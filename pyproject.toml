@@ -12,7 +12,8 @@ dependencies = [
 ]
 
 [project.scripts]
-reasonese = "reasonese.cli:main"
+reasonese-axes = "reasonese.show_axes:main"
+reasonese-plan = "reasonese.plan:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -47,7 +48,6 @@ skip_empty = true
 fail_under = 95
 exclude_lines = [
     "pragma: no cover",
-    "if __name__ == .__main__.",
     "if TYPE_CHECKING:",
 ]
 

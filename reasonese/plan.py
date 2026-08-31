@@ -1,4 +1,4 @@
-"""Command-line entry point."""
+"""Enumerate prompt specifications from base instructions."""
 
 from __future__ import annotations
 
@@ -9,34 +9,21 @@ from pathlib import Path
 
 from beartype import beartype
 
-from reasonese.axes import Author, Channel, Framing, axis_manifest
+from reasonese.axes import Author, Channel, Framing
 from reasonese.config import load_instructions
 from reasonese.io import write_prompt_specs
 from reasonese.planning import build_prompt_specs, specs_per_instruction
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="reasonese")
-    subparsers = parser.add_subparsers(dest="command", required=True)
-    subparsers.add_parser("axes", help="print the four axis definitions as JSON")
-
-    plan = subparsers.add_parser("plan", help="enumerate prompt specifications")
-    plan.add_argument("--instructions", type=Path, required=True)
-    plan.add_argument("--output", type=Path, required=True)
-    return parser
-
-
 @beartype
 def main(argv: Sequence[str] | None = None) -> int:
-    """Run the command-line interface."""
-    parser = _build_parser()
+    """Plan every axis combination for the configured instructions."""
+    parser = argparse.ArgumentParser(prog="reasonese-plan")
+    parser.add_argument("--instructions", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
 
     try:
-        if args.command == "axes":
-            print(json.dumps(axis_manifest(), indent=2))
-            return 0
-
         instructions = load_instructions(args.instructions)
         specs = build_prompt_specs(instructions)
         write_prompt_specs(args.output, specs)

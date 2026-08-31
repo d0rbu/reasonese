@@ -1,6 +1,6 @@
 # Plan output
 
-`reasonese plan` writes one JSON object per line with exactly the four experimental axes:
+`reasonese-plan` writes one JSON object per line with exactly the four experimental axes:
 
 ```json
 {

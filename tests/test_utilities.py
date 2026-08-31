@@ -5,24 +5,24 @@ from pathlib import Path
 
 import pytest
 
-from reasonese.cli import main
+from reasonese.plan import main as plan
+from reasonese.show_axes import main as show_axes
 
 
-def test_axes_command_prints_direct_values(capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["axes"]) == 0
+def test_show_axes_prints_direct_values(capsys: pytest.CaptureFixture[str]) -> None:
+    assert show_axes() is None
     output = json.loads(capsys.readouterr().out)
     assert output["channel"] == ["system prompt", "user message", "README.md"]
     assert output["author"][1] == "Qwen3.8 Flash"
 
 
-def test_plan_command_writes_ninety_specs_per_instruction(
+def test_plan_writes_ninety_specs_per_instruction(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     output = tmp_path / "specs.jsonl"
     assert (
-        main(
+        plan(
             [
-                "plan",
                 "--instructions",
                 "configs/example_instructions.toml",
                 "--output",
@@ -38,11 +38,10 @@ def test_plan_command_writes_ninety_specs_per_instruction(
     assert len(output.read_text().splitlines()) == 180
 
 
-def test_cli_reports_missing_input(tmp_path: Path) -> None:
+def test_plan_reports_missing_input(tmp_path: Path) -> None:
     with pytest.raises(SystemExit, match="2"):
-        main(
+        plan(
             [
-                "plan",
                 "--instructions",
                 str(tmp_path / "missing.toml"),
                 "--output",
@@ -51,6 +50,6 @@ def test_cli_reports_missing_input(tmp_path: Path) -> None:
         )
 
 
-def test_cli_requires_a_command() -> None:
+def test_plan_requires_its_arguments() -> None:
     with pytest.raises(SystemExit, match="2"):
-        main([])
+        plan([])

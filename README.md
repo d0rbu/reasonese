@@ -29,14 +29,16 @@ git clone https://github.com/d0rbu/reasonese.git
 cd reasonese
 uv sync
 
-uv run reasonese axes
-uv run reasonese plan \
+uv run reasonese-axes
+uv run reasonese-plan \
   --instructions configs/example_instructions.toml \
   --output out/example/prompt_specs.jsonl
 ```
 
-The example contains two instructions, so it writes 180 JSONL records. Each record contains
-only `instruction`, `framing`, `channel`, and `author`.
+The two utilities are independent: `reasonese-axes` prints the values, while
+`reasonese-plan` accepts the instruction and output paths. The example contains two
+instructions, so it writes 180 JSONL records. Each record contains only `instruction`,
+`framing`, `channel`, and `author`.
 
 ## Implementation notes
 

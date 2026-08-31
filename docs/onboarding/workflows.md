@@ -3,7 +3,7 @@
 ## Inspect definitions
 
 ```bash
-uv run reasonese axes
+uv run reasonese-axes
 ```
 
 Use this rather than duplicating axis values in scripts.
@@ -14,7 +14,7 @@ Create a TOML file following [`../reference/configuration.md`](../reference/conf
 then run:
 
 ```bash
-uv run reasonese plan --instructions path/to/instructions.toml --output out/specs.jsonl
+uv run reasonese-plan --instructions path/to/instructions.toml --output out/specs.jsonl
 ```
 
 The summary reports the number of instructions and specifications. Re-running with identical
