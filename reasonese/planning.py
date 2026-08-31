@@ -14,7 +14,7 @@ from reasonese.axes import Author, Channel, Framing, Instruction
 @beartype
 @dataclass(frozen=True, slots=True)
 class PromptSpec:
-    """One instruction x framing x channel x author combination."""
+    """One instruction x framing x channel x author datapoint."""
 
     instruction: Instruction
     framing: Framing

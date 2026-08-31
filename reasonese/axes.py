@@ -45,9 +45,18 @@ class Author(StrEnum):
     INKLING_SMALL = "Inkling Small"
 
 
+class Assistant(StrEnum):
+    """The model that receives the generated conversation."""
+
+    QWEN3_8_FLASH = "Qwen3.8 Flash"
+    QWEN3_8_2_4T = "Qwen3.8 2.4T"
+    INKLING = "Inkling"
+    INKLING_SMALL = "Inkling Small"
+
+
 @beartype
 def axis_manifest() -> dict[str, str | list[str]]:
-    """Return the values of all four axes."""
+    """Return the values of all four entry axes."""
     return {
         "instruction": "configured base prompts",
         "framing": [str(framing) for framing in Framing],

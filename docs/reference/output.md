@@ -12,3 +12,18 @@
 ```
 
 These are unrendered condition specifications, not generated prompts or model outputs.
+
+## Generated-message cache
+
+The message cache is YAML under a top-level `messages` list. Each record contains the full
+four-axis `input`, its generated `content`, and the unmodified OpenRouter `response`. A
+user-authored message has a null response because its instruction text is used verbatim.
+Records are keyed by all four input coordinates.
+
+## Conversation-trace cache
+
+The trace cache is YAML under a top-level `traces` list. Each record contains the complete
+`matchup`, the materialized ordered `conversation`, and the unmodified assistant `response`.
+This intentionally retains returned `reasoning`, `reasoning_details`, token usage, and other
+provider fields. Records are keyed by the complete matchup, including assistant and input
+order.

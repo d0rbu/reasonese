@@ -5,9 +5,11 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 
+import yaml
 from beartype import beartype
 
 from reasonese.axes import Instruction
+from reasonese.matchup import Matchup, matchup_from_dict
 
 
 @beartype
@@ -22,3 +24,10 @@ def load_instructions(path: Path) -> tuple[Instruction, ...]:
     if not instructions:
         raise ValueError("at least one instruction is required")
     return instructions
+
+
+@beartype
+def load_matchup(path: Path) -> Matchup:
+    """Load one matchup from YAML."""
+    with path.open(encoding="utf-8") as handle:
+        return matchup_from_dict(yaml.safe_load(handle))

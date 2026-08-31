@@ -8,6 +8,8 @@ uv run pre-commit run --all-files
 
 It checks the lockfile, Ruff, ty, and pytest. Pytest enforces at least 95 percent
 branch-aware coverage and exercises the axis values, phantom constraints, `beartype`
-boundaries, complete enumeration, TOML loading, JSONL output, and both utilities.
+boundaries, complete enumeration, configuration loading, serialization, OpenRouter request
+contracts, cache behavior, conversation execution, and all three utilities.
 
-All tests are offline. They do not validate future prompt transformations or model behavior.
+All tests are offline. A separately authorized live smoke test is needed to validate current
+provider availability and behavior.

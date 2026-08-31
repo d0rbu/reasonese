@@ -9,11 +9,14 @@ authors = [{ name = "Henry Castillo" }]
 dependencies = [
     "beartype>=0.22.0",
     "phantom-types>=3.0.0",
+    "pyyaml>=6.0.0",
+    "requests>=2.32.0",
 ]
 
 [project.scripts]
 reasonese-axes = "reasonese.show_axes:main"
 reasonese-plan = "reasonese.plan:main"
+reasonese-run-conversation = "reasonese.run_conversation:main"
 
 [build-system]
 requires = ["hatchling"]

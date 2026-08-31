@@ -1,4 +1,4 @@
-# Offline workflows
+# Workflows
 
 ## Inspect definitions
 
@@ -20,11 +20,23 @@ uv run reasonese-plan --instructions path/to/instructions.toml --output out/spec
 The summary reports the number of instructions and specifications. Re-running with identical
 input produces identical ordered records.
 
+## Run a matchup
+
+Create YAML following [`../reference/configuration.md`](../reference/configuration.md), then:
+
+```bash
+export OPENROUTER_API_KEY=...
+uv run reasonese-run-conversation --matchup path/to/matchup.yaml
+```
+
+The first run may submit authoring batches and then one synchronous assistant request. A warm
+trace-cache hit makes no network call. Cache files belong under ignored output directories and
+must not contain the API key.
+
 ## Validate a change
 
 ```bash
 uv run pre-commit run --all-files
 ```
 
-Do not add model calls to these workflows without separate authorization and a documented
-artifact contract.
+Unit tests replace the provider transport and make no network calls.

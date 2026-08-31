@@ -1,9 +1,10 @@
 """Foundations for controlled prompt-authoring experiments."""
 
-from reasonese.axes import Author, Channel, Framing, Instruction
+from reasonese.axes import Assistant, Author, Channel, Framing, Instruction
 from reasonese.planning import PromptSpec, build_prompt_specs
 
 __all__ = [
+    "Assistant",
     "Author",
     "Channel",
     "Framing",
