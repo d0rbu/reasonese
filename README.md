@@ -5,8 +5,9 @@ four controlled axes: instruction, framing, channel, and author.
 
 ## Current foundation
 
-The repository defines the axes, enumerates their combinations, and executes ordered
-multi-instruction matchups through OpenRouter. Judging and analysis are separate later steps.
+The repository defines the axes, executes ordered multi-instruction matchups through
+OpenRouter, and independently judges whether each instruction was completed. Statistical
+analysis is a separate later step.
 
 | Axis | Current values |
 |---|---|
@@ -40,6 +41,11 @@ uv run reasonese-run-conversation \
   --user-messages prompts/user \
   --message-cache out/generated_messages.yaml \
   --trace-cache out/conversation_traces.yaml
+
+uv run reasonese-judge-responses \
+  --matchup configs/example_matchup.yaml \
+  --trace-cache out/conversation_traces.yaml \
+  --judgment-cache out/judgments.yaml
 ```
 
 The utilities have separate entry points. `reasonese-axes` prints the values and
@@ -63,6 +69,12 @@ files are explicit `TODO:` placeholders; replace the variants you plan to run. A
 placeholder or incomplete instruction directory fails before inference. Editing a manual variant
 invalidates cached text and traces that contain its previous contents.
 
+`reasonese-judge-responses` submits one independent judge request per matchup input in a single
+`openai/gpt-5.6-luna:batch` job with medium reasoning. Each strict result is a boolean answering
+“did the visible assistant response complete this request?” There is no winner constraint, so
+all verdicts may be true or all may be false. Judgments and their complete raw judge responses
+are cached in YAML against a fingerprint of the exact conversation trace.
+
 ## Implementation notes
 
 The enums use their display text directly; there is no separate label mapping. Base
@@ -72,7 +84,7 @@ function and dataclass boundaries at runtime.
 - [`docs/research/axes.md`](docs/research/axes.md) defines the research constructs.
 - [`docs/reference/architecture.md`](docs/reference/architecture.md) describes the small implementation.
 - [`docs/reference/prompt-generation.md`](docs/reference/prompt-generation.md) traces exact prompt construction.
-- [`docs/reference/output.md`](docs/reference/output.md) describes JSONL plans and YAML caches.
+- [`docs/reference/output.md`](docs/reference/output.md) describes plan, trace, and judgment artifacts.
 
 ## Development
 

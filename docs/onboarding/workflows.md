@@ -38,6 +38,22 @@ trace-cache hit makes no network call unless a selected manual variant changed, 
 stale trace is replaced. Cache files belong under ignored output directories and must not contain
 the API key.
 
+## Judge a response
+
+Point the judge utility at the same matchup and trace cache:
+
+```bash
+export OPENROUTER_API_KEY=...
+uv run reasonese-judge-responses \
+  --matchup path/to/matchup.yaml \
+  --trace-cache out/conversation_traces.yaml \
+  --judgment-cache out/judgments.yaml
+```
+
+The utility requires an existing matching trace. It batches one independent medium-reasoning
+GPT-5.6 Luna request per input, prints the ordered boolean list, and caches the raw judge
+responses. Repeating an unchanged trace is network-free.
+
 ## Validate a change
 
 ```bash

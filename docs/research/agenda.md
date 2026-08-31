@@ -2,8 +2,9 @@
 
 ## Current step
 
-The current step turns four-axis datapoints into ordered multi-instruction conversations and
-collects assistant traces. The assistant remains matchup metadata rather than an entry axis.
+The current step turns four-axis datapoints into ordered multi-instruction conversations,
+collects assistant traces, and independently judges completion of every input. The assistant
+remains matchup metadata rather than an entry axis.
 
 This foundation specifies:
 
@@ -13,12 +14,14 @@ This foundation specifies:
 - how those combinations are serialized without ambiguity;
 - how model authors generate framed messages;
 - how channel treatments become an ordered conversation; and
-- how generated messages and raw responses are cached.
+- how generated messages and raw responses are cached; and
+- how one strict completion boolean is collected for each instruction.
 
 ## Deferred decisions
 
-Later work must specify judging and analysis. The repository contains an execution mechanism,
-but committed source does not contain an empirical corpus or statistical result.
+Later work must specify aggregation and statistical analysis. The repository contains
+execution and judging mechanisms, but committed source does not contain an empirical corpus or
+statistical result.
 
 ## Construct questions for later work
 
