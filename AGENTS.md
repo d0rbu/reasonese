@@ -1,41 +1,33 @@
 # AGENTS.md - reasonese
 
-`reasonese` is a correctness-first research codebase for controlled studies of instruction
-arbitration. Keep scientific status, data provenance, and construct boundaries explicit.
+`reasonese` is a small research codebase for controlled prompt-authoring experiments. Keep
+the implementation simple and the scientific status explicit.
 
 ## Read these first
 
-- [`README.md`](README.md) - project question, status, and quickstart
-- [`docs/research/agenda.md`](docs/research/agenda.md) - hypotheses, phases, and non-goals
-- [`docs/research/protocol.md`](docs/research/protocol.md) - pilot design and analysis contract
-- [`docs/research/construct-validity.md`](docs/research/construct-validity.md) - claim boundaries
-- [`docs/reference/architecture.md`](docs/reference/architecture.md) - package architecture
-- [`docs/reference/data-schema.md`](docs/reference/data-schema.md) - artifact schemas
-- [`docs/reference/file-reference.md`](docs/reference/file-reference.md) - file map
+- [`README.md`](README.md) - project status and quickstart
+- [`docs/research/axes.md`](docs/research/axes.md) - authoritative axis definitions
+- [`docs/research/agenda.md`](docs/research/agenda.md) - current scope and deferred work
+- [`docs/reference/architecture.md`](docs/reference/architecture.md) - implementation shape
+- [`docs/reference/file-reference.md`](docs/reference/file-reference.md) - repository map
 
 ## Scientific conventions
 
-- Never call synthetic responses or rankings empirical model results.
-- Call `zz_compact` *incident-inspired compressed text* or *neuralese-like*, not a sample of
-  hidden reasoning or a model-native language.
-- Preserve all four counterbalances for every condition pair and code pair.
-- Keep invalid responses in the scored artifact and report their rate separately.
-- Treat the Bradley-Terry ranking as descriptive and conditional on exact valid outputs.
-- Record exact model identifiers, endpoint dates, decoding parameters, prompt hashes, and
-  raw responses before making cross-model or longitudinal claims.
-- Do not add or invoke paid/live providers without explicit authorization.
-- Keep any future agentic study sandboxed and benign; simulate costs rather than creating
-  destructive or unauthorized tasks.
+- Keep instruction, framing, channel, and author as independent axes.
+- Treat an instruction as the simple base prompt, before framing.
+- Use `author` for whoever writes a framed instruction, not the model that later executes it.
+- Treat reasonese as an operational prompt representation, not hidden reasoning or a
+  model-native language.
+- Do not call specifications generated prompts, model responses, or research results.
+- Do not add or invoke live or paid model providers without explicit authorization.
 
 ## Engineering conventions
 
-- Use `uv sync` to install and `uv run ...` to invoke tools.
-- Keep raw boundary records strict and versioned; do not ignore unknown JSON or TOML keys.
-- Write generated artifacts below an ignored output directory such as `out/`.
-- Prefer typed dataclasses and explicit validation over loosely structured dictionaries.
-- Use `phantom-types` for bounded primitives, NumPy for numerical routines, and Hypothesis
-  for invariants that benefit from generated cases.
-- Update docs and `docs/reference/file-reference.md` when behavior or layout changes.
+- Prefer direct values and small dataclasses over identifiers, registries, or versioning.
+- Use `phantom-types` for meaningful unary constraints and `beartype` at runtime boundaries.
+- Keep relational checks explicit when they cannot be expressed by a single value's type.
+- Write generated artifacts below an ignored directory such as `out/`.
+- Update documentation when commands, axis values, or file responsibilities change.
 
 ## Required gate
 
@@ -43,5 +35,5 @@ arbitration. Keep scientific status, data provenance, and construct boundaries e
 uv run pre-commit run --all-files
 ```
 
-If a live study is not run, say so plainly; passing the offline gate does not validate model
-behavior or the experimental construct.
+Passing the offline gate validates the code only, not future prompt transformations or
+model behavior.

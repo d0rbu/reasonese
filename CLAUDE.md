@@ -8,8 +8,7 @@ this repository.
 - Read the relevant docs before changing code.
 - Keep changes tightly scoped to the requested behavior.
 - Prefer small, typed, tested functions over large scripts.
-- Use phantom types and runtime validation to make invalid states hard to represent.
-- Add or update property tests when changing invariants.
+- Add tests when changing invariants or boundary validation.
 - Update docs when file purpose, commands, configuration, or workflow changes.
 
 ## Required checks
