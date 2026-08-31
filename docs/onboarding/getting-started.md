@@ -1,46 +1,22 @@
-# Getting Started
+# Getting started
 
-## Prerequisites
-
-- Python 3.13
-- [`uv`](https://docs.astral.sh/uv/)
+Install Python 3.13 and [`uv`](https://docs.astral.sh/uv/), then run:
 
 ```bash
-command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync
+uv run reasonese axes
+uv run reasonese plan \
+  --instructions configs/example_instructions.toml \
+  --output out/example/prompt_specs.jsonl
 ```
 
-## Run the offline demo
+The `axes` command prints the canonical definitions. The `plan` command validates the two
+example base instructions and writes 180 prompt specifications: 90 for each instruction.
+
+Inspect a few records with:
 
 ```bash
-uv run reasonese design \
-  --config configs/pilot.toml \
-  --output out/demo/design.jsonl
-uv run reasonese simulate \
-  --design out/demo/design.jsonl \
-  --config configs/synthetic_demo.toml \
-  --output out/demo/responses.jsonl
-uv run reasonese score \
-  --design out/demo/design.jsonl \
-  --responses out/demo/responses.jsonl \
-  --output out/demo/outcomes.jsonl
-uv run reasonese fit \
-  --outcomes out/demo/outcomes.jsonl \
-  --reference plain \
-  --output out/demo/ranking.json
+head -n 3 out/example/prompt_specs.jsonl
 ```
 
-Everything under `out/demo/` is generated and ignored by git. The simulator samples from
-the known strengths in `configs/synthetic_demo.toml`; its ranking is not a model result.
-
-## Development setup
-
-```bash
-uv run pre-commit install
-uv run pytest
-uv run ty check
-uv run ruff check .
-```
-
-Before changing treatment text, read the pilot protocol. Once live collection begins,
-create a new versioned config rather than editing the run's config in place.
+These records are an experimental plan, not generated prompts or model outputs.

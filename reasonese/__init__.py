@@ -1,7 +1,14 @@
-"""Controlled experiments on instruction representation and arbitration."""
+"""Foundations for controlled prompt-authoring experiments."""
 
-from reasonese.bradley_terry import fit_bradley_terry
-from reasonese.design import build_trials
+from reasonese.axes import Author, Channel, Framing, Instruction
+from reasonese.planning import PromptSpec, build_prompt_specs
 
-__all__ = ["build_trials", "fit_bradley_terry"]
+__all__ = [
+    "Author",
+    "Channel",
+    "Framing",
+    "Instruction",
+    "PromptSpec",
+    "build_prompt_specs",
+]
 __version__ = "0.1.0"

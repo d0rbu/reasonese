@@ -1,17 +1,12 @@
 [project]
 name = "reasonese"
 version = "0.1.0"
-description = "Controlled experiments on how representation and social framing affect instruction arbitration."
+description = "Controlled experiments on how authors and representations shape instructions."
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
 license = "MIT"
 authors = [{ name = "Henry Castillo" }]
-dependencies = [
-    "beartype>=0.22.0",
-    "jaxtyping>=0.3.0",
-    "numpy>=2.0.0",
-    "phantom-types[hypothesis]>=3.0.0",
-]
+dependencies = []
 
 [project.scripts]
 reasonese = "reasonese.cli:main"
@@ -22,7 +17,6 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
-    "hypothesis>=6.0.0",
     "pre-commit>=4.6.0",
     "pytest>=9.0.0",
     "pytest-cov>=7.0.0",
@@ -38,10 +32,6 @@ addopts = [
     "--strict-markers",
     "--cov=reasonese",
     "--cov-report=term-missing",
-]
-markers = [
-    "property: property-based tests powered by Hypothesis",
-    "slow: tests that are useful but too expensive for the default suite",
 ]
 
 [tool.coverage.run]

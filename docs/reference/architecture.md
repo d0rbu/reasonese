@@ -1,39 +1,25 @@
 # Architecture
 
-The package implements one directional artifact flow:
+The package currently has one offline data flow:
 
 ```text
-experiment TOML -> Trial JSONL -> Response JSONL -> ScoredOutcome JSONL -> ranking JSON
-                         ^
-                         +-- synthetic demo only
+instruction TOML -> strict validation -> Cartesian planner -> prompt-spec JSONL
 ```
 
-| Module | Responsibility |
-|---|---|
-| `reasonese.config` | Strict experiment and simulator TOML loaders; design digest. |
-| `reasonese.schemas` | Versioned dataclasses and record invariants. |
-| `reasonese.design` | Complete pair construction, counterbalancing, rendering, and seeded shuffle. |
-| `reasonese.simulation` | Explicitly synthetic Bradley-Terry response sampler. |
-| `reasonese.scoring` | One-to-one completeness checks and exact response-code scoring. |
-| `reasonese.bradley_terry` | Connected-graph validation and penalized ranking fit. |
-| `reasonese.io` | Strict JSONL readers and atomic JSON/JSONL replacement. |
-| `reasonese.cli` | Thin orchestration for the four offline stages. |
+## Modules
 
-## Boundaries
+- `reasonese.axes` defines the enums, display metadata, base `Instruction`, and axis manifest.
+- `reasonese.config` loads a strict, versioned instruction-set TOML file.
+- `reasonese.planning` enumerates `PromptSpec` records and assigns content-addressed IDs.
+- `reasonese.io` atomically writes and strictly reads prompt-specification JSONL.
+- `reasonese.cli` exposes `axes` and `plan` commands.
 
-The package has no provider SDK and performs no network calls. Real responses enter through
-the documented `ResponseRecord` boundary. This keeps collection authorization, provider
-cost, retry behavior, and endpoint-specific metadata from being hidden inside analysis code.
+The planner creates condition specifications, not prompt text. There are no model-provider,
+execution, response, or analysis layers in the current architecture.
 
-The simulator shares the response schema but stamps `source="synthetic"`. Downstream reports
-preserve this source, preventing the demo from masquerading as live evidence.
+## Determinism
 
-## Estimator
-
-For each decisive observation where condition `i` beats `j`, the design row contains `+1`
-for `i` and `-1` for `j`. Newton updates maximize the logistic log likelihood with an L2
-penalty. Centering selects a readable score origin; the penalty makes separated data finite.
-
-The one-dimensional model may fit poorly when preferences are cyclic or interaction-heavy.
-Consumers should inspect the pairwise matrix and residuals before treating the ordering as a
-sufficient summary.
+Enumeration follows configured instruction order, then declared framing, channel, and
+author order. Each specification ID hashes the instruction ID, instruction text, framing,
+channel, and author. Identical inputs therefore produce identical ordered records, while
+changing any coordinate changes the ID.
