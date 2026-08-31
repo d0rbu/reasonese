@@ -1,46 +1,31 @@
 # Testing
 
-## Default Suite
-
-```bash
-uv run pytest
-```
-
-The default suite includes unit tests, property tests, and coverage.
-
-## Pre-Commit
-
-Install hooks once per clone:
-
-```bash
-uv run pre-commit install
-```
-
-Run the full configured gate manually:
+## Canonical gate
 
 ```bash
 uv run pre-commit run --all-files
 ```
 
-The local hooks run:
+The hooks run `uv lock --check`, Ruff, ty, and pytest with branch coverage.
 
-- `uv lock --check`
-- `uv run ruff check .`
-- `uv run ty check`
-- `uv run pytest`
-
-## Focused Runs
+## Focused commands
 
 ```bash
-uv run pytest tests/test_correctness_tools.py
-uv run pytest tests/test_correctness_tools.py -k weighted_mean
+uv run pytest tests/test_config_design.py
+uv run pytest tests/test_io_scoring_simulation.py
+uv run pytest tests/test_bradley_terry.py
+uv run pytest tests/test_cli.py
 uv run pytest -m property
 ```
 
-## Coverage
+## Test layers
 
-Coverage is configured in `pyproject.toml` and currently fails below 95%.
+- `test_schemas.py`: primitive, condition, trial, response, and outcome boundaries.
+- `test_config_design.py`: strict TOML and full-pilot counterbalancing.
+- `test_io_scoring_simulation.py`: atomic persistence, synthetic provenance, and exact scoring.
+- `test_bradley_terry.py`: recovery, counts, connectivity, malformed pairs, and convergence.
+- `test_cli.py`: the complete offline command sequence and user-facing failures.
 
-Use coverage as a guardrail, not a substitute for meaningful assertions. The most useful
-tests in this template check invariants: probabilities stay in range, weights normalize
-to one, and invalid primitive values are rejected before they enter core code.
+Coverage fails below 95% for the `reasonese` package. Coverage is a guardrail; full-pilot
+balance assertions and explicit failure cases are more scientifically important than merely
+executing lines.

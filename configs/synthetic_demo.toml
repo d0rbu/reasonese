@@ -1,0 +1,23 @@
+schema_version = 1
+
+[simulation]
+model_id = "synthetic_demo"
+seed = 17
+invalid_rate = 0.02
+first_position_bias = 0.15
+
+[strengths]
+plain = 0.00
+terse = 0.20
+symbolic = 0.45
+zz_compact = 0.70
+polite = -0.10
+forceful = 0.35
+ceo = 0.55
+intern = -0.45
+nature_paper = 0.50
+personal_blog = -0.30
+human_consensus = 0.40
+human_single = -0.20
+agent_consensus = 0.60
+agent_single = -0.25

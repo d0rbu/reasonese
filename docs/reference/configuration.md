@@ -1,81 +1,49 @@
 # Configuration
 
-All tool configuration lives in `pyproject.toml`.
+## Experiment TOML
 
-## Package Management
+`configs/pilot.toml` has a top-level schema version, one `[experiment]` table, and repeated
+`[[conditions]]` tables. Every key is required and unknown keys fail.
 
-Use `uv`.
+Experiment fields:
+
+| Field | Contract |
+|---|---|
+| `name` | Lowercase identifier included in each trial. |
+| `seed` | Non-negative integer controlling final order and design identity. |
+| `repetitions` | Positive integer; one complete counterbalance per repetition. |
+| `system_prompt` | Neutral response-format instruction. |
+| `user_preamble` | Text before the two rendered directives. |
+| `response_code_pairs` | One or more pairs of distinct uppercase alphanumeric nonce codes. |
+
+Condition fields are `id`, `family`, `template`, and `description`. A template must contain
+`{target}` exactly once.
+
+Any input that changes rendered identity changes the `design_id`. Copy configs rather than
+editing an already-collected design.
+
+## Synthetic simulation TOML
+
+`configs/synthetic_demo.toml` declares a clearly synthetic model identifier, seed, invalid
+rate, first-position logit, and one latent strength per condition. The simulator refuses a
+design if any condition lacks a strength.
+
+## Tool configuration
+
+All Python tooling lives in `pyproject.toml`:
+
+- Python 3.13 and `uv` packaging;
+- Ruff linting;
+- ty static checking;
+- pytest, Hypothesis, and branch coverage;
+- a `reasonese` console entry point; and
+- Hatchling as the build backend.
+
+Pre-commit uses the locked environment and runs:
 
 ```bash
-uv sync
-uv add numpy
-uv add --dev pytest
-```
-
-## Linting
-
-`ruff` is configured for Python 3.13 with common correctness-oriented rule families:
-
-- `E`, `F`, `W`
-- `I`
-- `UP`
-- `B`
-- `C4`
-- `SIM`
-- `RET`
-
-Run:
-
-```bash
+uv lock --check
 uv run ruff check .
-```
-
-## Pre-Commit
-
-`pre-commit` uses local hooks that invoke the locked `uv` environment.
-
-Install:
-
-```bash
-uv run pre-commit install
-```
-
-Run:
-
-```bash
-uv run pre-commit run --all-files
-```
-
-Configured hooks:
-
-- `uv lock --check`
-- `uv run ruff check .`
-- `uv run ty check`
-- `uv run pytest`
-
-## Type Checking
-
-`ty` is configured for Python 3.13.
-
-Run:
-
-```bash
 uv run ty check
-```
-
-## Testing
-
-`pytest` collects from `tests/`, runs with strict config and strict markers, and reports
-coverage for the scaffold tests. When the project adds real source modules, update
-`tool.coverage.run.source` and the `--cov` target.
-
-Run:
-
-```bash
 uv run pytest
 ```
-
-Markers:
-
-- `property`: property-based tests powered by Hypothesis
-- `slow`: useful but expensive tests excluded from ad hoc focused runs

@@ -1,60 +1,47 @@
-# AGENTS.md - research-project-template
+# AGENTS.md - reasonese
 
-You are working in a correctness-first Python research template. The repo should stay
-small, explicit, and easy to reuse as the base for new research projects.
-
-This file is the AI-agent entry point. It should point to docs that contain durable
-project knowledge. If you want to add detail here, usually update the linked doc instead.
+`reasonese` is a correctness-first research codebase for controlled studies of instruction
+arbitration. Keep scientific status, data provenance, and construct boundaries explicit.
 
 ## Read these first
 
-- [`README.md`](README.md) - project pitch and quickstart
-- [`docs/README.md`](docs/README.md) - documentation map
-- [`docs/onboarding/getting-started.md`](docs/onboarding/getting-started.md) - local setup
-- [`docs/onboarding/workflows.md`](docs/onboarding/workflows.md) - common development flows
-- [`docs/development/correctness.md`](docs/development/correctness.md) - correctness philosophy and tools
+- [`README.md`](README.md) - project question, status, and quickstart
+- [`docs/research/agenda.md`](docs/research/agenda.md) - hypotheses, phases, and non-goals
+- [`docs/research/protocol.md`](docs/research/protocol.md) - pilot design and analysis contract
+- [`docs/research/construct-validity.md`](docs/research/construct-validity.md) - claim boundaries
 - [`docs/reference/architecture.md`](docs/reference/architecture.md) - package architecture
-- [`docs/reference/configuration.md`](docs/reference/configuration.md) - tool configuration
-- [`docs/reference/file-reference.md`](docs/reference/file-reference.md) - file-by-file reference
+- [`docs/reference/data-schema.md`](docs/reference/data-schema.md) - artifact schemas
+- [`docs/reference/file-reference.md`](docs/reference/file-reference.md) - file map
 
-## Repo layout
+## Scientific conventions
 
-```
-tests/              pytest suite, including property tests
-docs/               source-of-truth documentation
-.github/workflows/  CI checks
-```
+- Never call synthetic responses or rankings empirical model results.
+- Call `zz_compact` *incident-inspired compressed text* or *neuralese-like*, not a sample of
+  hidden reasoning or a model-native language.
+- Preserve all four counterbalances for every condition pair and code pair.
+- Keep invalid responses in the scored artifact and report their rate separately.
+- Treat the Bradley-Terry ranking as descriptive and conditional on exact valid outputs.
+- Record exact model identifiers, endpoint dates, decoding parameters, prompt hashes, and
+  raw responses before making cross-model or longitudinal claims.
+- Do not add or invoke paid/live providers without explicit authorization.
+- Keep any future agentic study sandboxed and benign; simulate costs rather than creating
+  destructive or unauthorized tasks.
 
-## Conventions
+## Engineering conventions
 
-- Use `uv sync` to install and `uv run ...` to invoke project tools.
-- Run `uv run pre-commit run --all-files` before handoff.
-- The pre-commit hooks enforce `uv lock --check`, `ruff`, `ty`, and `pytest`.
-- Prefer making bad state unrepresentable over documenting invalid states after the fact.
-- Use `phantom-types` for domain invariants that narrow primitive values.
-- Use `beartype` at runtime boundaries where invalid values can enter the system.
-- Use `jaxtyping` for array shape and dtype contracts.
-- Use Hypothesis for invariants, edge cases, and regression tests that should hold over many inputs.
-- Keep imports at the top of each file.
-- Keep docs and code in sync; when behavior changes, update `docs/reference/file-reference.md`.
+- Use `uv sync` to install and `uv run ...` to invoke tools.
+- Keep raw boundary records strict and versioned; do not ignore unknown JSON or TOML keys.
+- Write generated artifacts below an ignored output directory such as `out/`.
+- Prefer typed dataclasses and explicit validation over loosely structured dictionaries.
+- Use `phantom-types` for bounded primitives, NumPy for numerical routines, and Hypothesis
+  for invariants that benefit from generated cases.
+- Update docs and `docs/reference/file-reference.md` when behavior or layout changes.
 
-## Correctness tools
-
-The scaffold tests demonstrate:
-
-- `Probability`: a phantom type for closed-range probabilities.
-- `normalize_weights`: a `jaxtyping` + `beartype` checked NumPy function.
-- property tests that use `st.from_type(...)` with phantom types.
-
-Copy these patterns for project-specific concepts such as dataset splits, feature IDs,
-sample counts, model dimensions, or validated artifact paths.
-
-## Testing
+## Required gate
 
 ```bash
 uv run pre-commit run --all-files
 ```
 
-`pytest` is configured to collect from `tests/` and require 95% coverage on the
-current scaffold tests. Update coverage `source` when the project grows real source
-modules.
+If a live study is not run, say so plainly; passing the offline gate does not validate model
+behavior or the experimental construct.

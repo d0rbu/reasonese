@@ -1,25 +1,38 @@
 # Workflows
 
-## Add a Domain Type
+## Change an experiment design
 
-1. Add the phantom type near the code that owns the domain concept.
-2. Add a `parse_*` refinement function for untrusted inputs.
-3. Use the refined type in public functions and dataclasses.
-4. Add `st.from_type(...)` property tests when the type has a Hypothesis strategy.
-5. Update `docs/development/correctness.md` if the pattern is new.
+1. Read `docs/research/protocol.md` and identify whether the change is pre- or post-collection.
+2. Copy the TOML config if any response has already been collected.
+3. Change the experiment identifier and treatment metadata.
+4. Generate a fresh design and record its `design_id` and checksum.
+5. Check the four counterbalances and update planned contrasts.
+6. Update construct-validity notes for any new treatment.
 
-## Add an Experiment Helper
+## Import model responses
 
-1. Put reusable code in the project module or package once one exists.
-2. Keep script-only orchestration out of core logic.
-3. Validate raw inputs at the boundary.
-4. Return typed values, dataclasses, or explicit result objects.
-5. Cover invariants with unit tests and property tests.
+1. Generate and freeze the design JSONL.
+2. Record an external run manifest with endpoint and decoding provenance.
+3. Produce exactly one `ResponseRecord` for every `trial_id`.
+4. Keep raw response text unchanged; do not repair it with a judge model.
+5. Run `reasonese score`, then inspect invalid outputs before fitting.
+6. Fit endpoints separately; do not silently pool deployment windows.
 
-## Before Handoff
+No provider collector is included yet. Adding or calling one requires explicit authorization
+for the provider, cost, models, and run size.
+
+## Change a schema
+
+1. Decide whether the change is additive or breaking.
+2. Increment `SCHEMA_VERSION` for incompatible records.
+3. Keep readers strict: unknown and missing fields should fail.
+4. Add round-trip and rejection tests.
+5. Document a migration rather than guessing how to translate old artifacts.
+
+## Before handoff
 
 ```bash
 uv run pre-commit run --all-files
 ```
 
-If a check is intentionally skipped, document the reason in the handoff.
+Report offline validation separately from treatment validation and live empirical status.

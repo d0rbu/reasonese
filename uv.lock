@@ -295,9 +295,9 @@ wheels = [
 ]
 
 [[package]]
-name = "research-project-template"
+name = "reasonese"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "beartype" },
     { name = "jaxtyping" },

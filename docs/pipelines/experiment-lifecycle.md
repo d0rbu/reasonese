@@ -1,27 +1,42 @@
 # Experiment Lifecycle
 
-Use this as the default lifecycle for research work built from the template.
+## 1. Proposal
 
-## 1. Define the Question
+Write the construct, planned contrast, expected direction if any, and disconfirming result.
+Separate confirmatory tests from exploratory rankings.
 
-Write down the hypothesis, metric, and expected failure modes before adding code.
+## 2. Design freeze
 
-## 2. Make State Explicit
+Validate treatment meaning, render the JSONL, save `design_id`, record the source commit,
+and inspect all four counterbalances. Presence of a design is not collection.
 
-Represent raw config as validated dataclasses. Use phantom types for values that have
-domain bounds such as probabilities, positive counts, feature IDs, seeds, and split
-fractions.
+## 3. Collection preflight
 
-## 3. Build Small Reusable Units
+Freeze endpoint provenance, decoding settings, retry policy, budget, and artifact paths.
+Verify the response schema with a non-billable or explicitly authorized minimal call. A
+passing preflight is not a completed run.
 
-Keep reusable logic in a real module once the project has source code. Keep one-off
-orchestration in scripts or notebooks that call reusable code.
+## 4. Collection
 
-## 4. Test Invariants
+Write raw responses and provider metadata before transformation. Keep endpoint windows
+separate, and do not overwrite partial artifacts. Record failures and retries.
 
-Add example tests for known cases and property tests for broad invariants.
+## 5. Scoring
 
-## 5. Record Outputs
+Require a complete one-to-one trial mapping. Produce outcomes with exact primary scoring,
+inspect invalid responses, and checksum both raw and scored artifacts.
 
-Keep generated artifacts out of git by default. Put durable notes in docs or experiment
-reports, and make artifact paths explicit.
+## 6. Analysis
+
+Report direct pairwise counts and nuisance diagnostics before the Bradley-Terry ranking.
+Separate synthetic pipeline checks from live model data and planned from exploratory tests.
+
+## 7. Interpretation
+
+Match every claim to the evidence level: surface-form choice, matched treatment effect,
+agentic transfer, or mechanistic evidence. Do not skip levels because a ranking is striking.
+
+## 8. Archive
+
+Keep configs, manifests, checksums, code commit, analysis environment, and a deviation log.
+Generated bulk artifacts remain outside git unless a deliberate release process approves them.

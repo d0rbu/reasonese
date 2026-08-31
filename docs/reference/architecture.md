@@ -1,25 +1,39 @@
 # Architecture
 
-This repository is a compact, package-free template for research code.
+The package implements one directional artifact flow:
 
-## Scaffold
+```text
+experiment TOML -> Trial JSONL -> Response JSONL -> ScoredOutcome JSONL -> ranking JSON
+                         ^
+                         +-- synthetic demo only
+```
 
-The base repository intentionally starts without an importable source package. Add one
-only when a research project has real reusable code.
-
-| Module | Purpose |
+| Module | Responsibility |
 |---|---|
-| `tests/test_correctness_tools.py` | Executable examples for phantom types, runtime checks, array contracts, and property tests |
+| `reasonese.config` | Strict experiment and simulator TOML loaders; design digest. |
+| `reasonese.schemas` | Versioned dataclasses and record invariants. |
+| `reasonese.design` | Complete pair construction, counterbalancing, rendering, and seeded shuffle. |
+| `reasonese.simulation` | Explicitly synthetic Bradley-Terry response sampler. |
+| `reasonese.scoring` | One-to-one completeness checks and exact response-code scoring. |
+| `reasonese.bradley_terry` | Connected-graph validation and penalized ranking fit. |
+| `reasonese.io` | Strict JSONL readers and atomic JSON/JSONL replacement. |
+| `reasonese.cli` | Thin orchestration for the four offline stages. |
 
-## Correctness Boundary
+## Boundaries
 
-Raw values should be refined near the boundary where they enter the system. Core code
-should receive domain types such as `Probability`, not broad primitive values.
+The package has no provider SDK and performs no network calls. Real responses enter through
+the documented `ResponseRecord` boundary. This keeps collection authorization, provider
+cost, retry behavior, and endpoint-specific metadata from being hidden inside analysis code.
 
-Array-heavy code should use `jaxtyping` for shape and dtype expectations and ordinary
-runtime checks for semantic constraints such as non-negativity or finite values.
+The simulator shares the response schema but stamps `source="synthetic"`. Downstream reports
+preserve this source, preventing the demo from masquerading as live evidence.
 
-## Tests
+## Estimator
 
-`tests/` contains example tests and property tests. The default suite is intentionally
-fast enough to run before every handoff.
+For each decisive observation where condition `i` beats `j`, the design row contains `+1`
+for `i` and `-1` for `j`. Newton updates maximize the logistic log likelihood with an L2
+penalty. Centering selects a readable score origin; the penalty makes separated data finite.
+
+The one-dimensional model may fit poorly when preferences are cyclic or interaction-heavy.
+Consumers should inspect the pairwise matrix and residuals before treating the ordering as a
+sufficient summary.

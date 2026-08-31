@@ -1,54 +1,41 @@
 # Correctness
 
-The template bias is to make bad state unrepresentable.
+Correctness has three layers: artifact integrity, experimental balance, and numerical honesty.
 
-## Phantom Types
+## Artifact boundaries
 
-Use `phantom-types` when a primitive type is too broad for a domain concept.
+- TOML loaders reject missing and unknown keys.
+- JSONL readers validate exact schema versions and fields.
+- Conditions contain exactly one `{target}` placeholder.
+- Response codes are distinct uppercase nonce tokens.
+- JSON and JSONL writers use atomic replacement.
+- A response set must match the design one-to-one; missing, unknown, and duplicate IDs fail.
 
-Examples in this repo:
+`Probability` is a phantom type so invalid rates cannot enter the simulator outside `[0, 1]`.
+Dataclass constructors enforce invariants again for programmatic callers.
 
-- `Probability`: `float` in `[0, 1]`, demonstrated in `tests/test_correctness_tools.py`
+## Experimental invariants
 
-Pattern:
+For every condition pair, code pair, and repetition:
 
-1. Define the phantom type near the code that owns the domain concept.
-2. Add a `parse_*` function that refines raw values.
-3. Store only refined values in dataclasses and core APIs.
-4. Use `st.from_type(YourType)` in property tests when a strategy exists.
+- each condition appears first twice;
+- each condition requests each nonce code twice; and
+- all four combinations have distinct trial IDs.
 
-## Runtime Checks
+Tests assert these properties on the checked-in 728-trial pilot, not only a small fixture.
 
-Use `beartype` at runtime boundaries and on small public functions where type violations
-would otherwise become confusing downstream failures.
+## Scoring invariants
 
-Do not decorate every private helper reflexively. Prefer validation at boundaries and
-around domain invariants.
+The scorer trims outer whitespace and then requires exact equality. It never performs
+substring matching, case folding, answer extraction, or judge-model repair. Invalid outputs
+remain records with both conditions attached so missingness can be audited.
 
-## Array Contracts
+## Numerical invariants
 
-Use `jaxtyping` for NumPy, JAX, PyTorch, or other array-like values when shape and dtype
-matter. Pair it with `beartype`:
+The estimator requires a connected decisive-comparison graph, one model/source per fit, a
+positive finite ridge penalty, and pair-consistent winner/loser fields. Scores are centered
+after every Newton step. A line search prevents an update from reducing the penalized
+objective, and nonconvergence remains visible in the report.
 
-```python
-from beartype import beartype
-from jaxtyping import Float64, jaxtyped
-
-Vector = Float64[np.ndarray, "n"]
-
-@jaxtyped(typechecker=beartype)
-def normalize_weights(weights: Vector) -> Vector:
-    ...
-```
-
-## Property Tests
-
-Use Hypothesis for:
-
-- normalization and conservation laws
-- parser and serializer round trips
-- shape-preserving transformations
-- monotonicity and ordering invariants
-- edge cases that are easy to miss with example tests
-
-Keep generated examples bounded so the default test suite stays fast.
+Penalized standard errors are implementation diagnostics, not automatically publication-ready
+confidence intervals. Repeated calls to one model endpoint are not independent model samples.
