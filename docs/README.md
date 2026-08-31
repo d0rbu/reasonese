@@ -2,15 +2,15 @@
 
 ## Research
 
-- [`research/axes.md`](research/axes.md): authoritative four-axis definitions
-- [`research/agenda.md`](research/agenda.md): current scope and deferred research decisions
+- [`research/axes.md`](research/axes.md): the four axis definitions
+- [`research/agenda.md`](research/agenda.md): current scope and deferred questions
 
 ## Reference
 
-- [`reference/architecture.md`](reference/architecture.md): package responsibilities and data flow
-- [`reference/configuration.md`](reference/configuration.md): instruction-set TOML format
-- [`reference/data-schema.md`](reference/data-schema.md): prompt-specification JSONL format
-- [`reference/file-reference.md`](reference/file-reference.md): repository file map
+- [`reference/architecture.md`](reference/architecture.md): package responsibilities
+- [`reference/configuration.md`](reference/configuration.md): instruction TOML
+- [`reference/output.md`](reference/output.md): four-field JSONL output
+- [`reference/file-reference.md`](reference/file-reference.md): repository map
 
 ## Onboarding and development
 

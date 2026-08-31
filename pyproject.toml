@@ -6,7 +6,10 @@ readme = "README.md"
 requires-python = ">=3.13,<3.14"
 license = "MIT"
 authors = [{ name = "Henry Castillo" }]
-dependencies = []
+dependencies = [
+    "beartype>=0.22.0",
+    "phantom-types>=3.0.0",
+]
 
 [project.scripts]
 reasonese = "reasonese.cli:main"

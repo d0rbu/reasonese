@@ -2,18 +2,15 @@
 
 | Path | Purpose |
 |---|---|
-| `configs/example_instructions.toml` | Two simple example base instructions |
-| `reasonese/axes.py` | Four-axis definitions and instruction validation |
-| `reasonese/config.py` | Strict TOML loader |
-| `reasonese/planning.py` | Complete deterministic condition enumeration |
-| `reasonese/io.py` | Atomic JSONL writer and strict reader |
+| `configs/example_instructions.toml` | Two simple base prompts |
+| `reasonese/axes.py` | Four axis types |
+| `reasonese/config.py` | TOML instruction loader |
+| `reasonese/planning.py` | Four-field dataclass and Cartesian planner |
+| `reasonese/io.py` | JSONL writer |
 | `reasonese/cli.py` | `axes` and `plan` commands |
-| `tests/test_axes.py` | Axis and base-instruction tests |
-| `tests/test_planning.py` | Completeness, ordering, identity, and schema tests |
-| `tests/test_config_io.py` | Boundary-validation and JSONL tests |
-| `tests/test_cli.py` | Command-line integration tests |
-| `docs/research/axes.md` | Authoritative research definitions |
-| `docs/research/agenda.md` | Current scope and deferred decisions |
+| `tests/test_axes.py` | Enum and instruction-type tests |
+| `tests/test_planning.py` | Combination and runtime-type tests |
+| `tests/test_config_io.py` | TOML and output tests |
+| `tests/test_cli.py` | Command-line tests |
 
-Generated artifacts belong under ignored directories such as `out/`; none are committed as
-research findings.
+Generated files belong under ignored directories such as `out/`.
