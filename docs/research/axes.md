@@ -26,10 +26,11 @@ guidance. User-authored inputs are already authored and therefore pass through v
 
 - `system prompt`: place the framed instruction in the executor's system prompt.
 - `user message`: place it in a user message.
-- `README.md`: place it in `README.md` and tell the executor to read the file.
+- `README.md`: present it as the result of an assistant `read_file("README.md")` tool call.
 
 During execution, system and user inputs become chat messages in their original order.
-`README.md` content is wrapped in a user message that tells the assistant to read it.
+`README.md` content is not wrapped in a user message. It appears as file-read tool history at
+the datapoint's ordered position in the transcript.
 
 ## Author
 

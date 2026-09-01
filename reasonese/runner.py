@@ -9,14 +9,24 @@ from beartype import beartype
 from reasonese.axes import Author
 from reasonese.cache import YamlMessageCache, YamlTraceCache
 from reasonese.conversation import (
+    ConversationSetup,
     ConversationTrace,
     GeneratedMessage,
     GeneratedText,
+    ToolStep,
     authoring_request,
     construct_conversation,
 )
 from reasonese.matchup import Matchup
-from reasonese.openrouter import OpenRouterClient, model_route, response_content
+from reasonese.openrouter import OpenRouterClient, OpenRouterModelId, model_route, response_content
+from reasonese.tools import (
+    ASSISTANT_TOOLS,
+    ToolRuntime,
+    assistant_message_from_response,
+    tool_calls_from_response,
+)
+
+_MAX_LOCAL_TOOL_STEPS = 8
 
 
 @beartype
@@ -72,6 +82,41 @@ def materialize_messages(
 
 
 @beartype
+def run_assistant(
+    setup: ConversationSetup,
+    model_id: OpenRouterModelId,
+    client: OpenRouterClient,
+) -> ConversationTrace:
+    """Run one assistant, executing bounded local function calls until it answers."""
+    messages = setup.openrouter_messages()
+    steps: list[ToolStep] = []
+    with ToolRuntime(setup.readme_contents()) as tools:
+        for _ in range(_MAX_LOCAL_TOOL_STEPS + 1):
+            response = client.complete(
+                model_id,
+                {
+                    "messages": messages,
+                    "tools": list(ASSISTANT_TOOLS),
+                    "parallel_tool_calls": False,
+                    "temperature": 0.7,
+                    "reasoning": {"enabled": True, "exclude": False},
+                },
+            )
+            calls = tool_calls_from_response(response)
+            if not calls:
+                return ConversationTrace(setup, response, tuple(steps))
+            if len(steps) == _MAX_LOCAL_TOOL_STEPS:
+                raise RuntimeError(
+                    f"assistant exceeded {_MAX_LOCAL_TOOL_STEPS} local tool-call steps"
+                )
+            results = tuple(tools.execute(call) for call in calls)
+            steps.append(ToolStep(response, results))
+            messages.append(assistant_message_from_response(response))
+            messages.extend(result.openrouter_dict() for result in results)
+    raise AssertionError("bounded assistant loop ended unexpectedly")
+
+
+@beartype
 def run_matchup(
     matchup: Matchup,
     client: OpenRouterClient,
@@ -92,13 +137,6 @@ def run_matchup(
         prefer_batch=prefer_batch,
     )
     setup = construct_conversation(matchup, generated)
-    response = client.complete(
-        model_route(matchup.assistant).model_id,
-        {
-            "messages": setup.openrouter_messages(),
-            "reasoning": {"enabled": True, "exclude": False},
-        },
-    )
-    trace = ConversationTrace(setup, response)
+    trace = run_assistant(setup, model_route(matchup.assistant).model_id, client)
     trace_cache.put(trace)
     return RunResult(trace, False)

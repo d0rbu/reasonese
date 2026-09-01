@@ -16,12 +16,13 @@ instruction strings -> Cartesian product -> four-field JSONL
 The conversation flow is:
 
 ```text
-matchup -> authored messages -> ordered conversation -> assistant trace
+matchup -> authored messages -> ordered tool-aware conversation -> agent loop -> assistant trace
 ```
 
 - `reasonese.matchup` validates an assistant and an ordered tuple of two or more datapoints.
 - `reasonese.openrouter` provides synchronous completions and model-grouped batch authoring.
 - `reasonese.conversation` builds authoring requests and channel-specific chat messages.
+- `reasonese.tools` defines bounded file, shell, Python, and server-side web-search tools.
 - `reasonese.cache` stores generated messages and raw traces in readable YAML.
 - `reasonese.runner` coordinates cache lookup, generation, construction, and execution.
 - `reasonese.run_conversation` is the standalone conversation utility.
@@ -39,5 +40,6 @@ inputs are valid. `Assistant` shares the four model values with model-backed aut
 separate from the four entry axes.
 
 The OpenRouter key exists only at the transport boundary. Cache keys are structural input
-coordinates, and raw provider responses are retained so reasoning and provider metadata are
-not discarded. The package does not yet judge or analyze responses.
+coordinates. Raw intermediate tool-call responses, local results, and the final provider response
+are retained so reasoning and provider metadata are not discarded. The package does not yet
+judge or analyze responses.

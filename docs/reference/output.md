@@ -23,7 +23,8 @@ Records are keyed by all four input coordinates.
 ## Conversation-trace cache
 
 The trace cache is YAML under a top-level `traces` list. Each record contains the complete
-`matchup`, the materialized ordered `conversation`, and the unmodified assistant `response`.
-This intentionally retains returned `reasoning`, `reasoning_details`, token usage, and other
-provider fields. Records are keyed by the complete matchup, including assistant and input
-order.
+`matchup`, the materialized ordered `conversation`, zero or more `tool_steps`, and the unmodified
+final assistant `response`. Each tool step retains the raw assistant response that requested the
+function call plus every local tool result sent back. This intentionally retains returned
+`reasoning`, `reasoning_details`, token usage, web citations, and other provider fields. Records
+are keyed by the complete matchup, including assistant and input order.

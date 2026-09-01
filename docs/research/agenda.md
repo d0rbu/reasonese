@@ -26,6 +26,6 @@ but committed source does not contain an empirical corpus or statistical result.
 - How should user-authored variants be elicited without conflating author with framing?
 - How should generated text be audited for semantic equivalence to its base instruction?
 - How should model revisions and provider routing be recorded alongside stable display names?
-- How much does the README wrapper itself influence channel comparisons?
+- How much does synthetic file-read history itself influence channel comparisons?
 
 Those questions should be resolved before interpreting future model behavior.

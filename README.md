@@ -44,13 +44,17 @@ uv run reasonese-run-conversation \
 The utilities have separate entry points. `reasonese-axes` prints the values and
 `reasonese-plan` writes four-axis datapoints. `reasonese-run-conversation` loads a `Matchup`,
 generates any missing model-authored messages, constructs the ordered conversation, and sends
-it to the selected assistant. It uses OpenRouter batch variants for groups that support them;
-`--no-batch` forces synchronous authoring requests.
+it to the selected assistant with file-read, sandboxed bash, sandboxed Python, and web-search
+tools. It uses OpenRouter batch variants for author groups that support them; `--no-batch`
+forces synchronous authoring requests. Bash and Python execution require `bubblewrap` (`bwrap`)
+on the host.
 
 A matchup contains one assistant plus an ordered tuple of inputs. It requires at least two
 inputs and at least one explicit `user message`; repeated channels are valid. Generated
-messages and complete raw assistant responses, including returned reasoning fields, are cached
-as readable YAML. A warm trace-cache hit does not require an API key or make a provider call.
+messages and complete raw assistant traces—including intermediate tool calls, tool results, and
+returned reasoning fields—are cached as readable YAML. A warm trace-cache hit does not require
+an API key or make a provider call. A `README.md` treatment appears as an assistant `read_file`
+call followed by a tool result, rather than as a wrapper inside a user message.
 
 ## Implementation notes
 

@@ -12,6 +12,9 @@ from reasonese.conversation import (
     ConversationTrace,
     GeneratedMessage,
     GeneratedText,
+    ToolCallId,
+    ToolResult,
+    ToolStep,
     construct_conversation,
 )
 from reasonese.matchup import Matchup, make_matchup, matchup_to_dict
@@ -39,6 +42,28 @@ def _chat(content: str, response_id: str = "response-1") -> JsonObject:
         "choices": [{"message": {"role": "assistant", "content": content}}],
         "reasoning": "preserved reasoning",
         "reasoning_details": [{"type": "reasoning.text", "text": "details"}],
+    }
+
+
+def _tool_chat(name: str = "read_file", arguments: str = '{"path":"README.md"}') -> JsonObject:
+    return {
+        "id": "tool-response",
+        "choices": [
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": None,
+                    "reasoning": "preserve this intermediate reasoning",
+                    "tool_calls": [
+                        {
+                            "id": "live-call",
+                            "type": "function",
+                            "function": {"name": name, "arguments": arguments},
+                        }
+                    ],
+                }
+            }
+        ],
     }
 
 
@@ -83,14 +108,43 @@ def test_message_cache_round_trips_raw_responses_and_replaces_by_spec(tmp_path: 
 
 
 def test_trace_cache_round_trips_conversation_and_complete_response(tmp_path: Path) -> None:
-    specs = (_spec("System task.", Channel.SYSTEM), _spec("User task.", Channel.USER))
+    specs = (_spec("File task.", Channel.README), _spec("User task.", Channel.USER))
     matchup = _matchup(*specs)
     generated = tuple(
         GeneratedMessage(spec, GeneratedText.parse(str(spec.instruction)), None) for spec in specs
     )
     first = ConversationTrace(construct_conversation(matchup, generated), _chat("first"))
+    tool_response = {
+        "choices": [
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "live-call",
+                            "type": "function",
+                            "function": {"name": "python", "arguments": '{"code":"print(1)"}'},
+                        }
+                    ],
+                }
+            }
+        ]
+    }
     replacement = ConversationTrace(
-        construct_conversation(matchup, generated), _chat("replacement", "response-2")
+        construct_conversation(matchup, generated),
+        _chat("replacement", "response-2"),
+        (
+            ToolStep(
+                tool_response,
+                (
+                    ToolResult(
+                        ToolCallId.parse("live-call"),
+                        GeneratedText.parse("exit_code: 0\noutput:\n1"),
+                    ),
+                ),
+            ),
+        ),
     )
     cache = YamlTraceCache(tmp_path / "traces.yaml")
 
@@ -103,6 +157,8 @@ def test_trace_cache_round_trips_conversation_and_complete_response(tmp_path: Pa
     assert cache.load()[0].response["reasoning_details"] == [
         {"type": "reasoning.text", "text": "details"}
     ]
+    assert cache.load()[0].tool_steps == replacement.tool_steps
+    assert cache.load()[0].setup.content_for_input(0) == "File task."
 
 
 @pytest.mark.parametrize(
@@ -141,15 +197,116 @@ def test_caches_reject_malformed_yaml(tmp_path: Path, key: str, value: object, e
 
 
 @pytest.mark.parametrize(
-    ("conversation", "response", "error"),
+    ("conversation", "tool_steps", "response", "error"),
     [
-        ("bad", _chat("answer"), "conversation must be a list"),
-        (["bad"], _chat("answer"), "conversation message has invalid fields"),
-        ([{"role": "user", "content": "Task."}], None, "must not be null"),
+        ("bad", [], _chat("answer"), "conversation must be a list"),
+        (["bad"], [], _chat("answer"), "conversation message has invalid fields"),
+        (
+            [{"role": "system", "content": "System."}, {"role": "user", "content": "User."}],
+            "bad",
+            _chat("answer"),
+            "tool_steps must be a list",
+        ),
+        ([{"role": "user", "content": "Task."}], [], None, "must not be null"),
+        ([{"role": "user", "content": "x", "extra": 1}], [], _chat("answer"), "text message"),
+        (
+            [{"role": "assistant", "content": None}],
+            [],
+            _chat("answer"),
+            "assistant message",
+        ),
+        (
+            [{"role": "assistant", "content": None, "tool_calls": "bad"}],
+            [],
+            _chat("answer"),
+            "assistant tool_calls",
+        ),
+        (
+            [{"role": "assistant", "content": None, "tool_calls": ["bad"]}],
+            [],
+            _chat("answer"),
+            "tool call has invalid fields",
+        ),
+        (
+            [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [{"id": "x", "type": "other", "function": {}}],
+                }
+            ],
+            [],
+            _chat("answer"),
+            "must be a function",
+        ),
+        (
+            [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [{"id": "x", "type": "function", "function": []}],
+                }
+            ],
+            [],
+            _chat("answer"),
+            "function has invalid fields",
+        ),
+        (
+            [
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "x",
+                            "type": "function",
+                            "function": {"name": "bash", "arguments": {}},
+                        }
+                    ],
+                }
+            ],
+            [],
+            _chat("answer"),
+            "arguments must be text",
+        ),
+        (
+            [{"role": "tool", "content": "x"}],
+            [],
+            _chat("answer"),
+            "tool message has invalid fields",
+        ),
+        (
+            [{"role": "system", "content": "System."}, {"role": "user", "content": "User."}],
+            ["bad"],
+            _chat("answer"),
+            "tool step has invalid fields",
+        ),
+        (
+            [{"role": "system", "content": "System."}, {"role": "user", "content": "User."}],
+            [{"response": None, "results": []}],
+            _chat("answer"),
+            "tool-step response must not be null",
+        ),
+        (
+            [{"role": "system", "content": "System."}, {"role": "user", "content": "User."}],
+            [{"response": _chat("tools"), "results": "bad"}],
+            _chat("answer"),
+            "tool-step results must be a list",
+        ),
+        (
+            [{"role": "system", "content": "System."}, {"role": "user", "content": "User."}],
+            [{"response": _chat("tools"), "results": [{"role": "user"}]}],
+            _chat("answer"),
+            "tool result has invalid fields",
+        ),
     ],
 )
 def test_trace_cache_rejects_malformed_trace_fields(
-    tmp_path: Path, conversation: object, response: object, error: str
+    tmp_path: Path,
+    conversation: object,
+    tool_steps: object,
+    response: object,
+    error: str,
 ) -> None:
     matchup = _matchup(_spec("System.", Channel.SYSTEM), _spec("User.", Channel.USER))
     path = tmp_path / "traces.yaml"
@@ -160,6 +317,7 @@ def test_trace_cache_rejects_malformed_trace_fields(
                     {
                         "matchup": matchup_to_dict(matchup),
                         "conversation": conversation,
+                        "tool_steps": tool_steps,
                         "response": response,
                     }
                 ]
@@ -262,6 +420,54 @@ def test_run_matchup_executes_once_preserves_reasoning_and_then_hits_cache(
         "enabled": True,
         "exclude": False,
     }
+    assert transport.post_calls[0][1]["temperature"] == 0.7
+    assert transport.post_calls[0][1]["parallel_tool_calls"] is False
+    assert {tool["type"] for tool in transport.post_calls[0][1]["tools"]} == {
+        "function",
+        "openrouter:web_search",
+    }
+
+
+def test_run_matchup_executes_local_tool_calls_and_preserves_every_step(tmp_path: Path) -> None:
+    matchup = _matchup(
+        _spec("Repository instruction.", Channel.README),
+        _spec("User request.", Channel.USER),
+    )
+    transport = FakeTransport([_tool_chat(), _chat("final answer")])
+
+    result = run_matchup(
+        matchup,
+        OpenRouterClient(transport),
+        YamlMessageCache(tmp_path / "messages.yaml"),
+        YamlTraceCache(tmp_path / "traces.yaml"),
+        prefer_batch=False,
+    )
+
+    assert result.trace.response == _chat("final answer")
+    assert result.trace.tool_steps[0].response == _tool_chat()
+    assert result.trace.tool_steps[0].results[0].content == "Repository instruction."
+    second_messages = transport.post_calls[1][1]["messages"]
+    assert second_messages[-2]["reasoning"] == "preserve this intermediate reasoning"
+    assert second_messages[-1] == {
+        "role": "tool",
+        "tool_call_id": "live-call",
+        "content": "Repository instruction.",
+    }
+
+
+def test_run_matchup_fails_when_assistant_exceeds_local_tool_step_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    matchup = _matchup(_spec("System.", Channel.SYSTEM), _spec("User.", Channel.USER))
+    monkeypatch.setattr("reasonese.runner._MAX_LOCAL_TOOL_STEPS", 0)
+    with pytest.raises(RuntimeError, match="exceeded 0"):
+        run_matchup(
+            matchup,
+            OpenRouterClient(FakeTransport([_tool_chat()])),
+            YamlMessageCache(tmp_path / "messages.yaml"),
+            YamlTraceCache(tmp_path / "traces.yaml"),
+            prefer_batch=False,
+        )
 
 
 def _write_matchup(path: Path) -> None:

@@ -16,6 +16,11 @@ from reasonese.conversation import (
     ConversationTrace,
     GeneratedMessage,
     GeneratedText,
+    ToolCall,
+    ToolCallId,
+    ToolName,
+    ToolResult,
+    ToolStep,
 )
 from reasonese.matchup import (
     Matchup,
@@ -103,7 +108,7 @@ def _trace_from_dict(raw: object) -> ConversationTrace:
     if not isinstance(raw, dict):
         raise ValueError("cached trace must be a mapping")
     data = cast(dict[str, Any], raw)
-    if set(data) != {"matchup", "conversation", "response"}:
+    if set(data) != {"matchup", "conversation", "tool_steps", "response"}:
         raise ValueError("cached trace has invalid fields")
     matchup = matchup_from_dict(data["matchup"])
     raw_messages = data["conversation"]
@@ -111,27 +116,112 @@ def _trace_from_dict(raw: object) -> ConversationTrace:
         raise ValueError("cached conversation must be a list")
     messages: list[ChatMessage] = []
     for raw_message in raw_messages:
-        if not isinstance(raw_message, dict) or set(raw_message) != {"role", "content"}:
-            raise ValueError("cached conversation message has invalid fields")
-        messages.append(
-            ChatMessage(
-                ChatRole(raw_message["role"]),
-                GeneratedText.parse(raw_message["content"]),
-            )
-        )
+        messages.append(_chat_message_from_dict(raw_message))
+    raw_steps = data["tool_steps"]
+    if not isinstance(raw_steps, list):
+        raise ValueError("cached tool_steps must be a list")
+    steps = tuple(_tool_step_from_dict(raw_step) for raw_step in raw_steps)
     response = _response(data["response"])
     if response is None:
         raise ValueError("cached trace response must not be null")
-    return ConversationTrace(ConversationSetup(matchup, tuple(messages)), response)
+    return ConversationTrace(ConversationSetup(matchup, tuple(messages)), response, steps)
+
+
+def _tool_call_from_dict(raw: object) -> ToolCall:
+    if not isinstance(raw, dict) or set(raw) != {"id", "type", "function"}:
+        raise ValueError("cached tool call has invalid fields")
+    data = cast(dict[str, Any], raw)
+    if data["type"] != "function":
+        raise ValueError("cached tool call must be a function")
+    function = data["function"]
+    if not isinstance(function, dict) or set(function) != {"name", "arguments"}:
+        raise ValueError("cached tool-call function has invalid fields")
+    function_data = cast(dict[str, Any], function)
+    arguments = function_data["arguments"]
+    if not isinstance(arguments, str):
+        raise ValueError("cached tool-call arguments must be text")
+    return ToolCall(
+        ToolCallId.parse(data["id"]),
+        ToolName.parse(function_data["name"]),
+        arguments,
+    )
+
+
+def _chat_message_from_dict(raw: object) -> ChatMessage:
+    if not isinstance(raw, dict) or "role" not in raw:
+        raise ValueError("cached conversation message has invalid fields")
+    data = cast(dict[str, Any], raw)
+    role = ChatRole(data["role"])
+    match role:
+        case ChatRole.SYSTEM | ChatRole.USER:
+            if set(data) != {"role", "content"}:
+                raise ValueError("cached text message has invalid fields")
+            return ChatMessage(role, GeneratedText.parse(data["content"]))
+        case ChatRole.ASSISTANT:
+            if set(data) != {"role", "content", "tool_calls"}:
+                raise ValueError("cached assistant message has invalid fields")
+            content = data["content"]
+            if content is not None:
+                content = GeneratedText.parse(content)
+            raw_calls = data["tool_calls"]
+            if not isinstance(raw_calls, list):
+                raise ValueError("cached assistant tool_calls must be a list")
+            return ChatMessage(
+                role,
+                content,
+                tuple(_tool_call_from_dict(call) for call in raw_calls),
+            )
+        case ChatRole.TOOL:
+            if set(data) != {"role", "tool_call_id", "content"}:
+                raise ValueError("cached tool message has invalid fields")
+            return ChatMessage(
+                role,
+                GeneratedText.parse(data["content"]),
+                tool_call_id=ToolCallId.parse(data["tool_call_id"]),
+            )
+        case _:
+            raise ValueError(f"unsupported cached chat role: {role}")
+
+
+def _tool_step_from_dict(raw: object) -> ToolStep:
+    if not isinstance(raw, dict) or set(raw) != {"response", "results"}:
+        raise ValueError("cached tool step has invalid fields")
+    data = cast(dict[str, Any], raw)
+    response = _response(data["response"])
+    if response is None:
+        raise ValueError("cached tool-step response must not be null")
+    raw_results = data["results"]
+    if not isinstance(raw_results, list):
+        raise ValueError("cached tool-step results must be a list")
+    results: list[ToolResult] = []
+    for result in raw_results:
+        if (
+            not isinstance(result, dict)
+            or set(result) != {"role", "tool_call_id", "content"}
+            or result.get("role") != "tool"
+        ):
+            raise ValueError("cached tool result has invalid fields")
+        result_data = cast(dict[str, Any], result)
+        results.append(
+            ToolResult(
+                ToolCallId.parse(result_data["tool_call_id"]),
+                GeneratedText.parse(result_data["content"]),
+            )
+        )
+    return ToolStep(response, tuple(results))
 
 
 @beartype
 def _trace_to_dict(trace: ConversationTrace) -> dict[str, object]:
     return {
         "matchup": matchup_to_dict(trace.setup.matchup),
-        "conversation": [
-            {"role": str(message.role), "content": str(message.content)}
-            for message in trace.setup.messages
+        "conversation": [message.openrouter_dict() for message in trace.setup.messages],
+        "tool_steps": [
+            {
+                "response": step.response,
+                "results": [result.openrouter_dict() for result in step.results],
+            }
+            for step in trace.tool_steps
         ],
         "response": trace.response,
     }
