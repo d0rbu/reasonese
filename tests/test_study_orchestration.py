@@ -53,7 +53,7 @@ def _spec(text: str, channel: Channel, author: Author = Author.USER) -> PromptSp
 def _study(rollouts: int = 1, assistant: Assistant = Assistant.INKLING) -> Study:
     return make_study(
         (
-            _spec("Name the capital of France.", Channel.SYSTEM),
+            _spec("Name the capital of France.", Channel.README),
             _spec("What is two plus two?", Channel.USER),
         ),
         assistant,
@@ -83,6 +83,41 @@ def _assistant_batch(count: int) -> JsonObject:
         "results": [
             _batch_result(f"request-{index}", _chat(f"answer {index}", f"assistant-{index}"))
             for index in range(count)
+        ],
+    }
+
+
+def _tool_chat() -> JsonObject:
+    return {
+        "id": "tool-response",
+        "choices": [
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "live-read",
+                            "type": "function",
+                            "function": {
+                                "name": "read_file",
+                                "arguments": '{"path":"README.md"}',
+                            },
+                        }
+                    ],
+                }
+            }
+        ],
+    }
+
+
+def _assistant_batch_with_tool_and_final() -> JsonObject:
+    return {
+        "id": "assistant-batch",
+        "status": "completed",
+        "results": [
+            _batch_result("request-0", _tool_chat()),
+            _batch_result("request-1", _chat("already done", "assistant-1")),
         ],
     }
 
@@ -368,12 +403,55 @@ def test_collect_study_batches_trials_and_judgments_then_resumes_without_a_key(
     assert len(transport.post_calls) == 2
     assert transport.post_calls[0][1]["model"] == "thinkingmachines/inkling"
     assert len(transport.post_calls[0][1]["requests"]) == 4
+    first_request = transport.post_calls[0][1]["requests"][0]["body"]
+    assert first_request["temperature"] == 0.7
+    assert first_request["parallel_tool_calls"] is False
+    assert any(tool["type"] == "openrouter:web_search" for tool in first_request["tools"])
     assert transport.post_calls[1][1]["model"] == "openai/gpt-5.6-luna"
     assert len(transport.post_calls[1][1]["requests"]) == 8
     rows = [json.loads(line) for line in (output / "observations.jsonl").read_text().splitlines()]
     assert len(rows) == 8
     assert (output / "study.yaml").exists()
     assert len(list((output / "trials").glob("*/trace.yaml"))) == 4
+
+
+def test_collect_study_batches_each_active_tool_round(tmp_path: Path) -> None:
+    study = _study()
+    transport = FakeTransport(
+        [
+            _assistant_batch_with_tool_and_final(),
+            {
+                "id": "assistant-followup",
+                "status": "completed",
+                "results": [_batch_result("request-0", _chat("used the file", "assistant-0"))],
+            },
+            _judge_batch((True, False, False, True)),
+        ]
+    )
+
+    result = collect_study(
+        study,
+        tmp_path / "tool-collection",
+        OpenRouterClient(transport),
+        prefer_batch=True,
+    )
+
+    cached_traces = tuple(
+        YamlTraceCache(
+            tmp_path / "tool-collection" / "trials" / str(trial.trial_id) / "trace.yaml"
+        ).load()[0]
+        for trial in result.trials
+    )
+    assert [len(trace.tool_steps) for trace in cached_traces] == [1, 0]
+    assert len(transport.post_calls[0][1]["requests"]) == 2
+    assert len(transport.post_calls[1][1]["requests"]) == 1
+    followup = transport.post_calls[1][1]["requests"][0]["body"]["messages"]
+    assert followup[-1] == {
+        "role": "tool",
+        "tool_call_id": "live-read",
+        "content": "Name the capital of France.",
+    }
+    assert len(transport.post_calls[2][1]["requests"]) == 4
 
 
 def test_collect_study_requires_key_only_for_missing_work(tmp_path: Path) -> None:

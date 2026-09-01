@@ -20,7 +20,7 @@ from reasonese.judging import Judgment, judge_traces, trace_fingerprint
 from reasonese.judgment_cache import YamlJudgmentCache
 from reasonese.observations import Observation, observations_from_trial, write_observations
 from reasonese.openrouter import OpenRouterClient, RequestsTransport, model_route
-from reasonese.runner import materialize_messages
+from reasonese.runner import materialize_messages, run_assistants
 from reasonese.study import Study, Trial, build_trials, study_to_dict
 
 
@@ -33,13 +33,6 @@ class CollectionResult:
     trials: tuple[Trial, ...]
     trace_cache_hits: Natural
     judgment_cache_hits: Natural
-
-
-def _assistant_request(trace: ConversationTrace) -> dict[str, object]:
-    return {
-        "messages": trace.setup.openrouter_messages(),
-        "reasoning": {"enabled": True, "exclude": False},
-    }
 
 
 @beartype
@@ -79,25 +72,20 @@ def collect_study(
             prefer_batch=prefer_batch,
         )
         by_spec = {message.spec: message for message in generated}
-        empty_traces = tuple(
-            ConversationTrace(
-                construct_conversation(
-                    trial.matchup,
-                    tuple(by_spec[spec] for spec in trial.matchup.inputs),
-                ),
-                {},
+        setups = tuple(
+            construct_conversation(
+                trial.matchup,
+                tuple(by_spec[spec] for spec in trial.matchup.inputs),
             )
             for trial in missing_trials
         )
-        responses = client.complete_many(
+        new_traces = run_assistants(
+            setups,
             model_route(study.assistant),
-            tuple(_assistant_request(trace) for trace in empty_traces),
+            client,
             prefer_batch=prefer_batch,
         )
-        for trial, empty_trace, response in zip(
-            missing_trials, empty_traces, responses, strict=True
-        ):
-            trace = ConversationTrace(empty_trace.setup, response)
+        for trial, trace in zip(missing_trials, new_traces, strict=True):
             YamlTraceCache(output_dir / "trials" / str(trial.trial_id) / "trace.yaml").put(trace)
             trace_by_id[str(trial.trial_id)] = trace
 

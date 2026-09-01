@@ -84,8 +84,9 @@ are cached in YAML against a fingerprint of the exact conversation trace.
 It requires at least two distinct inputs, runs every input permutation, and collects one or
 more rollouts per permutation. With `n` cells and `r` rollouts, the design has `n! × r` trials;
 every cell receives that many verdicts and appears `(n - 1)! × r` times at each position. The
-collector batches uncached assistant and judge work where supported, resumes from per-rollout
-caches, and writes flat analysis-ready rows to `observations.jsonl`.
+collector batches uncached assistant work round-by-round (including function-tool
+continuations) and batches judge work where supported, resumes from per-rollout caches, and
+writes flat analysis-ready rows to `observations.jsonl`.
 
 Full permutation designs grow factorially: two, three, and four cells produce 2, 6, and 24
 permutations before multiplying by rollouts.

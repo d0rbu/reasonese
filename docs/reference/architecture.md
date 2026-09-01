@@ -71,8 +71,8 @@ study -> all permutations x rollouts -> traces -> judgments -> observation rows
 
 - `reasonese.study` defines a cell, a strongly typed study, and stable permutation/rollout
   trials. Distinct inputs guarantee at least two unique permutations.
-- `reasonese.collect_data` batches uncached assistant trials, flattens uncached judge requests
-  into one batch, and resumes at trial granularity.
+- `reasonese.collect_data` batches every active assistant agent-loop round, flattens uncached
+  judge requests into one batch, and resumes at trial granularity.
 - `reasonese.observations` joins traces and judgments into one flat row per cell and trial.
 
 Each rollout has its own trace-cache path, so repeated responses for the same ordered matchup
