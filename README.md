@@ -8,7 +8,8 @@ four controlled axes: instruction, framing, channel, and author.
 The repository defines the axes, executes ordered multi-instruction matchups through
 OpenRouter, and independently judges whether each instruction was completed. Statistical
 analysis turns permutation-balanced datasets into cell rankings, axis comparisons, and order
-effect diagnostics.
+effect diagnostics. An independent message-QA gate checks each materialized instruction against
+its exact datapoint authoring instructions before assistant inference.
 
 | Axis | Current values |
 |---|---|
@@ -43,6 +44,10 @@ uv run reasonese-run-conversation \
   --message-cache out/generated_messages.yaml \
   --trace-cache out/conversation_traces.yaml
 
+uv run reasonese-check-messages \
+  --message-cache out/generated_messages.yaml \
+  --qa-cache out/message_qa.yaml
+
 uv run reasonese-judge-responses \
   --matchup configs/example_matchup.yaml \
   --trace-cache out/conversation_traces.yaml \
@@ -70,14 +75,22 @@ A matchup contains one assistant plus an ordered pair of inputs, at least one of
 the explicit `user message` channel. Repeated channels are valid. Generated
 messages and complete raw assistant traces—including intermediate tool calls, tool results, and
 returned reasoning fields—are cached as readable YAML. A warm trace-cache hit does not require
-an API key or make a provider call. A `README.md` treatment appears as an assistant `read_file`
-call followed by a tool result, rather than as a wrapper inside a user message.
+an API key or make a provider call once its exact messages also have cached passing QA. A
+`README.md` treatment appears as an assistant `read_file` call followed by a tool result, rather
+than as a wrapper inside a user message.
 
 User-authored variants live under `prompts/user/<instruction>/`. Each directory contains the
 exact base text in `instruction.txt` plus one text file for each framing. The checked-in variant
 files are explicit `TODO:` placeholders; replace the variants you plan to run. A selected
 placeholder or incomplete instruction directory fails before inference. Editing a manual variant
 invalidates cached text and traces that contain its previous contents.
+
+Before a new conversation is sent to its experimental assistant, `openai/gpt-5.6-luna:batch`
+independently checks every exact materialized message against the same authoring instructions
+derived from its datapoint. It returns a strict `complies` boolean plus concrete issues. Any false
+verdict stops the run without regenerating or selecting a replacement. Raw QA responses are
+cached in `out/message_qa.yaml`; `reasonese-check-messages` exposes the same audit as a separate
+nonzero-exit utility.
 
 `reasonese-judge-responses` submits one independent judge request per matchup input in a single
 `openai/gpt-5.6-luna:batch` job with medium reasoning. Each strict result is a boolean answering
@@ -92,7 +105,7 @@ verdicts and appears `r` times at each position. The
 collector batches uncached assistant work round-by-round (including function-tool
 continuations) and batches judge work where supported, resumes from per-rollout caches, and
 writes flat analysis-ready rows to `observations.jsonl`. The same manual-message hierarchy and
-cache-invalidation rules apply to user-authored study inputs.
+message-QA gate apply to user-authored study inputs.
 
 `reasonese-analyze` fits an L2-penalized Bradley–Terry ordering from each trial's cell pair.
 A completed cell beats an incomplete one; equal verdicts contribute half-wins. It also

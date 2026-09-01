@@ -21,6 +21,14 @@ user-authored message has a null response because its content comes from the sel
 variant file. Records are keyed by all four input coordinates. Manual files remain authoritative;
 changed manual text replaces its cached message and invalidates traces containing the old text.
 
+## Message-QA cache
+
+The message-QA cache is YAML under a top-level `message_qa` list. Each record contains the full
+four-axis input, exact audited content, strict `complies` boolean, concise issue list, and raw Luna
+response. A verdict is reusable only for the same datapoint and exact content. A compliant message
+must have no issues; a noncompliant message must have at least one. False verdicts remain cached
+for diagnosis and block inference rather than causing an automatic reroll.
+
 ## Conversation-trace cache
 
 The trace cache is YAML under a top-level `traces` list. Each record contains the complete
@@ -49,6 +57,7 @@ than one-hot: `[true, true]`, `[false, false]`, and mixed outcomes are all valid
 
 - `study.yaml`: the exact assistant, rollout count, and input cells;
 - `generated_messages.yaml`: shared materialized instruction cache;
+- `message_qa.yaml`: exact message-compliance verdicts and raw QA responses;
 - `trials/TRIAL_ID/trace.yaml`: one raw conversation trace per input ordering and rollout;
 - `judgments.yaml`: raw and parsed judgments keyed by concrete trace; and
 - `observations.jsonl`: one flat row per cell verdict.

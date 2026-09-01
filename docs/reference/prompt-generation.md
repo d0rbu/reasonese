@@ -30,7 +30,10 @@ The six framing briefs distinguish:
 | `reasonese-persuasive` | Terse reasoning-trace-like fragments, abbreviations, symbols, and omitted function words, combined with persuasive cues. |
 
 The authoring request uses temperature 0.7 and retains returned reasoning fields. Exact repeated
-datapoints reuse their generated message from the YAML cache.
+datapoints reuse their generated message from the YAML cache. Before assistant inference, a
+separate GPT-5.6 Luna batch request audits the produced text against the exact authoring
+instructions and returns strict `complies` and `issues` fields. A failed audit blocks the run and
+is retained without an automatic reroll.
 
 These briefs are design choices, not winners selected by a live prompt comparison. Their purpose
 is to be short, natural, and explicit enough to audit and revise.
@@ -110,5 +113,6 @@ usage, citations, and other provider metadata.
 ## Current boundaries
 
 The briefs are explicit operational definitions, not a claim that model-authored reasonese is a
-faithful sample of a model's latent language. There is not yet a semantic-equivalence validator,
-a bank of few-shot examples, or live evidence that these exact briefs outperform alternatives.
+faithful sample of a model's latent language. The QA model is a fallible audit rather than a proof
+of semantic equivalence. There is not yet a bank of few-shot examples or live evidence that these
+exact briefs outperform alternatives.

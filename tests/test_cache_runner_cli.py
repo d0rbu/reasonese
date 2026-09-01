@@ -19,6 +19,7 @@ from reasonese.conversation import (
 )
 from reasonese.manual_messages import ManualMessageLibrary
 from reasonese.matchup import Matchup, make_matchup, matchup_to_dict
+from reasonese.message_qa_cache import YamlMessageQaCache
 from reasonese.openrouter import JsonObject, OpenRouterClient
 from reasonese.planning import PromptSpec
 from reasonese.run_conversation import main as run_conversation
@@ -75,6 +76,39 @@ def _tool_chat(name: str = "read_file", arguments: str = '{"path":"README.md"}')
                     ],
                 }
             }
+        ],
+    }
+
+
+def _qa_chat(complies: bool, issues: list[str], response_id: str) -> JsonObject:
+    return {
+        "id": response_id,
+        "choices": [
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": json.dumps({"complies": complies, "issues": issues}),
+                }
+            }
+        ],
+    }
+
+
+def _qa_batch(count: int, *, complies: bool = True) -> JsonObject:
+    issues = [] if complies else ["Does not follow the requested framing."]
+    return {
+        "id": "qa-batch",
+        "status": "completed",
+        "results": [
+            {
+                "custom_id": f"request-{index}",
+                "response": {
+                    "status_code": 200,
+                    "body": _qa_chat(complies, issues, f"qa-{index}"),
+                },
+                "error": None,
+            }
+            for index in range(count)
         ],
     }
 
@@ -398,10 +432,11 @@ def test_run_matchup_executes_once_preserves_reasoning_and_then_hits_cache(
         _spec("System.", Channel.SYSTEM),
         _spec("User.", Channel.USER),
     )
-    transport = FakeTransport([_chat("assistant answer")])
+    transport = FakeTransport([_qa_batch(2), _chat("assistant answer")])
     client = OpenRouterClient(transport)
     message_cache = YamlMessageCache(tmp_path / "messages.yaml")
     trace_cache = YamlTraceCache(tmp_path / "traces.yaml")
+    qa_cache = YamlMessageQaCache(tmp_path / "message-qa.yaml")
     manual = _manual_library(tmp_path, matchup.inputs)
 
     first = run_matchup(
@@ -409,6 +444,7 @@ def test_run_matchup_executes_once_preserves_reasoning_and_then_hits_cache(
         client,
         message_cache,
         trace_cache,
+        qa_cache,
         manual,
         prefer_batch=True,
     )
@@ -417,6 +453,7 @@ def test_run_matchup_executes_once_preserves_reasoning_and_then_hits_cache(
         client,
         message_cache,
         trace_cache,
+        qa_cache,
         manual,
         prefer_batch=True,
     )
@@ -425,14 +462,14 @@ def test_run_matchup_executes_once_preserves_reasoning_and_then_hits_cache(
     assert second.cache_hit is True
     assert first.trace == second.trace
     assert first.trace.response["reasoning"] == "preserved reasoning"
-    assert len(transport.post_calls) == 1
-    assert transport.post_calls[0][1]["reasoning"] == {
+    assert len(transport.post_calls) == 2
+    assert transport.post_calls[1][1]["reasoning"] == {
         "enabled": True,
         "exclude": False,
     }
-    assert transport.post_calls[0][1]["temperature"] == 0.7
-    assert transport.post_calls[0][1]["parallel_tool_calls"] is False
-    assert {tool["type"] for tool in transport.post_calls[0][1]["tools"]} == {
+    assert transport.post_calls[1][1]["temperature"] == 0.7
+    assert transport.post_calls[1][1]["parallel_tool_calls"] is False
+    assert {tool["type"] for tool in transport.post_calls[1][1]["tools"]} == {
         "function",
         "openrouter:web_search",
     }
@@ -442,15 +479,19 @@ def test_editing_a_manual_variant_invalidates_message_and_trace_caches(tmp_path:
     specs = (_spec("System.", Channel.SYSTEM), _spec("User.", Channel.USER))
     matchup = _matchup(*specs)
     manual = _manual_library(tmp_path, matchup.inputs)
-    transport = FakeTransport([_chat("first answer"), _chat("second answer")])
+    transport = FakeTransport(
+        [_qa_batch(2), _chat("first answer"), _qa_batch(1), _chat("second answer")]
+    )
     message_cache = YamlMessageCache(tmp_path / "messages.yaml")
     trace_cache = YamlTraceCache(tmp_path / "traces.yaml")
+    qa_cache = YamlMessageQaCache(tmp_path / "message-qa.yaml")
 
     first = run_matchup(
         matchup,
         OpenRouterClient(transport),
         message_cache,
         trace_cache,
+        qa_cache,
         manual,
         prefer_batch=False,
     )
@@ -465,6 +506,7 @@ def test_editing_a_manual_variant_invalidates_message_and_trace_caches(tmp_path:
         OpenRouterClient(transport),
         message_cache,
         trace_cache,
+        qa_cache,
         manual,
         prefer_batch=False,
     )
@@ -476,7 +518,7 @@ def test_editing_a_manual_variant_invalidates_message_and_trace_caches(tmp_path:
     cached_system = message_cache.get(specs[0])
     assert cached_system is not None
     assert cached_system.content == "Changed manual system message."
-    assert len(transport.post_calls) == 2
+    assert len(transport.post_calls) == 4
 
 
 def test_run_matchup_executes_local_tool_calls_and_preserves_every_step(tmp_path: Path) -> None:
@@ -484,13 +526,14 @@ def test_run_matchup_executes_local_tool_calls_and_preserves_every_step(tmp_path
         _spec("Repository instruction.", Channel.README),
         _spec("User request.", Channel.USER),
     )
-    transport = FakeTransport([_tool_chat(), _chat("final answer")])
+    transport = FakeTransport([_qa_batch(2), _tool_chat(), _chat("final answer")])
 
     result = run_matchup(
         matchup,
         OpenRouterClient(transport),
         YamlMessageCache(tmp_path / "messages.yaml"),
         YamlTraceCache(tmp_path / "traces.yaml"),
+        YamlMessageQaCache(tmp_path / "message-qa.yaml"),
         _manual_library(tmp_path, matchup.inputs),
         prefer_batch=False,
     )
@@ -498,7 +541,7 @@ def test_run_matchup_executes_local_tool_calls_and_preserves_every_step(tmp_path
     assert result.trace.response == _chat("final answer")
     assert result.trace.tool_steps[0].response == _tool_chat()
     assert result.trace.tool_steps[0].results[0].content == "Repository instruction."
-    second_messages = transport.post_calls[1][1]["messages"]
+    second_messages = transport.post_calls[2][1]["messages"]
     assert second_messages[-2]["reasoning"] == "preserve this intermediate reasoning"
     assert second_messages[-1] == {
         "role": "tool",
@@ -515,12 +558,33 @@ def test_run_matchup_fails_when_assistant_exceeds_local_tool_step_limit(
     with pytest.raises(RuntimeError, match="exceeded 0"):
         run_matchup(
             matchup,
-            OpenRouterClient(FakeTransport([_tool_chat()])),
+            OpenRouterClient(FakeTransport([_qa_batch(2), _tool_chat()])),
             YamlMessageCache(tmp_path / "messages.yaml"),
             YamlTraceCache(tmp_path / "traces.yaml"),
+            YamlMessageQaCache(tmp_path / "message-qa.yaml"),
             _manual_library(tmp_path, matchup.inputs),
             prefer_batch=False,
         )
+
+
+def test_run_matchup_stops_before_assistant_when_message_qa_fails(tmp_path: Path) -> None:
+    matchup = _matchup(_spec("System.", Channel.SYSTEM), _spec("User.", Channel.USER))
+    transport = FakeTransport([_qa_batch(2, complies=False)])
+    trace_cache = YamlTraceCache(tmp_path / "traces.yaml")
+
+    with pytest.raises(ValueError, match="message QA failed for"):
+        run_matchup(
+            matchup,
+            OpenRouterClient(transport),
+            YamlMessageCache(tmp_path / "messages.yaml"),
+            trace_cache,
+            YamlMessageQaCache(tmp_path / "message-qa.yaml"),
+            _manual_library(tmp_path, matchup.inputs),
+            prefer_batch=False,
+        )
+
+    assert trace_cache.get(matchup) is None
+    assert len(transport.post_calls) == 1
 
 
 def _write_matchup(path: Path) -> None:
@@ -544,13 +608,14 @@ def test_run_conversation_cli_executes_and_warm_cache_needs_no_key(
 ) -> None:
     matchup_path = tmp_path / "matchup.yaml"
     message_cache = tmp_path / "messages.yaml"
+    message_qa_cache = tmp_path / "message-qa.yaml"
     trace_cache = tmp_path / "traces.yaml"
     _write_matchup(matchup_path)
     manual = _manual_library(
         tmp_path,
         (_spec("System task.", Channel.SYSTEM), _spec("User task.", Channel.USER)),
     )
-    transport = FakeTransport([_chat("assistant answer", "live-id")])
+    transport = FakeTransport([_qa_batch(2), _chat("assistant answer", "live-id")])
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
     monkeypatch.setattr("reasonese.run_conversation.RequestsTransport", lambda key: transport)
     args = [
@@ -558,6 +623,8 @@ def test_run_conversation_cli_executes_and_warm_cache_needs_no_key(
         str(matchup_path),
         "--message-cache",
         str(message_cache),
+        "--message-qa-cache",
+        str(message_qa_cache),
         "--trace-cache",
         str(trace_cache),
         "--user-messages",
@@ -575,7 +642,8 @@ def test_run_conversation_cli_executes_and_warm_cache_needs_no_key(
     assert cold_summary["response_id"] == "live-id"
     assert warm_summary["cache_hit"] is True
     assert warm_summary["messages"] == 2
-    assert len(transport.post_calls) == 1
+    assert cold_summary["message_qa_cache"] == str(message_qa_cache)
+    assert len(transport.post_calls) == 2
 
 
 def test_run_conversation_cli_requires_key_for_uncached_matchup(

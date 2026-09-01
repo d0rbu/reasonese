@@ -16,7 +16,7 @@ instruction strings -> Cartesian product -> four-field JSONL
 The conversation flow is:
 
 ```text
-matchup -> authored messages -> ordered tool-aware conversation -> agent loop -> assistant trace
+matchup -> authored messages -> independent message QA -> conversation -> assistant trace
 ```
 
 - `reasonese.matchup` validates an assistant and an ordered tuple of two or more datapoints.
@@ -25,10 +25,13 @@ matchup -> authored messages -> ordered tool-aware conversation -> agent loop ->
 - `reasonese.manual_messages` resolves filesystem-backed variants for the user author.
 - `reasonese.tools` defines bounded file, shell, Python, and server-side web-search tools.
 - `reasonese.cache` stores generated messages and raw traces in readable YAML.
+- `reasonese.message_qa` audits exact materialized text against its datapoint instructions.
+- `reasonese.message_qa_cache` preserves parsed QA results and raw judge responses in YAML.
+- `reasonese.check_messages` provides the reusable fail-closed gate and standalone utility.
 - `reasonese.runner` coordinates cache lookup, generation, construction, and execution.
 - `reasonese.run_conversation` is the standalone conversation utility.
 
-The two utilities have separate console entry points. There is no package-level dispatcher
+The utilities have separate console entry points. There is no package-level dispatcher
 or shared command switch.
 
 `Instruction` is a `phantom-types` string constrained to be non-empty and trimmed.
@@ -43,6 +46,12 @@ separate from the four entry axes.
 The OpenRouter key exists only at the transport boundary. Cache keys are structural input
 coordinates. Raw intermediate tool-call responses, local results, and the final provider
 response are retained so reasoning and provider metadata are not discarded.
+
+Message QA uses GPT-5.6 Luna batch with medium reasoning and a strict `{complies, issues}` schema.
+It quotes the exact output of `authoring_instructions(spec)` and the candidate as data. A false
+verdict blocks assistant inference but never triggers automatic regeneration. Exact content
+changes invalidate the verdict. This is an LLM quality-control judgment, not a proof of semantic
+equivalence.
 
 The judging flow is:
 
@@ -60,8 +69,7 @@ The judge receives the target base instruction, its concrete delivered text, the
 conversation including local tool calls and results, and the assistant's final visible response
 as separately escaped XML elements inside one evidence block.
 Hidden reasoning remains in the trace and its fingerprint but is not quoted as judge evidence.
-The judge does not compare instructions or force a winner. The package does not yet aggregate
-or statistically analyze verdicts.
+The response judge does not compare instructions or force a winner.
 
 The collection flow is:
 

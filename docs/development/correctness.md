@@ -12,8 +12,14 @@
 - Materialized messages and conversations preserve the matchup's order and duplicates.
 - Model-authored cache misses are grouped by author and use a batch variant when available.
 - User-authored text is used verbatim and has no provider response.
+- Message QA quotes the exact datapoint-derived authoring instructions and exact materialized text.
+- Message-QA verdicts contain a real boolean; pass has no issues and failure has at least one.
+- Exact message changes invalidate QA, and any false verdict blocks assistant inference without
+  automatic regeneration.
+- The message-QA route is `openai/gpt-5.6-luna:batch` with medium reasoning.
 - Trace caches preserve the complete raw assistant response, including reasoning fields.
-- A complete trace-cache hit performs no provider call and does not need an API key.
+- A complete trace-cache hit performs no provider call and needs no API key once its exact
+  messages also have cached passing QA.
 - Judging emits exactly one verdict per matchup input in the same order.
 - Each verdict is an actual boolean; numeric or truthy substitutes are rejected.
 - Verdicts are independent, so no invariant requires exactly one true value.

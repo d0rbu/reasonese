@@ -31,10 +31,19 @@ uv run reasonese-run-conversation --matchup configs/example_matchup.yaml
 If the matchup contains `author: user`, first replace the selected `TODO:` variant under
 `prompts/user`, or pass another hierarchy with `--user-messages`.
 
-The default readable caches are `out/generated_messages.yaml` and
-`out/conversation_traces.yaml`. Repeating the same matchup returns the cached trace without
-requiring the key, provided its manual user-authored files have not changed. Use `--no-batch`
-to disable batch authoring where supported.
+The default readable caches are `out/generated_messages.yaml`, `out/message_qa.yaml`, and
+`out/conversation_traces.yaml`. Before the assistant runs, Luna batch audits each exact
+materialized message against its datapoint instructions. Repeating the same matchup returns the
+cached trace without requiring the key once those exact messages have passing cached QA and its
+manual files have not changed. Use `--no-batch` to disable batch authoring where supported.
+
+Inspect or rerun the message audit separately with:
+
+```bash
+uv run reasonese-check-messages
+```
+
+It exits nonzero if any exact cached message is noncompliant and never regenerates text.
 
 Once the trace exists, judge every input with:
 

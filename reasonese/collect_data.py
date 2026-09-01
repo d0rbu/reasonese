@@ -14,11 +14,17 @@ from beartype import beartype
 from phantom.interval import Natural
 
 from reasonese.cache import YamlMessageCache, YamlTraceCache
+from reasonese.check_messages import audit_messages, require_compliant_messages
 from reasonese.config import load_study
-from reasonese.conversation import ConversationTrace, construct_conversation
+from reasonese.conversation import (
+    ConversationTrace,
+    GeneratedMessage,
+    construct_conversation,
+)
 from reasonese.judging import Judgment, judge_traces, trace_fingerprint
 from reasonese.judgment_cache import YamlJudgmentCache
 from reasonese.manual_messages import ManualMessageLibrary
+from reasonese.message_qa_cache import YamlMessageQaCache
 from reasonese.observations import Observation, observations_from_trial, write_observations
 from reasonese.openrouter import OpenRouterClient, RequestsTransport, model_route
 from reasonese.runner import materialize_messages, run_assistants
@@ -63,6 +69,7 @@ def collect_study(
             trace_by_id[str(trial.trial_id)] = cached
             trace_hits += 1
 
+    generated: tuple[GeneratedMessage, ...]
     if missing_trials:
         if client is None:
             raise ValueError("OPENROUTER_API_KEY is required for uncached conversation trials")
@@ -74,6 +81,27 @@ def collect_study(
             manual_messages,
             prefer_batch=prefer_batch,
         )
+    else:
+        first_trace = trace_by_id[str(trials[0].trial_id)]
+        content_by_spec = {
+            spec: first_trace.setup.content_for_input(index)
+            for index, spec in enumerate(first_trace.setup.matchup.inputs)
+        }
+        generated = tuple(
+            GeneratedMessage(spec, content_by_spec[spec], None) for spec in study.inputs
+        )
+
+    require_compliant_messages(
+        audit_messages(
+            generated,
+            YamlMessageQaCache(output_dir / "message_qa.yaml"),
+            client,
+        )
+    )
+
+    if missing_trials:
+        if client is None:
+            raise ValueError("OPENROUTER_API_KEY is required for uncached conversation trials")
         by_spec = {message.spec: message for message in generated}
         setups = tuple(
             construct_conversation(

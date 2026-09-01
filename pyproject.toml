@@ -18,6 +18,7 @@ dependencies = [
 reasonese-axes = "reasonese.show_axes:main"
 reasonese-plan = "reasonese.plan:main"
 reasonese-run-conversation = "reasonese.run_conversation:main"
+reasonese-check-messages = "reasonese.check_messages:main"
 reasonese-judge-responses = "reasonese.judge_responses:main"
 reasonese-collect-data = "reasonese.collect_data:main"
 reasonese-analyze = "reasonese.analyze:main"
