@@ -35,7 +35,8 @@ are keyed by the complete matchup, including assistant and input order.
 The judgment cache is YAML under a top-level `judgments` list. Each record contains:
 
 - the complete `matchup`;
-- a `trace_fingerprint` over the matchup, delivered conversation, and assistant response; and
+- a `trace_fingerprint` over the matchup, delivered conversation, local tool steps, and final
+  assistant response; and
 - one ordered verdict per input, with the four-axis input, exact `completed` boolean, and
   unmodified raw judge response.
 

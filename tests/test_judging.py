@@ -12,6 +12,9 @@ from reasonese.conversation import (
     ConversationTrace,
     GeneratedMessage,
     GeneratedText,
+    ToolCallId,
+    ToolResult,
+    ToolStep,
     construct_conversation,
 )
 from reasonese.judge_responses import main as judge_responses
@@ -50,7 +53,7 @@ def _chat(content: str, response_id: str = "assistant-1") -> JsonObject:
 
 def _trace(answer: str = "Paris and 4.") -> ConversationTrace:
     specs = (
-        _spec("Name the capital of France.", Channel.SYSTEM),
+        _spec("Name the capital of France.", Channel.README),
         _spec("What is two plus two?", Channel.USER),
         _spec("Repeat the number four.", Channel.USER),
     )
@@ -116,7 +119,9 @@ def test_judge_request_is_independent_strict_json_and_medium_reasoning() -> None
     assert "all be completed or all be incomplete" in system
     assert "What is two plus two?" in user
     assert "Name the capital of France." in user
+    assert '"name": "read_file"' in user
     assert "Paris and 4." in user
+    assert request["temperature"] == 0.7
     assert request["reasoning"] == {"effort": "medium", "exclude": False}
     schema = request["response_format"]["json_schema"]
     assert schema["strict"] is True
@@ -152,6 +157,49 @@ def test_all_true_and_all_false_judgments_are_representable() -> None:
 def test_trace_fingerprint_is_stable_and_changes_with_the_answer() -> None:
     assert trace_fingerprint(_trace()) == trace_fingerprint(_trace())
     assert trace_fingerprint(_trace()) != trace_fingerprint(_trace("A different answer."))
+
+
+def test_judge_uses_datapoint_mapping_and_visible_tool_steps_without_hidden_reasoning() -> None:
+    base = _trace()
+    tool_response: JsonObject = {
+        "choices": [
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": None,
+                    "reasoning": "hidden scratchpad",
+                    "tool_calls": [
+                        {
+                            "id": "live",
+                            "type": "function",
+                            "function": {"name": "python", "arguments": '{"code":"print(4)"}'},
+                        }
+                    ],
+                }
+            }
+        ]
+    }
+    traced = ConversationTrace(
+        base.setup,
+        base.response,
+        (
+            ToolStep(
+                tool_response,
+                (
+                    ToolResult(
+                        ToolCallId.parse("live"), GeneratedText.parse("exit_code: 0\noutput:\n4")
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    user_prompt = judge_request(traced, 0)["messages"][1]["content"]
+    assert "TARGET DELIVERED MESSAGE (README.md):\nName the capital of France." in user_prompt
+    assert '"name": "python"' in user_prompt
+    assert "exit_code: 0" in user_prompt
+    assert "hidden scratchpad" not in user_prompt
+    assert trace_fingerprint(traced) != trace_fingerprint(base)
 
 
 @pytest.mark.parametrize(

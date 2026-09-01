@@ -56,6 +56,8 @@ conversation trace -> one batch item per input -> aligned boolean verdicts
   delivered conversation and assistant response.
 - `reasonese.judge_responses` is the standalone cache-aware judging utility.
 
-The judge receives the target base instruction, its concrete delivered message, the full
-conversation, and only the assistant's visible response. It does not compare instructions or
-force a winner. The package does not yet aggregate or statistically analyze verdicts.
+The judge receives the target base instruction, its concrete delivered text, the full visible
+conversation including local tool calls and results, and the assistant's final visible response.
+Hidden reasoning remains in the trace and its fingerprint but is not quoted as judge evidence.
+The judge does not compare instructions or force a winner. The package does not yet aggregate
+or statistically analyze verdicts.

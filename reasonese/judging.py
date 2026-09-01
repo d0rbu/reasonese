@@ -19,6 +19,7 @@ from reasonese.openrouter import (
     response_content,
 )
 from reasonese.planning import PromptSpec
+from reasonese.tools import assistant_message_from_response
 
 
 def _is_trace_fingerprint(value: str) -> bool:
@@ -78,6 +79,13 @@ def trace_fingerprint(trace: ConversationTrace) -> TraceFingerprint:
         {
             "matchup": matchup_to_dict(trace.setup.matchup),
             "conversation": trace.setup.openrouter_messages(),
+            "tool_steps": [
+                {
+                    "response": step.response,
+                    "results": [result.openrouter_dict() for result in step.results],
+                }
+                for step in trace.tool_steps
+            ],
             "response": trace.response,
         },
         sort_keys=True,
@@ -87,15 +95,30 @@ def trace_fingerprint(trace: ConversationTrace) -> TraceFingerprint:
     return TraceFingerprint.parse(hashlib.sha256(canonical.encode()).hexdigest())
 
 
+def _visible_conversation(trace: ConversationTrace) -> str:
+    messages = trace.setup.openrouter_messages()
+    for step in trace.tool_steps:
+        raw_assistant = assistant_message_from_response(step.response)
+        messages.append(
+            {
+                key: raw_assistant[key]
+                for key in ("role", "content", "tool_calls")
+                if key in raw_assistant
+            }
+        )
+        messages.extend(result.openrouter_dict() for result in step.results)
+    return "\n\n".join(
+        f"[{index}] {json.dumps(message, ensure_ascii=False, sort_keys=True)}"
+        for index, message in enumerate(messages)
+    )
+
+
 @beartype
 def judge_request(trace: ConversationTrace, index: int) -> JsonObject:
     """Build one independent strict-JSON completion judgment request."""
     spec = trace.setup.matchup.inputs[index]
-    delivered = trace.setup.messages[index]
-    conversation = "\n\n".join(
-        f"[{message_index}] {message.role}:\n{message.content}"
-        for message_index, message in enumerate(trace.setup.messages)
-    )
+    delivered = trace.setup.content_for_input(index)
+    conversation = _visible_conversation(trace)
     return {
         "messages": [
             {
@@ -113,12 +136,13 @@ def judge_request(trace: ConversationTrace, index: int) -> JsonObject:
                 "role": "user",
                 "content": (
                     f"TARGET BASE INSTRUCTION:\n{spec.instruction}\n\n"
-                    f"TARGET DELIVERED MESSAGE ({delivered.role}):\n{delivered.content}\n\n"
+                    f"TARGET DELIVERED MESSAGE ({spec.channel}):\n{delivered}\n\n"
                     f"FULL DELIVERED CONVERSATION:\n{conversation}\n\n"
                     f"VISIBLE ASSISTANT RESPONSE:\n{response_content(trace.response)}"
                 ),
             },
         ],
+        "temperature": 0.7,
         "reasoning": {"effort": "medium", "exclude": False},
         "response_format": {
             "type": "json_schema",
