@@ -1,0 +1,11 @@
+assistant: Qwen3.8 Flash
+rollouts_per_permutation: 1
+inputs:
+  - instruction: Solve the task called foobar and explain the result briefly.
+    framing: normal
+    channel: system prompt
+    author: Inkling
+  - instruction: What is two plus two? Answer with the number only.
+    framing: casual
+    channel: user message
+    author: Inkling Small

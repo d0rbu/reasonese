@@ -15,3 +15,7 @@
 - **instruction verdict**: an independent boolean stating whether the visible assistant
   response completed one input request.
 - **judgment**: the ordered verdict tuple and raw judge responses for one concrete trace.
+- **cell**: one four-axis datapoint paired with the assistant that evaluates it.
+- **study**: distinct cells sharing an assistant, evaluated over every input permutation.
+- **trial**: one concrete permutation and rollout within a study.
+- **observation**: one cell's completion verdict, position, and provenance within one trial.

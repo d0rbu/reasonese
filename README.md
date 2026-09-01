@@ -7,7 +7,8 @@ four controlled axes: instruction, framing, channel, and author.
 
 The repository defines the axes, executes ordered multi-instruction matchups through
 OpenRouter, and independently judges whether each instruction was completed. Statistical
-analysis is a separate later step.
+analysis is a separate later step. A study orchestrator collects permutation-balanced datasets
+across multiple response rollouts.
 
 | Axis | Current values |
 |---|---|
@@ -46,6 +47,10 @@ uv run reasonese-judge-responses \
   --matchup configs/example_matchup.yaml \
   --trace-cache out/conversation_traces.yaml \
   --judgment-cache out/judgments.yaml
+
+uv run reasonese-collect-data \
+  --study configs/example_study.yaml \
+  --output out/example-study
 ```
 
 The utilities have separate entry points. `reasonese-axes` prints the values and
@@ -74,6 +79,16 @@ invalidates cached text and traces that contain its previous contents.
 “did the visible assistant response complete this request?” There is no winner constraint, so
 all verdicts may be true or all may be false. Judgments and their complete raw judge responses
 are cached in YAML against a fingerprint of the exact conversation trace.
+
+`reasonese-collect-data` treats each four-axis datapoint plus the chosen assistant as one cell.
+It requires at least two distinct inputs, runs every input permutation, and collects one or
+more rollouts per permutation. With `n` cells and `r` rollouts, the design has `n! × r` trials;
+every cell receives that many verdicts and appears `(n - 1)! × r` times at each position. The
+collector batches uncached assistant and judge work where supported, resumes from per-rollout
+caches, and writes flat analysis-ready rows to `observations.jsonl`.
+
+Full permutation designs grow factorially: two, three, and four cells produce 2, 6, and 24
+permutations before multiplying by rollouts.
 
 ## Implementation notes
 

@@ -40,3 +40,26 @@ An entry with `author: user` resolves its text from the `--user-messages` root, 
 match the YAML instruction, and it must contain `<framing>.txt` for all six framings. Directory
 names are descriptive only. A selected file beginning with `TODO:` is an intentional placeholder
 and is rejected before inference.
+
+## Study configuration
+
+A study adds a positive rollout count to an assistant and an unordered set of inputs:
+
+```yaml
+assistant: Qwen3.8 Flash
+rollouts_per_permutation: 2
+inputs:
+  - instruction: Solve the task called foobar and explain the result briefly.
+    framing: normal
+    channel: system prompt
+    author: Inkling
+  - instruction: What is two plus two? Answer with the number only.
+    framing: casual
+    channel: user message
+    author: Inkling Small
+```
+
+Inputs must be distinct, there must be at least two, and at least one must use the explicit
+`user message` channel. The collector enumerates every unique ordering and repeats each
+ordering `rollouts_per_permutation` times. See
+[`../../configs/example_study.yaml`](../../configs/example_study.yaml).

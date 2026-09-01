@@ -44,3 +44,14 @@ uv run reasonese-judge-responses --matchup configs/example_matchup.yaml
 
 This uses `openai/gpt-5.6-luna:batch` at medium reasoning and writes
 `out/judgments.yaml`. A warm judgment-cache hit also needs no API key.
+
+For a balanced dataset rather than one matchup, run:
+
+```bash
+uv run reasonese-collect-data \
+  --study configs/example_study.yaml \
+  --output out/example-study
+```
+
+The example's two cells produce two permutation trials and four observation rows. Increase
+`rollouts_per_permutation` in the study YAML for repeated assistant responses.

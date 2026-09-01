@@ -115,8 +115,14 @@ class YamlJudgmentCache:
         )
 
     def put(self, judgment: Judgment) -> None:
+        self.put_many((judgment,))
+
+    def put_many(self, judgments: tuple[Judgment, ...]) -> None:
+        """Insert or replace multiple judgments with one cache write."""
         by_key = {(cached.matchup, cached.trace_fingerprint): cached for cached in self.load()}
-        by_key[(judgment.matchup, judgment.trace_fingerprint)] = judgment
+        by_key.update(
+            {(judgment.matchup, judgment.trace_fingerprint): judgment for judgment in judgments}
+        )
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("w", encoding="utf-8") as handle:
             yaml.safe_dump(

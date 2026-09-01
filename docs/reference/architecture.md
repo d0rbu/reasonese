@@ -62,3 +62,18 @@ as separately escaped XML elements inside one evidence block.
 Hidden reasoning remains in the trace and its fingerprint but is not quoted as judge evidence.
 The judge does not compare instructions or force a winner. The package does not yet aggregate
 or statistically analyze verdicts.
+
+The collection flow is:
+
+```text
+study -> all permutations x rollouts -> traces -> judgments -> observation rows
+```
+
+- `reasonese.study` defines a cell, a strongly typed study, and stable permutation/rollout
+  trials. Distinct inputs guarantee at least two unique permutations.
+- `reasonese.collect_data` batches uncached assistant trials, flattens uncached judge requests
+  into one batch, and resumes at trial granularity.
+- `reasonese.observations` joins traces and judgments into one flat row per cell and trial.
+
+Each rollout has its own trace-cache path, so repeated responses for the same ordered matchup
+do not collapse into one cache record. Generated instructions remain shared across the study.

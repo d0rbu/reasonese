@@ -10,6 +10,7 @@ from beartype import beartype
 
 from reasonese.axes import Instruction
 from reasonese.matchup import Matchup, matchup_from_dict
+from reasonese.study import Study, study_from_dict
 
 
 @beartype
@@ -31,3 +32,10 @@ def load_matchup(path: Path) -> Matchup:
     """Load one matchup from YAML."""
     with path.open(encoding="utf-8") as handle:
         return matchup_from_dict(yaml.safe_load(handle))
+
+
+@beartype
+def load_study(path: Path) -> Study:
+    """Load and validate one permutation-balanced study from YAML."""
+    with path.open(encoding="utf-8") as handle:
+        return study_from_dict(yaml.safe_load(handle))

@@ -188,15 +188,36 @@ def parse_completed(response: JsonObject) -> bool:
 @beartype
 def judge_trace(trace: ConversationTrace, client: OpenRouterClient) -> Judgment:
     """Judge every input independently in one GPT-5.6 Luna batch."""
+    return judge_traces((trace,), client)[0]
+
+
+@beartype
+def judge_traces(
+    traces: tuple[ConversationTrace, ...], client: OpenRouterClient
+) -> tuple[Judgment, ...]:
+    """Judge multiple traces in one flattened GPT-5.6 Luna batch."""
+    if not traces:
+        return ()
     responses = client.complete_many(
         JUDGE_ROUTE,
-        tuple(judge_request(trace, index) for index in range(len(trace.setup.matchup.inputs))),
+        tuple(
+            judge_request(trace, index)
+            for trace in traces
+            for index in range(len(trace.setup.matchup.inputs))
+        ),
         prefer_batch=True,
     )
-    verdicts = InstructionVerdicts.parse(
-        tuple(
-            InstructionVerdict(spec, parse_completed(response), response)
-            for spec, response in zip(trace.setup.matchup.inputs, responses, strict=True)
+    judgments: list[Judgment] = []
+    response_index = 0
+    for trace in traces:
+        count = len(trace.setup.matchup.inputs)
+        trace_responses = responses[response_index : response_index + count]
+        response_index += count
+        verdicts = InstructionVerdicts.parse(
+            tuple(
+                InstructionVerdict(spec, parse_completed(response), response)
+                for spec, response in zip(trace.setup.matchup.inputs, trace_responses, strict=True)
+            )
         )
-    )
-    return Judgment(trace.setup.matchup, trace_fingerprint(trace), verdicts)
+        judgments.append(Judgment(trace.setup.matchup, trace_fingerprint(trace), verdicts))
+    return tuple(judgments)
