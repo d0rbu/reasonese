@@ -23,6 +23,8 @@
 | `reasonese/study.py` | Cell, study, and permutation/rollout trial types |
 | `reasonese/observations.py` | Flat analysis-ready observation records |
 | `reasonese/collect_data.py` | Resumable study collector and utility |
+| `reasonese/analysis.py` | Bradley-Terry, axis, position, and diagnostic analyses |
+| `reasonese/analyze.py` | `reasonese-analyze` reporting utility |
 | `reasonese/show_axes.py` | `reasonese-axes` utility |
 | `reasonese/plan.py` | `reasonese-plan` utility |
 | `reasonese/run_conversation.py` | `reasonese-run-conversation` utility |
@@ -36,5 +38,6 @@
 | `tests/test_cache_runner_cli.py` | Cache, execution, and CLI tests |
 | `tests/test_judging.py` | Verdict, judgment-cache, and judge-utility tests |
 | `tests/test_study_orchestration.py` | Permutation balance, collection, and resume tests |
+| `tests/test_analysis.py` | Synthetic ranking, position-effect, diagnostics, and output tests |
 
 Generated files belong under ignored directories such as `out/`.

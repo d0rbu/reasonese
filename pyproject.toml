@@ -8,6 +8,7 @@ license = "MIT"
 authors = [{ name = "Henry Castillo" }]
 dependencies = [
     "beartype>=0.22.0",
+    "numpy>=2.2.0",
     "phantom-types>=3.0.0",
     "pyyaml>=6.0.0",
     "requests>=2.32.0",
@@ -19,6 +20,7 @@ reasonese-plan = "reasonese.plan:main"
 reasonese-run-conversation = "reasonese.run_conversation:main"
 reasonese-judge-responses = "reasonese.judge_responses:main"
 reasonese-collect-data = "reasonese.collect_data:main"
+reasonese-analyze = "reasonese.analyze:main"
 
 [build-system]
 requires = ["hatchling"]

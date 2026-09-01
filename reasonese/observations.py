@@ -6,11 +6,12 @@ import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, cast
 
 from beartype import beartype
 from phantom import Phantom
 
-from reasonese.axes import Assistant
+from reasonese.axes import Assistant, Author, Channel, Framing, Instruction
 from reasonese.conversation import ConversationTrace
 from reasonese.judging import Judgment, TraceFingerprint, trace_fingerprint
 from reasonese.matchup import prompt_spec_to_dict
@@ -112,6 +113,84 @@ def observation_to_dict(observation: Observation) -> dict[str, object]:
         "assistant_response_id": observation.assistant_response_id,
         "judge_response_id": observation.judge_response_id,
     }
+
+
+def observation_from_dict(raw: object) -> Observation:
+    """Parse one flat observation and verify its derived cell identifier."""
+    if not isinstance(raw, dict):
+        raise ValueError("observation must be a mapping")
+    data = cast(dict[str, Any], raw)
+    expected = {
+        "trial_id",
+        "cell_id",
+        "instruction",
+        "framing",
+        "channel",
+        "author",
+        "assistant",
+        "permutation",
+        "rollout",
+        "position",
+        "completed",
+        "trace_fingerprint",
+        "assistant_response_id",
+        "judge_response_id",
+    }
+    if set(data) != expected:
+        raise ValueError("observation has invalid fields")
+    completed = data["completed"]
+    if not isinstance(completed, bool):
+        raise ValueError("observation completed field must be a boolean")
+    integer_fields = ("permutation", "rollout", "position")
+    if any(
+        not isinstance(data[field], int) or isinstance(data[field], bool)
+        for field in integer_fields
+    ):
+        raise ValueError("observation permutation, rollout, and position must be integers")
+    for field in ("assistant_response_id", "judge_response_id"):
+        if data[field] is not None and not isinstance(data[field], str):
+            raise ValueError("observation response IDs must be strings or null")
+    spec = PromptSpec(
+        Instruction.parse(data["instruction"]),
+        Framing(data["framing"]),
+        Channel(data["channel"]),
+        Author(data["author"]),
+    )
+    assistant = Assistant(data["assistant"])
+    parsed_cell_id = CellId.parse(data["cell_id"])
+    if parsed_cell_id != cell_id(Cell(spec, assistant)):
+        raise ValueError("observation cell_id does not match its coordinates")
+    return Observation(
+        TrialId.parse(data["trial_id"]),
+        parsed_cell_id,
+        spec,
+        assistant,
+        PositiveInteger.parse(data["permutation"]),
+        PositiveInteger.parse(data["rollout"]),
+        PositiveInteger.parse(data["position"]),
+        completed,
+        TraceFingerprint.parse(data["trace_fingerprint"]),
+        data["assistant_response_id"],
+        data["judge_response_id"],
+    )
+
+
+@beartype
+def load_observations(path: Path) -> tuple[Observation, ...]:
+    """Load analysis-ready observations from JSONL."""
+    observations: list[Observation] = []
+    with path.open(encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            if not line.strip():
+                continue
+            try:
+                raw = json.loads(line)
+                observations.append(observation_from_dict(raw))
+            except (TypeError, ValueError, json.JSONDecodeError) as error:
+                raise ValueError(f"invalid observation at {path}:{line_number}: {error}") from error
+    if not observations:
+        raise ValueError(f"{path} contains no observations")
+    return tuple(observations)
 
 
 @beartype

@@ -19,3 +19,6 @@
 - **study**: two distinct cells sharing an assistant, evaluated in both input orderings.
 - **trial**: one concrete input ordering and rollout within a study.
 - **observation**: one cell's completion verdict, position, and provenance within one trial.
+- **comparison**: one within-trial pair encoded as win, loss, or half-win tie.
+- **comparison graph**: cells as vertices and observed within-trial comparisons as edges.
+- **order sensitivity**: variation in a cell's or axis value's completion rate across positions.

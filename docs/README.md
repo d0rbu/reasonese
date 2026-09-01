@@ -10,13 +10,13 @@
 - [`reference/architecture.md`](reference/architecture.md): package responsibilities
 - [`reference/configuration.md`](reference/configuration.md): instruction, matchup, and study inputs
 - [`reference/prompt-generation.md`](reference/prompt-generation.md): exact four-axis message construction
-- [`reference/output.md`](reference/output.md): plan, trace, and judgment artifacts
+- [`reference/output.md`](reference/output.md): collection and analysis artifacts
 - [`reference/file-reference.md`](reference/file-reference.md): repository map
 
 ## Onboarding and development
 
 - [`onboarding/getting-started.md`](onboarding/getting-started.md): install and first run
 - [`onboarding/glossary.md`](onboarding/glossary.md): project vocabulary
-- [`onboarding/workflows.md`](onboarding/workflows.md): planning, collection, and judging workflows
+- [`onboarding/workflows.md`](onboarding/workflows.md): planning, collection, judging, and analysis
 - [`development/correctness.md`](development/correctness.md): design invariants
 - [`development/testing.md`](development/testing.md): validation commands

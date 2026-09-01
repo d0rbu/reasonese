@@ -56,3 +56,14 @@ uv run reasonese-collect-data \
 
 The example's two cells produce two ordering trials and four observation rows. Increase
 `rollouts_per_permutation` in the study YAML for repeated assistant responses.
+
+Analyze the collected rows with:
+
+```bash
+uv run reasonese-analyze \
+  --observations out/example-study/observations.jsonl \
+  --output out/example-study/analysis
+```
+
+The default uses L2 penalty 1.0, 200 trial-cluster bootstrap samples, and seed 0. The primary
+entry point is `analysis/report.md`; all complete tables remain available as CSV.

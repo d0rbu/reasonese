@@ -76,6 +76,24 @@ execution is intentionally desired; the Luna judge remains a batch model.
 Check the design size before a live run: two inputs and `r` rollouts require `2r` assistant
 responses and `4r` judge verdicts.
 
+## Analyze collected observations
+
+One or more observation files can be combined:
+
+```bash
+uv run reasonese-analyze \
+  --observations out/study-a/observations.jsonl out/study-b/observations.jsonl \
+  --output out/combined-analysis \
+  --l2 1.0 \
+  --bootstrap-samples 200 \
+  --seed 0
+```
+
+Inspect `report.md` first, then `diagnostics.json`. A disconnected comparison graph means the
+L2 penalty numerically places components on one list, but the data do not identify their
+between-component ordering. Position imbalance or large cell/axis position effects should be
+resolved or modeled before interpreting the primary ranking.
+
 ## Validate a change
 
 ```bash
