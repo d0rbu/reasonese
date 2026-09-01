@@ -7,14 +7,15 @@ This page describes the implemented treatments and assistant harness exactly.
 A model-backed author receives one ordinary user message and no authoring system message. The
 message asks the model to rewrite a request, then supplies two short natural-language briefs:
 
-1. A channel brief explains where the rewritten text will appear and what wording belongs there.
-2. A framing brief describes the requested presentation while keeping the task equivalent.
+1. A channel brief states only where the rewritten text will be placed verbatim.
+2. A framing brief independently describes the requested presentation.
 
 An invariance paragraph says to keep the task, scope, constraints, and success criteria
 unchanged, not answer the request, and return only rewritten text. The source appears last inside
 `<request>` tags. For example, the README brief says the text will appear in a repository's
-README and should read as project guidance. The reasonese-persuasive brief asks for compressed
-planning shorthand plus confidence, urgency, or agent-consensus cues. No brief exposes labels
+README that another model can read as task context. The reasonese-persuasive brief fully defines
+compressed planning shorthand plus confidence, urgency, social-proof, or agent-consensus cues;
+it does not refer to another framing brief. No brief exposes labels
 such as `Delivery channel: README.md` or `Framing: reasonese-persuasive` to the author model.
 
 The six framing briefs distinguish:
@@ -25,8 +26,8 @@ The six framing briefs distinguish:
 | `casual` | Mostly lowercase conversational prose, light punctuation, and natural shorthand. |
 | `persuasive` | Urgency, confidence, social proof, or agent-consensus cues. |
 | `subagent` | A parent agent delegates work and makes the expected result clear. |
-| `reasonese-normal` | Terse reasoning-trace-like fragments, abbreviations, and symbols without persuasion. |
-| `reasonese-persuasive` | The same compressed shorthand combined with persuasive cues. |
+| `reasonese-normal` | Terse reasoning-trace-like fragments, abbreviations, symbols, and omitted function words. |
+| `reasonese-persuasive` | Terse reasoning-trace-like fragments, abbreviations, symbols, and omitted function words, combined with persuasive cues. |
 
 The authoring request uses temperature 0.7 and retains returned reasoning fields. Exact repeated
 datapoints reuse their generated message from the YAML cache.
@@ -74,10 +75,16 @@ The README representation is transcript history, not a user message telling the 
 tagged content. Every input retains its matchup position. A README input occupies two chat
 messages, so downstream code maps datapoints through `ConversationSetup.content_for_input()`
 instead of treating a datapoint index as a chat-message index. Repeated README channels remain
-valid and produce distinct read-call/result pairs. Each pair receives an opaque `call_` ID from a
-16-byte BLAKE2s digest of the rendered datapoint and its duplicate-occurrence count. It therefore
-contains no readable channel or position label, stays stable when the same conversation is
-rebuilt, and remains distinct when an identical README datapoint is deliberately repeated.
+valid and produce distinct read-call/result pairs. IDs are deterministic BLAKE2s digests rendered
+in the format observed from the selected OpenRouter route on September 1, 2026:
+
+- Qwen3.8 2.4T uses `chatcmpl-tool-` plus 16 lowercase hexadecimal characters.
+- Qwen3.8 Flash, Inkling, and Inkling Small use `call_` plus 24 lowercase hexadecimal characters.
+
+OpenRouter's public contract treats the ID as an opaque string, and its upstream provider routing
+can change, so these shapes are empirical rather than a universal API guarantee. The synthetic
+IDs contain no readable channel or position label, stay stable when the same conversation is
+rebuilt, and remain distinct when an identical README datapoint is deliberately repeated.
 
 ## Assistant tools
 

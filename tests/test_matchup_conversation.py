@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any, cast
 
@@ -17,6 +18,7 @@ from reasonese.conversation import (
     ToolCallId,
     ToolName,
     ToolResult,
+    authoring_instructions,
     authoring_request,
     construct_conversation,
 )
@@ -116,6 +118,7 @@ def test_authoring_request_includes_all_treatment_coordinates() -> None:
     assert "Framing:" not in prompt
     assert request["reasoning"] == {"enabled": True, "exclude": False}
     assert request["temperature"] == 0.7
+    assert request["messages"][0]["content"] == authoring_instructions(spec)
 
 
 @pytest.mark.parametrize(
@@ -136,11 +139,26 @@ def test_every_framing_has_an_explicit_natural_brief(framing: Framing, phrase: s
     assert phrase in prompt
 
 
+def test_reasonese_briefs_are_standalone_and_do_not_cross_reference_each_other() -> None:
+    normal = authoring_instructions(
+        _spec("Task.", Channel.USER, framing=Framing.REASONESE_NORMAL)
+    )
+    persuasive = authoring_instructions(
+        _spec("Task.", Channel.USER, framing=Framing.REASONESE_PERSUASIVE)
+    )
+
+    assert "persuasive" not in normal.lower()
+    assert "same compressed" not in persuasive.lower()
+    assert "terse fragments" in persuasive
+    assert "omitted function words" in persuasive
+    assert "social proof" in persuasive
+
+
 @pytest.mark.parametrize(
     ("channel", "phrase"),
     [
-        (Channel.SYSTEM, "another model's system message"),
-        (Channel.USER, "sent directly to another model"),
+        (Channel.SYSTEM, "placed verbatim in another model's system message"),
+        (Channel.USER, "placed verbatim in another model's user message"),
         (Channel.README, "repository's README.md"),
     ],
 )
@@ -149,6 +167,14 @@ def test_every_channel_explains_how_the_target_encounters_text(
 ) -> None:
     prompt = authoring_request(_spec("Task.", channel))["messages"][0]["content"]
     assert phrase in prompt
+
+
+def test_user_channel_context_does_not_impose_a_competing_writing_style() -> None:
+    prompt = authoring_instructions(
+        _spec("Task.", Channel.USER, framing=Framing.REASONESE_PERSUASIVE)
+    )
+    assert "natural request" not in prompt
+    assert "conversational" not in prompt
 
 
 def test_conversation_preserves_input_order_and_reads_readme_with_a_tool() -> None:
@@ -177,7 +203,7 @@ def test_conversation_preserves_input_order_and_reads_readme_with_a_tool() -> No
     call_id = assistant_message["tool_calls"][0]["id"]
     assert call_id.startswith("call_")
     digest = call_id.removeprefix("call_")
-    assert len(digest) == 32
+    assert len(digest) == 24
     assert int(digest, 16) > 0
     assert assistant_message == {
         "role": "assistant",
@@ -218,6 +244,32 @@ def test_repeated_identical_readme_datapoints_receive_distinct_stable_ids() -> N
 
     assert first[0]["tool_calls"][0]["id"] != first[2]["tool_calls"][0]["id"]
     assert first == second
+
+
+@pytest.mark.parametrize(
+    ("assistant", "pattern"),
+    [
+        (Assistant.QWEN3_8_FLASH, r"call_[0-9a-f]{24}"),
+        (Assistant.QWEN3_8_2_4T, r"chatcmpl-tool-[0-9a-f]{16}"),
+        (Assistant.INKLING, r"call_[0-9a-f]{24}"),
+        (Assistant.INKLING_SMALL, r"call_[0-9a-f]{24}"),
+    ],
+)
+def test_readme_call_id_matches_observed_openrouter_route_format(
+    assistant: Assistant,
+    pattern: str,
+) -> None:
+    readme = _spec("File instruction.", Channel.README)
+    user = _spec("User instruction.", Channel.USER)
+    setup = construct_conversation(
+        make_matchup((readme, user), assistant),
+        (
+            GeneratedMessage(readme, GeneratedText.parse("file text"), {}),
+            GeneratedMessage(user, GeneratedText.parse("user text"), {}),
+        ),
+    )
+
+    assert re.fullmatch(pattern, setup.openrouter_messages()[0]["tool_calls"][0]["id"])
 
 
 def test_chat_messages_and_setup_reject_invalid_role_shapes() -> None:
