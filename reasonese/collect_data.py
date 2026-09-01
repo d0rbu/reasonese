@@ -18,6 +18,7 @@ from reasonese.config import load_study
 from reasonese.conversation import ConversationTrace, construct_conversation
 from reasonese.judging import Judgment, judge_traces, trace_fingerprint
 from reasonese.judgment_cache import YamlJudgmentCache
+from reasonese.manual_messages import ManualMessageLibrary
 from reasonese.observations import Observation, observations_from_trial, write_observations
 from reasonese.openrouter import OpenRouterClient, RequestsTransport, model_route
 from reasonese.runner import materialize_messages, run_assistants
@@ -40,6 +41,7 @@ def collect_study(
     study: Study,
     output_dir: Path,
     client: OpenRouterClient | None,
+    manual_messages: ManualMessageLibrary,
     *,
     prefer_batch: bool,
 ) -> CollectionResult:
@@ -55,7 +57,7 @@ def collect_study(
     for trial in trials:
         cache = YamlTraceCache(output_dir / "trials" / str(trial.trial_id) / "trace.yaml")
         cached = cache.get(trial.matchup)
-        if cached is None:
+        if cached is None or not manual_messages.matches(cached.setup):
             missing_trials.append(trial)
         else:
             trace_by_id[str(trial.trial_id)] = cached
@@ -69,6 +71,7 @@ def collect_study(
             base_matchup,
             client,
             YamlMessageCache(output_dir / "generated_messages.yaml"),
+            manual_messages,
             prefer_batch=prefer_batch,
         )
         by_spec = {message.spec: message for message in generated}
@@ -141,6 +144,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="reasonese-collect-data")
     parser.add_argument("--study", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--user-messages", type=Path, default=Path("prompts/user"))
     parser.add_argument("--no-batch", action="store_true")
     args = parser.parse_args(argv)
 
@@ -152,6 +156,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             study,
             args.output,
             client,
+            ManualMessageLibrary(args.user_messages),
             prefer_batch=not args.no_batch,
         )
     except (OSError, RuntimeError, TimeoutError, TypeError, ValueError) as error:

@@ -55,4 +55,5 @@ than one-hot: `[true, true]`, `[false, false]`, and mixed outcomes are all valid
 
 Each observation contains the cell ID and five coordinates, permutation, rollout, one-based
 position, completion boolean, trace fingerprint, and available assistant/judge response IDs.
-This is the input to downstream analysis.
+This is the input to downstream analysis. Cached study traces are reused only while their
+user-authored contents still match the selected manual files.

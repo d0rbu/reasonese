@@ -50,6 +50,7 @@ uv run reasonese-judge-responses \
 
 uv run reasonese-collect-data \
   --study configs/example_study.yaml \
+  --user-messages prompts/user \
   --output out/example-study
 ```
 
@@ -86,7 +87,8 @@ more rollouts per permutation. With `n` cells and `r` rollouts, the design has `
 every cell receives that many verdicts and appears `(n - 1)! × r` times at each position. The
 collector batches uncached assistant work round-by-round (including function-tool
 continuations) and batches judge work where supported, resumes from per-rollout caches, and
-writes flat analysis-ready rows to `observations.jsonl`.
+writes flat analysis-ready rows to `observations.jsonl`. The same manual-message hierarchy and
+cache-invalidation rules apply to user-authored study inputs.
 
 Full permutation designs grow factorially: two, three, and four cells produce 2, 6, and 24
 permutations before multiplying by rollouts.

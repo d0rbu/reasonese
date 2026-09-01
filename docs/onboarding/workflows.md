@@ -62,14 +62,16 @@ Create study YAML following [`../reference/configuration.md`](../reference/confi
 export OPENROUTER_API_KEY=...
 uv run reasonese-collect-data \
   --study path/to/study.yaml \
+  --user-messages prompts/user \
   --output out/my-study
 ```
 
 The collector runs every input permutation and every requested rollout, then emits
 `observations.jsonl`. It uses shared generated-message caching, separate trace caches for each
 rollout, and trace-sensitive judgment caching. Re-running an entirely cached study needs no
-key. Use `--no-batch` only when synchronous assistant execution is intentionally desired; the
-Luna judge remains a batch model.
+key. User-authored cells use the same manual hierarchy as a single matchup; editing a selected
+variant invalidates every affected rollout. Use `--no-batch` only when synchronous assistant
+execution is intentionally desired; the Luna judge remains a batch model.
 
 Check the factorial design size before a live run: `n` inputs and `r` rollouts require
 `n! × r` assistant responses and `n × n! × r` judge verdicts.

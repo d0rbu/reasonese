@@ -50,6 +50,7 @@ For a balanced dataset rather than one matchup, run:
 ```bash
 uv run reasonese-collect-data \
   --study configs/example_study.yaml \
+  --user-messages prompts/user \
   --output out/example-study
 ```
 

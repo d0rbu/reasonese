@@ -21,6 +21,7 @@ from reasonese.judging import (
     judge_traces,
     trace_fingerprint,
 )
+from reasonese.manual_messages import ManualMessageLibrary
 from reasonese.observations import (
     cell_id,
     observation_to_dict,
@@ -59,6 +60,20 @@ def _study(rollouts: int = 1, assistant: Assistant = Assistant.INKLING) -> Study
         assistant,
         rollouts,
     )
+
+
+def _manual_library(tmp_path: Path, study: Study) -> ManualMessageLibrary:
+    root = tmp_path / "manual"
+    instructions = tuple(
+        dict.fromkeys(spec.instruction for spec in study.inputs if spec.author is Author.USER)
+    )
+    for index, instruction in enumerate(instructions):
+        directory = root / f"instruction-{index}"
+        directory.mkdir(parents=True)
+        (directory / "instruction.txt").write_text(str(instruction))
+        for framing in Framing:
+            (directory / f"{framing}.txt").write_text(str(instruction))
+    return ManualMessageLibrary(root)
 
 
 def _chat(content: str, response_id: str) -> JsonObject:
@@ -384,14 +399,16 @@ def test_collect_study_batches_trials_and_judgments_then_resumes_without_a_key(
         ]
     )
     output = tmp_path / "collection"
+    manual = _manual_library(tmp_path, study)
 
     cold = collect_study(
         study,
         output,
         OpenRouterClient(transport),
+        manual,
         prefer_batch=True,
     )
-    warm = collect_study(study, output, None, prefer_batch=True)
+    warm = collect_study(study, output, None, manual, prefer_batch=True)
 
     assert len(cold.trials) == 4
     assert len(cold.observations) == 8
@@ -414,6 +431,11 @@ def test_collect_study_batches_trials_and_judgments_then_resumes_without_a_key(
     assert (output / "study.yaml").exists()
     assert len(list((output / "trials").glob("*/trace.yaml"))) == 4
 
+    first_directory = next(directory for directory in manual.root.iterdir() if directory.is_dir())
+    (first_directory / "normal.txt").write_text("Changed manual instruction.")
+    with pytest.raises(ValueError, match="conversation trials"):
+        collect_study(study, output, None, manual, prefer_batch=True)
+
 
 def test_collect_study_batches_each_active_tool_round(tmp_path: Path) -> None:
     study = _study()
@@ -433,6 +455,7 @@ def test_collect_study_batches_each_active_tool_round(tmp_path: Path) -> None:
         study,
         tmp_path / "tool-collection",
         OpenRouterClient(transport),
+        _manual_library(tmp_path, study),
         prefer_batch=True,
     )
 
@@ -456,15 +479,16 @@ def test_collect_study_batches_each_active_tool_round(tmp_path: Path) -> None:
 
 def test_collect_study_requires_key_only_for_missing_work(tmp_path: Path) -> None:
     study = _study()
+    manual = _manual_library(tmp_path, study)
     with pytest.raises(ValueError, match="conversation trials"):
-        collect_study(study, tmp_path / "empty", None, prefer_batch=True)
+        collect_study(study, tmp_path / "empty", None, manual, prefer_batch=True)
 
     output = tmp_path / "traces-only"
     for trial_index, trial in enumerate(build_trials(study)):
         trace = _trace_for_trial(study, trial_index)
         YamlTraceCache(output / "trials" / str(trial.trial_id) / "trace.yaml").put(trace)
     with pytest.raises(ValueError, match="uncached judgments"):
-        collect_study(study, output, None, prefer_batch=True)
+        collect_study(study, output, None, manual, prefer_batch=True)
 
 
 def _write_study(path: Path, study: Study) -> None:
@@ -479,10 +503,18 @@ def test_collect_data_cli_runs_then_reports_warm_cache(
     study_path = tmp_path / "study.yaml"
     output = tmp_path / "output"
     _write_study(study_path, _study())
+    manual = _manual_library(tmp_path, _study())
     transport = FakeTransport([_assistant_batch(2), _judge_batch((True, False, False, True))])
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
     monkeypatch.setattr("reasonese.collect_data.RequestsTransport", lambda key: transport)
-    args = ["--study", str(study_path), "--output", str(output)]
+    args = [
+        "--study",
+        str(study_path),
+        "--output",
+        str(output),
+        "--user-messages",
+        str(manual.root),
+    ]
 
     assert collect_data(args) == 0
     cold = json.loads(capsys.readouterr().out)
@@ -501,10 +533,21 @@ def test_collect_data_cli_reports_missing_key(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     study_path = tmp_path / "study.yaml"
-    _write_study(study_path, _study())
+    study = _study()
+    _write_study(study_path, study)
+    manual = _manual_library(tmp_path, study)
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     with pytest.raises(SystemExit, match="2"):
-        collect_data(["--study", str(study_path), "--output", str(tmp_path / "out")])
+        collect_data(
+            [
+                "--study",
+                str(study_path),
+                "--output",
+                str(tmp_path / "out"),
+                "--user-messages",
+                str(manual.root),
+            ]
+        )
 
 
 def test_refined_study_types_reject_bad_values() -> None:
