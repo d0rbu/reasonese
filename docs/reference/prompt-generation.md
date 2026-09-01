@@ -74,8 +74,10 @@ The README representation is transcript history, not a user message telling the 
 tagged content. Every input retains its matchup position. A README input occupies two chat
 messages, so downstream code maps datapoints through `ConversationSetup.content_for_input()`
 instead of treating a datapoint index as a chat-message index. Repeated README channels remain
-valid and produce distinct read-call/result pairs. Each pair receives an opaque ID in the normal
-`call_<uuid4>` form; the ID carries no channel name or input position.
+valid and produce distinct read-call/result pairs. Each pair receives an opaque `call_` ID from a
+16-byte BLAKE2s digest of the rendered datapoint and its duplicate-occurrence count. It therefore
+contains no readable channel or position label, stays stable when the same conversation is
+rebuilt, and remains distinct when an identical README datapoint is deliberately repeated.
 
 ## Assistant tools
 

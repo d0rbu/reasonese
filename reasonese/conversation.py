@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
-import uuid
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -280,14 +280,32 @@ def authoring_request(spec: PromptSpec) -> JsonObject:
     }
 
 
-def _chat_messages(message: GeneratedMessage) -> tuple[ChatMessage, ...]:
+def _readme_call_id(message: GeneratedMessage, occurrence: int) -> ToolCallId:
+    identity = json.dumps(
+        {
+            "author": message.spec.author,
+            "channel": message.spec.channel,
+            "content": message.content,
+            "framing": message.spec.framing,
+            "instruction": message.spec.instruction,
+            "occurrence": occurrence,
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    digest = hashlib.blake2s(identity.encode(), digest_size=16).hexdigest()
+    return ToolCallId.parse(f"call_{digest}")
+
+
+def _chat_messages(message: GeneratedMessage, occurrence: int) -> tuple[ChatMessage, ...]:
     match message.spec.channel:
         case Channel.SYSTEM:
             return (ChatMessage(ChatRole.SYSTEM, message.content),)
         case Channel.USER:
             return (ChatMessage(ChatRole.USER, message.content),)
         case Channel.README:
-            call_id = ToolCallId.parse(f"call_{uuid.uuid4().hex}")
+            call_id = _readme_call_id(message, occurrence)
             call = ToolCall(
                 call_id,
                 ToolName.parse("read_file"),
@@ -312,7 +330,10 @@ def construct_conversation(
     for spec, generated in zip(matchup.inputs, generated_messages, strict=True):
         if generated.spec != spec:
             raise ValueError("generated messages must follow matchup input order")
-    messages = tuple(
-        chat_message for message in generated_messages for chat_message in _chat_messages(message)
-    )
-    return ConversationSetup(matchup, messages)
+    occurrences: dict[PromptSpec, int] = {}
+    messages: list[ChatMessage] = []
+    for generated in generated_messages:
+        occurrence = occurrences.get(generated.spec, 0)
+        occurrences[generated.spec] = occurrence + 1
+        messages.extend(_chat_messages(generated, occurrence))
+    return ConversationSetup(matchup, tuple(messages))

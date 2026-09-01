@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import uuid
 from pathlib import Path
 from typing import Any, cast
 
@@ -177,7 +176,9 @@ def test_conversation_preserves_input_order_and_reads_readme_with_a_tool() -> No
     assistant_message = setup.openrouter_messages()[1]
     call_id = assistant_message["tool_calls"][0]["id"]
     assert call_id.startswith("call_")
-    assert uuid.UUID(call_id.removeprefix("call_")).version == 4
+    digest = call_id.removeprefix("call_")
+    assert len(digest) == 32
+    assert int(digest, 16) > 0
     assert assistant_message == {
         "role": "assistant",
         "content": None,
@@ -197,6 +198,26 @@ def test_conversation_preserves_input_order_and_reads_readme_with_a_tool() -> No
     assert setup.openrouter_messages()[3] == {"role": "user", "content": "generated 2"}
     assert setup.content_for_input(1) == "generated 1"
     assert setup.readme_contents() == ("generated 1",)
+    assert construct_conversation(matchup, generated).openrouter_messages() == (
+        setup.openrouter_messages()
+    )
+
+
+def test_repeated_identical_readme_datapoints_receive_distinct_stable_ids() -> None:
+    readme = _spec("File instruction.", Channel.README)
+    user = _spec("User instruction.", Channel.USER)
+    matchup = make_matchup((readme, readme, user), Assistant.INKLING)
+    generated = (
+        GeneratedMessage(readme, GeneratedText.parse("same file text"), {}),
+        GeneratedMessage(readme, GeneratedText.parse("same file text"), {}),
+        GeneratedMessage(user, GeneratedText.parse("user text"), {}),
+    )
+
+    first = construct_conversation(matchup, generated).openrouter_messages()
+    second = construct_conversation(matchup, generated).openrouter_messages()
+
+    assert first[0]["tool_calls"][0]["id"] != first[2]["tool_calls"][0]["id"]
+    assert first == second
 
 
 def test_chat_messages_and_setup_reject_invalid_role_shapes() -> None:
