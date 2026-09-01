@@ -8,11 +8,12 @@ from beartype import beartype
 from phantom import Phantom
 
 
-def _is_instruction(value: str) -> bool:
+def is_non_empty_trimmed(value: str) -> bool:
+    """Return whether text is non-empty and has no surrounding whitespace."""
     return bool(value) and value == value.strip()
 
 
-class Instruction(str, Phantom[str], predicate=_is_instruction, bound=str):
+class Instruction(str, Phantom[str], predicate=is_non_empty_trimmed, bound=str):
     """A non-empty base prompt without surrounding whitespace."""
 
 

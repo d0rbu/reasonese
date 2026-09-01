@@ -8,17 +8,13 @@ from enum import StrEnum
 from beartype import beartype
 from phantom import Phantom
 
-from reasonese.axes import Channel, Framing
+from reasonese.axes import Channel, Framing, is_non_empty_trimmed
 from reasonese.matchup import Matchup
 from reasonese.openrouter import JsonObject
 from reasonese.planning import PromptSpec
 
 
-def _is_generated_text(value: str) -> bool:
-    return bool(value) and value == value.strip()
-
-
-class GeneratedText(str, Phantom[str], predicate=_is_generated_text, bound=str):
+class GeneratedText(str, Phantom[str], predicate=is_non_empty_trimmed, bound=str):
     """Non-empty generated message text without surrounding whitespace."""
 
 
@@ -106,21 +102,25 @@ def authoring_request(spec: PromptSpec) -> JsonObject:
                 ),
             },
         ],
-        "temperature": 0.0,
+        "temperature": 0.7,
         "reasoning": {"enabled": True, "exclude": False},
     }
 
 
 def _chat_message(message: GeneratedMessage) -> ChatMessage:
-    if message.spec.channel is Channel.SYSTEM:
-        return ChatMessage(ChatRole.SYSTEM, message.content)
-    if message.spec.channel is Channel.USER:
-        return ChatMessage(ChatRole.USER, message.content)
-    readme = GeneratedText.parse(
-        "Read the following README.md content before responding.\n\n"
-        f"<README.md>\n{message.content}\n</README.md>"
-    )
-    return ChatMessage(ChatRole.USER, readme)
+    match message.spec.channel:
+        case Channel.SYSTEM:
+            return ChatMessage(ChatRole.SYSTEM, message.content)
+        case Channel.USER:
+            return ChatMessage(ChatRole.USER, message.content)
+        case Channel.README:
+            readme = GeneratedText.parse(
+                "Read the following README.md content before responding.\n\n"
+                f"<README.md>\n{message.content}\n</README.md>"
+            )
+            return ChatMessage(ChatRole.USER, readme)
+        case _:
+            raise ValueError(f"unsupported channel: {message.spec.channel}")
 
 
 @beartype

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 
@@ -104,6 +105,7 @@ def test_authoring_request_includes_all_treatment_coordinates() -> None:
     assert "reasonese-persuasive" in prompt
     assert "Do the task." in prompt
     assert request["reasoning"] == {"enabled": True, "exclude": False}
+    assert request["temperature"] == 0.7
 
 
 def test_conversation_preserves_input_order_and_wraps_readme_content() -> None:
@@ -142,3 +144,17 @@ def test_conversation_rejects_missing_or_misordered_generated_messages() -> None
         construct_conversation(matchup, (first_message,))
     with pytest.raises(ValueError, match="order"):
         construct_conversation(matchup, (second_message, first_message))
+
+
+def test_channel_rendering_fails_closed_for_future_unhandled_values() -> None:
+    system = _spec("System.", Channel.SYSTEM)
+    user = _spec("User.", Channel.USER)
+    matchup = make_matchup((system, user), Assistant.INKLING)
+    object.__setattr__(user, "channel", cast(Any, "future channel"))
+    generated = (
+        GeneratedMessage(system, GeneratedText.parse("system"), {}),
+        GeneratedMessage(user, GeneratedText.parse("user"), {}),
+    )
+
+    with pytest.raises(ValueError, match="unsupported channel"):
+        construct_conversation(matchup, generated)

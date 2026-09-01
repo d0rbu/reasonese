@@ -34,17 +34,17 @@ class ModelRoute:
     batch_model_id: OpenRouterModelId | None
 
 
-_MODEL_ROUTES = {
-    "Qwen3.8 Flash": ModelRoute(OpenRouterModelId.parse("qwen/qwen3.8-flash"), None),
-    "Qwen3.8 2.4T": ModelRoute(
+_MODEL_ROUTES: dict[Author, ModelRoute] = {
+    Author.QWEN3_8_FLASH: ModelRoute(OpenRouterModelId.parse("qwen/qwen3.8-flash"), None),
+    Author.QWEN3_8_2_4T: ModelRoute(
         OpenRouterModelId.parse("qwen/qwen3.8-2.4t-a95b"),
         OpenRouterModelId.parse("qwen/qwen3.8-2.4t-a95b:batch"),
     ),
-    "Inkling": ModelRoute(
+    Author.INKLING: ModelRoute(
         OpenRouterModelId.parse("thinkingmachines/inkling"),
         OpenRouterModelId.parse("thinkingmachines/inkling:batch"),
     ),
-    "Inkling Small": ModelRoute(
+    Author.INKLING_SMALL: ModelRoute(
         OpenRouterModelId.parse("thinkingmachines/inkling-small"),
         OpenRouterModelId.parse("thinkingmachines/inkling-small:batch"),
     ),
@@ -54,10 +54,10 @@ _MODEL_ROUTES = {
 @beartype
 def model_route(model: Author | Assistant) -> ModelRoute:
     """Return OpenRouter slugs for a model-backed author or assistant."""
-    try:
-        return _MODEL_ROUTES[str(model)]
-    except KeyError as error:
-        raise ValueError("the user author does not have an OpenRouter model") from error
+    author = Author(model.value)
+    if author is Author.USER:
+        raise ValueError("the user author does not have an OpenRouter model")
+    return _MODEL_ROUTES[author]
 
 
 @runtime_checkable

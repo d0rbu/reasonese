@@ -60,6 +60,7 @@ function and dataclass boundaries at runtime.
 
 - [`docs/research/axes.md`](docs/research/axes.md) defines the research constructs.
 - [`docs/reference/architecture.md`](docs/reference/architecture.md) describes the small implementation.
+- [`docs/reference/prompt-generation.md`](docs/reference/prompt-generation.md) traces exact prompt construction.
 - [`docs/reference/output.md`](docs/reference/output.md) describes JSONL plans and YAML caches.
 
 ## Development
