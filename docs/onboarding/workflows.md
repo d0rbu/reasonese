@@ -29,9 +29,14 @@ export OPENROUTER_API_KEY=...
 uv run reasonese-run-conversation --matchup path/to/matchup.yaml
 ```
 
+For each user-authored instruction, add its exact base text to `instruction.txt` and replace the
+selected framing placeholder under `prompts/user/<instruction>/`. Use `--user-messages` when the
+manual hierarchy lives elsewhere.
+
 The first run may submit authoring batches and then one synchronous assistant request. A warm
-trace-cache hit makes no network call. Cache files belong under ignored output directories and
-must not contain the API key.
+trace-cache hit makes no network call unless a selected manual variant changed, in which case the
+stale trace is replaced. Cache files belong under ignored output directories and must not contain
+the API key.
 
 ## Validate a change
 

@@ -37,6 +37,7 @@ uv run reasonese-plan \
 export OPENROUTER_API_KEY=...
 uv run reasonese-run-conversation \
   --matchup configs/example_matchup.yaml \
+  --user-messages prompts/user \
   --message-cache out/generated_messages.yaml \
   --trace-cache out/conversation_traces.yaml
 ```
@@ -55,6 +56,12 @@ messages and complete raw assistant traces—including intermediate tool calls, 
 returned reasoning fields—are cached as readable YAML. A warm trace-cache hit does not require
 an API key or make a provider call. A `README.md` treatment appears as an assistant `read_file`
 call followed by a tool result, rather than as a wrapper inside a user message.
+
+User-authored variants live under `prompts/user/<instruction>/`. Each directory contains the
+exact base text in `instruction.txt` plus one text file for each framing. The checked-in variant
+files are explicit `TODO:` placeholders; replace the variants you plan to run. A selected
+placeholder or incomplete instruction directory fails before inference. Editing a manual variant
+invalidates cached text and traces that contain its previous contents.
 
 ## Implementation notes
 

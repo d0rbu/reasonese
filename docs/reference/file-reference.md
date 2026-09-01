@@ -10,6 +10,8 @@
 | `reasonese/io.py` | JSONL writer |
 | `reasonese/matchup.py` | Strongly typed matchup invariants and serialization |
 | `reasonese/conversation.py` | Authoring requests and channel rendering |
+| `reasonese/manual_messages.py` | Filesystem-backed user-authored variants |
+| `prompts/user/` | Editable manual variants organized by base instruction |
 | `reasonese/tools.py` | Bounded assistant tool definitions and local execution |
 | `docs/reference/prompt-generation.md` | Exact prompts, framing guidance, and current limitations |
 | `reasonese/openrouter.py` | Synchronous and batch provider client |

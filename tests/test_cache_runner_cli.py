@@ -17,6 +17,7 @@ from reasonese.conversation import (
     ToolStep,
     construct_conversation,
 )
+from reasonese.manual_messages import ManualMessageLibrary
 from reasonese.matchup import Matchup, make_matchup, matchup_to_dict
 from reasonese.openrouter import JsonObject, OpenRouterClient
 from reasonese.planning import PromptSpec
@@ -34,6 +35,17 @@ def _spec(
 
 def _matchup(*specs: PromptSpec) -> Matchup:
     return make_matchup(specs, Assistant.INKLING_SMALL)
+
+
+def _manual_library(tmp_path: Path, specs: tuple[PromptSpec, ...]) -> ManualMessageLibrary:
+    root = tmp_path / "manual"
+    for index, instruction in enumerate(dict.fromkeys(spec.instruction for spec in specs)):
+        directory = root / f"instruction-{index}"
+        directory.mkdir(parents=True)
+        (directory / "instruction.txt").write_text(str(instruction))
+        for framing in Framing:
+            (directory / f"{framing}.txt").write_text(str(instruction))
+    return ManualMessageLibrary(root)
 
 
 def _chat(content: str, response_id: str = "response-1") -> JsonObject:
@@ -348,6 +360,7 @@ def test_materialize_messages_deduplicates_and_groups_missing_model_authors(
         matchup,
         OpenRouterClient(transport),
         cache,
+        _manual_library(tmp_path, matchup.inputs),
         prefer_batch=False,
     )
 
@@ -378,6 +391,7 @@ def test_materialize_messages_uses_a_warm_cache_without_requests(tmp_path: Path)
             matchup,
             OpenRouterClient(FakeTransport([])),
             cache,
+            _manual_library(tmp_path, matchup.inputs),
             prefer_batch=True,
         )
         == cached
@@ -395,12 +409,14 @@ def test_run_matchup_executes_once_preserves_reasoning_and_then_hits_cache(
     client = OpenRouterClient(transport)
     message_cache = YamlMessageCache(tmp_path / "messages.yaml")
     trace_cache = YamlTraceCache(tmp_path / "traces.yaml")
+    manual = _manual_library(tmp_path, matchup.inputs)
 
     first = run_matchup(
         matchup,
         client,
         message_cache,
         trace_cache,
+        manual,
         prefer_batch=True,
     )
     second = run_matchup(
@@ -408,6 +424,7 @@ def test_run_matchup_executes_once_preserves_reasoning_and_then_hits_cache(
         client,
         message_cache,
         trace_cache,
+        manual,
         prefer_batch=True,
     )
 
@@ -428,6 +445,47 @@ def test_run_matchup_executes_once_preserves_reasoning_and_then_hits_cache(
     }
 
 
+def test_editing_a_manual_variant_invalidates_message_and_trace_caches(tmp_path: Path) -> None:
+    specs = (_spec("System.", Channel.SYSTEM), _spec("User.", Channel.USER))
+    matchup = _matchup(*specs)
+    manual = _manual_library(tmp_path, matchup.inputs)
+    transport = FakeTransport([_chat("first answer"), _chat("second answer")])
+    message_cache = YamlMessageCache(tmp_path / "messages.yaml")
+    trace_cache = YamlTraceCache(tmp_path / "traces.yaml")
+
+    first = run_matchup(
+        matchup,
+        OpenRouterClient(transport),
+        message_cache,
+        trace_cache,
+        manual,
+        prefer_batch=False,
+    )
+    system_directory = next(
+        directory
+        for directory in manual.root.iterdir()
+        if (directory / "instruction.txt").read_text() == "System."
+    )
+    (system_directory / "normal.txt").write_text("Changed manual system message.")
+    second = run_matchup(
+        matchup,
+        OpenRouterClient(transport),
+        message_cache,
+        trace_cache,
+        manual,
+        prefer_batch=False,
+    )
+
+    assert first.cache_hit is False
+    assert second.cache_hit is False
+    assert second.trace.setup.content_for_input(0) == "Changed manual system message."
+    assert second.trace.response == _chat("second answer")
+    cached_system = message_cache.get(specs[0])
+    assert cached_system is not None
+    assert cached_system.content == "Changed manual system message."
+    assert len(transport.post_calls) == 2
+
+
 def test_run_matchup_executes_local_tool_calls_and_preserves_every_step(tmp_path: Path) -> None:
     matchup = _matchup(
         _spec("Repository instruction.", Channel.README),
@@ -440,6 +498,7 @@ def test_run_matchup_executes_local_tool_calls_and_preserves_every_step(tmp_path
         OpenRouterClient(transport),
         YamlMessageCache(tmp_path / "messages.yaml"),
         YamlTraceCache(tmp_path / "traces.yaml"),
+        _manual_library(tmp_path, matchup.inputs),
         prefer_batch=False,
     )
 
@@ -466,6 +525,7 @@ def test_run_matchup_fails_when_assistant_exceeds_local_tool_step_limit(
             OpenRouterClient(FakeTransport([_tool_chat()])),
             YamlMessageCache(tmp_path / "messages.yaml"),
             YamlTraceCache(tmp_path / "traces.yaml"),
+            _manual_library(tmp_path, matchup.inputs),
             prefer_batch=False,
         )
 
@@ -493,6 +553,10 @@ def test_run_conversation_cli_executes_and_warm_cache_needs_no_key(
     message_cache = tmp_path / "messages.yaml"
     trace_cache = tmp_path / "traces.yaml"
     _write_matchup(matchup_path)
+    manual = _manual_library(
+        tmp_path,
+        (_spec("System task.", Channel.SYSTEM), _spec("User task.", Channel.USER)),
+    )
     transport = FakeTransport([_chat("assistant answer", "live-id")])
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
     monkeypatch.setattr("reasonese.run_conversation.RequestsTransport", lambda key: transport)
@@ -503,6 +567,8 @@ def test_run_conversation_cli_executes_and_warm_cache_needs_no_key(
         str(message_cache),
         "--trace-cache",
         str(trace_cache),
+        "--user-messages",
+        str(manual.root),
         "--no-batch",
     ]
 
@@ -525,6 +591,10 @@ def test_run_conversation_cli_requires_key_for_uncached_matchup(
 ) -> None:
     matchup_path = tmp_path / "matchup.yaml"
     _write_matchup(matchup_path)
+    manual = _manual_library(
+        tmp_path,
+        (_spec("System task.", Channel.SYSTEM), _spec("User task.", Channel.USER)),
+    )
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
 
     with pytest.raises(SystemExit, match="2"):
@@ -536,5 +606,7 @@ def test_run_conversation_cli_requires_key_for_uncached_matchup(
                 str(tmp_path / "messages.yaml"),
                 "--trace-cache",
                 str(tmp_path / "traces.yaml"),
+                "--user-messages",
+                str(manual.root),
             ]
         )

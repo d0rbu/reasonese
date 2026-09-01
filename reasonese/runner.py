@@ -17,6 +17,7 @@ from reasonese.conversation import (
     authoring_request,
     construct_conversation,
 )
+from reasonese.manual_messages import ManualMessageLibrary
 from reasonese.matchup import Matchup
 from reasonese.openrouter import OpenRouterClient, OpenRouterModelId, model_route, response_content
 from reasonese.tools import (
@@ -43,19 +44,22 @@ def materialize_messages(
     matchup: Matchup,
     client: OpenRouterClient,
     cache: YamlMessageCache,
+    manual_messages: ManualMessageLibrary,
     *,
     prefer_batch: bool,
 ) -> tuple[GeneratedMessage, ...]:
     """Generate each distinct uncached input, grouped by author model."""
     materialized = {message.spec: message for message in cache.load()}
-    missing = tuple(dict.fromkeys(spec for spec in matchup.inputs if spec not in materialized))
     new_messages: list[GeneratedMessage] = []
 
-    for spec in missing:
-        if spec.author is Author.USER:
-            message = GeneratedMessage(spec, GeneratedText.parse(str(spec.instruction)), None)
+    user_specs = tuple(dict.fromkeys(spec for spec in matchup.inputs if spec.author is Author.USER))
+    for spec in user_specs:
+        message = GeneratedMessage(spec, manual_messages.message_for(spec), None)
+        if materialized.get(spec) != message:
             materialized[spec] = message
             new_messages.append(message)
+
+    missing = tuple(dict.fromkeys(spec for spec in matchup.inputs if spec not in materialized))
 
     model_authors = tuple(author for author in Author if author is not Author.USER)
     for author in model_authors:
@@ -122,18 +126,20 @@ def run_matchup(
     client: OpenRouterClient,
     message_cache: YamlMessageCache,
     trace_cache: YamlTraceCache,
+    manual_messages: ManualMessageLibrary,
     *,
     prefer_batch: bool,
 ) -> RunResult:
     """Return a cached trace or execute the complete matchup through OpenRouter."""
     cached = trace_cache.get(matchup)
-    if cached is not None:
+    if cached is not None and manual_messages.matches(cached.setup):
         return RunResult(cached, True)
 
     generated = materialize_messages(
         matchup,
         client,
         message_cache,
+        manual_messages,
         prefer_batch=prefer_batch,
     )
     setup = construct_conversation(matchup, generated)

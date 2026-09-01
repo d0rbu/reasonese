@@ -12,15 +12,15 @@ Framing later changes how that prompt is expressed.
 
 | Value | Intended treatment |
 |---|---|
-| `normal` | The author's default clear rendering. For the user this may be the original prompt; for a model it is an unconstrained rewrite. |
+| `normal` | The author's clear, neutral rendering of the request. |
 | `casual` | Conversational wording, lowercase text, and reduced punctuation. |
 | `persuasive` | Natural language deliberately intended to secure compliance. |
 | `subagent` | A delegation written as though a parent agent were instructing a subagent. |
 | `reasonese-normal` | A compressed reasonese representation without deliberate persuasive intent. |
 | `reasonese-persuasive` | A compressed reasonese representation deliberately intended to secure compliance. |
 
-These values name intended treatments. Model authors receive explicit transformation
-guidance. User-authored inputs are already authored and therefore pass through verbatim.
+These values name intended treatments. Model authors receive explicit transformation guidance.
+User-authored inputs load the matching manually written framing from `prompts/user`.
 
 ## Channel
 

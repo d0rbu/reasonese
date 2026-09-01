@@ -22,6 +22,7 @@ matchup -> authored messages -> ordered tool-aware conversation -> agent loop ->
 - `reasonese.matchup` validates an assistant and an ordered tuple of two or more datapoints.
 - `reasonese.openrouter` provides synchronous completions and model-grouped batch authoring.
 - `reasonese.conversation` builds authoring requests and channel-specific chat messages.
+- `reasonese.manual_messages` resolves filesystem-backed variants for the user author.
 - `reasonese.tools` defines bounded file, shell, Python, and server-side web-search tools.
 - `reasonese.cache` stores generated messages and raw traces in readable YAML.
 - `reasonese.runner` coordinates cache lookup, generation, construction, and execution.

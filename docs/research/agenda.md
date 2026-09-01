@@ -23,7 +23,7 @@ but committed source does not contain an empirical corpus or statistical result.
 ## Construct questions for later work
 
 - How should the six framing treatments be audited for fidelity and distinctness?
-- How should user-authored variants be elicited without conflating author with framing?
+- Which protocol should be used to write and review the manual user-authored variants?
 - How should generated text be audited for semantic equivalence to its base instruction?
 - How should model revisions and provider routing be recorded alongside stable display names?
 - How much does synthetic file-read history itself influence channel comparisons?

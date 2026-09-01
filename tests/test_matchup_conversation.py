@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from pathlib import Path
 from typing import Any, cast
 
@@ -106,7 +107,8 @@ def test_authoring_request_includes_all_treatment_coordinates() -> None:
         framing=Framing.REASONESE_PERSUASIVE,
     )
     request = authoring_request(spec)
-    prompt = request["messages"][1]["content"]
+    assert [message["role"] for message in request["messages"]] == ["user"]
+    prompt = request["messages"][0]["content"]
     assert "README.md" in prompt
     assert "compressed planning shorthand" in prompt
     assert "agent-consensus cues" in prompt
@@ -129,7 +131,7 @@ def test_authoring_request_includes_all_treatment_coordinates() -> None:
     ],
 )
 def test_every_framing_has_an_explicit_natural_brief(framing: Framing, phrase: str) -> None:
-    prompt = authoring_request(_spec("Task.", Channel.USER, framing=framing))["messages"][1][
+    prompt = authoring_request(_spec("Task.", Channel.USER, framing=framing))["messages"][0][
         "content"
     ]
     assert phrase in prompt
@@ -138,15 +140,15 @@ def test_every_framing_has_an_explicit_natural_brief(framing: Framing, phrase: s
 @pytest.mark.parametrize(
     ("channel", "phrase"),
     [
-        (Channel.SYSTEM, "before the other experimental messages"),
-        (Channel.USER, "natural direct request"),
-        (Channel.README, "repository documentation"),
+        (Channel.SYSTEM, "another model's system message"),
+        (Channel.USER, "sent directly to another model"),
+        (Channel.README, "repository's README.md"),
     ],
 )
 def test_every_channel_explains_how_the_target_encounters_text(
     channel: Channel, phrase: str
 ) -> None:
-    prompt = authoring_request(_spec("Task.", channel))["messages"][1]["content"]
+    prompt = authoring_request(_spec("Task.", channel))["messages"][0]["content"]
     assert phrase in prompt
 
 
@@ -172,12 +174,16 @@ def test_conversation_preserves_input_order_and_reads_readme_with_a_tool() -> No
         ChatRole.USER,
         ChatRole.USER,
     ]
-    assert setup.openrouter_messages()[1] == {
+    assistant_message = setup.openrouter_messages()[1]
+    call_id = assistant_message["tool_calls"][0]["id"]
+    assert call_id.startswith("call_")
+    assert uuid.UUID(call_id.removeprefix("call_")).version == 4
+    assert assistant_message == {
         "role": "assistant",
         "content": None,
         "tool_calls": [
             {
-                "id": "read-readme-1",
+                "id": call_id,
                 "type": "function",
                 "function": {"name": "read_file", "arguments": '{"path":"README.md"}'},
             }
@@ -185,7 +191,7 @@ def test_conversation_preserves_input_order_and_reads_readme_with_a_tool() -> No
     }
     assert setup.openrouter_messages()[2] == {
         "role": "tool",
-        "tool_call_id": "read-readme-1",
+        "tool_call_id": call_id,
         "content": "generated 1",
     }
     assert setup.openrouter_messages()[3] == {"role": "user", "content": "generated 2"}

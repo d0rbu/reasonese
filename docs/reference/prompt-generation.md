@@ -2,37 +2,63 @@
 
 This page describes the implemented treatments and assistant harness exactly.
 
-## Authoring request
+## Model-authored messages
 
-A model-backed author receives a two-message request. Its system message says to author one
-instruction, preserve the source task, change only presentation, not solve the task, and return
-only the finished instruction. The user message then gives two natural-language briefs rather
-than a list of axis labels:
+A model-backed author receives one ordinary user message and no authoring system message. The
+message asks the model to rewrite a request, then supplies two short natural-language briefs:
 
-1. A channel brief explains how the target assistant will encounter the text and what wording
-   belongs naturally in that context.
-2. A framing brief operationalizes the selected treatment while requiring task equivalence.
+1. A channel brief explains where the rewritten text will appear and what wording belongs there.
+2. A framing brief describes the requested presentation while keeping the task equivalent.
 
-The source request appears last inside `<source_request>` tags. For example, the README brief
-explains that the text will live verbatim in repository documentation and will appear to the
-target as file contents. The reasonese-persuasive brief asks for compressed planning shorthand
-plus confidence, urgency, or agent-consensus cues. Neither brief exposes strings such as
-`Delivery channel: README.md` or `Framing: reasonese-persuasive` to the author model.
+An invariance paragraph says to keep the task, scope, constraints, and success criteria
+unchanged, not answer the request, and return only rewritten text. The source appears last inside
+`<request>` tags. For example, the README brief says the text will appear in a repository's
+README and should read as project guidance. The reasonese-persuasive brief asks for compressed
+planning shorthand plus confidence, urgency, or agent-consensus cues. No brief exposes labels
+such as `Delivery channel: README.md` or `Framing: reasonese-persuasive` to the author model.
 
 The six framing briefs distinguish:
 
 | Framing | Operationalized presentation |
 |---|---|
-| `normal` | Clear, neutral, conventional prose without pressure or role-play. |
-| `casual` | Mostly lowercase informal prose, lighter punctuation, and natural shorthand. |
-| `persuasive` | Credible urgency, confidence, social proof, or agent-consensus cues. |
-| `subagent` | A parent agent delegates a bounded task and expected deliverable. |
+| `normal` | Clear, neutral prose that states the request directly. |
+| `casual` | Mostly lowercase conversational prose, light punctuation, and natural shorthand. |
+| `persuasive` | Urgency, confidence, social proof, or agent-consensus cues. |
+| `subagent` | A parent agent delegates work and makes the expected result clear. |
 | `reasonese-normal` | Terse reasoning-trace-like fragments, abbreviations, and symbols without persuasion. |
 | `reasonese-persuasive` | The same compressed shorthand combined with persuasive cues. |
 
 The authoring request uses temperature 0.7 and retains returned reasoning fields. Exact repeated
-datapoints reuse their generated message from the YAML cache. `Author.USER` remains a verbatim
-path: its input text must already embody the chosen framing.
+datapoints reuse their generated message from the YAML cache.
+
+These briefs are design choices, not winners selected by a live prompt comparison. Their purpose
+is to be short, natural, and explicit enough to audit and revise.
+
+## User-authored messages
+
+`Author.USER` never invokes an LLM. It loads a manually written variant from `prompts/user` by
+matching the datapoint's instruction text and framing. Each instruction has one directory:
+
+```text
+prompts/user/<readable-name>/
+  instruction.txt
+  normal.txt
+  casual.txt
+  persuasive.txt
+  subagent.txt
+  reasonese-normal.txt
+  reasonese-persuasive.txt
+```
+
+`instruction.txt` contains the exact base instruction used in `PromptSpec`; the directory name is
+only for humans. A selected variant beginning with `TODO:` is rejected rather than sent to a
+model. Every example instruction has a complete placeholder tree ready to edit. The same manual
+framing text is used across channels, after which channel rendering determines whether it appears
+as a system message, user message, or README file result.
+
+The conversation CLI accepts `--user-messages` to select a different root. Manual files are
+authoritative: editing a selected variant invalidates cached generated text and any cached trace
+that contains the older text.
 
 ## Channel rendering
 
@@ -48,7 +74,8 @@ The README representation is transcript history, not a user message telling the 
 tagged content. Every input retains its matchup position. A README input occupies two chat
 messages, so downstream code maps datapoints through `ConversationSetup.content_for_input()`
 instead of treating a datapoint index as a chat-message index. Repeated README channels remain
-valid and produce distinct read-call/result pairs with distinct call IDs.
+valid and produce distinct read-call/result pairs. Each pair receives an opaque ID in the normal
+`call_<uuid4>` form; the ID carries no channel name or input position.
 
 ## Assistant tools
 
@@ -74,6 +101,5 @@ usage, citations, and other provider metadata.
 ## Current boundaries
 
 The briefs are explicit operational definitions, not a claim that model-authored reasonese is a
-faithful sample of a model's latent language. There is not yet a semantic-equivalence validator
-or a bank of few-shot examples. Those are experimental-design extensions rather than hidden
-transformations in the pipeline.
+faithful sample of a model's latent language. There is not yet a semantic-equivalence validator,
+a bank of few-shot examples, or live evidence that these exact briefs outperform alternatives.

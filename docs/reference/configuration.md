@@ -32,3 +32,11 @@ inputs:
 The list must contain at least two entries and at least one entry whose channel is
 `user message`. It may contain more entries and may repeat any channel. List order is the
 conversation order. See [`../../configs/example_matchup.yaml`](../../configs/example_matchup.yaml).
+
+## Manual user-author configuration
+
+An entry with `author: user` resolves its text from the `--user-messages` root, which defaults to
+`prompts/user`. Create one child directory per instruction. Its `instruction.txt` must exactly
+match the YAML instruction, and it must contain `<framing>.txt` for all six framings. Directory
+names are descriptive only. A selected file beginning with `TODO:` is an intentional placeholder
+and is rejected before inference.

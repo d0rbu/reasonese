@@ -17,8 +17,9 @@ These are unrendered condition specifications, not generated prompts or model ou
 
 The message cache is YAML under a top-level `messages` list. Each record contains the full
 four-axis `input`, its generated `content`, and the unmodified OpenRouter `response`. A
-user-authored message has a null response because its instruction text is used verbatim.
-Records are keyed by all four input coordinates.
+user-authored message has a null response because its content comes from the selected manual
+variant file. Records are keyed by all four input coordinates. Manual files remain authoritative;
+changed manual text replaces its cached message and invalidates traces containing the old text.
 
 ## Conversation-trace cache
 

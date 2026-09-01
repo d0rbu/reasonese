@@ -12,6 +12,7 @@ from beartype import beartype
 
 from reasonese.cache import YamlMessageCache, YamlTraceCache
 from reasonese.config import load_matchup
+from reasonese.manual_messages import ManualMessageLibrary
 from reasonese.openrouter import OpenRouterClient, RequestsTransport
 from reasonese.runner import run_matchup
 
@@ -23,6 +24,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--matchup", type=Path, required=True)
     parser.add_argument("--message-cache", type=Path, default=Path("out/generated_messages.yaml"))
     parser.add_argument("--trace-cache", type=Path, default=Path("out/conversation_traces.yaml"))
+    parser.add_argument("--user-messages", type=Path, default=Path("prompts/user"))
     parser.add_argument("--no-batch", action="store_true")
     args = parser.parse_args(argv)
 
@@ -30,8 +32,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         matchup = load_matchup(args.matchup)
         message_cache = YamlMessageCache(args.message_cache)
         trace_cache = YamlTraceCache(args.trace_cache)
+        manual_messages = ManualMessageLibrary(args.user_messages)
         cached = trace_cache.get(matchup)
-        if cached is not None:
+        if cached is not None and manual_messages.matches(cached.setup):
             result = {
                 "assistant": str(matchup.assistant),
                 "cache_hit": True,
@@ -51,6 +54,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             client,
             message_cache,
             trace_cache,
+            manual_messages,
             prefer_batch=not args.no_batch,
         )
     except (OSError, RuntimeError, TypeError, ValueError) as error:
