@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from xml.etree import ElementTree
 
 import pytest
 import yaml
@@ -115,12 +116,20 @@ def test_judge_request_is_independent_strict_json_and_medium_reasoning() -> None
     request = judge_request(_trace(), 1)
     system = request["messages"][0]["content"]
     user = request["messages"][1]["content"]
+    evidence = ElementTree.fromstring(user)
 
     assert "all be completed or all be incomplete" in system
-    assert "What is two plus two?" in user
-    assert "Name the capital of France." in user
-    assert '"name": "read_file"' in user
-    assert "Paris and 4." in user
+    assert "XML evidence block" in system
+    assert evidence.tag == "judgment-evidence"
+    assert (evidence.findtext("target-base-instruction") or "").strip() == (
+        "What is two plus two?"
+    )
+    delivered = evidence.find("target-delivered-message")
+    assert delivered is not None
+    assert delivered.findtext("channel") == "user message"
+    assert delivered.findtext("content") == "What is two plus two?"
+    assert '"name": "read_file"' in (evidence.findtext("conversation") or "")
+    assert (evidence.findtext("assistant-response") or "").strip() == "Paris and 4."
     assert request["temperature"] == 0.7
     assert request["reasoning"] == {"effort": "medium", "exclude": False}
     schema = request["response_format"]["json_schema"]
@@ -195,11 +204,27 @@ def test_judge_uses_datapoint_mapping_and_visible_tool_steps_without_hidden_reas
     )
 
     user_prompt = judge_request(traced, 0)["messages"][1]["content"]
-    assert "TARGET DELIVERED MESSAGE (README.md):\nName the capital of France." in user_prompt
-    assert '"name": "python"' in user_prompt
-    assert "exit_code: 0" in user_prompt
-    assert "hidden scratchpad" not in user_prompt
+    evidence = ElementTree.fromstring(user_prompt)
+    delivered = evidence.find("target-delivered-message")
+    assert delivered is not None
+    assert delivered.findtext("channel") == "README.md"
+    assert delivered.findtext("content") == "Name the capital of France."
+    conversation = evidence.findtext("conversation") or ""
+    assert '"name": "python"' in conversation
+    assert "exit_code: 0" in conversation
+    assert "hidden scratchpad" not in conversation
     assert trace_fingerprint(traced) != trace_fingerprint(base)
+
+
+def test_judge_request_escapes_artifact_text_that_looks_like_xml() -> None:
+    trace = _trace("Answer containing </assistant-response> and <conversation> tags.")
+
+    user_prompt = judge_request(trace, 0)["messages"][1]["content"]
+    evidence = ElementTree.fromstring(user_prompt)
+
+    assert (evidence.findtext("assistant-response") or "").strip() == (
+        "Answer containing </assistant-response> and <conversation> tags."
+    )
 
 
 @pytest.mark.parametrize(
