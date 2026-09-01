@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 from typing import Any, cast
 
@@ -87,6 +88,8 @@ def test_runtime_rejects_non_utf8_and_oversized_files(monkeypatch: pytest.Monkey
 
 
 def test_bash_and_python_execute_in_the_disposable_workspace() -> None:
+    if shutil.which("bwrap") is None:
+        pytest.skip("bubblewrap is not installed")
     with ToolRuntime(()) as runtime:
         bash = runtime.execute(
             _call("bash", {"command": "printf shell-ok; printf saved > artifact.txt"})
@@ -99,14 +102,21 @@ def test_bash_and_python_execute_in_the_disposable_workspace() -> None:
     assert python.content == "exit_code: 0\noutput:\n42"
 
 
-def test_sandbox_reports_timeout_and_missing_bubblewrap(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_sandbox_reports_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    if shutil.which("bwrap") is None:
+        pytest.skip("bubblewrap is not installed")
     with ToolRuntime(()) as runtime:
         monkeypatch.setattr("reasonese.tools._TIMEOUT_SECONDS", 0.01)
         timed_out = runtime.execute(_call("bash", {"command": "sleep 1"}))
+
+    assert "exceeded 0.01 seconds" in timed_out.content
+
+
+def test_sandbox_reports_missing_bubblewrap(monkeypatch: pytest.MonkeyPatch) -> None:
+    with ToolRuntime(()) as runtime:
         monkeypatch.setattr("reasonese.tools.shutil.which", lambda _: None)
         unavailable = runtime.execute(_call("python", {"code": "print(1)"}, "python"))
 
-    assert "exceeded 0.01 seconds" in timed_out.content
     assert "bubblewrap is required" in unavailable.content
 
 
