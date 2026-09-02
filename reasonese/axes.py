@@ -8,11 +8,12 @@ from beartype import beartype
 from phantom import Phantom
 
 
-def _is_instruction(value: str) -> bool:
+def is_non_empty_trimmed(value: str) -> bool:
+    """Return whether text is non-empty and has no surrounding whitespace."""
     return bool(value) and value == value.strip()
 
 
-class Instruction(str, Phantom[str], predicate=_is_instruction, bound=str):
+class Instruction(str, Phantom[str], predicate=is_non_empty_trimmed, bound=str):
     """A non-empty base prompt without surrounding whitespace."""
 
 
@@ -45,9 +46,18 @@ class Author(StrEnum):
     INKLING_SMALL = "Inkling Small"
 
 
+class Assistant(StrEnum):
+    """The model that receives the generated conversation."""
+
+    QWEN3_8_FLASH = "Qwen3.8 Flash"
+    QWEN3_8_2_4T = "Qwen3.8 2.4T"
+    INKLING = "Inkling"
+    INKLING_SMALL = "Inkling Small"
+
+
 @beartype
 def axis_manifest() -> dict[str, str | list[str]]:
-    """Return the values of all four axes."""
+    """Return the values of all four entry axes."""
     return {
         "instruction": "configured base prompts",
         "framing": [str(framing) for framing in Framing],

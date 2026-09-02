@@ -2,33 +2,30 @@
 
 ## Current step
 
-The current step establishes the vocabulary and software representation for four axes:
-instruction, framing, channel, and author. Its output is a deterministic list of intended
-prompt specifications.
+The current step turns four-axis datapoints into ordered multi-instruction conversations and
+collects assistant traces. The assistant remains matchup metadata rather than an entry axis.
 
-This foundation answers only:
+This foundation specifies:
 
 - which values currently belong to each axis;
 - how simple base instructions are configured;
 - how every axis combination is enumerated; and
-- how those combinations are serialized without ambiguity.
+- how those combinations are serialized without ambiguity;
+- how model authors generate framed messages;
+- how channel treatments become an ordered conversation; and
+- how generated messages and raw responses are cached.
 
 ## Deferred decisions
 
-Later work may specify how prompts are written, how model authors are invoked, how channel
-environments are rendered, which executor models receive the prompts, how responses are
-collected, and how results are analyzed. None of those procedures is selected or implied by
-this foundation.
-
-In particular, the repository currently contains no generated prompt corpus, provider
-adapter, response artifact, empirical observation, or statistical result.
+Later work must specify judging and analysis. The repository contains an execution mechanism,
+but committed source does not contain an empirical corpus or statistical result.
 
 ## Construct questions for later work
 
-- What reproducible rubric distinguishes casual, persuasive, subagent, and reasonese text?
-- How should user-authored variants be elicited without conflating author with framing?
+- How should the six framing treatments be audited for fidelity and distinctness?
+- Which protocol should be used to write and review the manual user-authored variants?
 - How should generated text be audited for semantic equivalence to its base instruction?
-- What metadata will uniquely identify model authors and their decoding settings?
-- What wrapper content is necessary to make the three channels comparable?
+- How should model revisions and provider routing be recorded alongside stable display names?
+- How much does synthetic file-read history itself influence channel comparisons?
 
 Those questions should be resolved before interpreting future model behavior.

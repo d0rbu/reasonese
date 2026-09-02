@@ -5,8 +5,8 @@ four controlled axes: instruction, framing, channel, and author.
 
 ## Current foundation
 
-The repository currently defines the axes and enumerates their combinations. It does not
-yet generate framed text, call a model, collect responses, or analyze outcomes.
+The repository defines the axes, enumerates their combinations, and executes ordered
+multi-instruction matchups through OpenRouter. Judging and analysis are separate later steps.
 
 | Axis | Current values |
 |---|---|
@@ -16,8 +16,8 @@ yet generate framed text, call a model, collect responses, or analyze outcomes.
 | author | `user`, `Qwen3.8 Flash`, `Qwen3.8 2.4T`, `Inkling`, `Inkling Small` |
 
 Framing and author are independent. “Normal” is the author's default rendering in clear
-prose: for the user it may preserve the original instruction, while for a model it is the
-model's unconstrained rewrite.
+prose. A `user`-authored input is treated as already written and used verbatim; model authors
+rewrite the base instruction according to the selected framing.
 
 Six framings, three channels, and five authors produce `6 × 3 × 5 = 90` specifications per
 base instruction. A specification is just a four-field dataclass containing those axes.
@@ -33,12 +33,35 @@ uv run reasonese-axes
 uv run reasonese-plan \
   --instructions configs/example_instructions.toml \
   --output out/example/prompt_specs.jsonl
+
+export OPENROUTER_API_KEY=...
+uv run reasonese-run-conversation \
+  --matchup configs/example_matchup.yaml \
+  --user-messages prompts/user \
+  --message-cache out/generated_messages.yaml \
+  --trace-cache out/conversation_traces.yaml
 ```
 
-The two utilities are independent: `reasonese-axes` prints the values, while
-`reasonese-plan` accepts the instruction and output paths. The example contains two
-instructions, so it writes 180 JSONL records. Each record contains only `instruction`,
-`framing`, `channel`, and `author`.
+The utilities have separate entry points. `reasonese-axes` prints the values and
+`reasonese-plan` writes four-axis datapoints. `reasonese-run-conversation` loads a `Matchup`,
+generates any missing model-authored messages, constructs the ordered conversation, and sends
+it to the selected assistant with file-read, sandboxed bash, sandboxed Python, and web-search
+tools. It uses OpenRouter batch variants for author groups that support them; `--no-batch`
+forces synchronous authoring requests. Bash and Python execution require `bubblewrap` (`bwrap`)
+on the host.
+
+A matchup contains one assistant plus an ordered tuple of inputs. It requires at least two
+inputs and at least one explicit `user message`; repeated channels are valid. Generated
+messages and complete raw assistant traces—including intermediate tool calls, tool results, and
+returned reasoning fields—are cached as readable YAML. A warm trace-cache hit does not require
+an API key or make a provider call. A `README.md` treatment appears as an assistant `read_file`
+call followed by a tool result, rather than as a wrapper inside a user message.
+
+User-authored variants live under `prompts/user/<instruction>/`. Each directory contains the
+exact base text in `instruction.txt` plus one text file for each framing. The checked-in variant
+files are explicit `TODO:` placeholders; replace the variants you plan to run. A selected
+placeholder or incomplete instruction directory fails before inference. Editing a manual variant
+invalidates cached text and traces that contain its previous contents.
 
 ## Implementation notes
 
@@ -48,7 +71,8 @@ function and dataclass boundaries at runtime.
 
 - [`docs/research/axes.md`](docs/research/axes.md) defines the research constructs.
 - [`docs/reference/architecture.md`](docs/reference/architecture.md) describes the small implementation.
-- [`docs/reference/output.md`](docs/reference/output.md) shows the JSONL output.
+- [`docs/reference/prompt-generation.md`](docs/reference/prompt-generation.md) traces exact prompt construction.
+- [`docs/reference/output.md`](docs/reference/output.md) describes JSONL plans and YAML caches.
 
 ## Development
 

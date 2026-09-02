@@ -12,22 +12,25 @@ Framing later changes how that prompt is expressed.
 
 | Value | Intended treatment |
 |---|---|
-| `normal` | The author's default clear rendering. For the user this may be the original prompt; for a model it is an unconstrained rewrite. |
+| `normal` | The author's clear, neutral rendering of the request. |
 | `casual` | Conversational wording, lowercase text, and reduced punctuation. |
 | `persuasive` | Natural language deliberately intended to secure compliance. |
 | `subagent` | A delegation written as though a parent agent were instructing a subagent. |
 | `reasonese-normal` | A compressed reasonese representation without deliberate persuasive intent. |
 | `reasonese-persuasive` | A compressed reasonese representation deliberately intended to secure compliance. |
 
-These values name intended treatments. This step does not implement the transformations.
+These values name intended treatments. Model authors receive explicit transformation guidance.
+User-authored inputs load the matching manually written framing from `prompts/user`.
 
 ## Channel
 
 - `system prompt`: place the framed instruction in the executor's system prompt.
 - `user message`: place it in a user message.
-- `README.md`: place it in `README.md` and tell the executor to read the file.
+- `README.md`: present it as the result of an assistant `read_file("README.md")` tool call.
 
-The planner records the channel but does not yet render the corresponding environment.
+During execution, system and user inputs become chat messages in their original order.
+`README.md` content is not wrapped in a user message. It appears as file-read tool history at
+the datapoint's ordered position in the transcript.
 
 ## Author
 
@@ -39,6 +42,12 @@ The planner records the channel but does not yet render the corresponding enviro
 
 The enum strings above are the display values; there is no second label or identifier map.
 Author means whoever writes the framed instruction, not the executor model.
+
+## Assistant
+
+The assistant is not a fifth entry axis. A `Matchup` places an ordered tuple of four-axis
+datapoints in front of one of the four model-backed author values. This cleanly separates who
+writes each instruction from which model receives the resulting conversation.
 
 ## Design size
 

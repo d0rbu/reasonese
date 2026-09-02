@@ -1,4 +1,4 @@
-"""Write planned prompt specifications."""
+"""Write planned datapoints."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from reasonese.planning import PromptSpec
 
 @beartype
 def write_prompt_specs(path: Path, specs: tuple[PromptSpec, ...]) -> None:
-    """Write prompt specifications as JSONL."""
+    """Write datapoints as JSONL."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
         for spec in specs:

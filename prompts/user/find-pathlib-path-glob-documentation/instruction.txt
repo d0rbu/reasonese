@@ -1,0 +1,1 @@
+Find the official Python documentation for pathlib.Path.glob and summarize its behavior.
