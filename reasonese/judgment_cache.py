@@ -15,6 +15,8 @@ from reasonese.judging import (
     InstructionVerdicts,
     Judgment,
     TraceFingerprint,
+    _instruction_verdict_from_validated,
+    _judgment_from_validated,
     trace_fingerprint,
 )
 from reasonese.matchup import (
@@ -88,30 +90,6 @@ def _judgment_fields(
         TraceFingerprint.parse(data["trace_fingerprint"]),
         tuple(fields),
     )
-
-
-def _judgment_from_validated(
-    matchup: Matchup,
-    fingerprint: TraceFingerprint,
-    verdicts: InstructionVerdicts,
-) -> Judgment:
-    judgment = object.__new__(Judgment)
-    object.__setattr__(judgment, "matchup", matchup)
-    object.__setattr__(judgment, "trace_fingerprint", fingerprint)
-    object.__setattr__(judgment, "verdicts", verdicts)
-    return judgment
-
-
-def _instruction_verdict_from_validated(
-    spec: PromptSpec,
-    completed: bool,
-    response: JsonObject,
-) -> InstructionVerdict:
-    verdict = object.__new__(InstructionVerdict)
-    object.__setattr__(verdict, "spec", spec)
-    object.__setattr__(verdict, "completed", completed)
-    object.__setattr__(verdict, "response", response)
-    return verdict
 
 
 @beartype
