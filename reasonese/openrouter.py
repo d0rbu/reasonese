@@ -194,7 +194,7 @@ class OpenRouterClient:
     transport: JsonTransport
     poll_interval_seconds: float = 10.0
     batch_timeout_seconds: float = 86_400.0
-    sync_workers: int = 16
+    sync_workers: int = 8
     sleep: Callable[[float], None] = field(default=time.sleep, repr=False)
     monotonic: Callable[[], float] = field(default=time.monotonic, repr=False)
 

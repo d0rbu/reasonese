@@ -20,8 +20,8 @@ matchup -> authored messages -> independent message QA -> conversation -> assist
 ```
 
 - `reasonese.matchup` validates an assistant and an ordered tuple of two or more datapoints.
-- `reasonese.openrouter` provides bounded concurrent synchronous completions, retries definite
-  rate limits with bounded backoff, and overlaps
+- `reasonese.openrouter` provides eight-worker concurrent synchronous completions by default,
+  retries definite rate limits with bounded backoff, and overlaps
   independent model-grouped batch jobs while preserving request and group order. Requests with
   OpenRouter server tools stay on the synchronous API because those tools are rejected by the
   Batch API.

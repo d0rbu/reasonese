@@ -105,7 +105,7 @@ are cached in YAML against a fingerprint of the exact conversation trace.
 It requires exactly two distinct inputs, runs both input orderings, and collects one or more
 rollouts per ordering. With `r` rollouts, the design has `2r` trials; every cell receives `2r`
 verdicts and appears `r` times at each position. The collector runs uncached assistant work
-through bounded, completion-driven concurrency: as soon as one response requests a local tool,
+through eight-worker, completion-driven concurrency by default: as soon as one response requests a local tool,
 its continuation is submitted without waiting for slower peer responses. It batches judge work,
 resumes from per-rollout caches, and writes flat analysis-ready rows to `observations.jsonl`.
 Assistant requests retain the
