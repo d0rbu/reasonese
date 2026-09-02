@@ -23,6 +23,7 @@ from reasonese.manual_messages import ManualMessageLibrary
 from reasonese.matchup import Matchup
 from reasonese.message_qa_cache import YamlMessageQaCache
 from reasonese.openrouter import (
+    CompletionGroup,
     JsonObject,
     ModelRoute,
     OpenRouterClient,
@@ -30,6 +31,7 @@ from reasonese.openrouter import (
     model_route,
     response_content,
 )
+from reasonese.planning import PromptSpec
 from reasonese.tools import (
     ASSISTANT_TOOLS,
     ToolRuntime,
@@ -81,16 +83,26 @@ def materialize_messages(
 
     missing = tuple(dict.fromkeys(spec for spec in matchup.inputs if spec not in materialized))
 
+    grouped_specs: list[tuple[PromptSpec, ...]] = []
+    completion_groups: list[CompletionGroup] = []
     model_authors = tuple(author for author in Author if author is not Author.USER)
     for author in model_authors:
         authored_specs = tuple(spec for spec in missing if spec.author is author)
         if not authored_specs:
             continue
-        responses = client.complete_many(
-            model_route(author),
-            tuple(authoring_request(spec) for spec in authored_specs),
-            prefer_batch=prefer_batch,
+        grouped_specs.append(authored_specs)
+        completion_groups.append(
+            CompletionGroup(
+                model_route(author),
+                tuple(authoring_request(spec) for spec in authored_specs),
+            )
         )
+
+    grouped_responses = client.complete_many_grouped(
+        tuple(completion_groups),
+        prefer_batch=prefer_batch,
+    )
+    for authored_specs, responses in zip(grouped_specs, grouped_responses, strict=True):
         for spec, response in zip(authored_specs, responses, strict=True):
             message = GeneratedMessage(
                 spec,
