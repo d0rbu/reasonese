@@ -11,6 +11,8 @@
 - **prompt specification**: one unrendered combination of instruction, framing, channel,
   and author.
 - **materialization**: generation or retrieval of concrete text for an entry datapoint.
+- **message QA**: an exact-text compliance verdict and issue list produced before assistant
+  inference from the datapoint-derived authoring instructions.
 - **conversation trace**: the complete rendered conversation and raw assistant response.
 - **instruction verdict**: an independent boolean stating whether the visible assistant
   response completed one input request.

@@ -33,10 +33,25 @@ For each user-authored instruction, add its exact base text to `instruction.txt`
 selected framing placeholder under `prompts/user/<instruction>/`. Use `--user-messages` when the
 manual hierarchy lives elsewhere.
 
-The first run may submit authoring batches and then one synchronous assistant request. A warm
-trace-cache hit makes no network call unless a selected manual variant changed, in which case the
-stale trace is replaced. Cache files belong under ignored output directories and must not contain
-the API key.
+The first run may submit authoring batches, one Luna message-QA batch, and then the assistant
+request. Any failed QA verdict stops before the assistant and remains cached for inspection; text
+is never rerolled automatically. A warm trace-cache hit makes no network call unless a selected
+manual variant changed or exact passing QA is absent. Cache files belong under ignored output
+directories and must not contain the API key.
+
+## Check materialized messages
+
+The conversation runner and study collector enforce this automatically. To inspect the same gate
+directly, run:
+
+```bash
+uv run reasonese-check-messages \
+  --message-cache out/generated_messages.yaml \
+  --qa-cache out/message_qa.yaml
+```
+
+The utility audits exact cache misses in one Luna batch, prints ordered booleans, and exits 1 when
+any message fails. It preserves issue lists and raw responses without modifying the messages.
 
 ## Judge a response
 
@@ -69,8 +84,9 @@ uv run reasonese-collect-data \
 The collector runs both input orderings and every requested rollout, then emits
 `observations.jsonl`. It uses shared generated-message caching, separate trace caches for each
 rollout, and trace-sensitive judgment caching. Re-running an entirely cached study needs no
-key. User-authored cells use the same manual hierarchy as a single matchup; editing a selected
-variant invalidates every affected rollout. Use `--no-batch` only when synchronous assistant
+key once exact passing message QA is also cached. User-authored cells use the same manual
+hierarchy as a single matchup; editing a selected variant invalidates every affected rollout and
+its QA. Use `--no-batch` only when synchronous assistant
 execution is intentionally desired; the Luna judge remains a batch model.
 
 Check the design size before a live run: two inputs and `r` rollouts require `2r` assistant

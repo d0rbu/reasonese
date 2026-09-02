@@ -20,6 +20,8 @@ from reasonese.judging import (
     trace_fingerprint,
 )
 from reasonese.manual_messages import ManualMessageLibrary
+from reasonese.message_qa import MessageQaVerdict
+from reasonese.message_qa_cache import YamlMessageQaCache
 from reasonese.observations import (
     cell_id,
     observation_to_dict,
@@ -145,6 +147,20 @@ def _judge_batch(values: tuple[bool, ...]) -> JsonObject:
                 _chat(json.dumps({"completed": value}), f"judge-{index}"),
             )
             for index, value in enumerate(values)
+        ],
+    }
+
+
+def _message_qa_batch(count: int) -> JsonObject:
+    return {
+        "id": "message-qa-batch",
+        "status": "completed",
+        "results": [
+            _batch_result(
+                f"request-{index}",
+                _chat(json.dumps({"complies": True, "issues": []}), f"message-qa-{index}"),
+            )
+            for index in range(count)
         ],
     }
 
@@ -377,6 +393,7 @@ def test_collect_study_batches_trials_and_judgments_then_resumes_without_a_key(
     study = _study(2)
     transport = FakeTransport(
         [
+            _message_qa_batch(2),
             _assistant_batch(4),
             _judge_batch((True, False, False, True, True, False, False, True)),
         ]
@@ -400,15 +417,16 @@ def test_collect_study_batches_trials_and_judgments_then_resumes_without_a_key(
     assert warm.trace_cache_hits == 4
     assert warm.judgment_cache_hits == 4
     assert warm.observations == cold.observations
-    assert len(transport.post_calls) == 2
-    assert transport.post_calls[0][1]["model"] == "thinkingmachines/inkling"
-    assert len(transport.post_calls[0][1]["requests"]) == 4
-    first_request = transport.post_calls[0][1]["requests"][0]["body"]
+    assert len(transport.post_calls) == 3
+    assert transport.post_calls[0][1]["model"] == "openai/gpt-5.6-luna"
+    assert transport.post_calls[1][1]["model"] == "thinkingmachines/inkling"
+    assert len(transport.post_calls[1][1]["requests"]) == 4
+    first_request = transport.post_calls[1][1]["requests"][0]["body"]
     assert first_request["temperature"] == 0.7
     assert first_request["parallel_tool_calls"] is False
     assert any(tool["type"] == "openrouter:web_search" for tool in first_request["tools"])
-    assert transport.post_calls[1][1]["model"] == "openai/gpt-5.6-luna"
-    assert len(transport.post_calls[1][1]["requests"]) == 8
+    assert transport.post_calls[2][1]["model"] == "openai/gpt-5.6-luna"
+    assert len(transport.post_calls[2][1]["requests"]) == 8
     rows = [json.loads(line) for line in (output / "observations.jsonl").read_text().splitlines()]
     assert len(rows) == 8
     assert (output / "study.yaml").exists()
@@ -424,6 +442,7 @@ def test_collect_study_batches_each_active_tool_round(tmp_path: Path) -> None:
     study = _study()
     transport = FakeTransport(
         [
+            _message_qa_batch(2),
             _assistant_batch_with_tool_and_final(),
             {
                 "id": "assistant-followup",
@@ -449,15 +468,15 @@ def test_collect_study_batches_each_active_tool_round(tmp_path: Path) -> None:
         for trial in result.trials
     )
     assert [len(trace.tool_steps) for trace in cached_traces] == [1, 0]
-    assert len(transport.post_calls[0][1]["requests"]) == 2
-    assert len(transport.post_calls[1][1]["requests"]) == 1
-    followup = transport.post_calls[1][1]["requests"][0]["body"]["messages"]
+    assert len(transport.post_calls[1][1]["requests"]) == 2
+    assert len(transport.post_calls[2][1]["requests"]) == 1
+    followup = transport.post_calls[2][1]["requests"][0]["body"]["messages"]
     assert followup[-1] == {
         "role": "tool",
         "tool_call_id": "live-read",
         "content": "Name the capital of France.",
     }
-    assert len(transport.post_calls[2][1]["requests"]) == 4
+    assert len(transport.post_calls[3][1]["requests"]) == 4
 
 
 def test_collect_study_requires_key_only_for_missing_work(tmp_path: Path) -> None:
@@ -470,6 +489,18 @@ def test_collect_study_requires_key_only_for_missing_work(tmp_path: Path) -> Non
     for trial_index, trial in enumerate(build_trials(study)):
         trace = _trace_for_trial(study, trial_index)
         YamlTraceCache(output / "trials" / str(trial.trial_id) / "trace.yaml").put(trace)
+    YamlMessageQaCache(output / "message_qa.yaml").put_many(
+        tuple(
+            MessageQaVerdict(
+                spec,
+                GeneratedText.parse(str(spec.instruction)),
+                True,
+                (),
+                _chat(json.dumps({"complies": True, "issues": []}), f"qa-{index}"),
+            )
+            for index, spec in enumerate(study.inputs)
+        )
+    )
     with pytest.raises(ValueError, match="uncached judgments"):
         collect_study(study, output, None, manual, prefer_batch=True)
 
@@ -487,7 +518,9 @@ def test_collect_data_cli_runs_then_reports_warm_cache(
     output = tmp_path / "output"
     _write_study(study_path, _study())
     manual = _manual_library(tmp_path, _study())
-    transport = FakeTransport([_assistant_batch(2), _judge_batch((True, False, False, True))])
+    transport = FakeTransport(
+        [_message_qa_batch(2), _assistant_batch(2), _judge_batch((True, False, False, True))]
+    )
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
     monkeypatch.setattr("reasonese.collect_data.RequestsTransport", lambda key: transport)
     args = [
@@ -509,7 +542,7 @@ def test_collect_data_cli_runs_then_reports_warm_cache(
     assert cold["observations"] == 4
     assert warm["trace_cache_hits"] == 2
     assert warm["judgment_cache_hits"] == 2
-    assert len(transport.post_calls) == 2
+    assert len(transport.post_calls) == 3
 
 
 def test_collect_data_cli_reports_missing_key(

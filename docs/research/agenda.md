@@ -15,6 +15,7 @@ This foundation specifies:
 - how every axis combination is enumerated; and
 - how those combinations are serialized without ambiguity;
 - how model authors generate framed messages;
+- how each exact materialized message receives an independent compliance audit;
 - how channel treatments become an ordered conversation; and
 - how generated messages and raw responses are cached; and
 - how one strict completion boolean is collected for each instruction; and
@@ -32,7 +33,7 @@ sample sizes and study topology are known.
 
 - How should the six framing treatments be audited for fidelity and distinctness?
 - Which protocol should be used to write and review the manual user-authored variants?
-- How should generated text be audited for semantic equivalence to its base instruction?
+- How well do message-QA verdicts agree with blinded human semantic-equivalence ratings?
 - How should model revisions and provider routing be recorded alongside stable display names?
 - How much does synthetic file-read history itself influence channel comparisons?
 

@@ -17,6 +17,9 @@
 | `docs/reference/prompt-generation.md` | Exact prompts, framing guidance, and current limitations |
 | `reasonese/openrouter.py` | Synchronous and batch provider client |
 | `reasonese/cache.py` | Readable message and trace caches |
+| `reasonese/message_qa.py` | Independent materialized-message compliance judgments |
+| `reasonese/message_qa_cache.py` | Exact-text-keyed readable QA cache |
+| `reasonese/check_messages.py` | Fail-closed QA gate and `reasonese-check-messages` utility |
 | `reasonese/runner.py` | Cache-aware conversation execution |
 | `reasonese/judging.py` | Independent GPT-5.6 Luna completion verdicts |
 | `reasonese/judgment_cache.py` | Trace-keyed readable judgment cache |
@@ -37,6 +40,7 @@
 | `tests/test_openrouter.py` | Provider-client contract tests |
 | `tests/test_cache_runner_cli.py` | Cache, execution, and CLI tests |
 | `tests/test_judging.py` | Verdict, judgment-cache, and judge-utility tests |
+| `tests/test_message_qa.py` | Message-QA prompt, parsing, cache, and utility tests |
 | `tests/test_study_orchestration.py` | Permutation balance, collection, and resume tests |
 | `tests/test_analysis.py` | Synthetic ranking, position-effect, diagnostics, and output tests |
 

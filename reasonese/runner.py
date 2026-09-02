@@ -9,6 +9,7 @@ from beartype import beartype
 
 from reasonese.axes import Author
 from reasonese.cache import YamlMessageCache, YamlTraceCache
+from reasonese.check_messages import audit_messages, require_compliant_messages
 from reasonese.conversation import (
     ConversationSetup,
     ConversationTrace,
@@ -20,6 +21,7 @@ from reasonese.conversation import (
 )
 from reasonese.manual_messages import ManualMessageLibrary
 from reasonese.matchup import Matchup
+from reasonese.message_qa_cache import YamlMessageQaCache
 from reasonese.openrouter import (
     JsonObject,
     ModelRoute,
@@ -168,6 +170,7 @@ def run_matchup(
     client: OpenRouterClient,
     message_cache: YamlMessageCache,
     trace_cache: YamlTraceCache,
+    qa_cache: YamlMessageQaCache,
     manual_messages: ManualMessageLibrary,
     *,
     prefer_batch: bool,
@@ -175,6 +178,11 @@ def run_matchup(
     """Return a cached trace or execute the complete matchup through OpenRouter."""
     cached = trace_cache.get(matchup)
     if cached is not None and manual_messages.matches(cached.setup):
+        cached_messages = tuple(
+            GeneratedMessage(spec, cached.setup.content_for_input(index), None)
+            for index, spec in enumerate(matchup.inputs)
+        )
+        require_compliant_messages(audit_messages(cached_messages, qa_cache, client))
         return RunResult(cached, True)
 
     generated = materialize_messages(
@@ -184,6 +192,7 @@ def run_matchup(
         manual_messages,
         prefer_batch=prefer_batch,
     )
+    require_compliant_messages(audit_messages(generated, qa_cache, client))
     setup = construct_conversation(matchup, generated)
     trace = run_assistant(setup, model_route(matchup.assistant).model_id, client)
     trace_cache.put(trace)
