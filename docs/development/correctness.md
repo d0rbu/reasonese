@@ -26,6 +26,15 @@
 - Every cell has `2r` observations and `r` observations at each position.
 - Each rollout has a separate trace cache; repeated responses cannot collapse into one record.
 - Observation rows preserve trial, permutation, rollout, one-based position, and trace identity.
+- Analysis requires exactly two cells at positions 1 and 2 and rejects duplicate cells or
+  inconsistent metadata within trials.
+- Each trial's cell pair becomes a win, loss, or 0.5 tie; tied trials are not discarded.
+- Bradley-Terry fitting always uses a positive L2 penalty and reports graph components.
+- Bootstrap intervals resample complete trials rather than dependent pair rows.
+- Every axis receives marginal summaries and pairwise contrasts.
+- Cell and axis position tables expose non-monotonic effects through position-specific rates
+  and rate ranges, even when a linear correlation is zero.
+- Regularization sensitivity reports all cell scores and ranks at 0.1×, 1×, and 10× penalty.
 
 A new axis value changes the design size and should update code, tests, examples, and the
 research definitions together.

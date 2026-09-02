@@ -77,3 +77,22 @@ study -> both input orderings x rollouts -> traces -> judgments -> observation r
 
 Each rollout has its own trace-cache path, so repeated responses for the same ordered matchup
 do not collapse into one cache record. Generated instructions remain shared across the study.
+
+The analysis flow is:
+
+```text
+observation rows -> within-trial comparisons -> ranking + margins + order diagnostics
+```
+
+- `reasonese.analysis` validates complete trials, converts each within-trial pair into a win,
+  loss, or half-win tie, and solves the L2-penalized Bradley–Terry likelihood with Newton steps.
+- Trial-cluster bootstrap resampling preserves dependence among pairwise comparisons derived
+  from the same assistant response.
+- Marginal axis rates, pairwise axis contrasts, position effects, connectivity, balance, and
+  regularization sensitivity are calculated alongside the ranking.
+- `reasonese.analyze` writes CSV tables, machine-readable diagnostics, and a Markdown report.
+
+The L2 penalty produces a numerical total order even under separation. Comparison-graph
+components are reported because relative levels across disconnected components are not
+identified by the data. Marginal axis comparisons are explicitly descriptive rather than
+causal when the cell design does not independently balance those axes.

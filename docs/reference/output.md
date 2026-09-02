@@ -57,3 +57,21 @@ Each observation contains the cell ID and five coordinates, permutation, rollout
 position, completion boolean, trace fingerprint, and available assistant/judge response IDs.
 This is the input to downstream analysis. Cached study traces are reused only while their
 user-authored contents still match the selected manual files.
+
+## Analysis directory
+
+`reasonese-analyze --output DIRECTORY` writes:
+
+- `ranking.csv`: the total Bradley–Terry ordering, penalized standard errors, clustered
+  bootstrap intervals, and raw completion rates;
+- `axis_summary.csv` and `axis_comparisons.csv`: margins and pairwise contrasts for instruction,
+  framing, channel, author, and assistant;
+- `position_summary.csv`, `cell_position_effects.csv`, and `axis_position_effects.csv`;
+- `order_sensitivity.csv`: position-rate ranges and position/outcome correlations;
+- `regularization_sensitivity.csv`: scores and ranks under 0.1×, 1×, and 10× L2 penalties;
+- `diagnostics.json`: trial integrity, comparison connectivity, per-cell position balance, and
+  rank-stability summaries; and
+- `report.md`: a readable total ordering, axis table, strongest order effects, and caveats.
+
+Within a trial, completed-versus-incomplete yields a win; equal completion verdicts yield a
+0.5 tie. This retains all-true and all-false trials. Bootstrap sampling is clustered by trial.

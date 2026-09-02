@@ -2,10 +2,11 @@
 
 ## Current step
 
-The current step turns four-axis datapoints into ordered multi-instruction conversations,
+The current step turns pairs of four-axis datapoints into ordered two-instruction conversations,
 collects assistant traces, and independently judges completion of every input. The assistant
 remains matchup metadata rather than an entry axis. Study orchestration balances each cell
-over every possible position and supports repeated rollouts.
+over every possible position and supports repeated rollouts. Analysis provides penalized
+cell rankings, axis margins, and explicit position and robustness diagnostics.
 
 This foundation specifies:
 
@@ -17,13 +18,15 @@ This foundation specifies:
 - how channel treatments become an ordered conversation; and
 - how generated messages and raw responses are cached; and
 - how one strict completion boolean is collected for each instruction; and
-- how permutations and repeated rollouts become analysis-ready observation rows.
+- how both orderings and repeated rollouts become analysis-ready observation rows; and
+- how rankings, axis contrasts, order effects, and design diagnostics are reported.
 
 ## Deferred decisions
 
-Later work must specify aggregation and statistical analysis. The repository contains
-execution and judging mechanisms, but committed source does not contain an empirical corpus or
-statistical result.
+The repository specifies one initial aggregation and analysis contract but committed source
+does not contain an empirical corpus or statistical result. Future work may add hierarchical
+models, multiplicity-aware inference, or explicit position-adjusted rankings after empirical
+sample sizes and study topology are known.
 
 ## Construct questions for later work
 
