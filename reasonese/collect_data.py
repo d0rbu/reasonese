@@ -84,13 +84,16 @@ def _prepare_task(task: CollectionTask, manual_messages: ManualMessageSnapshot) 
     traces: dict[str, FingerprintedTrace] = {}
     missing_trials: list[Trial] = []
     cached_to_fingerprint: list[tuple[Trial, ConversationTrace]] = []
+    manual_matches: dict[ConversationSetup, bool] = {}
     trace_hits = 0
     for trial in trials:
         cached = cached_traces.get(trial.trial_id)
+        if cached is not None and cached.setup not in manual_matches:
+            manual_matches[cached.setup] = manual_messages.matches(cached.setup)
         if (
             cached is None
             or cached.setup.matchup != trial.matchup
-            or not manual_messages.matches(cached.setup)
+            or not manual_matches[cached.setup]
         ):
             missing_trials.append(trial)
         else:
