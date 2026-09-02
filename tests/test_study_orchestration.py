@@ -212,6 +212,8 @@ def test_trials_reuse_one_validated_matchup_per_permutation() -> None:
     assert trials[0].matchup is trials[1].matchup
     assert trials[2].matchup is trials[3].matchup
     assert trials[0].matchup is not trials[2].matchup
+    with pytest.raises(BeartypeCallHintParamViolation):
+        replace(trials[0], rollout=cast(PositiveInteger, 0))
 
 
 def test_study_cells_pair_each_input_with_the_assistant() -> None:
