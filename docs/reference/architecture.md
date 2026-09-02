@@ -26,7 +26,8 @@ matchup -> authored messages -> independent message QA -> conversation -> assist
   OpenRouter server tools stay on the synchronous API because those tools are rejected by the
   Batch API.
 - `reasonese.conversation` builds authoring requests and channel-specific chat messages.
-- `reasonese.manual_messages` resolves filesystem-backed variants for the user author.
+- `reasonese.manual_messages` resolves filesystem-backed variants for the user author and
+  snapshots the needed files once per top-level invocation.
 - `reasonese.tools` defines bounded file, shell, Python, and server-side web-search tools.
 - `reasonese.cache` stores generated messages and raw traces in readable YAML.
 - `reasonese.message_qa` audits exact materialized text against its datapoint instructions.

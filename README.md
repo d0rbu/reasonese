@@ -85,6 +85,8 @@ exact base text in `instruction.txt` plus one text file for each framing. The ch
 files are explicit `TODO:` placeholders; replace the variants you plan to run. A selected
 placeholder or incomplete instruction directory fails before inference. Editing a manual variant
 invalidates cached text and traces that contain its previous contents.
+The collector reads the needed variants into one immutable snapshot per invocation, avoiding
+repeated directory scans while ensuring edits are picked up on the next run.
 
 Before a new conversation is sent to its experimental assistant, `openai/gpt-5.6-luna:batch`
 independently checks every exact materialized message against the same authoring instructions

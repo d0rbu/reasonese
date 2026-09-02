@@ -20,7 +20,7 @@ from reasonese.conversation import (
     authoring_request,
     construct_conversation,
 )
-from reasonese.manual_messages import ManualMessageLibrary
+from reasonese.manual_messages import ManualMessageLibrary, ManualMessageSnapshot
 from reasonese.matchup import Matchup
 from reasonese.message_qa_cache import YamlMessageQaCache
 from reasonese.openrouter import (
@@ -76,7 +76,7 @@ def materialize_messages(
     matchup: Matchup,
     client: OpenRouterClient,
     cache: YamlMessageCache,
-    manual_messages: ManualMessageLibrary,
+    manual_messages: ManualMessageLibrary | ManualMessageSnapshot,
     *,
     prefer_batch: bool,
 ) -> tuple[GeneratedMessage, ...]:
@@ -95,17 +95,22 @@ def materialize_specs(
     specs: tuple[PromptSpec, ...],
     client: OpenRouterClient,
     cache: YamlMessageCache,
-    manual_messages: ManualMessageLibrary,
+    manual_messages: ManualMessageLibrary | ManualMessageSnapshot,
     *,
     prefer_batch: bool,
 ) -> tuple[GeneratedMessage, ...]:
     """Materialize arbitrary prompt specs with one shared model-grouped cache pass."""
+    manual_snapshot = (
+        manual_messages.snapshot(specs)
+        if isinstance(manual_messages, ManualMessageLibrary)
+        else manual_messages
+    )
     materialized = {message.spec: message for message in cache.load()}
     new_messages: list[GeneratedMessage] = []
 
     user_specs = tuple(dict.fromkeys(spec for spec in specs if spec.author is Author.USER))
     for spec in user_specs:
-        message = GeneratedMessage(spec, manual_messages.message_for(spec), None)
+        message = GeneratedMessage(spec, manual_snapshot.message_for(spec), None)
         if materialized.get(spec) != message:
             materialized[spec] = message
             new_messages.append(message)
@@ -241,8 +246,9 @@ def run_matchup(
     prefer_batch: bool,
 ) -> RunResult:
     """Return a cached trace or execute the complete matchup through OpenRouter."""
+    manual_snapshot = manual_messages.snapshot(matchup.inputs)
     cached = trace_cache.get(matchup)
-    if cached is not None and manual_messages.matches(cached.setup):
+    if cached is not None and manual_snapshot.matches(cached.setup):
         cached_messages = tuple(
             GeneratedMessage(spec, cached.setup.content_for_input(index), None)
             for index, spec in enumerate(matchup.inputs)
@@ -254,7 +260,7 @@ def run_matchup(
         matchup,
         client,
         message_cache,
-        manual_messages,
+        manual_snapshot,
         prefer_batch=prefer_batch,
     )
     require_compliant_messages(audit_messages(generated, qa_cache, client))
