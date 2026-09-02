@@ -58,8 +58,8 @@ than one-hot: `[true, true]`, `[false, false]`, and mixed outcomes are all valid
 - `study.yaml`: the exact assistant, rollout count, and input cells;
 - `generated_messages.yaml`: shared materialized instruction cache;
 - `message_qa.yaml`: exact message-compliance verdicts and raw QA responses;
-- `trials/TRIAL_ID/trace.yaml`: one raw conversation trace per input ordering and rollout;
-- `judgments.yaml`: raw and parsed judgments keyed by concrete trace; and
+- `collection.sqlite3`: `traces` and `judgments` tables keyed by stable trial ID, with complete
+  records stored as JSON text; and
 - `observations.jsonl`: one flat row per cell verdict.
 
 Each observation contains the cell ID and five coordinates, permutation, rollout, one-based
@@ -69,7 +69,7 @@ user-authored contents still match the selected manual files.
 
 `reasonese-collect-studies --output DIRECTORY` places shared `generated_messages.yaml` and
 `message_qa.yaml` files directly under `DIRECTORY`. Every repeated `--study PATH` is collected
-under `DIRECTORY/PATH_STEM/` with the same `study.yaml`, `trials/`, `judgments.yaml`, and
+under `DIRECTORY/PATH_STEM/` with the same `study.yaml`, `collection.sqlite3`, and
 `observations.jsonl` layout above. This lets identical cells reuse the same authored message and
 QA verdict while keeping rollout traces and judgments isolated by study.
 

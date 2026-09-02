@@ -112,6 +112,10 @@ support that server tool in batch jobs. Definite HTTP 429 responses are retried 
 of times using the provider's `Retry-After` delay when present. The same manual-message hierarchy
 and message-QA gate apply to user-authored study inputs.
 
+High-volume collector traces and judgments are JSON payloads in one `collection.sqlite3` file
+per study. This batches filesystem reads and transactional writes while retaining complete raw
+provider responses; the standalone one-conversation utilities keep their readable YAML caches.
+
 `reasonese-collect-studies` accepts repeated `--study` paths and batches work across those study
 boundaries. It shares generated-message and message-QA caches at the output root, combines all
 active assistant models and trials into one completion-driven scheduler, and submits all

@@ -104,7 +104,7 @@ class YamlMessageCache:
         )
 
 
-def _trace_from_dict(raw: object) -> ConversationTrace:
+def trace_from_dict(raw: object) -> ConversationTrace:
     if not isinstance(raw, dict):
         raise ValueError("cached trace must be a mapping")
     data = cast(dict[str, Any], raw)
@@ -212,7 +212,7 @@ def _tool_step_from_dict(raw: object) -> ToolStep:
 
 
 @beartype
-def _trace_to_dict(trace: ConversationTrace) -> dict[str, object]:
+def trace_to_dict(trace: ConversationTrace) -> dict[str, object]:
     return {
         "matchup": matchup_to_dict(trace.setup.matchup),
         "conversation": [message.openrouter_dict() for message in trace.setup.messages],
@@ -235,7 +235,7 @@ class YamlTraceCache:
     path: Path
 
     def load(self) -> tuple[ConversationTrace, ...]:
-        return tuple(_trace_from_dict(raw) for raw in _load_list(self.path, "traces"))
+        return tuple(trace_from_dict(raw) for raw in _load_list(self.path, "traces"))
 
     def get(self, matchup: Matchup) -> ConversationTrace | None:
         return next((trace for trace in self.load() if trace.setup.matchup == matchup), None)
@@ -246,5 +246,5 @@ class YamlTraceCache:
         _write_list(
             self.path,
             "traces",
-            [_trace_to_dict(cached) for cached in by_matchup.values()],
+            [trace_to_dict(cached) for cached in by_matchup.values()],
         )

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
 
 import pytest
 import yaml
 
 from reasonese.axes import Assistant, Author, Channel, Framing, Instruction
-from reasonese.cache import YamlMessageCache, YamlTraceCache
+from reasonese.cache import YamlMessageCache
 from reasonese.collect_data import CollectionResult, CollectionTask, collect_studies, collect_study
 from reasonese.collect_data import main as collect_data
 from reasonese.collect_studies import collection_tasks
@@ -47,6 +48,7 @@ from reasonese.study import (
     study_to_dict,
     trial_count,
 )
+from reasonese.study_cache import SqliteStudyCache
 
 
 def _spec(text: str, channel: Channel, author: Author = Author.USER) -> PromptSpec:
@@ -297,6 +299,68 @@ def _judgment_for_trace(trace: ConversationTrace, values: tuple[bool, ...]) -> J
     return Judgment(trace.setup.matchup, trace_fingerprint(trace), verdicts)
 
 
+def test_sqlite_study_cache_batches_round_trips_and_replaces(tmp_path: Path) -> None:
+    study = _study()
+    trials = build_trials(study)
+    traces = tuple(_trace_for_trial(study, index) for index in range(len(trials)))
+    cache = SqliteStudyCache(tmp_path / "nested" / "collection.sqlite3")
+
+    cache.put_traces(
+        tuple(
+            (trial.trial_id, trace)
+            for trial, trace in zip(trials, traces, strict=True)
+        )
+    )
+    assert cache.load_traces() == {
+        trial.trial_id: trace for trial, trace in zip(trials, traces, strict=True)
+    }
+
+    replacement = _trace_for_trial(study, 0, "replacement")
+    cache.put_traces(((trials[0].trial_id, replacement),))
+    judgments = (
+        _judgment_for_trace(replacement, (True, False)),
+        _judgment_for_trace(traces[1], (False, True)),
+    )
+    cache.put_judgments(
+        tuple((trial.trial_id, judgment) for trial, judgment in zip(trials, judgments, strict=True))
+    )
+
+    assert cache.load_traces()[trials[0].trial_id] == replacement
+    assert cache.load_judgments() == {
+        trial.trial_id: judgment for trial, judgment in zip(trials, judgments, strict=True)
+    }
+    cache.put_traces(())
+    cache.put_judgments(())
+
+
+@pytest.mark.parametrize(
+    ("table", "payload", "error"),
+    [
+        ("traces", "not JSON", "not valid JSON"),
+        ("judgments", sqlite3.Binary(b"{}"), "payload must be text"),
+    ],
+)
+def test_sqlite_study_cache_rejects_corrupt_payloads(
+    tmp_path: Path,
+    table: str,
+    payload: object,
+    error: str,
+) -> None:
+    cache = SqliteStudyCache(tmp_path / "collection.sqlite3")
+    cache.load_traces()
+    with sqlite3.connect(cache.path) as connection:
+        connection.execute(
+            f"INSERT INTO {table} (trial_id, payload) VALUES (?, ?)",
+            ("corrupt-trial", payload),
+        )
+
+    with pytest.raises(ValueError, match=error):
+        if table == "traces":
+            cache.load_traces()
+        else:
+            cache.load_judgments()
+
+
 def test_judge_traces_flattens_multiple_conversations_into_one_batch() -> None:
     study = _study()
     traces = (_trace_for_trial(study, 0), _trace_for_trial(study, 1))
@@ -429,12 +493,49 @@ def test_collect_study_batches_trials_and_judgments_then_resumes_without_a_key(
     rows = [json.loads(line) for line in (output / "observations.jsonl").read_text().splitlines()]
     assert len(rows) == 8
     assert (output / "study.yaml").exists()
-    assert len(list((output / "trials").glob("*/trace.yaml"))) == 4
+    assert (output / "collection.sqlite3").is_file()
 
     first_directory = next(directory for directory in manual.root.iterdir() if directory.is_dir())
     (first_directory / "normal.txt").write_text("Changed manual instruction.")
     with pytest.raises(ValueError, match="conversation trials"):
         collect_study(study, output, None, manual, prefer_batch=True)
+
+
+def test_collect_study_preserves_distinct_verdicts_for_identical_rollout_traces(
+    tmp_path: Path,
+) -> None:
+    study = _study(2)
+    identical_response = _chat("same answer", "same-assistant-response")
+    transport = FakeTransport(
+        [
+            _message_qa_batch(2),
+            *(identical_response for _ in range(4)),
+            _judge_batch((True, False, False, True, True, True, False, False)),
+        ]
+    )
+    output = tmp_path / "identical-rollouts"
+    manual = _manual_library(tmp_path, study)
+
+    cold = collect_study(
+        study,
+        output,
+        OpenRouterClient(transport),
+        manual,
+        prefer_batch=True,
+    )
+    warm = collect_study(study, output, None, manual, prefer_batch=True)
+
+    assert warm.observations == cold.observations
+    assert [observation.completed for observation in warm.observations] == [
+        True,
+        False,
+        False,
+        True,
+        True,
+        True,
+        False,
+        False,
+    ]
 
 
 def test_collect_studies_batches_across_tasks_and_matches_independent_outcomes(
@@ -584,12 +685,10 @@ def test_collect_study_runs_each_active_tool_round(tmp_path: Path) -> None:
         prefer_batch=True,
     )
 
-    cached_traces = tuple(
-        YamlTraceCache(
-            tmp_path / "tool-collection" / "trials" / str(trial.trial_id) / "trace.yaml"
-        ).load()[0]
-        for trial in result.trials
-    )
+    cached_by_trial = SqliteStudyCache(
+        tmp_path / "tool-collection" / "collection.sqlite3"
+    ).load_traces()
+    cached_traces = tuple(cached_by_trial[trial.trial_id] for trial in result.trials)
     assert [len(trace.tool_steps) for trace in cached_traces] == [1, 0]
     assert all(call[0] == "/api/v1/chat/completions" for call in transport.post_calls[1:4])
     followup = transport.post_calls[3][1]["messages"]
@@ -608,9 +707,13 @@ def test_collect_study_requires_key_only_for_missing_work(tmp_path: Path) -> Non
         collect_study(study, tmp_path / "empty", None, manual, prefer_batch=True)
 
     output = tmp_path / "traces-only"
-    for trial_index, trial in enumerate(build_trials(study)):
-        trace = _trace_for_trial(study, trial_index)
-        YamlTraceCache(output / "trials" / str(trial.trial_id) / "trace.yaml").put(trace)
+    trials = build_trials(study)
+    SqliteStudyCache(output / "collection.sqlite3").put_traces(
+        tuple(
+            (trial.trial_id, _trace_for_trial(study, trial_index))
+            for trial_index, trial in enumerate(trials)
+        )
+    )
     YamlMessageQaCache(output / "message_qa.yaml").put_many(
         tuple(
             MessageQaVerdict(
