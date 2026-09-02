@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from beartype import beartype
 from phantom import Phantom
 
-from reasonese.conversation import ConversationTrace
+from reasonese.conversation import ConversationSetup, ConversationTrace
 from reasonese.matchup import Matchup, matchup_to_dict
 from reasonese.openrouter import (
     JsonObject,
@@ -106,6 +106,69 @@ def trace_fingerprint(trace: ConversationTrace) -> TraceFingerprint:
         ensure_ascii=False,
     )
     return TraceFingerprint.parse(hashlib.sha256(canonical.encode()).hexdigest())
+
+
+def _fingerprinted_trace_from_validated(
+    trace: ConversationTrace,
+    fingerprint: TraceFingerprint,
+) -> FingerprintedTrace:
+    item = object.__new__(FingerprintedTrace)
+    object.__setattr__(item, "trace", trace)
+    object.__setattr__(item, "fingerprint", fingerprint)
+    return item
+
+
+@beartype
+def fingerprint_traces(
+    traces: tuple[ConversationTrace, ...],
+) -> tuple[FingerprintedTrace, ...]:
+    """Fingerprint traces while serializing each shared conversation setup once."""
+    setup_json: dict[ConversationSetup, tuple[str, str]] = {}
+    fingerprinted: list[FingerprintedTrace] = []
+    for trace in traces:
+        serialized = setup_json.get(trace.setup)
+        if serialized is None:
+            serialized = (
+                json.dumps(
+                    trace.setup.openrouter_messages(),
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    ensure_ascii=False,
+                ),
+                json.dumps(
+                    matchup_to_dict(trace.setup.matchup),
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    ensure_ascii=False,
+                ),
+            )
+            setup_json[trace.setup] = serialized
+        conversation_json, matchup_json = serialized
+        response_json = json.dumps(
+            trace.response,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
+        tool_steps_json = json.dumps(
+            [
+                {
+                    "response": step.response,
+                    "results": [result.openrouter_dict() for result in step.results],
+                }
+                for step in trace.tool_steps
+            ],
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
+        canonical = (
+            f'{{"conversation":{conversation_json},"matchup":{matchup_json},'
+            f'"response":{response_json},"tool_steps":{tool_steps_json}}}'
+        )
+        fingerprint = TraceFingerprint.parse(hashlib.sha256(canonical.encode()).hexdigest())
+        fingerprinted.append(_fingerprinted_trace_from_validated(trace, fingerprint))
+    return tuple(fingerprinted)
 
 
 def _visible_conversation(trace: ConversationTrace) -> str:
@@ -208,7 +271,7 @@ def judge_traces(
     traces: tuple[ConversationTrace, ...], client: OpenRouterClient
 ) -> tuple[Judgment, ...]:
     """Judge multiple traces in one flattened GPT-5.6 Luna batch."""
-    return judge_fingerprinted_traces(tuple(FingerprintedTrace(trace) for trace in traces), client)
+    return judge_fingerprinted_traces(fingerprint_traces(traces), client)
 
 
 @beartype

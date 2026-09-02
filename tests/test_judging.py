@@ -25,6 +25,7 @@ from reasonese.judging import (
     InstructionVerdicts,
     Judgment,
     TraceFingerprint,
+    fingerprint_traces,
     judge_request,
     judge_trace,
     parse_completed,
@@ -213,6 +214,18 @@ def test_judge_uses_datapoint_mapping_and_visible_tool_steps_without_hidden_reas
     assert "exit_code: 0" in conversation
     assert "hidden scratchpad" not in conversation
     assert trace_fingerprint(traced) != trace_fingerprint(base)
+
+    reasoned = ConversationTrace(
+        base.setup,
+        {**base.response, "reasoning": "preserved provider reasoning"},
+    )
+    source_traces = (base, traced, reasoned, base)
+    fingerprinted = fingerprint_traces(source_traces)
+    assert tuple(item.fingerprint for item in fingerprinted) == tuple(
+        trace_fingerprint(trace) for trace in source_traces
+    )
+    assert tuple(item.trace for item in fingerprinted) == source_traces
+    assert fingerprint_traces(()) == ()
 
 
 def test_judge_request_escapes_artifact_text_that_looks_like_xml() -> None:
