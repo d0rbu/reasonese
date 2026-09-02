@@ -14,6 +14,12 @@
 - User-authored text is used verbatim and has no provider response.
 - Trace caches preserve the complete raw assistant response, including reasoning fields.
 - A complete trace-cache hit performs no provider call and does not need an API key.
+- Judging emits exactly one verdict per matchup input in the same order.
+- Each verdict is an actual boolean; numeric or truthy substitutes are rejected.
+- Verdicts are independent, so no invariant requires exactly one true value.
+- The judge route is `openai/gpt-5.6-luna:batch` with medium reasoning.
+- A judgment cache hit requires both the same matchup and the same exact-trace fingerprint.
+- Raw judge responses are retained alongside parsed verdicts.
 
 A new axis value changes the design size and should update code, tests, examples, and the
 research definitions together.

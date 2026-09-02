@@ -41,6 +41,24 @@ inputs are valid. `Assistant` shares the four model values with model-backed aut
 separate from the four entry axes.
 
 The OpenRouter key exists only at the transport boundary. Cache keys are structural input
-coordinates. Raw intermediate tool-call responses, local results, and the final provider response
-are retained so reasoning and provider metadata are not discarded. The package does not yet
-judge or analyze responses.
+coordinates. Raw intermediate tool-call responses, local results, and the final provider
+response are retained so reasoning and provider metadata are not discarded.
+
+The judging flow is:
+
+```text
+conversation trace -> one batch item per input -> aligned boolean verdicts
+```
+
+- `reasonese.judging` builds independent strict-JSON requests for GPT-5.6 Luna batch, parses
+  exact booleans, and binds the verdict tuple to the matchup's input order.
+- `reasonese.judgment_cache` keys judgments by matchup and a SHA-256 fingerprint of the exact
+  delivered conversation and assistant response.
+- `reasonese.judge_responses` is the standalone cache-aware judging utility.
+
+The judge receives the target base instruction, its concrete delivered text, the full visible
+conversation including local tool calls and results, and the assistant's final visible response
+as separately escaped XML elements inside one evidence block.
+Hidden reasoning remains in the trace and its fingerprint but is not quoted as judge evidence.
+The judge does not compare instructions or force a winner. The package does not yet aggregate
+or statistically analyze verdicts.

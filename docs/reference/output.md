@@ -29,3 +29,16 @@ final assistant `response`. Each tool step retains the raw assistant response th
 function call plus every local tool result sent back. This intentionally retains returned
 `reasoning`, `reasoning_details`, token usage, web citations, and other provider fields. Records
 are keyed by the complete matchup, including assistant and input order.
+
+## Judgment cache
+
+The judgment cache is YAML under a top-level `judgments` list. Each record contains:
+
+- the complete `matchup`;
+- a `trace_fingerprint` over the matchup, delivered conversation, local tool steps, and final
+  assistant response; and
+- one ordered verdict per input, with the four-axis input, exact `completed` boolean, and
+  unmodified raw judge response.
+
+The fingerprint prevents reuse after a trace changes. The verdicts are independent rather
+than one-hot: `[true, true]`, `[false, false]`, and mixed outcomes are all valid.

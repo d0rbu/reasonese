@@ -17,9 +17,12 @@
 | `reasonese/openrouter.py` | Synchronous and batch provider client |
 | `reasonese/cache.py` | Readable message and trace caches |
 | `reasonese/runner.py` | Cache-aware conversation execution |
+| `reasonese/judging.py` | Independent GPT-5.6 Luna completion verdicts |
+| `reasonese/judgment_cache.py` | Trace-keyed readable judgment cache |
 | `reasonese/show_axes.py` | `reasonese-axes` utility |
 | `reasonese/plan.py` | `reasonese-plan` utility |
 | `reasonese/run_conversation.py` | `reasonese-run-conversation` utility |
+| `reasonese/judge_responses.py` | `reasonese-judge-responses` utility |
 | `tests/test_axes.py` | Enum and instruction-type tests |
 | `tests/test_planning.py` | Combination and runtime-type tests |
 | `tests/test_config_io.py` | TOML and output tests |
@@ -27,5 +30,6 @@
 | `tests/test_matchup_conversation.py` | Matchup and rendering tests |
 | `tests/test_openrouter.py` | Provider-client contract tests |
 | `tests/test_cache_runner_cli.py` | Cache, execution, and CLI tests |
+| `tests/test_judging.py` | Verdict, judgment-cache, and judge-utility tests |
 
 Generated files belong under ignored directories such as `out/`.

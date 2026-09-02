@@ -35,3 +35,12 @@ The default readable caches are `out/generated_messages.yaml` and
 `out/conversation_traces.yaml`. Repeating the same matchup returns the cached trace without
 requiring the key, provided its manual user-authored files have not changed. Use `--no-batch`
 to disable batch authoring where supported.
+
+Once the trace exists, judge every input with:
+
+```bash
+uv run reasonese-judge-responses --matchup configs/example_matchup.yaml
+```
+
+This uses `openai/gpt-5.6-luna:batch` at medium reasoning and writes
+`out/judgments.yaml`. A warm judgment-cache hit also needs no API key.

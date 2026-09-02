@@ -12,3 +12,6 @@
   and author.
 - **materialization**: generation or retrieval of concrete text for an entry datapoint.
 - **conversation trace**: the complete rendered conversation and raw assistant response.
+- **instruction verdict**: an independent boolean stating whether the visible assistant
+  response completed one input request.
+- **judgment**: the ordered verdict tuple and raw judge responses for one concrete trace.

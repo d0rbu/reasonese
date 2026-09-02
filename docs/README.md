@@ -10,7 +10,7 @@
 - [`reference/architecture.md`](reference/architecture.md): package responsibilities
 - [`reference/configuration.md`](reference/configuration.md): instruction TOML and matchup YAML
 - [`reference/prompt-generation.md`](reference/prompt-generation.md): exact four-axis message construction
-- [`reference/output.md`](reference/output.md): JSONL plans and YAML caches
+- [`reference/output.md`](reference/output.md): plan, trace, and judgment artifacts
 - [`reference/file-reference.md`](reference/file-reference.md): repository map
 
 ## Onboarding and development
