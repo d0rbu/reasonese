@@ -108,6 +108,8 @@ verdicts and appears `r` times at each position. The collector runs uncached ass
 through eight-worker, completion-driven concurrency by default: as soon as one response requests a local tool,
 its continuation is submitted without waiting for slower peer responses. It batches judge work,
 resumes from per-rollout caches, and writes flat analysis-ready rows to `observations.jsonl`.
+Initial requests are admitted round-robin across assistant models, and ready tool continuations
+receive freed worker slots before fresh requests, so a large group cannot monopolize the queue.
 Assistant requests retain the
 OpenRouter web-search tool and therefore use the synchronous API because OpenRouter does not
 support that server tool in batch jobs. Definite HTTP 429 responses are retried a bounded number

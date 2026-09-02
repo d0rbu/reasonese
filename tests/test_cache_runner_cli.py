@@ -10,6 +10,7 @@ import yaml
 from reasonese.axes import Assistant, Author, Channel, Framing, Instruction
 from reasonese.cache import YamlMessageCache, YamlTraceCache
 from reasonese.conversation import (
+    ConversationSetup,
     ConversationTrace,
     GeneratedMessage,
     GeneratedText,
@@ -606,6 +607,106 @@ def test_assistant_tool_continuation_does_not_wait_for_slow_peer() -> None:
     assert len(traces[0][0].tool_steps) == 1
     assert traces[1][0].response["id"] == "slow-final"
     assert traces[1][0].tool_steps == ()
+
+
+class PriorityAdmissionTransport:
+    def __init__(self) -> None:
+        self.continuation_started = Event()
+
+    def post_json(self, path: str, body: JsonObject) -> JsonObject:
+        if body["messages"][-1]["role"] == "tool":
+            self.continuation_started.set()
+            return _chat("tool complete", "priority-final")
+        user_content = next(
+            message["content"] for message in body["messages"] if message["role"] == "user"
+        )
+        if user_content == "tool-target":
+            return _tool_chat()
+        if not self.continuation_started.wait(timeout=1.0):
+            raise AssertionError("queued initial requests starved the ready continuation")
+        return _chat("blocker complete", f"final-{user_content}")
+
+    def get_json(self, path: str) -> JsonObject:
+        raise AssertionError(f"unexpected GET {path}")
+
+
+def _setup_with_user_content(content: str) -> ConversationSetup:
+    matchup = _matchup(
+        _spec("Repository instruction.", Channel.README),
+        _spec(content, Channel.USER),
+    )
+    generated = tuple(
+        GeneratedMessage(spec, GeneratedText.parse(str(spec.instruction)), None)
+        for spec in matchup.inputs
+    )
+    return construct_conversation(matchup, generated)
+
+
+def test_ready_tool_continuation_precedes_queued_initial_requests() -> None:
+    transport = PriorityAdmissionTransport()
+    setups = tuple(
+        _setup_with_user_content(content)
+        for content in ("tool-target", "blocker-1", "blocker-2")
+    )
+
+    traces = run_assistant_groups(
+        (
+            AssistantRunGroup(
+                ModelRoute(OpenRouterModelId.parse("example/priority"), None),
+                setups,
+            ),
+        ),
+        OpenRouterClient(transport, sync_workers=2),
+    )[0]
+
+    assert transport.continuation_started.is_set()
+    assert [trace.response["id"] for trace in traces] == [
+        "priority-final",
+        "final-blocker-1",
+        "final-blocker-2",
+    ]
+    assert [len(trace.tool_steps) for trace in traces] == [1, 0, 0]
+
+
+class FairGroupAdmissionTransport:
+    def __init__(self) -> None:
+        self.later_group_started = Event()
+
+    def post_json(self, path: str, body: JsonObject) -> JsonObject:
+        if body["model"] == "example/later":
+            self.later_group_started.set()
+            return _chat("later complete", "later-final")
+        if not self.later_group_started.wait(timeout=1.0):
+            raise AssertionError("the first model group starved a later model group")
+        return _chat("bulk complete", "bulk-final")
+
+    def get_json(self, path: str) -> JsonObject:
+        raise AssertionError(f"unexpected GET {path}")
+
+
+def test_initial_requests_are_admitted_round_robin_across_model_groups() -> None:
+    transport = FairGroupAdmissionTransport()
+    setup = _setup_with_user_content("request")
+
+    traces = run_assistant_groups(
+        (
+            AssistantRunGroup(
+                ModelRoute(OpenRouterModelId.parse("example/bulk"), None),
+                (setup, setup, setup),
+            ),
+            AssistantRunGroup(
+                ModelRoute(OpenRouterModelId.parse("example/later"), None),
+                (setup,),
+            ),
+        ),
+        OpenRouterClient(transport, sync_workers=2),
+    )
+
+    assert transport.later_group_started.is_set()
+    assert [[trace.response["id"] for trace in group] for group in traces] == [
+        ["bulk-final", "bulk-final", "bulk-final"],
+        ["later-final"],
+    ]
 
 
 def test_run_matchup_fails_when_assistant_exceeds_local_tool_step_limit(

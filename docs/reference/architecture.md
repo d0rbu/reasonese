@@ -35,7 +35,8 @@ matchup -> authored messages -> independent message QA -> conversation -> assist
 - `reasonese.check_messages` provides the reusable fail-closed gate and standalone utility.
 - `reasonese.runner` coordinates cache lookup, generation, construction, and completion-driven
   assistant execution. A tool continuation is submitted as soon as its preceding response
-  arrives, independently of slower peers.
+  arrives, independently of slower peers. Bounded admission is round-robin across model groups,
+  with ready continuations prioritized over fresh requests.
 - `reasonese.run_conversation` is the standalone conversation utility.
 
 The utilities have separate console entry points. There is no package-level dispatcher

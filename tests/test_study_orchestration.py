@@ -724,8 +724,8 @@ def test_collect_study_runs_each_active_tool_round(tmp_path: Path) -> None:
         [
             _message_qa_batch(2),
             _tool_chat(),
-            _chat("already done", "assistant-1"),
             _chat("used the file", "assistant-0"),
+            _chat("already done", "assistant-1"),
             _judge_batch((True, False, False, True)),
         ]
     )
@@ -744,7 +744,7 @@ def test_collect_study_runs_each_active_tool_round(tmp_path: Path) -> None:
     cached_traces = tuple(cached_by_trial[trial.trial_id] for trial in result.trials)
     assert [len(trace.tool_steps) for trace in cached_traces] == [1, 0]
     assert all(call[0] == "/api/v1/chat/completions" for call in transport.post_calls[1:4])
-    followup = transport.post_calls[3][1]["messages"]
+    followup = transport.post_calls[2][1]["messages"]
     assert followup[-1] == {
         "role": "tool",
         "tool_call_id": "live-read",
