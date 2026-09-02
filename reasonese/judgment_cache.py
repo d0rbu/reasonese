@@ -25,6 +25,7 @@ from reasonese.matchup import (
     prompt_spec_to_dict,
 )
 from reasonese.openrouter import JsonObject
+from reasonese.planning import PromptSpec
 
 
 def _response(raw: object) -> JsonObject:
@@ -37,6 +38,18 @@ def judgment_from_dict(
     raw: object,
     expected_matchup: Matchup | None = None,
 ) -> Judgment:
+    """Parse one judgment through its fully checked public constructors."""
+    matchup, fingerprint, fields = _judgment_fields(raw, expected_matchup)
+    verdicts = InstructionVerdicts.parse(
+        tuple(InstructionVerdict(spec, completed, response) for spec, completed, response in fields)
+    )
+    return Judgment(matchup, fingerprint, verdicts)
+
+
+def _judgment_fields(
+    raw: object,
+    expected_matchup: Matchup | None,
+) -> tuple[Matchup, TraceFingerprint, tuple[tuple[PromptSpec, bool, JsonObject], ...]]:
     if not isinstance(raw, dict):
         raise ValueError("cached judgment must be a mapping")
     data = cast(dict[str, Any], raw)
@@ -51,7 +64,7 @@ def judgment_from_dict(
         if data["matchup"] != matchup_to_dict(expected_matchup):
             raise ValueError("cached judgment matchup does not match expected trial")
         matchup = expected_matchup
-    verdicts: list[InstructionVerdict] = []
+    fields: list[tuple[PromptSpec, bool, JsonObject]] = []
     for index, raw_verdict in enumerate(raw_verdicts):
         if not isinstance(raw_verdict, dict):
             raise ValueError("cached instruction verdict must be a mapping")
@@ -69,18 +82,57 @@ def judgment_from_dict(
             spec = expected_matchup.inputs[index]
             if verdict["input"] != prompt_spec_to_dict(spec):
                 raise ValueError("cached judgment input does not match expected trial")
-        verdicts.append(
-            InstructionVerdict(
-                spec,
-                completed,
-                _response(verdict["response"]),
-            )
-        )
-    return Judgment(
+        fields.append((spec, completed, _response(verdict["response"])))
+    return (
         matchup,
         TraceFingerprint.parse(data["trace_fingerprint"]),
-        InstructionVerdicts.parse(tuple(verdicts)),
+        tuple(fields),
     )
+
+
+def _judgment_from_validated(
+    matchup: Matchup,
+    fingerprint: TraceFingerprint,
+    verdicts: InstructionVerdicts,
+) -> Judgment:
+    judgment = object.__new__(Judgment)
+    object.__setattr__(judgment, "matchup", matchup)
+    object.__setattr__(judgment, "trace_fingerprint", fingerprint)
+    object.__setattr__(judgment, "verdicts", verdicts)
+    return judgment
+
+
+def _instruction_verdict_from_validated(
+    spec: PromptSpec,
+    completed: bool,
+    response: JsonObject,
+) -> InstructionVerdict:
+    verdict = object.__new__(InstructionVerdict)
+    object.__setattr__(verdict, "spec", spec)
+    object.__setattr__(verdict, "completed", completed)
+    object.__setattr__(verdict, "response", response)
+    return verdict
+
+
+@beartype
+def judgments_from_dicts(
+    raws: tuple[object, ...],
+    expected_matchups: tuple[Matchup, ...],
+) -> tuple[Judgment, ...]:
+    """Decode aligned cache rows after explicit payload and relationship validation."""
+    if len(raws) != len(expected_matchups):
+        raise ValueError("cached judgments and expected matchups must have equal lengths")
+    judgments: list[Judgment] = []
+    for raw, expected_matchup in zip(raws, expected_matchups, strict=True):
+        matchup, fingerprint, fields = _judgment_fields(raw, expected_matchup)
+        verdicts = InstructionVerdicts.parse(
+            tuple(
+                _instruction_verdict_from_validated(spec, completed, response)
+                for spec, completed, response in fields
+            )
+        )
+        judgments.append(_judgment_from_validated(matchup, fingerprint, verdicts))
+    return tuple(judgments)
 
 
 @beartype

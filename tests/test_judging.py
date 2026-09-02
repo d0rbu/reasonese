@@ -34,7 +34,12 @@ from reasonese.judging import (
     parse_completed,
     trace_fingerprint,
 )
-from reasonese.judgment_cache import YamlJudgmentCache
+from reasonese.judgment_cache import (
+    YamlJudgmentCache,
+    judgment_from_dict,
+    judgment_to_dict,
+    judgments_from_dicts,
+)
 from reasonese.matchup import make_matchup, matchup_to_dict
 from reasonese.openrouter import JsonObject, OpenRouterClient
 from reasonese.planning import PromptSpec
@@ -324,6 +329,19 @@ def test_judgment_cache_round_trips_raw_responses_and_replaces_same_trace(
         "raw judge reasoning"
     )
     assert cache.get(_trace("changed")) is None
+
+
+def test_batched_judgment_parser_matches_checked_parser_and_validates_lengths() -> None:
+    trace = _trace()
+    judgment = _judgment(trace, (True, False))
+    raw = judgment_to_dict(judgment)
+
+    assert judgments_from_dicts(
+        (raw, raw),
+        (trace.setup.matchup, trace.setup.matchup),
+    ) == (judgment_from_dict(raw, trace.setup.matchup),) * 2
+    with pytest.raises(ValueError, match="equal lengths"):
+        judgments_from_dicts((raw,), ())
 
 
 @pytest.mark.parametrize(
