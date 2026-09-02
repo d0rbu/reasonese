@@ -98,15 +98,8 @@ def _batch_result(custom_id: str, response: JsonObject) -> JsonObject:
     }
 
 
-def _assistant_batch(count: int) -> JsonObject:
-    return {
-        "id": "assistant-batch",
-        "status": "completed",
-        "results": [
-            _batch_result(f"request-{index}", _chat(f"answer {index}", f"assistant-{index}"))
-            for index in range(count)
-        ],
-    }
+def _assistant_responses(count: int) -> list[JsonObject]:
+    return [_chat(f"answer {index}", f"assistant-{index}") for index in range(count)]
 
 
 def _tool_chat() -> JsonObject:
@@ -129,17 +122,6 @@ def _tool_chat() -> JsonObject:
                     ],
                 }
             }
-        ],
-    }
-
-
-def _assistant_batch_with_tool_and_final() -> JsonObject:
-    return {
-        "id": "assistant-batch",
-        "status": "completed",
-        "results": [
-            _batch_result("request-0", _tool_chat()),
-            _batch_result("request-1", _chat("already done", "assistant-1")),
         ],
     }
 
@@ -173,16 +155,26 @@ def _message_qa_batch(count: int) -> JsonObject:
 
 
 class FakeTransport:
-    def __init__(self, posts: list[JsonObject]) -> None:
+    def __init__(
+        self,
+        posts: list[JsonObject],
+        gets: list[JsonObject] | None = None,
+    ) -> None:
         self.posts = posts
+        self.gets = gets or []
         self.post_calls: list[tuple[str, JsonObject]] = []
+        self.calls: list[tuple[str, str]] = []
 
     def post_json(self, path: str, body: JsonObject) -> JsonObject:
         self.post_calls.append((path, body))
+        self.calls.append(("POST", path))
         return self.posts.pop(0)
 
     def get_json(self, path: str) -> JsonObject:
-        raise AssertionError(f"unexpected GET {path}")
+        self.calls.append(("GET", path))
+        if not self.gets:
+            raise AssertionError(f"unexpected GET {path}")
+        return self.gets.pop(0)
 
 
 def test_two_input_study_has_two_permutations_and_two_scores_per_cell() -> None:
@@ -401,7 +393,7 @@ def test_collect_study_batches_trials_and_judgments_then_resumes_without_a_key(
     transport = FakeTransport(
         [
             _message_qa_batch(2),
-            _assistant_batch(4),
+            *_assistant_responses(4),
             _judge_batch((True, False, False, True, True, False, False, True)),
         ]
     )
@@ -424,16 +416,16 @@ def test_collect_study_batches_trials_and_judgments_then_resumes_without_a_key(
     assert warm.trace_cache_hits == 4
     assert warm.judgment_cache_hits == 4
     assert warm.observations == cold.observations
-    assert len(transport.post_calls) == 3
+    assert len(transport.post_calls) == 6
     assert transport.post_calls[0][1]["model"] == "openai/gpt-5.6-luna"
-    assert transport.post_calls[1][1]["model"] == "thinkingmachines/inkling"
-    assert len(transport.post_calls[1][1]["requests"]) == 4
-    first_request = transport.post_calls[1][1]["requests"][0]["body"]
+    assert all(call[0] == "/api/v1/chat/completions" for call in transport.post_calls[1:5])
+    assert all(call[1]["model"] == "thinkingmachines/inkling" for call in transport.post_calls[1:5])
+    first_request = transport.post_calls[1][1]
     assert first_request["temperature"] == 0.7
     assert first_request["parallel_tool_calls"] is False
     assert any(tool["type"] == "openrouter:web_search" for tool in first_request["tools"])
-    assert transport.post_calls[2][1]["model"] == "openai/gpt-5.6-luna"
-    assert len(transport.post_calls[2][1]["requests"]) == 8
+    assert transport.post_calls[5][1]["model"] == "openai/gpt-5.6-luna"
+    assert len(transport.post_calls[5][1]["requests"]) == 8
     rows = [json.loads(line) for line in (output / "observations.jsonl").read_text().splitlines()]
     assert len(rows) == 8
     assert (output / "study.yaml").exists()
@@ -464,7 +456,7 @@ def test_collect_studies_batches_across_tasks_and_matches_independent_outcomes(
     suite_transport = FakeTransport(
         [
             _message_qa_batch(3),
-            _assistant_batch(4),
+            *_assistant_responses(4),
             _judge_batch((True, False, False, True, True, False, False, True)),
         ]
     )
@@ -486,7 +478,7 @@ def test_collect_studies_batches_across_tasks_and_matches_independent_outcomes(
                 FakeTransport(
                     [
                         _message_qa_batch(2),
-                        _assistant_batch(2),
+                        *_assistant_responses(2),
                         _judge_batch((True, False, False, True)),
                     ]
                 )
@@ -513,8 +505,10 @@ def test_collect_studies_batches_across_tasks_and_matches_independent_outcomes(
     assert [numeric_outcomes(result) for result in suite_results] == [
         numeric_outcomes(result) for result in independent_results
     ]
-    assert len(suite_transport.post_calls) == 3
-    assert [len(call[1]["requests"]) for call in suite_transport.post_calls] == [3, 4, 8]
+    assert len(suite_transport.post_calls) == 6
+    assert len(suite_transport.post_calls[0][1]["requests"]) == 3
+    assert all(call[0] == "/api/v1/chat/completions" for call in suite_transport.post_calls[1:5])
+    assert len(suite_transport.post_calls[5][1]["requests"]) == 8
 
     warm_results = collect_studies(
         tasks,
@@ -531,17 +525,53 @@ def test_collect_studies_batches_across_tasks_and_matches_independent_outcomes(
     assert [result.judgment_cache_hits for result in warm_results] == [2, 2]
 
 
-def test_collect_study_batches_each_active_tool_round(tmp_path: Path) -> None:
+def test_collect_studies_runs_mixed_assistant_models_through_sync_requests(
+    tmp_path: Path,
+) -> None:
+    first = _study(assistant=Assistant.INKLING)
+    second = _study(assistant=Assistant.INKLING_SMALL)
+    tasks = (
+        CollectionTask(first, tmp_path / "mixed" / "inkling"),
+        CollectionTask(second, tmp_path / "mixed" / "inkling-small"),
+    )
+    transport = FakeTransport(
+        [
+            _message_qa_batch(2),
+            *_assistant_responses(4),
+            _judge_batch((True, False, False, True, True, False, False, True)),
+        ]
+    )
+
+    results = collect_studies(
+        tasks,
+        OpenRouterClient(transport),
+        _manual_library(tmp_path, first, second),
+        YamlMessageCache(tmp_path / "mixed" / "generated_messages.yaml"),
+        YamlMessageQaCache(tmp_path / "mixed" / "message_qa.yaml"),
+        prefer_batch=True,
+    )
+
+    assert [len(result.observations) for result in results] == [4, 4]
+    assert transport.post_calls[0][0] == "/api/beta/batches"
+    assert all(call[0] == "/api/v1/chat/completions" for call in transport.post_calls[1:5])
+    assert sorted(call[1]["model"] for call in transport.post_calls[1:5]) == [
+        "thinkingmachines/inkling",
+        "thinkingmachines/inkling",
+        "thinkingmachines/inkling-small",
+        "thinkingmachines/inkling-small",
+    ]
+    assert transport.post_calls[5][0] == "/api/beta/batches"
+    assert len(transport.post_calls[5][1]["requests"]) == 8
+
+
+def test_collect_study_runs_each_active_tool_round(tmp_path: Path) -> None:
     study = _study()
     transport = FakeTransport(
         [
             _message_qa_batch(2),
-            _assistant_batch_with_tool_and_final(),
-            {
-                "id": "assistant-followup",
-                "status": "completed",
-                "results": [_batch_result("request-0", _chat("used the file", "assistant-0"))],
-            },
+            _tool_chat(),
+            _chat("already done", "assistant-1"),
+            _chat("used the file", "assistant-0"),
             _judge_batch((True, False, False, True)),
         ]
     )
@@ -549,7 +579,7 @@ def test_collect_study_batches_each_active_tool_round(tmp_path: Path) -> None:
     result = collect_study(
         study,
         tmp_path / "tool-collection",
-        OpenRouterClient(transport),
+        OpenRouterClient(transport, sync_workers=1),
         _manual_library(tmp_path, study),
         prefer_batch=True,
     )
@@ -561,15 +591,14 @@ def test_collect_study_batches_each_active_tool_round(tmp_path: Path) -> None:
         for trial in result.trials
     )
     assert [len(trace.tool_steps) for trace in cached_traces] == [1, 0]
-    assert len(transport.post_calls[1][1]["requests"]) == 2
-    assert len(transport.post_calls[2][1]["requests"]) == 1
-    followup = transport.post_calls[2][1]["requests"][0]["body"]["messages"]
+    assert all(call[0] == "/api/v1/chat/completions" for call in transport.post_calls[1:4])
+    followup = transport.post_calls[3][1]["messages"]
     assert followup[-1] == {
         "role": "tool",
         "tool_call_id": "live-read",
         "content": "Name the capital of France.",
     }
-    assert len(transport.post_calls[3][1]["requests"]) == 4
+    assert len(transport.post_calls[4][1]["requests"]) == 4
 
 
 def test_collect_study_requires_key_only_for_missing_work(tmp_path: Path) -> None:
@@ -612,7 +641,11 @@ def test_collect_data_cli_runs_then_reports_warm_cache(
     _write_study(study_path, _study())
     manual = _manual_library(tmp_path, _study())
     transport = FakeTransport(
-        [_message_qa_batch(2), _assistant_batch(2), _judge_batch((True, False, False, True))]
+        [
+            _message_qa_batch(2),
+            *_assistant_responses(2),
+            _judge_batch((True, False, False, True)),
+        ]
     )
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
     monkeypatch.setattr("reasonese.collect_data.RequestsTransport", lambda key: transport)
@@ -635,7 +668,7 @@ def test_collect_data_cli_runs_then_reports_warm_cache(
     assert cold["observations"] == 4
     assert warm["trace_cache_hits"] == 2
     assert warm["judgment_cache_hits"] == 2
-    assert len(transport.post_calls) == 3
+    assert len(transport.post_calls) == 4
 
 
 def test_collect_studies_cli_batches_tasks_then_reports_warm_cache(
@@ -658,7 +691,7 @@ def test_collect_studies_cli_batches_tasks_then_reports_warm_cache(
     transport = FakeTransport(
         [
             _message_qa_batch(3),
-            _assistant_batch(4),
+            *_assistant_responses(4),
             _judge_batch((True, False, False, True, True, False, False, True)),
         ]
     )
@@ -689,7 +722,7 @@ def test_collect_studies_cli_batches_tasks_then_reports_warm_cache(
     ]
     assert [item["trace_cache_hits"] for item in warm["studies"]] == [2, 2]
     assert [item["judgment_cache_hits"] for item in warm["studies"]] == [2, 2]
-    assert len(transport.post_calls) == 3
+    assert len(transport.post_calls) == 6
 
 
 def test_collection_tasks_require_paths_with_distinct_stems(tmp_path: Path) -> None:

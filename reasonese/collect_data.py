@@ -30,7 +30,7 @@ from reasonese.message_qa_cache import YamlMessageQaCache
 from reasonese.observations import Observation, observations_from_trial, write_observations
 from reasonese.openrouter import OpenRouterClient, RequestsTransport, model_route
 from reasonese.planning import PromptSpec
-from reasonese.runner import materialize_specs, run_assistants
+from reasonese.runner import AssistantRunGroup, materialize_specs, run_assistant_groups
 from reasonese.study import Study, Trial, build_trials, study_to_dict
 
 
@@ -172,13 +172,19 @@ def collect_studies(
     if assistant_work:
         if client is None:  # pragma: no cover - guarded by materialization above
             raise RuntimeError("assistant work requires an OpenRouter client")
-        for assistant, work in assistant_work.items():
-            new_traces = run_assistants(
-                tuple(setup for _, _, setup in work),
-                model_route(assistant),
-                client,
-                prefer_batch=prefer_batch,
-            )
+        ordered_work = tuple(assistant_work.items())
+        trace_groups = run_assistant_groups(
+            tuple(
+                AssistantRunGroup(
+                    model_route(assistant),
+                    tuple(setup for _, _, setup in work),
+                )
+                for assistant, work in ordered_work
+            ),
+            client,
+            prefer_batch=prefer_batch,
+        )
+        for (_, work), new_traces in zip(ordered_work, trace_groups, strict=True):
             for (state, trial, _), trace in zip(work, new_traces, strict=True):
                 YamlTraceCache(
                     state.task.output_dir / "trials" / str(trial.trial_id) / "trace.yaml"

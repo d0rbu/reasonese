@@ -15,7 +15,7 @@
 | `prompts/user/` | Editable manual variants organized by base instruction |
 | `reasonese/tools.py` | Bounded assistant tool definitions and local execution |
 | `docs/reference/prompt-generation.md` | Exact prompts, framing guidance, and current limitations |
-| `reasonese/openrouter.py` | Synchronous and overlapping grouped-batch provider client |
+| `reasonese/openrouter.py` | Concurrent synchronous and overlapping grouped-batch provider client |
 | `reasonese/cache.py` | Readable message and trace caches |
 | `reasonese/message_qa.py` | Independent materialized-message compliance judgments |
 | `reasonese/message_qa_cache.py` | Exact-text-keyed readable QA cache |
