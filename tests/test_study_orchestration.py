@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import itertools
 import json
-from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -174,33 +172,9 @@ def test_two_input_study_has_two_permutations_and_two_scores_per_cell() -> None:
     assert trial_count(study) == 2
     assert observations_per_cell(study) == 2
     assert observations_per_cell_position(study) == 1
-    assert {trial.matchup.inputs for trial in trials} == set(itertools.permutations(study.inputs))
+    first, second = study.inputs
+    assert {trial.matchup.inputs for trial in trials} == {(first, second), (second, first)}
     assert len({trial.trial_id for trial in trials}) == 2
-
-
-def test_three_input_study_balances_every_cell_over_positions_and_rollouts() -> None:
-    study = make_study(
-        (
-            _spec("A", Channel.SYSTEM),
-            _spec("B", Channel.USER),
-            _spec("C", Channel.USER),
-        ),
-        Assistant.QWEN3_8_FLASH,
-        2,
-    )
-    trials = build_trials(study)
-    position_counts = Counter(
-        (spec, position)
-        for trial in trials
-        for position, spec in enumerate(trial.matchup.inputs, start=1)
-    )
-
-    assert len(trials) == 12
-    assert trial_count(study) == 12
-    assert observations_per_cell(study) == 12
-    assert observations_per_cell_position(study) == 4
-    assert set(position_counts.values()) == {4}
-    assert Counter(trial.rollout for trial in trials) == {1: 6, 2: 6}
 
 
 def test_study_cells_pair_each_input_with_the_assistant() -> None:
@@ -215,7 +189,16 @@ def test_study_cells_pair_each_input_with_the_assistant() -> None:
 @pytest.mark.parametrize(
     ("inputs", "rollouts", "error"),
     [
-        ((_spec("Only", Channel.USER),), 1, "at least two"),
+        ((_spec("Only", Channel.USER),), 1, "exactly two"),
+        (
+            (
+                _spec("A", Channel.SYSTEM),
+                _spec("B", Channel.USER),
+                _spec("C", Channel.USER),
+            ),
+            1,
+            "exactly two",
+        ),
         (
             (_spec("Same", Channel.USER), _spec("Same", Channel.USER)),
             1,

@@ -3,17 +3,21 @@
 from __future__ import annotations
 
 import hashlib
-import itertools
 import json
-import math
 from dataclasses import dataclass
 from typing import Any, cast
 
 from beartype import beartype
 from phantom import Phantom
 
-from reasonese.axes import Assistant, Channel
-from reasonese.matchup import Matchup, make_matchup, prompt_spec_from_dict, prompt_spec_to_dict
+from reasonese.axes import Assistant, is_non_empty_trimmed
+from reasonese.matchup import (
+    Matchup,
+    is_matchup_inputs,
+    make_matchup,
+    prompt_spec_from_dict,
+    prompt_spec_to_dict,
+)
 from reasonese.planning import PromptSpec
 
 
@@ -31,12 +35,7 @@ class PositiveInteger(
 
 
 def _is_study_inputs(value: tuple[PromptSpec, ...]) -> bool:
-    return (
-        len(value) >= 2
-        and len(value) == len(set(value))
-        and all(isinstance(item, PromptSpec) for item in value)
-        and any(item.channel is Channel.USER for item in value)
-    )
+    return is_matchup_inputs(value) and len(set(value)) == 2
 
 
 class StudyInputs(
@@ -44,14 +43,10 @@ class StudyInputs(
     Phantom,
     predicate=_is_study_inputs,
 ):
-    """At least two distinct inputs, including an explicit user message."""
+    """Exactly two distinct inputs, including an explicit user message."""
 
 
-def _is_identifier(value: str) -> bool:
-    return bool(value) and value == value.strip()
-
-
-class TrialId(str, Phantom[str], predicate=_is_identifier, bound=str):
+class TrialId(str, Phantom[str], predicate=is_non_empty_trimmed, bound=str):
     """A stable non-empty trial identifier."""
 
 
@@ -92,11 +87,11 @@ def make_study(
     rollouts_per_permutation: int,
 ) -> Study:
     """Validate study-wide balance invariants and construct a study."""
-    if len(inputs) < 2:
-        raise ValueError("a study requires at least two inputs")
+    if len(inputs) != 2:
+        raise ValueError("a study requires exactly two inputs")
     if len(inputs) != len(set(inputs)):
         raise ValueError("study inputs must be distinct to produce unique permutations")
-    if not any(item.channel is Channel.USER for item in inputs):
+    if not is_matchup_inputs(inputs):
         raise ValueError("a study requires at least one user message input")
     if rollouts_per_permutation < 1:
         raise ValueError("rollouts per permutation must be at least one")
@@ -147,11 +142,12 @@ def study_fingerprint(study: Study) -> str:
 
 @beartype
 def build_trials(study: Study) -> tuple[Trial, ...]:
-    """Enumerate every permutation and requested rollout in stable order."""
+    """Enumerate both pair orderings and requested rollouts in stable order."""
     prefix = study_fingerprint(study)
     trials: list[Trial] = []
+    first, second = study.inputs
     for permutation_index, ordered_inputs in enumerate(
-        itertools.permutations(study.inputs), start=1
+        ((first, second), (second, first)), start=1
     ):
         for rollout_index in range(1, int(study.rollouts_per_permutation) + 1):
             permutation = PositiveInteger.parse(permutation_index)
@@ -177,10 +173,8 @@ def study_cells(study: Study) -> tuple[Cell, ...]:
 
 @beartype
 def trial_count(study: Study) -> PositiveInteger:
-    """Return n! times rollouts per permutation."""
-    return PositiveInteger.parse(
-        math.factorial(len(study.inputs)) * int(study.rollouts_per_permutation)
-    )
+    """Return two orderings times rollouts per ordering."""
+    return PositiveInteger.parse(2 * int(study.rollouts_per_permutation))
 
 
 @beartype
@@ -191,7 +185,5 @@ def observations_per_cell(study: Study) -> PositiveInteger:
 
 @beartype
 def observations_per_cell_position(study: Study) -> PositiveInteger:
-    """Return verdicts collected for every cell at every possible position."""
-    return PositiveInteger.parse(
-        math.factorial(len(study.inputs) - 1) * int(study.rollouts_per_permutation)
-    )
+    """Return one verdict per rollout for a cell at each of the two positions."""
+    return study.rollouts_per_permutation

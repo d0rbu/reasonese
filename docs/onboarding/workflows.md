@@ -66,15 +66,15 @@ uv run reasonese-collect-data \
   --output out/my-study
 ```
 
-The collector runs every input permutation and every requested rollout, then emits
+The collector runs both input orderings and every requested rollout, then emits
 `observations.jsonl`. It uses shared generated-message caching, separate trace caches for each
 rollout, and trace-sensitive judgment caching. Re-running an entirely cached study needs no
 key. User-authored cells use the same manual hierarchy as a single matchup; editing a selected
 variant invalidates every affected rollout. Use `--no-batch` only when synchronous assistant
 execution is intentionally desired; the Luna judge remains a batch model.
 
-Check the factorial design size before a live run: `n` inputs and `r` rollouts require
-`n! × r` assistant responses and `n × n! × r` judge verdicts.
+Check the design size before a live run: two inputs and `r` rollouts require `2r` assistant
+responses and `4r` judge verdicts.
 
 ## Validate a change
 

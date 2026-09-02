@@ -279,7 +279,6 @@ def authoring_request(spec: PromptSpec) -> JsonObject:
 
 def _readme_call_id(
     message: GeneratedMessage,
-    occurrence: int,
     assistant: Assistant,
 ) -> ToolCallId:
     identity = json.dumps(
@@ -290,7 +289,6 @@ def _readme_call_id(
             "content": message.content,
             "framing": message.spec.framing,
             "instruction": message.spec.instruction,
-            "occurrence": occurrence,
         },
         ensure_ascii=False,
         separators=(",", ":"),
@@ -312,7 +310,6 @@ def _readme_call_id(
 
 def _chat_messages(
     message: GeneratedMessage,
-    occurrence: int,
     assistant: Assistant,
 ) -> tuple[ChatMessage, ...]:
     match message.spec.channel:
@@ -321,7 +318,7 @@ def _chat_messages(
         case Channel.USER:
             return (ChatMessage(ChatRole.USER, message.content),)
         case Channel.README:
-            call_id = _readme_call_id(message, occurrence, assistant)
+            call_id = _readme_call_id(message, assistant)
             call = ToolCall(
                 call_id,
                 ToolName.parse("read_file"),
@@ -346,10 +343,9 @@ def construct_conversation(
     for spec, generated in zip(matchup.inputs, generated_messages, strict=True):
         if generated.spec != spec:
             raise ValueError("generated messages must follow matchup input order")
-    occurrences: dict[PromptSpec, int] = {}
-    messages: list[ChatMessage] = []
-    for generated in generated_messages:
-        occurrence = occurrences.get(generated.spec, 0)
-        occurrences[generated.spec] = occurrence + 1
-        messages.extend(_chat_messages(generated, occurrence, matchup.assistant))
-    return ConversationSetup(matchup, tuple(messages))
+    messages = tuple(
+        chat_message
+        for generated in generated_messages
+        for chat_message in _chat_messages(generated, matchup.assistant)
+    )
+    return ConversationSetup(matchup, messages)

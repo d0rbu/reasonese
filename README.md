@@ -62,8 +62,8 @@ tools. It uses OpenRouter batch variants for author groups that support them; `-
 forces synchronous authoring requests. Bash and Python execution require `bubblewrap` (`bwrap`)
 on the host.
 
-A matchup contains one assistant plus an ordered tuple of inputs. It requires at least two
-inputs and at least one explicit `user message`; repeated channels are valid. Generated
+A matchup contains one assistant plus an ordered pair of inputs, at least one of which must use
+the explicit `user message` channel. Repeated channels are valid. Generated
 messages and complete raw assistant traces—including intermediate tool calls, tool results, and
 returned reasoning fields—are cached as readable YAML. A warm trace-cache hit does not require
 an API key or make a provider call. A `README.md` treatment appears as an assistant `read_file`
@@ -82,16 +82,13 @@ all verdicts may be true or all may be false. Judgments and their complete raw j
 are cached in YAML against a fingerprint of the exact conversation trace.
 
 `reasonese-collect-data` treats each four-axis datapoint plus the chosen assistant as one cell.
-It requires at least two distinct inputs, runs every input permutation, and collects one or
-more rollouts per permutation. With `n` cells and `r` rollouts, the design has `n! × r` trials;
-every cell receives that many verdicts and appears `(n - 1)! × r` times at each position. The
+It requires exactly two distinct inputs, runs both input orderings, and collects one or more
+rollouts per ordering. With `r` rollouts, the design has `2r` trials; every cell receives `2r`
+verdicts and appears `r` times at each position. The
 collector batches uncached assistant work round-by-round (including function-tool
 continuations) and batches judge work where supported, resumes from per-rollout caches, and
 writes flat analysis-ready rows to `observations.jsonl`. The same manual-message hierarchy and
 cache-invalidation rules apply to user-authored study inputs.
-
-Full permutation designs grow factorially: two, three, and four cells produce 2, 6, and 24
-permutations before multiplying by rollouts.
 
 ## Implementation notes
 

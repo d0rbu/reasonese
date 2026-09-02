@@ -49,7 +49,7 @@ than one-hot: `[true, true]`, `[false, false]`, and mixed outcomes are all valid
 
 - `study.yaml`: the exact assistant, rollout count, and input cells;
 - `generated_messages.yaml`: shared materialized instruction cache;
-- `trials/TRIAL_ID/trace.yaml`: one raw conversation trace per permutation and rollout;
+- `trials/TRIAL_ID/trace.yaml`: one raw conversation trace per input ordering and rollout;
 - `judgments.yaml`: raw and parsed judgments keyed by concrete trace; and
 - `observations.jsonl`: one flat row per cell verdict.
 

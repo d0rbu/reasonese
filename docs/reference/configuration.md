@@ -29,8 +29,8 @@ inputs:
     author: Inkling Small
 ```
 
-The list must contain at least two entries and at least one entry whose channel is
-`user message`. It may contain more entries and may repeat any channel. List order is the
+The list must contain exactly two entries and at least one entry whose channel is
+`user message`. It may repeat any channel. List order is the
 conversation order. See [`../../configs/example_matchup.yaml`](../../configs/example_matchup.yaml).
 
 ## Manual user-author configuration
@@ -44,7 +44,7 @@ inference.
 
 ## Study configuration
 
-A study adds a positive rollout count to an assistant and an unordered set of inputs:
+A study adds a positive rollout count to an assistant and an unordered pair of inputs:
 
 ```yaml
 assistant: Qwen3.8 Flash
@@ -60,7 +60,7 @@ inputs:
     author: Inkling Small
 ```
 
-Inputs must be distinct, there must be at least two, and at least one must use the explicit
-`user message` channel. The collector enumerates every unique ordering and repeats each
+The two inputs must be distinct, and at least one must use the explicit `user message` channel.
+The collector enumerates both orderings and repeats each
 ordering `rollouts_per_permutation` times. See
 [`../../configs/example_study.yaml`](../../configs/example_study.yaml).

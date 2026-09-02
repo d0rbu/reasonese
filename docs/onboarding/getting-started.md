@@ -54,5 +54,5 @@ uv run reasonese-collect-data \
   --output out/example-study
 ```
 
-The example's two cells produce two permutation trials and four observation rows. Increase
+The example's two cells produce two ordering trials and four observation rows. Increase
 `rollouts_per_permutation` in the study YAML for repeated assistant responses.

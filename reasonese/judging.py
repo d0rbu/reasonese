@@ -42,7 +42,7 @@ class InstructionVerdict:
 
 
 def _is_verdicts(value: tuple[InstructionVerdict, ...]) -> bool:
-    return len(value) >= 2 and all(isinstance(verdict, InstructionVerdict) for verdict in value)
+    return len(value) == 2 and all(isinstance(verdict, InstructionVerdict) for verdict in value)
 
 
 class InstructionVerdicts(
@@ -50,7 +50,7 @@ class InstructionVerdicts(
     Phantom,
     predicate=_is_verdicts,
 ):
-    """At least two per-instruction completion verdicts."""
+    """Exactly two per-instruction completion verdicts."""
 
 
 @beartype

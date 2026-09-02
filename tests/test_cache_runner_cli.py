@@ -346,14 +346,12 @@ def test_empty_yaml_cache_is_empty(tmp_path: Path) -> None:
     assert YamlMessageCache(path).load() == ()
 
 
-def test_materialize_messages_deduplicates_and_groups_missing_model_authors(
+def test_materialize_messages_deduplicates_repeated_inputs(
     tmp_path: Path,
 ) -> None:
-    user = _spec("Pre-authored system text.", Channel.SYSTEM)
     inkling = _spec("First base task.", Channel.USER, Author.INKLING)
-    inkling_small = _spec("Second base task.", Channel.USER, Author.INKLING_SMALL)
-    matchup = _matchup(user, inkling, inkling, inkling_small)
-    transport = FakeTransport([_chat("Inkling rewrite"), _chat("Inkling Small rewrite")])
+    matchup = _matchup(inkling, inkling)
+    transport = FakeTransport([_chat("Inkling rewrite")])
     cache = YamlMessageCache(tmp_path / "messages.yaml")
 
     messages = materialize_messages(
@@ -365,16 +363,11 @@ def test_materialize_messages_deduplicates_and_groups_missing_model_authors(
     )
 
     assert [str(message.content) for message in messages] == [
-        "Pre-authored system text.",
         "Inkling rewrite",
         "Inkling rewrite",
-        "Inkling Small rewrite",
     ]
-    assert len(transport.post_calls) == 2
-    assert len(cache.load()) == 3
-    cached_user = cache.get(user)
-    assert cached_user is not None
-    assert cached_user.response is None
+    assert len(transport.post_calls) == 1
+    assert len(cache.load()) == 1
 
 
 def test_materialize_messages_uses_a_warm_cache_without_requests(tmp_path: Path) -> None:

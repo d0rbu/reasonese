@@ -56,7 +56,6 @@ def _trace(answer: str = "Paris and 4.") -> ConversationTrace:
     specs = (
         _spec("Name the capital of France.", Channel.README),
         _spec("What is two plus two?", Channel.USER),
-        _spec("Repeat the number four.", Channel.USER),
     )
     matchup = make_matchup(specs, Assistant.INKLING)
     messages = tuple(
@@ -138,24 +137,24 @@ def test_judge_request_is_independent_strict_json_and_medium_reasoning() -> None
 
 
 def test_judge_trace_batches_one_independent_boolean_per_input() -> None:
-    transport = FakeTransport([_completed_batch((True, False, True))])
+    transport = FakeTransport([_completed_batch((True, False))])
     trace = _trace()
 
     judgment = judge_trace(trace, OpenRouterClient(transport))
 
-    assert [verdict.completed for verdict in judgment.verdicts] == [True, False, True]
+    assert [verdict.completed for verdict in judgment.verdicts] == [True, False]
     assert tuple(verdict.spec for verdict in judgment.verdicts) == trace.setup.matchup.inputs
     assert judgment.trace_fingerprint == trace_fingerprint(trace)
     path, payload = transport.post_calls[0]
     assert path == "/api/beta/batches"
     assert payload["model"] == "openai/gpt-5.6-luna"
-    assert len(payload["requests"]) == 3
+    assert len(payload["requests"]) == 2
     assert all(request["body"]["model"] == "openai/gpt-5.6-luna" for request in payload["requests"])
 
 
 def test_all_true_and_all_false_judgments_are_representable() -> None:
     trace = _trace()
-    for values in ((True, True, True), (False, False, False)):
+    for values in ((True, True), (False, False)):
         judgment = judge_trace(
             trace,
             OpenRouterClient(FakeTransport([_completed_batch(values)])),
@@ -275,8 +274,8 @@ def test_judgment_cache_round_trips_raw_responses_and_replaces_same_trace(
 ) -> None:
     trace = _trace()
     cache = YamlJudgmentCache(tmp_path / "nested" / "judgments.yaml")
-    first = _judgment(trace, (True, False, True))
-    replacement = _judgment(trace, (False, False, False))
+    first = _judgment(trace, (True, False))
+    replacement = _judgment(trace, (False, False))
 
     assert cache.load() == ()
     assert cache.get(trace) is None
@@ -359,7 +358,7 @@ def test_judgment_cache_rejects_bad_verdicts(tmp_path: Path, verdicts: object, e
 
 def test_judgment_cache_rejects_non_mapping_raw_response(tmp_path: Path) -> None:
     trace = _trace()
-    judgment = _judgment(trace, (True, True, True))
+    judgment = _judgment(trace, (True, True))
     path = tmp_path / "judgments.yaml"
     cache = YamlJudgmentCache(path)
     cache.put(judgment)
@@ -403,7 +402,7 @@ def test_judge_cli_runs_batch_then_warm_cache_without_key(
 ) -> None:
     trace_path, matchup_path, _ = _write_trace_and_matchup(tmp_path)
     judgment_path = tmp_path / "judgments.yaml"
-    transport = FakeTransport([_completed_batch((True, False, True))])
+    transport = FakeTransport([_completed_batch((True, False))])
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
     monkeypatch.setattr("reasonese.judge_responses.RequestsTransport", lambda key: transport)
     args = [
@@ -423,7 +422,7 @@ def test_judge_cli_runs_batch_then_warm_cache_without_key(
 
     assert cold == {
         "cache_hit": False,
-        "completed": [True, False, True],
+        "completed": [True, False],
         "judge": "openai/gpt-5.6-luna:batch",
         "judgment_cache": str(judgment_path),
     }
