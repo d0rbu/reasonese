@@ -7,6 +7,7 @@ from xml.etree import ElementTree
 import pytest
 import yaml
 
+import reasonese.judging as judging_module
 from reasonese.axes import Assistant, Author, Channel, Framing, Instruction
 from reasonese.cache import YamlTraceCache
 from reasonese.conversation import (
@@ -27,6 +28,8 @@ from reasonese.judging import (
     TraceFingerprint,
     fingerprint_traces,
     judge_request,
+    judge_requests,
+    judge_requests_for_traces,
     judge_trace,
     parse_completed,
     trace_fingerprint,
@@ -113,7 +116,8 @@ def _completed_batch(values: tuple[bool, ...]) -> JsonObject:
 
 
 def test_judge_request_is_independent_strict_json_and_medium_reasoning() -> None:
-    request = judge_request(_trace(), 1)
+    trace = _trace()
+    request = judge_request(trace, 1)
     system = request["messages"][0]["content"]
     user = request["messages"][1]["content"]
     evidence = ElementTree.fromstring(user)
@@ -135,6 +139,25 @@ def test_judge_request_is_independent_strict_json_and_medium_reasoning() -> None
     schema = request["response_format"]["json_schema"]
     assert schema["strict"] is True
     assert schema["schema"]["properties"] == {"completed": {"type": "boolean"}}
+    assert judge_requests(trace) == (judge_request(trace, 0), judge_request(trace, 1))
+    assert judge_requests_for_traces((trace, trace)) == (*judge_requests(trace), *judge_requests(trace))
+
+
+def test_judge_requests_build_visible_conversation_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+    original = judging_module._visible_conversation
+
+    def track(trace: ConversationTrace) -> str:
+        nonlocal calls
+        calls += 1
+        return original(trace)
+
+    monkeypatch.setattr(judging_module, "_visible_conversation", track)
+
+    assert len(judge_requests(_trace())) == 2
+    assert calls == 1
 
 
 def test_judge_trace_batches_one_independent_boolean_per_input() -> None:

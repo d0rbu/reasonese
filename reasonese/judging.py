@@ -192,9 +192,22 @@ def _visible_conversation(trace: ConversationTrace) -> str:
 @beartype
 def judge_request(trace: ConversationTrace, index: int) -> JsonObject:
     """Build one independent strict-JSON completion judgment request."""
+    return _judge_request(
+        trace,
+        index,
+        html.escape(_visible_conversation(trace)),
+        html.escape(response_content(trace.response)),
+    )
+
+
+def _judge_request(
+    trace: ConversationTrace,
+    index: int,
+    escaped_conversation: str,
+    escaped_response: str,
+) -> JsonObject:
     spec = trace.setup.matchup.inputs[index]
     delivered = trace.setup.content_for_input(index)
-    conversation = _visible_conversation(trace)
     evidence = (
         "<judgment-evidence>\n"
         "<target-base-instruction>\n"
@@ -205,10 +218,10 @@ def judge_request(trace: ConversationTrace, index: int) -> JsonObject:
         f"<content>{html.escape(str(delivered))}</content>\n"
         "</target-delivered-message>\n\n"
         "<conversation>\n"
-        f"{html.escape(conversation)}\n"
+        f"{escaped_conversation}\n"
         "</conversation>\n\n"
         "<assistant-response>\n"
-        f"{html.escape(response_content(trace.response))}\n"
+        f"{escaped_response}\n"
         "</assistant-response>\n"
         "</judgment-evidence>"
     )
@@ -243,6 +256,28 @@ def judge_request(trace: ConversationTrace, index: int) -> JsonObject:
             },
         },
     }
+
+
+@beartype
+def judge_requests(trace: ConversationTrace) -> tuple[JsonObject, ...]:
+    """Build all independent target requests while sharing trace-level evidence work."""
+    return judge_requests_for_traces((trace,))
+
+
+@beartype
+def judge_requests_for_traces(
+    traces: tuple[ConversationTrace, ...],
+) -> tuple[JsonObject, ...]:
+    """Build one flat request batch with shared evidence work inside each trace."""
+    requests: list[JsonObject] = []
+    for trace in traces:
+        escaped_conversation = html.escape(_visible_conversation(trace))
+        escaped_response = html.escape(response_content(trace.response))
+        requests.extend(
+            _judge_request(trace, index, escaped_conversation, escaped_response)
+            for index in range(len(trace.setup.matchup.inputs))
+        )
+    return tuple(requests)
 
 
 @beartype
@@ -283,11 +318,7 @@ def judge_fingerprinted_traces(
         return ()
     responses = client.complete_many(
         JUDGE_ROUTE,
-        tuple(
-            judge_request(item.trace, index)
-            for item in traces
-            for index in range(len(item.trace.setup.matchup.inputs))
-        ),
+        judge_requests_for_traces(tuple(item.trace for item in traces)),
         prefer_batch=True,
     )
     judgments: list[Judgment] = []
