@@ -4,8 +4,9 @@
 |---|---|
 | `configs/example_instructions.toml` | Two simple base prompts |
 | `configs/example_matchup.yaml` | Two-input conversation example |
+| `configs/example_study.yaml` | Permutation-balanced collection example |
 | `reasonese/axes.py` | Four axis types |
-| `reasonese/config.py` | TOML instruction and YAML matchup loaders |
+| `reasonese/config.py` | Instruction, matchup, and study loaders |
 | `reasonese/planning.py` | Four-field dataclass and Cartesian planner |
 | `reasonese/io.py` | JSONL writer |
 | `reasonese/matchup.py` | Strongly typed matchup invariants and serialization |
@@ -19,6 +20,9 @@
 | `reasonese/runner.py` | Cache-aware conversation execution |
 | `reasonese/judging.py` | Independent GPT-5.6 Luna completion verdicts |
 | `reasonese/judgment_cache.py` | Trace-keyed readable judgment cache |
+| `reasonese/study.py` | Cell, study, and permutation/rollout trial types |
+| `reasonese/observations.py` | Flat analysis-ready observation records |
+| `reasonese/collect_data.py` | Resumable study collector and utility |
 | `reasonese/show_axes.py` | `reasonese-axes` utility |
 | `reasonese/plan.py` | `reasonese-plan` utility |
 | `reasonese/run_conversation.py` | `reasonese-run-conversation` utility |
@@ -31,5 +35,6 @@
 | `tests/test_openrouter.py` | Provider-client contract tests |
 | `tests/test_cache_runner_cli.py` | Cache, execution, and CLI tests |
 | `tests/test_judging.py` | Verdict, judgment-cache, and judge-utility tests |
+| `tests/test_study_orchestration.py` | Permutation balance, collection, and resume tests |
 
 Generated files belong under ignored directories such as `out/`.

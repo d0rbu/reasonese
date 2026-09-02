@@ -35,9 +35,9 @@ or shared command switch.
 `specs_per_instruction()` returns `phantom.interval.Natural`, the library's non-negative
 integer type. `beartype` checks public functions and the `PromptSpec` constructor.
 
-`MatchupInputs` is a `phantom-types` refined tuple: it contains at least two `PromptSpec`
-objects and at least one explicit user-message channel. Repeated channels and more than two
-inputs are valid. `Assistant` shares the four model values with model-backed authors but is
+`MatchupInputs` is a `phantom-types` refined tuple: it contains exactly two `PromptSpec`
+objects and at least one explicit user-message channel. Repeated channels are valid.
+`Assistant` shares the four model values with model-backed authors but is
 separate from the four entry axes.
 
 The OpenRouter key exists only at the transport boundary. Cache keys are structural input
@@ -62,3 +62,18 @@ as separately escaped XML elements inside one evidence block.
 Hidden reasoning remains in the trace and its fingerprint but is not quoted as judge evidence.
 The judge does not compare instructions or force a winner. The package does not yet aggregate
 or statistically analyze verdicts.
+
+The collection flow is:
+
+```text
+study -> both input orderings x rollouts -> traces -> judgments -> observation rows
+```
+
+- `reasonese.study` defines a cell, a strongly typed input pair, and stable ordering/rollout
+  trials. Its two distinct inputs produce exactly two orderings.
+- `reasonese.collect_data` batches every active assistant agent-loop round, flattens uncached
+  judge requests into one batch, and resumes at trial granularity.
+- `reasonese.observations` joins traces and judgments into one flat row per cell and trial.
+
+Each rollout has its own trace-cache path, so repeated responses for the same ordered matchup
+do not collapse into one cache record. Generated instructions remain shared across the study.

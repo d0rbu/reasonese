@@ -54,6 +54,28 @@ The utility requires an existing matching trace. It batches one independent medi
 GPT-5.6 Luna request per input, prints the ordered boolean list, and caches the raw judge
 responses. Repeating an unchanged trace is network-free.
 
+## Collect a balanced study
+
+Create study YAML following [`../reference/configuration.md`](../reference/configuration.md):
+
+```bash
+export OPENROUTER_API_KEY=...
+uv run reasonese-collect-data \
+  --study path/to/study.yaml \
+  --user-messages prompts/user \
+  --output out/my-study
+```
+
+The collector runs both input orderings and every requested rollout, then emits
+`observations.jsonl`. It uses shared generated-message caching, separate trace caches for each
+rollout, and trace-sensitive judgment caching. Re-running an entirely cached study needs no
+key. User-authored cells use the same manual hierarchy as a single matchup; editing a selected
+variant invalidates every affected rollout. Use `--no-batch` only when synchronous assistant
+execution is intentionally desired; the Luna judge remains a batch model.
+
+Check the design size before a live run: two inputs and `r` rollouts require `2r` assistant
+responses and `4r` judge verdicts.
+
 ## Validate a change
 
 ```bash

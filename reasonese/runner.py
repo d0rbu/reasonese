@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import ExitStack
 from dataclasses import dataclass
 
 from beartype import beartype
@@ -19,7 +20,14 @@ from reasonese.conversation import (
 )
 from reasonese.manual_messages import ManualMessageLibrary
 from reasonese.matchup import Matchup
-from reasonese.openrouter import OpenRouterClient, OpenRouterModelId, model_route, response_content
+from reasonese.openrouter import (
+    JsonObject,
+    ModelRoute,
+    OpenRouterClient,
+    OpenRouterModelId,
+    model_route,
+    response_content,
+)
 from reasonese.tools import (
     ASSISTANT_TOOLS,
     ToolRuntime,
@@ -28,6 +36,16 @@ from reasonese.tools import (
 )
 
 _MAX_LOCAL_TOOL_STEPS = 8
+
+
+def _assistant_request(messages: list[JsonObject]) -> JsonObject:
+    return {
+        "messages": list(messages),
+        "tools": list(ASSISTANT_TOOLS),
+        "parallel_tool_calls": False,
+        "temperature": 0.7,
+        "reasoning": {"enabled": True, "exclude": False},
+    }
 
 
 @beartype
@@ -92,32 +110,56 @@ def run_assistant(
     client: OpenRouterClient,
 ) -> ConversationTrace:
     """Run one assistant, executing bounded local function calls until it answers."""
-    messages = setup.openrouter_messages()
-    steps: list[ToolStep] = []
-    with ToolRuntime(setup.readme_contents()) as tools:
-        for _ in range(_MAX_LOCAL_TOOL_STEPS + 1):
-            response = client.complete(
-                model_id,
-                {
-                    "messages": messages,
-                    "tools": list(ASSISTANT_TOOLS),
-                    "parallel_tool_calls": False,
-                    "temperature": 0.7,
-                    "reasoning": {"enabled": True, "exclude": False},
-                },
+    route = ModelRoute(model_id, None)
+    return run_assistants((setup,), route, client, prefer_batch=False)[0]
+
+
+@beartype
+def run_assistants(
+    setups: tuple[ConversationSetup, ...],
+    route: ModelRoute,
+    client: OpenRouterClient,
+    *,
+    prefer_batch: bool,
+) -> tuple[ConversationTrace, ...]:
+    """Run many independent assistants, batching each active function-tool round."""
+    if not setups:
+        return ()
+    messages = {index: setup.openrouter_messages() for index, setup in enumerate(setups)}
+    steps = {index: [] for index in range(len(setups))}
+    completed: dict[int, ConversationTrace] = {}
+    pending = list(range(len(setups)))
+
+    with ExitStack() as stack:
+        runtimes = {
+            index: stack.enter_context(ToolRuntime(setup.readme_contents()))
+            for index, setup in enumerate(setups)
+        }
+        while pending:
+            responses = client.complete_many(
+                route,
+                tuple(_assistant_request(messages[index]) for index in pending),
+                prefer_batch=prefer_batch,
             )
-            calls = tool_calls_from_response(response)
-            if not calls:
-                return ConversationTrace(setup, response, tuple(steps))
-            if len(steps) == _MAX_LOCAL_TOOL_STEPS:
-                raise RuntimeError(
-                    f"assistant exceeded {_MAX_LOCAL_TOOL_STEPS} local tool-call steps"
-                )
-            results = tuple(tools.execute(call) for call in calls)
-            steps.append(ToolStep(response, results))
-            messages.append(assistant_message_from_response(response))
-            messages.extend(result.openrouter_dict() for result in results)
-    raise AssertionError("bounded assistant loop ended unexpectedly")
+            next_pending: list[int] = []
+            for index, response in zip(pending, responses, strict=True):
+                calls = tool_calls_from_response(response)
+                if not calls:
+                    completed[index] = ConversationTrace(
+                        setups[index], response, tuple(steps[index])
+                    )
+                    continue
+                if len(steps[index]) == _MAX_LOCAL_TOOL_STEPS:
+                    raise RuntimeError(
+                        f"assistant exceeded {_MAX_LOCAL_TOOL_STEPS} local tool-call steps"
+                    )
+                results = tuple(runtimes[index].execute(call) for call in calls)
+                steps[index].append(ToolStep(response, results))
+                messages[index].append(assistant_message_from_response(response))
+                messages[index].extend(result.openrouter_dict() for result in results)
+                next_pending.append(index)
+            pending = next_pending
+    return tuple(completed[index] for index in range(len(setups)))
 
 
 @beartype

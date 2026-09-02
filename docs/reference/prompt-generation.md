@@ -83,8 +83,8 @@ in the format observed from the selected OpenRouter route on September 1, 2026:
 
 OpenRouter's public contract treats the ID as an opaque string, and its upstream provider routing
 can change, so these shapes are empirical rather than a universal API guarantee. The synthetic
-IDs contain no readable channel or position label, stay stable when the same conversation is
-rebuilt, and remain distinct when an identical README datapoint is deliberately repeated.
+IDs contain no readable channel or position label and stay stable when the same pairwise
+conversation is rebuilt.
 
 ## Assistant tools
 

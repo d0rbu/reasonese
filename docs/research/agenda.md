@@ -4,7 +4,8 @@
 
 The current step turns four-axis datapoints into ordered multi-instruction conversations,
 collects assistant traces, and independently judges completion of every input. The assistant
-remains matchup metadata rather than an entry axis.
+remains matchup metadata rather than an entry axis. Study orchestration balances each cell
+over every possible position and supports repeated rollouts.
 
 This foundation specifies:
 
@@ -15,7 +16,8 @@ This foundation specifies:
 - how model authors generate framed messages;
 - how channel treatments become an ordered conversation; and
 - how generated messages and raw responses are cached; and
-- how one strict completion boolean is collected for each instruction.
+- how one strict completion boolean is collected for each instruction; and
+- how permutations and repeated rollouts become analysis-ready observation rows.
 
 ## Deferred decisions
 

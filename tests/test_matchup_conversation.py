@@ -42,10 +42,8 @@ def _spec(
     return PromptSpec(Instruction.parse(text), framing, channel, author)
 
 
-def test_matchup_refined_type_allows_repeated_channels_and_three_or_more_inputs() -> None:
+def test_matchup_refined_type_allows_repeated_channels_in_an_input_pair() -> None:
     inputs = (
-        _spec("First system instruction.", Channel.SYSTEM),
-        _spec("Second system instruction.", Channel.SYSTEM),
         _spec("First user instruction.", Channel.USER),
         _spec("Second user instruction.", Channel.USER),
     )
@@ -56,9 +54,18 @@ def test_matchup_refined_type_allows_repeated_channels_and_three_or_more_inputs(
     assert matchup.assistant is Assistant.QWEN3_8_FLASH
 
 
-def test_matchup_rejects_too_few_inputs_or_no_explicit_user_message() -> None:
-    with pytest.raises(ValueError, match="at least two"):
+def test_matchup_rejects_non_pairs_or_no_explicit_user_message() -> None:
+    with pytest.raises(ValueError, match="exactly two"):
         make_matchup((_spec("Only one.", Channel.USER),), Assistant.INKLING)
+    with pytest.raises(ValueError, match="exactly two"):
+        make_matchup(
+            (
+                _spec("First.", Channel.USER),
+                _spec("Second.", Channel.USER),
+                _spec("Third.", Channel.USER),
+            ),
+            Assistant.INKLING,
+        )
     with pytest.raises(ValueError, match="at least one user"):
         make_matchup(
             (
@@ -179,10 +186,8 @@ def test_user_channel_context_does_not_impose_a_competing_writing_style() -> Non
 
 def test_conversation_preserves_input_order_and_reads_readme_with_a_tool() -> None:
     specs = (
-        _spec("System one.", Channel.SYSTEM),
         _spec("File instruction.", Channel.README),
         _spec("User one.", Channel.USER),
-        _spec("User two.", Channel.USER),
     )
     matchup = make_matchup(specs, Assistant.INKLING_SMALL)
     generated = tuple(
@@ -193,13 +198,11 @@ def test_conversation_preserves_input_order_and_reads_readme_with_a_tool() -> No
     setup = construct_conversation(matchup, generated)
 
     assert [message.role for message in setup.messages] == [
-        ChatRole.SYSTEM,
         ChatRole.ASSISTANT,
         ChatRole.TOOL,
         ChatRole.USER,
-        ChatRole.USER,
     ]
-    assistant_message = setup.openrouter_messages()[1]
+    assistant_message = setup.openrouter_messages()[0]
     call_id = assistant_message["tool_calls"][0]["id"]
     assert call_id.startswith("call_")
     digest = call_id.removeprefix("call_")
@@ -216,34 +219,17 @@ def test_conversation_preserves_input_order_and_reads_readme_with_a_tool() -> No
             }
         ],
     }
-    assert setup.openrouter_messages()[2] == {
+    assert setup.openrouter_messages()[1] == {
         "role": "tool",
         "tool_call_id": call_id,
-        "content": "generated 1",
+        "content": "generated 0",
     }
-    assert setup.openrouter_messages()[3] == {"role": "user", "content": "generated 2"}
-    assert setup.content_for_input(1) == "generated 1"
-    assert setup.readme_contents() == ("generated 1",)
+    assert setup.openrouter_messages()[2] == {"role": "user", "content": "generated 1"}
+    assert setup.content_for_input(0) == "generated 0"
+    assert setup.readme_contents() == ("generated 0",)
     assert construct_conversation(matchup, generated).openrouter_messages() == (
         setup.openrouter_messages()
     )
-
-
-def test_repeated_identical_readme_datapoints_receive_distinct_stable_ids() -> None:
-    readme = _spec("File instruction.", Channel.README)
-    user = _spec("User instruction.", Channel.USER)
-    matchup = make_matchup((readme, readme, user), Assistant.INKLING)
-    generated = (
-        GeneratedMessage(readme, GeneratedText.parse("same file text"), {}),
-        GeneratedMessage(readme, GeneratedText.parse("same file text"), {}),
-        GeneratedMessage(user, GeneratedText.parse("user text"), {}),
-    )
-
-    first = construct_conversation(matchup, generated).openrouter_messages()
-    second = construct_conversation(matchup, generated).openrouter_messages()
-
-    assert first[0]["tool_calls"][0]["id"] != first[2]["tool_calls"][0]["id"]
-    assert first == second
 
 
 @pytest.mark.parametrize(

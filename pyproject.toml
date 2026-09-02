@@ -18,6 +18,7 @@ reasonese-axes = "reasonese.show_axes:main"
 reasonese-plan = "reasonese.plan:main"
 reasonese-run-conversation = "reasonese.run_conversation:main"
 reasonese-judge-responses = "reasonese.judge_responses:main"
+reasonese-collect-data = "reasonese.collect_data:main"
 
 [build-system]
 requires = ["hatchling"]

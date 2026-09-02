@@ -12,9 +12,10 @@ from reasonese.axes import Assistant, Author, Channel, Framing, Instruction
 from reasonese.planning import PromptSpec
 
 
-def _is_matchup_inputs(value: tuple[PromptSpec, ...]) -> bool:
+def is_matchup_inputs(value: tuple[PromptSpec, ...]) -> bool:
+    """Return whether inputs form one valid pairwise matchup."""
     return (
-        len(value) >= 2
+        len(value) == 2
         and all(isinstance(item, PromptSpec) for item in value)
         and any(item.channel is Channel.USER for item in value)
     )
@@ -23,9 +24,9 @@ def _is_matchup_inputs(value: tuple[PromptSpec, ...]) -> bool:
 class MatchupInputs(
     tuple[PromptSpec, ...],
     Phantom,
-    predicate=_is_matchup_inputs,
+    predicate=is_matchup_inputs,
 ):
-    """At least two inputs, including at least one explicit user message."""
+    """Exactly two inputs, including at least one explicit user message."""
 
 
 @beartype
@@ -40,8 +41,8 @@ class Matchup:
 @beartype
 def make_matchup(inputs: tuple[PromptSpec, ...], assistant: Assistant) -> Matchup:
     """Validate matchup-wide invariants and construct the refined type."""
-    if len(inputs) < 2:
-        raise ValueError("a matchup requires at least two inputs")
+    if len(inputs) != 2:
+        raise ValueError("a matchup requires exactly two inputs")
     if not any(item.channel is Channel.USER for item in inputs):
         raise ValueError("a matchup requires at least one user message input")
     return Matchup(MatchupInputs.parse(inputs), assistant)

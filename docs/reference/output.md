@@ -42,3 +42,18 @@ The judgment cache is YAML under a top-level `judgments` list. Each record conta
 
 The fingerprint prevents reuse after a trace changes. The verdicts are independent rather
 than one-hot: `[true, true]`, `[false, false]`, and mixed outcomes are all valid.
+
+## Collected study
+
+`reasonese-collect-data --output DIRECTORY` writes:
+
+- `study.yaml`: the exact assistant, rollout count, and input cells;
+- `generated_messages.yaml`: shared materialized instruction cache;
+- `trials/TRIAL_ID/trace.yaml`: one raw conversation trace per input ordering and rollout;
+- `judgments.yaml`: raw and parsed judgments keyed by concrete trace; and
+- `observations.jsonl`: one flat row per cell verdict.
+
+Each observation contains the cell ID and five coordinates, permutation, rollout, one-based
+position, completion boolean, trace fingerprint, and available assistant/judge response IDs.
+This is the input to downstream analysis. Cached study traces are reused only while their
+user-authored contents still match the selected manual files.
