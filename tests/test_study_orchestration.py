@@ -16,6 +16,7 @@ from reasonese.collect_studies import main as collect_studies_cli
 from reasonese.config import load_study
 from reasonese.conversation import ConversationTrace, GeneratedMessage, GeneratedText
 from reasonese.judging import (
+    FingerprintedTrace,
     InstructionVerdict,
     InstructionVerdicts,
     Judgment,
@@ -29,6 +30,7 @@ from reasonese.observations import (
     cell_id,
     observation_to_dict,
     observations_from_trial,
+    observations_from_trials,
     write_observations,
 )
 from reasonese.openrouter import JsonObject, OpenRouterClient
@@ -392,6 +394,31 @@ def test_observations_join_trial_trace_and_judgment_in_position_order() -> None:
     assert row["assistant"] == "Inkling"
     assert row["assistant_response_id"] == "assistant-0"
     assert row["judge_response_id"] == "0"
+
+
+def test_batch_observations_match_individual_conversion_and_validate_lengths() -> None:
+    study = _study()
+    trials = build_trials(study)
+    traces = tuple(_trace_for_trial(study, index) for index in range(len(trials)))
+    fingerprinted = tuple(FingerprintedTrace(trace) for trace in traces)
+    judgments = tuple(
+        _judgment_for_trace(trace, values)
+        for trace, values in zip(traces, ((True, False), (False, True)), strict=True)
+    )
+
+    batched = observations_from_trials(trials, fingerprinted, judgments)
+    individual = tuple(
+        observation
+        for trial, trace, judgment in zip(trials, traces, judgments, strict=True)
+        for observation in observations_from_trial(trial, trace, judgment)
+    )
+
+    assert batched == individual
+    assert [item.fingerprint for item in fingerprinted] == [
+        trace_fingerprint(trace) for trace in traces
+    ]
+    with pytest.raises(ValueError, match="equal lengths"):
+        observations_from_trials(trials, fingerprinted, judgments[:1])
 
 
 def test_observations_preserve_missing_provider_ids() -> None:
