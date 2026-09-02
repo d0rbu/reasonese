@@ -6,6 +6,7 @@ from time import sleep
 from typing import Any, cast
 
 import pytest
+import requests
 
 from reasonese.axes import Assistant, Author
 from reasonese.openrouter import (
@@ -422,12 +423,21 @@ def test_response_content_strips_text() -> None:
 
 
 class FakeResponse:
-    def __init__(self, payload: object) -> None:
+    def __init__(
+        self,
+        payload: object,
+        status_code: int = 200,
+        headers: dict[str, str] | None = None,
+    ) -> None:
         self.payload = payload
+        self.status_code = status_code
+        self.headers = headers or {}
         self.raised = False
 
     def raise_for_status(self) -> None:
         self.raised = True
+        if self.status_code >= 400:
+            raise requests.HTTPError(f"status {self.status_code}")
 
     def json(self) -> object:
         return self.payload
@@ -461,9 +471,46 @@ def test_requests_transport_posts_and_gets_authenticated_json() -> None:
     assert session.calls[0][2]["headers"]["Authorization"] == "Bearer secret"
 
 
+def test_requests_transport_retries_429_using_retry_after() -> None:
+    limited = FakeResponse({}, 429, {"Retry-After": "0.25"})
+    completed = FakeResponse({"done": True})
+    session = FakeSession(iter((limited, completed)))
+    sleeps: list[float] = []
+    transport = RequestsTransport(
+        "secret",
+        rate_limit_retries=1,
+        retry_sleep=sleeps.append,
+    )
+    cast(Any, transport)._session = session
+
+    assert transport.post_json("/post", {}) == {"done": True}
+    assert len(session.calls) == 2
+    assert sleeps == [0.25]
+    assert limited.raised is False
+    assert completed.raised is True
+
+
+def test_requests_transport_bounds_retry_after() -> None:
+    limited = FakeResponse({}, 429, {"Retry-After": "3600"})
+    completed = FakeResponse({"done": True})
+    session = FakeSession(iter((limited, completed)))
+    sleeps: list[float] = []
+    transport = RequestsTransport(
+        "secret",
+        rate_limit_retries=1,
+        retry_sleep=sleeps.append,
+    )
+    cast(Any, transport)._session = session
+
+    assert transport.post_json("/post", {}) == {"done": True}
+    assert sleeps == [30.0]
+
+
 def test_requests_transport_rejects_blank_keys_and_non_object_json() -> None:
     with pytest.raises(ValueError, match="must not be blank"):
         RequestsTransport(" ")
+    with pytest.raises(ValueError, match="non-negative integer"):
+        RequestsTransport("secret", rate_limit_retries=-1)
     response = FakeResponse([])
     transport = RequestsTransport("secret")
     cast(Any, transport)._session = FakeSession(iter((response,)))

@@ -182,7 +182,6 @@ def collect_studies(
                 for assistant, work in ordered_work
             ),
             client,
-            prefer_batch=prefer_batch,
         )
         for (_, work), new_traces in zip(ordered_work, trace_groups, strict=True):
             for (state, trial, _), trace in zip(work, new_traces, strict=True):

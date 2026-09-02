@@ -20,7 +20,8 @@ matchup -> authored messages -> independent message QA -> conversation -> assist
 ```
 
 - `reasonese.matchup` validates an assistant and an ordered tuple of two or more datapoints.
-- `reasonese.openrouter` provides bounded concurrent synchronous completions and overlaps
+- `reasonese.openrouter` provides bounded concurrent synchronous completions, retries definite
+  rate limits with bounded backoff, and overlaps
   independent model-grouped batch jobs while preserving request and group order. Requests with
   OpenRouter server tools stay on the synchronous API because those tools are rejected by the
   Batch API.
@@ -31,7 +32,9 @@ matchup -> authored messages -> independent message QA -> conversation -> assist
 - `reasonese.message_qa` audits exact materialized text against its datapoint instructions.
 - `reasonese.message_qa_cache` preserves parsed QA results and raw judge responses in YAML.
 - `reasonese.check_messages` provides the reusable fail-closed gate and standalone utility.
-- `reasonese.runner` coordinates cache lookup, generation, construction, and execution.
+- `reasonese.runner` coordinates cache lookup, generation, construction, and completion-driven
+  assistant execution. A tool continuation is submitted as soon as its preceding response
+  arrives, independently of slower peers.
 - `reasonese.run_conversation` is the standalone conversation utility.
 
 The utilities have separate console entry points. There is no package-level dispatcher
@@ -82,7 +85,7 @@ study -> both input orderings x rollouts -> traces -> judgments -> observation r
 
 - `reasonese.study` defines a cell, a strongly typed input pair, and stable ordering/rollout
   trials. Its two distinct inputs produce exactly two orderings.
-- `reasonese.collect_data` concurrently executes every active assistant agent-loop round,
+- `reasonese.collect_data` concurrently advances every assistant tool loop as responses arrive,
   flattens uncached judge requests into one batch, and resumes at trial granularity.
 - `reasonese.collect_studies` applies the same stages across repeated study paths, sharing
   materialized-message and QA caches and grouping concurrent trials and batched judgments across

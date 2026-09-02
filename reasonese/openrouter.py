@@ -113,12 +113,18 @@ class RequestsTransport:
         *,
         base_url: str = "https://openrouter.ai",
         timeout_seconds: float = 120.0,
+        rate_limit_retries: int = 3,
+        retry_sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         if not api_key.strip():
             raise ValueError("OpenRouter API key must not be blank")
+        if isinstance(rate_limit_retries, bool) or rate_limit_retries < 0:
+            raise ValueError("rate-limit retries must be a non-negative integer")
         self._api_key = api_key
         self._base_url = base_url.rstrip("/")
         self._timeout_seconds = timeout_seconds
+        self._rate_limit_retries = rate_limit_retries
+        self._retry_sleep = retry_sleep
         self._session = requests.Session()
         self._owner_thread = get_ident()
         self._thread_sessions = local()
@@ -146,15 +152,29 @@ class RequestsTransport:
             raise ValueError("OpenRouter returned a non-object JSON response")
         return cast(JsonObject, payload)
 
+    @staticmethod
+    def _retry_delay(response: requests.Response, attempt: int) -> float:
+        raw_delay = response.headers.get("Retry-After")
+        if raw_delay is not None:
+            try:
+                return min(max(float(raw_delay), 0.0), 30.0)
+            except ValueError:
+                pass
+        return min(2.0**attempt, 30.0)
+
     @beartype
     def post_json(self, path: str, body: JsonObject) -> JsonObject:
-        response = self._active_session().post(
-            f"{self._base_url}{path}",
-            headers=self._headers(),
-            json=body,
-            timeout=self._timeout_seconds,
-        )
-        return self._json(response)
+        for attempt in range(self._rate_limit_retries + 1):
+            response = self._active_session().post(
+                f"{self._base_url}{path}",
+                headers=self._headers(),
+                json=body,
+                timeout=self._timeout_seconds,
+            )
+            if response.status_code != 429 or attempt == self._rate_limit_retries:
+                return self._json(response)
+            self._retry_sleep(self._retry_delay(response, attempt))
+        raise RuntimeError("rate-limit retry loop did not return")  # pragma: no cover
 
     @beartype
     def get_json(self, path: str) -> JsonObject:
