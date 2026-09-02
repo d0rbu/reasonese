@@ -18,6 +18,7 @@ from reasonese.judging import (
     trace_fingerprint,
 )
 from reasonese.matchup import (
+    Matchup,
     matchup_from_dict,
     matchup_to_dict,
     prompt_spec_from_dict,
@@ -32,7 +33,10 @@ def _response(raw: object) -> JsonObject:
     return cast(JsonObject, raw)
 
 
-def judgment_from_dict(raw: object) -> Judgment:
+def judgment_from_dict(
+    raw: object,
+    expected_matchup: Matchup | None = None,
+) -> Judgment:
     if not isinstance(raw, dict):
         raise ValueError("cached judgment must be a mapping")
     data = cast(dict[str, Any], raw)
@@ -41,8 +45,14 @@ def judgment_from_dict(raw: object) -> Judgment:
     raw_verdicts = data["verdicts"]
     if not isinstance(raw_verdicts, list):
         raise ValueError("cached judgment verdicts must be a list")
+    if expected_matchup is None:
+        matchup = matchup_from_dict(data["matchup"])
+    else:
+        if data["matchup"] != matchup_to_dict(expected_matchup):
+            raise ValueError("cached judgment matchup does not match expected trial")
+        matchup = expected_matchup
     verdicts: list[InstructionVerdict] = []
-    for raw_verdict in raw_verdicts:
+    for index, raw_verdict in enumerate(raw_verdicts):
         if not isinstance(raw_verdict, dict):
             raise ValueError("cached instruction verdict must be a mapping")
         verdict = cast(dict[str, Any], raw_verdict)
@@ -51,15 +61,23 @@ def judgment_from_dict(raw: object) -> Judgment:
         completed = verdict["completed"]
         if not isinstance(completed, bool):
             raise ValueError("cached instruction verdict must contain a boolean")
+        if expected_matchup is None:
+            spec = prompt_spec_from_dict(verdict["input"])
+        else:
+            if index >= len(expected_matchup.inputs):
+                raise ValueError("cached judgment has too many verdicts")
+            spec = expected_matchup.inputs[index]
+            if verdict["input"] != prompt_spec_to_dict(spec):
+                raise ValueError("cached judgment input does not match expected trial")
         verdicts.append(
             InstructionVerdict(
-                prompt_spec_from_dict(verdict["input"]),
+                spec,
                 completed,
                 _response(verdict["response"]),
             )
         )
     return Judgment(
-        matchup_from_dict(data["matchup"]),
+        matchup,
         TraceFingerprint.parse(data["trace_fingerprint"]),
         InstructionVerdicts.parse(tuple(verdicts)),
     )

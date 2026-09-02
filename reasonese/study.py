@@ -146,8 +146,12 @@ def build_trials(study: Study) -> tuple[Trial, ...]:
     prefix = study_fingerprint(study)
     trials: list[Trial] = []
     first, second = study.inputs
-    for permutation_index, ordered_inputs in enumerate(
-        ((first, second), (second, first)), start=1
+    matchups = (
+        make_matchup((first, second), study.assistant),
+        make_matchup((second, first), study.assistant),
+    )
+    for permutation_index, matchup in enumerate(
+        matchups, start=1
     ):
         for rollout_index in range(1, int(study.rollouts_per_permutation) + 1):
             permutation = PositiveInteger.parse(permutation_index)
@@ -157,7 +161,7 @@ def build_trials(study: Study) -> tuple[Trial, ...]:
                     TrialId.parse(
                         f"{prefix}-permutation-{permutation_index:06d}-rollout-{rollout_index:04d}"
                     ),
-                    make_matchup(ordered_inputs, study.assistant),
+                    matchup,
                     permutation,
                     rollout,
                 )

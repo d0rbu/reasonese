@@ -119,6 +119,8 @@ per study. This batches filesystem reads and transactional writes while retainin
 provider responses. Trace fingerprints are derived once and reused through judgment and batched
 observation construction; the standalone one-conversation utilities keep their readable YAML
 caches.
+Study trials likewise share their two validated ordered matchups, which cache readers reuse while
+checking the redundant serialized coordinates for equality.
 
 `reasonese-collect-studies` accepts repeated `--study` paths and batches work across those study
 boundaries. It shares generated-message and message-QA caches at the output root, combines all

@@ -104,13 +104,21 @@ class YamlMessageCache:
         )
 
 
-def trace_from_dict(raw: object) -> ConversationTrace:
+def trace_from_dict(
+    raw: object,
+    expected_matchup: Matchup | None = None,
+) -> ConversationTrace:
     if not isinstance(raw, dict):
         raise ValueError("cached trace must be a mapping")
     data = cast(dict[str, Any], raw)
     if set(data) != {"matchup", "conversation", "tool_steps", "response"}:
         raise ValueError("cached trace has invalid fields")
-    matchup = matchup_from_dict(data["matchup"])
+    if expected_matchup is None:
+        matchup = matchup_from_dict(data["matchup"])
+    else:
+        if data["matchup"] != matchup_to_dict(expected_matchup):
+            raise ValueError("cached trace matchup does not match expected trial")
+        matchup = expected_matchup
     raw_messages = data["conversation"]
     if not isinstance(raw_messages, list):
         raise ValueError("cached conversation must be a list")
