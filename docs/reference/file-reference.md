@@ -26,6 +26,7 @@
 | `reasonese/study.py` | Cell, study, and permutation/rollout trial types |
 | `reasonese/observations.py` | Flat analysis-ready observation records |
 | `reasonese/collect_data.py` | Resumable study collector and utility |
+| `reasonese/collect_studies.py` | Cross-study batched collection utility |
 | `reasonese/analysis.py` | Bradley-Terry, axis, position, and diagnostic analyses |
 | `reasonese/analyze.py` | `reasonese-analyze` reporting utility |
 | `reasonese/show_axes.py` | `reasonese-axes` utility |

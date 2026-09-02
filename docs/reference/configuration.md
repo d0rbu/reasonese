@@ -64,3 +64,7 @@ The two inputs must be distinct, and at least one must use the explicit `user me
 The collector enumerates both orderings and repeats each
 ordering `rollouts_per_permutation` times. See
 [`../../configs/example_study.yaml`](../../configs/example_study.yaml).
+
+Pass multiple study files as repeated `--study` arguments to `reasonese-collect-studies` when
+collecting a larger design. Their filename stems must be distinct because each stem names that
+study's output subdirectory.
