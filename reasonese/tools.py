@@ -109,12 +109,26 @@ class ToolRuntime:
     def __enter__(self) -> ToolRuntime:
         self._temporary = tempfile.TemporaryDirectory(prefix="reasonese-tools-")
         self._root = Path(self._temporary.name)
+        self._write_readme()
+        return self
+
+    def _write_readme(self) -> None:
         if self._readme_contents:
-            (self._root / "README.md").write_text(
+            (self.root / "README.md").write_text(
                 "\n\n".join(str(content) for content in self._readme_contents),
                 encoding="utf-8",
             )
-        return self
+
+    @beartype
+    def reset(self, readme_contents: tuple[GeneratedText, ...]) -> None:
+        """Clear the workspace and prepare it for another isolated conversation."""
+        for path in self.root.iterdir():
+            if path.is_symlink() or not path.is_dir():
+                path.unlink()
+            else:
+                shutil.rmtree(path)
+        self._readme_contents = readme_contents
+        self._write_readme()
 
     def __exit__(self, *_: object) -> None:
         assert self._temporary is not None

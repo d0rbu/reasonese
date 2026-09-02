@@ -195,58 +195,77 @@ def run_assistant_groups(
         if setup_index < len(group.setups)
     )
 
-    with ExitStack() as stack:
-        runtimes = {
-            (group_index, setup_index): stack.enter_context(ToolRuntime(setup.readme_contents()))
-            for group_index, group in enumerate(groups)
-            for setup_index, setup in enumerate(group.setups)
-        }
-        worker_count = min(client.sync_workers, len(messages))
-        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+    runtimes: dict[tuple[int, int], ToolRuntime] = {}
+    available_runtimes: list[ToolRuntime] = []
+    runtime_stack = ExitStack()
 
-            def submit(key: tuple[int, int]) -> Future[JsonObject]:
-                group_index, _ = key
-                return executor.submit(
-                    client.complete,
-                    groups[group_index].route.model_id,
-                    _assistant_request(messages[key]),
-                )
+    def runtime_for(key: tuple[int, int]) -> ToolRuntime:
+        runtime = runtimes.get(key)
+        if runtime is not None:
+            return runtime
+        group_index, setup_index = key
+        readme_contents = groups[group_index].setups[setup_index].readme_contents()
+        if available_runtimes:
+            runtime = available_runtimes.pop()
+            runtime.reset(readme_contents)
+        else:
+            runtime = runtime_stack.enter_context(ToolRuntime(readme_contents))
+        runtimes[key] = runtime
+        return runtime
 
-            pending: dict[Future[JsonObject], tuple[int, int]] = {}
+    def release_runtime(key: tuple[int, int]) -> None:
+        runtime = runtimes.pop(key, None)
+        if runtime is not None:
+            available_runtimes.append(runtime)
 
-            def admit_waiting() -> None:
-                while waiting and len(pending) < worker_count:
-                    key = waiting.popleft()
-                    pending[submit(key)] = key
+    worker_count = min(client.sync_workers, len(messages))
+    with runtime_stack, ThreadPoolExecutor(max_workers=worker_count) as executor:
 
+        def submit(key: tuple[int, int]) -> Future[JsonObject]:
+            group_index, _ = key
+            return executor.submit(
+                client.complete,
+                groups[group_index].route.model_id,
+                _assistant_request(messages[key]),
+            )
+
+        pending: dict[Future[JsonObject], tuple[int, int]] = {}
+
+        def admit_waiting() -> None:
+            while waiting and len(pending) < worker_count:
+                key = waiting.popleft()
+                pending[submit(key)] = key
+
+        admit_waiting()
+        while pending:
+            finished, _ = wait(tuple(pending), return_when=FIRST_COMPLETED)
+            continuations: list[tuple[int, int]] = []
+            for future in sorted(finished, key=pending.__getitem__):
+                key = pending.pop(future)
+                group_index, setup_index = key
+                response = future.result()
+                calls = tool_calls_from_response(response)
+                if not calls:
+                    completed[key] = ConversationTrace(
+                        groups[group_index].setups[setup_index],
+                        response,
+                        tuple(steps[key]),
+                    )
+                    release_runtime(key)
+                    continue
+                if len(steps[key]) == _MAX_LOCAL_TOOL_STEPS:
+                    raise RuntimeError(
+                        f"assistant exceeded {_MAX_LOCAL_TOOL_STEPS} local tool-call steps"
+                    )
+                runtime = runtime_for(key)
+                results = tuple(runtime.execute(call) for call in calls)
+                steps[key].append(ToolStep(response, results))
+                messages[key].append(assistant_message_from_response(response))
+                messages[key].extend(result.openrouter_dict() for result in results)
+                continuations.append(key)
+            for key in continuations:
+                pending[submit(key)] = key
             admit_waiting()
-            while pending:
-                finished, _ = wait(tuple(pending), return_when=FIRST_COMPLETED)
-                continuations: list[tuple[int, int]] = []
-                for future in sorted(finished, key=pending.__getitem__):
-                    key = pending.pop(future)
-                    group_index, setup_index = key
-                    response = future.result()
-                    calls = tool_calls_from_response(response)
-                    if not calls:
-                        completed[key] = ConversationTrace(
-                            groups[group_index].setups[setup_index],
-                            response,
-                            tuple(steps[key]),
-                        )
-                        continue
-                    if len(steps[key]) == _MAX_LOCAL_TOOL_STEPS:
-                        raise RuntimeError(
-                            f"assistant exceeded {_MAX_LOCAL_TOOL_STEPS} local tool-call steps"
-                        )
-                    results = tuple(runtimes[key].execute(call) for call in calls)
-                    steps[key].append(ToolStep(response, results))
-                    messages[key].append(assistant_message_from_response(response))
-                    messages[key].extend(result.openrouter_dict() for result in results)
-                    continuations.append(key)
-                for key in continuations:
-                    pending[submit(key)] = key
-                admit_waiting()
     return tuple(
         tuple(completed[(group_index, setup_index)] for setup_index in range(len(group.setups)))
         for group_index, group in enumerate(groups)

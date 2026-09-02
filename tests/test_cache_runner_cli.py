@@ -14,6 +14,7 @@ from reasonese.conversation import (
     ConversationTrace,
     GeneratedMessage,
     GeneratedText,
+    ToolCall,
     ToolCallId,
     ToolResult,
     ToolStep,
@@ -707,6 +708,132 @@ def test_initial_requests_are_admitted_round_robin_across_model_groups() -> None
         ["bulk-final", "bulk-final", "bulk-final"],
         ["later-final"],
     ]
+
+
+class TrackingToolRuntime:
+    constructed = 0
+    assignments = 0
+    active = 0
+    peak_active = 0
+    exited = 0
+    executions: dict[int, int] = {}
+
+    def __init__(self, readme_contents: tuple[GeneratedText, ...]) -> None:
+        self.runtime_id = type(self).constructed
+        type(self).constructed += 1
+        self._assign()
+
+    def _assign(self) -> None:
+        self.assignment_id = type(self).assignments
+        type(self).assignments += 1
+        type(self).executions[self.assignment_id] = 0
+
+    def __enter__(self) -> TrackingToolRuntime:
+        type(self).active += 1
+        type(self).peak_active = max(type(self).peak_active, type(self).active)
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        type(self).active -= 1
+        type(self).exited += 1
+
+    def execute(self, call: ToolCall) -> ToolResult:
+        type(self).executions[self.assignment_id] += 1
+        return ToolResult(call.call_id, GeneratedText.parse(f"runtime-{self.runtime_id}"))
+
+    def reset(self, readme_contents: tuple[GeneratedText, ...]) -> None:
+        self._assign()
+
+    @classmethod
+    def reset_counters(cls) -> None:
+        cls.constructed = cls.assignments = cls.active = cls.peak_active = cls.exited = 0
+        cls.executions = {}
+
+
+class RuntimeLifecycleTransport:
+    def __init__(self) -> None:
+        self.request_counts: dict[str, int] = {}
+
+    def post_json(self, path: str, body: JsonObject) -> JsonObject:
+        content = next(
+            message["content"] for message in body["messages"] if message["role"] == "user"
+        )
+        count = self.request_counts.get(content, 0)
+        self.request_counts[content] = count + 1
+        if content == "direct" or count == 2:
+            return _chat(f"final {content}", f"final-{content}")
+        return _tool_chat()
+
+    def get_json(self, path: str) -> JsonObject:
+        raise AssertionError(f"unexpected GET {path}")
+
+
+def test_tool_runtimes_are_lazy_reused_and_bounded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    TrackingToolRuntime.reset_counters()
+    monkeypatch.setattr("reasonese.runner.ToolRuntime", TrackingToolRuntime)
+    setups = tuple(
+        _setup_with_user_content(content)
+        for content in ("tool-1", "direct", "tool-2", "tool-3", "tool-4")
+    )
+
+    traces = run_assistant_groups(
+        (
+            AssistantRunGroup(
+                ModelRoute(OpenRouterModelId.parse("example/runtime"), None),
+                setups,
+            ),
+        ),
+        OpenRouterClient(RuntimeLifecycleTransport(), sync_workers=2),
+    )[0]
+
+    assert [trace.response["id"] for trace in traces] == [
+        "final-tool-1",
+        "final-direct",
+        "final-tool-2",
+        "final-tool-3",
+        "final-tool-4",
+    ]
+    assert TrackingToolRuntime.constructed <= 2
+    assert TrackingToolRuntime.assignments == 4
+    assert TrackingToolRuntime.peak_active <= 2
+    assert TrackingToolRuntime.active == 0
+    assert TrackingToolRuntime.exited == TrackingToolRuntime.constructed
+    assert sorted(TrackingToolRuntime.executions.values()) == [2, 2, 2, 2]
+
+
+class FailingToolContinuationTransport:
+    def post_json(self, path: str, body: JsonObject) -> JsonObject:
+        if body["messages"][-1]["role"] == "tool":
+            raise RuntimeError("continuation failed")
+        return _tool_chat()
+
+    def get_json(self, path: str) -> JsonObject:
+        raise AssertionError(f"unexpected GET {path}")
+
+
+def test_tool_runtime_closes_when_a_continuation_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    TrackingToolRuntime.reset_counters()
+    monkeypatch.setattr("reasonese.runner.ToolRuntime", TrackingToolRuntime)
+
+    with pytest.raises(RuntimeError, match="continuation failed"):
+        run_assistant_groups(
+            (
+                AssistantRunGroup(
+                    ModelRoute(OpenRouterModelId.parse("example/runtime"), None),
+                    (_setup_with_user_content("tool"),),
+                ),
+            ),
+            OpenRouterClient(FailingToolContinuationTransport(), sync_workers=1),
+        )
+
+    assert TrackingToolRuntime.constructed == 1
+    assert TrackingToolRuntime.assignments == 1
+    assert TrackingToolRuntime.active == 0
+    assert TrackingToolRuntime.exited == 1
 
 
 def test_run_matchup_fails_when_assistant_exceeds_local_tool_step_limit(
