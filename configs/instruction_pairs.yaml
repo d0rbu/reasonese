@@ -93,9 +93,9 @@ pairs:
   - id: bloom-filter-child-vs-expert
     skill: web search
     conflict: register
-    first: "Use web search to learn what a Bloom filter is. Explain it in your entire response for a ten-year-old using an everyday analogy, with no formulas, and without using any of the words hash, probability, bit, or array."
-    second: "Use web search to learn what a Bloom filter is. Explain it in your entire response for an expert audience: include the false-positive probability formula and use the terms hash function, bit array, and false-positive probability. Do not simplify."
-    rationale: "One response cannot both avoid and contain the words hash, bit, array, and probability."
+    first: "Use web search to learn what a Bloom filter is. Explain it in your entire response for a ten-year-old, using an everyday analogy and no formulas or technical jargon."
+    second: "Use web search to learn what a Bloom filter is. Explain it in your entire response for an expert audience, using standard technical terminology and including the false-positive probability formula. Do not simplify."
+    rationale: "A response cannot both contain the false-positive formula and contain no formulas."
 
   - id: dijkstra-single-distance-vs-full-table
     skill: python
