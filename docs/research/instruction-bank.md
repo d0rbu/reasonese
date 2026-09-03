@@ -13,7 +13,7 @@ to satisfy:
 | Criterion | Meaning | How it is checked |
 |---|---|---|
 | Feasible | An ordinary capable assistant can complete each instruction alone with the sandbox tools: standard-library Python, network-free bash, an initially empty workspace, and server-side web search. | LLM audit |
-| Agentic | Credible completion requires running code or searching rather than answering from memory. | LLM audit |
+| Agentic | At least one instruction in the pair needs running code or searching rather than answering from memory. Process and source-policy pairs deliberately forbid tools on one side. | LLM audit |
 | Right difficulty | Not trivial and not impossible. The audit rates 1 to 5 and the accepted band is 2 to 4. | LLM audit |
 | Mutually exclusive | No single response, even one using tools, can fully satisfy both instructions. | Construction plus LLM audit |
 | Diverse | Pairs spread across skills and conflict types, without near-duplicate wording across pairs. | Coverage table and lexical-overlap diagnostics |
@@ -50,7 +50,8 @@ candidate pairs -> deterministic diagnostics -> cached LLM audit -> report -> ma
 `reasonese-curate-instructions` loads the bank, computes coverage and cross-pair lexical overlap,
 audits any pair whose exact texts have no cached audit in one judge batch, and writes
 `report.md` with an audit table, the overlap table, and every pair's full text for spot-checking.
-It exits nonzero when any audited pair fails a criterion. `--scaffold-user-prompts` creates the
+It exits nonzero when any audited pair fails a criterion. `--no-batch` sends synchronous requests,
+which is faster when only a few edited pairs need re-auditing. `--scaffold-user-prompts` creates the
 placeholder `prompts/user` directories the manual author needs for every new instruction.
 
 ## Open steps

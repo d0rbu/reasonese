@@ -62,6 +62,8 @@ def audit_pairs(
     pairs: tuple[InstructionPair, ...],
     cache: YamlPairCheckCache,
     client: OpenRouterClient | None,
+    *,
+    prefer_batch: bool = True,
 ) -> tuple[tuple[PairCheck, ...], Natural]:
     """Audit pairs, judging only those whose exact texts have no cached audit."""
     cached = cache.load()
@@ -74,7 +76,7 @@ def audit_pairs(
     if missing:
         if client is None:
             raise ValueError("OPENROUTER_API_KEY is required for uncached pair checks")
-        new_checks = check_pairs(missing, client)
+        new_checks = check_pairs(missing, client, prefer_batch=prefer_batch)
         cache.put_many(new_checks)
         check_by_id.update({check.pair.pair_id: check for check in new_checks})
     return (
@@ -91,6 +93,7 @@ def curate(
     *,
     run_checks: bool,
     similarity_threshold: float,
+    prefer_batch: bool = True,
 ) -> CurationResult:
     """Run deterministic diagnostics and, when requested, the cached LLM audit."""
     if not 0.0 <= similarity_threshold <= 1.0:
@@ -98,7 +101,7 @@ def curate(
     checks: tuple[PairCheck, ...] = ()
     hits = Natural.parse(0)
     if run_checks:
-        checks, hits = audit_pairs(pairs, cache, client)
+        checks, hits = audit_pairs(pairs, cache, client, prefer_batch=prefer_batch)
     return CurationResult(
         pairs,
         checks,
@@ -205,6 +208,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--output", type=Path, default=Path("out/instructions"))
     parser.add_argument("--check-cache", type=Path, default=None)
     parser.add_argument("--no-checks", action="store_true")
+    parser.add_argument("--no-batch", action="store_true")
     parser.add_argument(
         "--similarity-threshold", type=float, default=DEFAULT_SIMILARITY_THRESHOLD
     )
@@ -222,6 +226,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             client,
             run_checks=not args.no_checks,
             similarity_threshold=args.similarity_threshold,
+            prefer_batch=not args.no_batch,
         )
         write_report(args.output / "report.md", result)
         scaffolded: tuple[Path, ...] = ()

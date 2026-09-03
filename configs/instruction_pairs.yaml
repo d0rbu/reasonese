@@ -44,9 +44,9 @@ pairs:
   - id: pi-digits-brief-vs-detailed
     skill: python
     conflict: length
-    first: "Write and run Python that computes the first 50 decimal digits of pi using only integer arithmetic. Reply with at most two sentences that include the digits."
+    first: "Write and run Python that computes the first 50 decimal digits of pi using only integer arithmetic. Reply with at most 30 words in total, including the digits."
     second: "Write and run Python that computes the first 50 decimal digits of pi using only integer arithmetic. Reply with a detailed explanation of at least 250 words covering the algorithm, why it converges, and the digits obtained."
-    rationale: "At most two sentences and at least 250 words cannot both hold."
+    rationale: "At most 30 words and at least 250 words cannot both hold."
 
   - id: fibonacci-json-vs-csv
     skill: python

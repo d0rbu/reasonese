@@ -41,12 +41,8 @@ class InstructionAssessment:
 
     @property
     def passes(self) -> bool:
-        """Return whether the instruction is feasible, agentic, and in the difficulty band."""
-        return (
-            self.feasible
-            and self.requires_tools
-            and MIN_DIFFICULTY <= int(self.difficulty) <= MAX_DIFFICULTY
-        )
+        """Return whether the instruction is feasible and inside the difficulty band."""
+        return self.feasible and MIN_DIFFICULTY <= int(self.difficulty) <= MAX_DIFFICULTY
 
 
 @beartype
@@ -62,9 +58,19 @@ class PairCheck:
     response: JsonObject
 
     @property
+    def requires_tools(self) -> bool:
+        """Return whether at least one instruction needs code execution or search."""
+        return self.first.requires_tools or self.second.requires_tools
+
+    @property
     def passes(self) -> bool:
         """Return whether every bank criterion is satisfied."""
-        return self.first.passes and self.second.passes and self.mutually_exclusive
+        return (
+            self.first.passes
+            and self.second.passes
+            and self.requires_tools
+            and self.mutually_exclusive
+        )
 
     def failure_reasons(self) -> tuple[str, ...]:
         """Name each failed criterion without consulting the judge's free-text issues."""
@@ -72,10 +78,10 @@ class PairCheck:
         for slot, assessment in (("first", self.first), ("second", self.second)):
             if not assessment.feasible:
                 reasons.append(f"{slot} instruction is not feasible")
-            if not assessment.requires_tools:
-                reasons.append(f"{slot} instruction does not require tools")
             if not MIN_DIFFICULTY <= int(assessment.difficulty) <= MAX_DIFFICULTY:
                 reasons.append(f"{slot} instruction difficulty {int(assessment.difficulty)}")
+        if not self.requires_tools:
+            reasons.append("neither instruction requires tools")
         if not self.mutually_exclusive:
             reasons.append("instructions are not mutually exclusive")
         return tuple(reasons)
@@ -210,15 +216,18 @@ def parse_pair_check(pair: InstructionPair, response: JsonObject) -> PairCheck:
 
 @beartype
 def check_pairs(
-    pairs: tuple[InstructionPair, ...], client: OpenRouterClient
+    pairs: tuple[InstructionPair, ...],
+    client: OpenRouterClient,
+    *,
+    prefer_batch: bool = True,
 ) -> tuple[PairCheck, ...]:
-    """Audit pairs independently in one GPT-5.6 Luna batch."""
+    """Audit pairs independently, in one GPT-5.6 Luna batch when preferred."""
     if not pairs:
         return ()
     responses = client.complete_many(
         JUDGE_ROUTE,
         tuple(pair_check_request(pair) for pair in pairs),
-        prefer_batch=True,
+        prefer_batch=prefer_batch,
     )
     return tuple(
         parse_pair_check(pair, response)

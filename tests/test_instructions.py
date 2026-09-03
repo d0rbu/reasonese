@@ -264,7 +264,7 @@ def test_parse_pair_check_reports_passes_and_failure_reasons() -> None:
         _chat(
             _audit(
                 feasible=(False, True),
-                tools=(True, False),
+                tools=(False, False),
                 difficulty=(5, 1),
                 exclusive=False,
                 issues=("Needs network.", "Answerable from memory."),
@@ -275,10 +275,12 @@ def test_parse_pair_check_reports_passes_and_failure_reasons() -> None:
     assert failed.failure_reasons() == (
         "first instruction is not feasible",
         "first instruction difficulty 5",
-        "second instruction does not require tools",
         "second instruction difficulty 1",
+        "neither instruction requires tools",
         "instructions are not mutually exclusive",
     )
+    one_sided = parse_pair_check(_pair(), _chat(_audit(tools=(True, False))))
+    assert one_sided.passes is True
     assert failed.issues == ("Needs network.", "Answerable from memory.")
 
     bare = parse_pair_check(_pair(), _chat(_audit(exclusive=False)))
@@ -320,6 +322,16 @@ def test_check_pairs_uses_one_judge_batch_in_order() -> None:
     assert body["endpoint"] == "/v1/chat/completions"
     assert [check.pair.pair_id for check in checks] == ["count-vs-list", "two"]
     assert [check.passes for check in checks] == [True, False]
+
+
+def test_check_pairs_can_use_synchronous_completions() -> None:
+    transport = FakeTransport([_chat(_audit()), _chat(_audit(difficulty=(3, 4)))])
+    pairs = (_pair(), _pair("two", "Do A now.", "Do B now."))
+    checks = check_pairs(pairs, OpenRouterClient(transport), prefer_batch=False)
+
+    assert [path for path, _ in transport.post_calls] == ["/api/v1/chat/completions"] * 2
+    assert transport.post_calls[0][1]["model"] == "openai/gpt-5.6-luna"
+    assert [int(check.second.difficulty) for check in checks] == [3, 4]
 
 
 def test_pair_check_cache_round_trips_and_matches_exact_text(tmp_path: Path) -> None:
@@ -460,7 +472,7 @@ def test_curate_cli_runs_checks_through_transport_and_fails_closed(
 ) -> None:
     bank = _write_bank(tmp_path / "pairs.yaml", (_pair(), _pair("two", "Do A now.", "Do B now.")))
     transport = FakeTransport(
-        [_batch((_audit(), _audit(tools=(True, False), issues=("From memory.",))))]
+        [_batch((_audit(), _audit(tools=(False, False), issues=("From memory.",))))]
     )
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
     monkeypatch.setattr("reasonese.curate_instructions.RequestsTransport", lambda key: transport)
@@ -507,3 +519,8 @@ def test_assessment_and_difficulty_types_enforce_bounds() -> None:
         Difficulty.parse(0)
     check = PairCheck(_pair(), assessment, assessment, True, (), {"id": "x"})
     assert check.passes is True
+    no_tools = InstructionAssessment(True, False, Difficulty.parse(3))
+    assert no_tools.passes is True
+    unagentic = PairCheck(_pair(), no_tools, no_tools, True, (), {"id": "x"})
+    assert unagentic.passes is False
+    assert unagentic.failure_reasons() == ("neither instruction requires tools",)
