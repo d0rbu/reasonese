@@ -32,7 +32,7 @@ def _response(raw: object) -> JsonObject:
     return cast(JsonObject, raw)
 
 
-def _judgment_from_dict(raw: object) -> Judgment:
+def judgment_from_dict(raw: object) -> Judgment:
     if not isinstance(raw, dict):
         raise ValueError("cached judgment must be a mapping")
     data = cast(dict[str, Any], raw)
@@ -66,7 +66,7 @@ def _judgment_from_dict(raw: object) -> Judgment:
 
 
 @beartype
-def _judgment_to_dict(judgment: Judgment) -> dict[str, object]:
+def judgment_to_dict(judgment: Judgment) -> dict[str, object]:
     return {
         "matchup": matchup_to_dict(judgment.matchup),
         "trace_fingerprint": str(judgment.trace_fingerprint),
@@ -100,7 +100,7 @@ class YamlJudgmentCache:
         raw_judgments = raw["judgments"]
         if not isinstance(raw_judgments, list):
             raise ValueError(f"{self.path} must contain one 'judgments' list")
-        return tuple(_judgment_from_dict(item) for item in raw_judgments)
+        return tuple(judgment_from_dict(item) for item in raw_judgments)
 
     def get(self, trace: ConversationTrace) -> Judgment | None:
         fingerprint = trace_fingerprint(trace)
@@ -126,7 +126,7 @@ class YamlJudgmentCache:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("w", encoding="utf-8") as handle:
             yaml.safe_dump(
-                {"judgments": [_judgment_to_dict(item) for item in by_key.values()]},
+                {"judgments": [judgment_to_dict(item) for item in by_key.values()]},
                 handle,
                 sort_keys=False,
                 allow_unicode=True,

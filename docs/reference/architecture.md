@@ -90,10 +90,12 @@ study -> both input orderings x rollouts -> traces -> judgments -> observation r
 - `reasonese.collect_studies` applies the same stages across repeated study paths, sharing
   materialized-message and QA caches and grouping concurrent trials and batched judgments across
   study boundaries.
+- `reasonese.study_cache` loads study traces and judgments with one SQLite query per table and
+  writes each completed stage in one transaction, keyed by stable trial ID.
 - `reasonese.observations` joins traces and judgments into one flat row per cell and trial.
 
-Each rollout has its own trace-cache path, so repeated responses for the same ordered matchup
-do not collapse into one cache record. Generated instructions remain shared across the study.
+Each rollout has its own trial-keyed trace and judgment row, so repeated identical responses do
+not collapse into one cache record. Generated instructions remain shared across the study.
 
 The analysis flow is:
 

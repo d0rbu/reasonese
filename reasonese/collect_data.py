@@ -14,7 +14,7 @@ from beartype import beartype
 from phantom.interval import Natural
 
 from reasonese.axes import Assistant
-from reasonese.cache import YamlMessageCache, YamlTraceCache
+from reasonese.cache import YamlMessageCache
 from reasonese.check_messages import audit_messages, require_compliant_messages
 from reasonese.config import load_study
 from reasonese.conversation import (
@@ -24,14 +24,14 @@ from reasonese.conversation import (
     construct_conversation,
 )
 from reasonese.judging import Judgment, judge_traces, trace_fingerprint
-from reasonese.judgment_cache import YamlJudgmentCache
 from reasonese.manual_messages import ManualMessageLibrary
 from reasonese.message_qa_cache import YamlMessageQaCache
 from reasonese.observations import Observation, observations_from_trial, write_observations
 from reasonese.openrouter import OpenRouterClient, RequestsTransport, model_route
 from reasonese.planning import PromptSpec
 from reasonese.runner import AssistantRunGroup, materialize_specs, run_assistant_groups
-from reasonese.study import Study, Trial, build_trials, study_to_dict
+from reasonese.study import Study, Trial, TrialId, build_trials, study_to_dict
+from reasonese.study_cache import SqliteStudyCache
 
 
 @beartype
@@ -48,6 +48,7 @@ class _CollectionState:
     """Mutable orchestration state for one collection task."""
 
     task: CollectionTask
+    cache: SqliteStudyCache
     trials: tuple[Trial, ...]
     traces: dict[str, ConversationTrace]
     missing_trials: list[Trial]
@@ -73,18 +74,23 @@ def _prepare_task(task: CollectionTask, manual_messages: ManualMessageLibrary) -
     with (task.output_dir / "study.yaml").open("w", encoding="utf-8") as handle:
         yaml.safe_dump(study_to_dict(task.study), handle, sort_keys=False, allow_unicode=True)
 
+    cache = SqliteStudyCache(task.output_dir / "collection.sqlite3")
+    cached_traces = cache.load_traces()
     traces: dict[str, ConversationTrace] = {}
     missing_trials: list[Trial] = []
     trace_hits = 0
     for trial in trials:
-        cache = YamlTraceCache(task.output_dir / "trials" / str(trial.trial_id) / "trace.yaml")
-        cached = cache.get(trial.matchup)
-        if cached is None or not manual_messages.matches(cached.setup):
+        cached = cached_traces.get(trial.trial_id)
+        if (
+            cached is None
+            or cached.setup.matchup != trial.matchup
+            or not manual_messages.matches(cached.setup)
+        ):
             missing_trials.append(trial)
         else:
             traces[str(trial.trial_id)] = cached
             trace_hits += 1
-    return _CollectionState(task, trials, traces, missing_trials, trace_hits, {}, 0)
+    return _CollectionState(task, cache, trials, traces, missing_trials, trace_hits, {}, 0)
 
 
 def _messages_from_cached_trace(state: _CollectionState) -> tuple[GeneratedMessage, ...]:
@@ -185,24 +191,27 @@ def collect_studies(
         )
         for (_, work), new_traces in zip(ordered_work, trace_groups, strict=True):
             for (state, trial, _), trace in zip(work, new_traces, strict=True):
-                YamlTraceCache(
-                    state.task.output_dir / "trials" / str(trial.trial_id) / "trace.yaml"
-                ).put(trace)
                 state.traces[str(trial.trial_id)] = trace
+        for state in states:
+            state.cache.put_traces(
+                tuple(
+                    (trial.trial_id, state.traces[str(trial.trial_id)])
+                    for trial in state.missing_trials
+                )
+            )
 
-    judgment_caches: list[YamlJudgmentCache] = []
     missing_judgments: list[tuple[int, Trial, ConversationTrace]] = []
     for state_index, state in enumerate(states):
-        judgment_cache = YamlJudgmentCache(state.task.output_dir / "judgments.yaml")
-        judgment_caches.append(judgment_cache)
-        cached_judgments = {
-            (judgment.matchup, judgment.trace_fingerprint): judgment
-            for judgment in judgment_cache.load()
-        }
+        cached_judgments = state.cache.load_judgments()
         for trial in state.trials:
             trace = state.traces[str(trial.trial_id)]
-            cached = cached_judgments.get((trial.matchup, trace_fingerprint(trace)))
-            if cached is None:
+            fingerprint = trace_fingerprint(trace)
+            cached = cached_judgments.get(trial.trial_id)
+            if (
+                cached is None
+                or cached.matchup != trial.matchup
+                or cached.trace_fingerprint != fingerprint
+            ):
                 missing_judgments.append((state_index, trial, trace))
             else:
                 state.judgments[str(trial.trial_id)] = cached
@@ -215,12 +224,12 @@ def collect_studies(
             tuple(trace for _, _, trace in missing_judgments),
             client,
         )
-        judgments_by_state: dict[int, list[Judgment]] = {}
+        judgments_by_state: dict[int, list[tuple[TrialId, Judgment]]] = {}
         for (state_index, trial, _), judgment in zip(missing_judgments, new_judgments, strict=True):
             states[state_index].judgments[str(trial.trial_id)] = judgment
-            judgments_by_state.setdefault(state_index, []).append(judgment)
+            judgments_by_state.setdefault(state_index, []).append((trial.trial_id, judgment))
         for state_index, judgments in judgments_by_state.items():
-            judgment_caches[state_index].put_many(tuple(judgments))
+            states[state_index].cache.put_judgments(tuple(judgments))
 
     results: list[CollectionResult] = []
     for state in states:
