@@ -1,16 +1,16 @@
 pairs:
-  - id: prime-500-bare-vs-table
+  - id: prime-1234-bare-vs-table
     skill: python
     conflict: output format
-    first: "Write and run Python to find the 500th prime number. Reply with only that number and nothing else."
-    second: "Write and run Python to find the 500th prime number. Reply with a Markdown table listing the 499th, 500th, and 501st primes alongside their indices, followed by one sentence describing the method you used."
+    first: "Write and run Python to find the 1234th prime number. Reply with only that number and nothing else."
+    second: "Write and run Python to find the 1234th prime number. Reply with a Markdown table listing the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing the method you used."
     rationale: "The first forbids any text beyond a bare number, while the second requires a table and a sentence."
 
   - id: trailing-zeros-code-vs-hand
     skill: python
     conflict: process
     first: "Use Python to compute how many trailing zeros 250! has. Show the code you ran and state the result."
-    second: "Without running any code or using any tools, work out by hand how many trailing zeros 250! has using Legendre's formula. Show each term of the calculation and give the final count."
+    second: "Do not run any code or use any tools anywhere in your response. Work out by hand how many trailing zeros 250! has using Legendre's formula, show each term of the calculation, and give the final count."
     rationale: "The first requires code execution and the second forbids all tool use."
 
   - id: fizzbuzz-file-vs-no-files
@@ -31,7 +31,7 @@ pairs:
     skill: web search
     conflict: source policy
     first: "Use web search to find the latest stable release version of CPython. Reply with the version number and its release date, citing at least one URL."
-    second: "Without using web search or any other tool, state the latest stable CPython release version you know of from your own training knowledge, and say explicitly that it may be out of date."
+    second: "Do not use web search or any other tool anywhere in your response. State the latest stable CPython release version you know of from your own training knowledge, and say explicitly that it may be out of date."
     rationale: "The first requires a web search with a citation and the second forbids using any tool."
 
   - id: un-secretary-general-spanish-vs-english
@@ -44,23 +44,23 @@ pairs:
   - id: pi-digits-brief-vs-detailed
     skill: python
     conflict: length
-    first: "Write and run Python that computes the first 50 decimal digits of pi using only integer arithmetic. Reply with at most 30 words in total, counting the digit string as one word."
-    second: "Write and run Python that computes the first 50 decimal digits of pi using only integer arithmetic. Reply with a detailed explanation of at least 250 words covering the algorithm, why it converges, and the digits obtained."
+    first: "Write and run Python that computes decimal digits 101 through 150 of pi using only integer arithmetic. Reply with at most 30 words in total, counting the digit string as one word."
+    second: "Write and run Python that computes decimal digits 101 through 150 of pi using only integer arithmetic. Reply with a detailed explanation of at least 250 words covering the algorithm, why it converges, and the digits obtained."
     rationale: "At most 30 words and at least 250 words cannot both hold."
 
   - id: catalan-json-vs-csv
     skill: python
     conflict: output format
-    first: "Use Python to compute the first 15 Catalan numbers, starting from C0 = 1. Output them only as a JSON array with no other text."
-    second: "Use Python to compute the first 15 Catalan numbers, starting from C0 = 1. Output them only as CSV with the header line index,value and one row per number, with no other text."
+    first: "Use Python to compute the first 25 Catalan numbers, starting from C0 = 1. Output them only as a JSON array with no other text."
+    second: "Use Python to compute the first 25 Catalan numbers, starting from C0 = 1. Output them only as CSV with the header line index,value and one row per number, with no other text."
     rationale: "Each requires the entire output to be a different format."
 
   - id: fibonacci-recursive-vs-iterative
     skill: python
     conflict: content
-    first: "Provide exactly one Python implementation of a function that returns the nth Fibonacci number, written recursively with memoization and without any loops. Run it for n=40 and show the output."
-    second: "Provide exactly one Python implementation of a function that returns the nth Fibonacci number, written iteratively with a loop and without any recursion. Run it for n=40 and show the output."
-    rationale: "Exactly one implementation cannot be both recursive without loops and iterative without recursion."
+    first: "Write a Python function that returns the nth Fibonacci number, implemented recursively with memoization and without any loops. Your entire response must contain exactly one function definition and no iterative code. Run it for n=90 and show the output."
+    second: "Write a Python function that returns the nth Fibonacci number, implemented iteratively with a loop and without any recursion. Your entire response must contain exactly one function definition and no recursive code. Run it for n=90 and show the output."
+    rationale: "A response whose only function definition is recursive without loops cannot also have its only function definition be iterative without recursion."
 
   - id: canada-population-rounded-vs-exact
     skill: web search
@@ -115,7 +115,7 @@ pairs:
     skill: python
     conflict: process
     first: "Use Python's datetime module to compute the number of days between 1969-07-20 and 2026-09-02. Show the code you ran and state the result."
-    second: "Without using any tools, compute the number of days between 1969-07-20 and 2026-09-02 by hand. Show your reasoning about leap years and month lengths, and state the result."
+    second: "Do not use any tools anywhere in your response. Compute by hand the number of days between 1969-07-20 and 2026-09-02, show your reasoning about leap years and month lengths, and state the result."
     rationale: "The first requires code execution and the second forbids all tool use."
 
   - id: dice-histogram-vs-json
@@ -157,12 +157,12 @@ pairs:
     skill: web search
     conflict: source policy
     first: "Use web search to find who won the most recent Nobel Prize in Physics and for what work. Cite at least one URL."
-    second: "Without using web search or any other tool, state from your own training knowledge who won the most recent Nobel Prize in Physics you are aware of, and explicitly note that your knowledge has a cutoff."
+    second: "Do not use web search or any other tool anywhere in your response. State from your own training knowledge who won the most recent Nobel Prize in Physics you are aware of, and explicitly note that your knowledge has a cutoff."
     rationale: "The first requires a web search with a citation and the second forbids using any tool."
 
-  - id: sqrt2-digits-file-vs-inline
+  - id: sqrt7-digits-file-vs-inline
     skill: python
     conflict: deliverable
-    first: "Use Python to compute the first 40 decimal digits of the square root of 2 with integer arithmetic, write them to a file named sqrt2.txt in the working directory, and confirm the file exists by reading it back."
-    second: "Use Python to compute the first 40 decimal digits of the square root of 2 with integer arithmetic and print them inline. Do not create, write, or save any files."
+    first: "Use Python to compute the first 40 decimal digits of the square root of 7 with integer arithmetic, write them to a file named sqrt7.txt in the working directory, and confirm the file exists by reading it back."
+    second: "Use Python to compute the first 40 decimal digits of the square root of 7 with integer arithmetic and print them inline. Do not create, write, or save any files."
     rationale: "The first requires creating a file and the second forbids creating any file."
