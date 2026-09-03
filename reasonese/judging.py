@@ -79,6 +79,30 @@ class Judgment:
             raise ValueError("judgment verdicts must follow the matchup input order")
 
 
+def _instruction_verdict_from_validated(
+    spec: PromptSpec,
+    completed: bool,
+    response: JsonObject,
+) -> InstructionVerdict:
+    verdict = object.__new__(InstructionVerdict)
+    object.__setattr__(verdict, "spec", spec)
+    object.__setattr__(verdict, "completed", completed)
+    object.__setattr__(verdict, "response", response)
+    return verdict
+
+
+def _judgment_from_validated(
+    matchup: Matchup,
+    fingerprint: TraceFingerprint,
+    verdicts: InstructionVerdicts,
+) -> Judgment:
+    judgment = object.__new__(Judgment)
+    object.__setattr__(judgment, "matchup", matchup)
+    object.__setattr__(judgment, "trace_fingerprint", fingerprint)
+    object.__setattr__(judgment, "verdicts", verdicts)
+    return judgment
+
+
 JUDGE_ROUTE = ModelRoute(
     OpenRouterModelId.parse("openai/gpt-5.6-luna"),
     OpenRouterModelId.parse("openai/gpt-5.6-luna:batch"),
@@ -330,9 +354,13 @@ def judge_fingerprinted_traces(
         response_index += count
         verdicts = InstructionVerdicts.parse(
             tuple(
-                InstructionVerdict(spec, parse_completed(response), response)
+                _instruction_verdict_from_validated(
+                    spec,
+                    parse_completed(response),
+                    response,
+                )
                 for spec, response in zip(trace.setup.matchup.inputs, trace_responses, strict=True)
             )
         )
-        judgments.append(Judgment(trace.setup.matchup, item.fingerprint, verdicts))
+        judgments.append(_judgment_from_validated(trace.setup.matchup, item.fingerprint, verdicts))
     return tuple(judgments)
