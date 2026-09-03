@@ -97,7 +97,8 @@ study -> both input orderings x rollouts -> traces -> judgments -> observation r
 - `reasonese.collect_studies` applies the same stages across repeated study paths, sharing
   materialized-message and QA caches and grouping concurrent trials and batched judgments across
   study boundaries. It also consumes sampled suite YAML, uses stable fingerprint output names,
-  and writes a combined observation file.
+  writes a combined observation file, and stores all suite traces and judgments in one root
+  SQLite database.
 - `reasonese.study_cache` loads study traces and judgments with one SQLite query per table,
   validates serialized coordinates against the known trial matchups without reparsing them, and
   writes each completed stage in one transaction keyed by stable trial ID.

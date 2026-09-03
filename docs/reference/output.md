@@ -79,8 +79,9 @@ assistant, `a` assistants, and `r` rollouts per permutation, it contains `pa` st
 `2par` assistant trials. The same `p` input pairs are used for each assistant.
 
 When `reasonese-collect-studies --suite PATH` is used, each study is collected below
-`DIRECTORY/<study fingerprint>/`. In addition to those resumable per-study artifacts, the suite
-root receives one combined `observations.jsonl` ready for analysis.
+`DIRECTORY/<study fingerprint>/`. Each child contains `study.yaml` and `observations.jsonl`; all
+trace and judgment rows are deduplicated into `DIRECTORY/collection.sqlite3`. The suite root also
+receives one combined `observations.jsonl` ready for analysis.
 
 ## Analysis directory
 
