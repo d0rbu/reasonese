@@ -5,8 +5,14 @@
 | `configs/example_instructions.toml` | Two simple base prompts |
 | `configs/example_matchup.yaml` | Two-input conversation example |
 | `configs/example_study.yaml` | Permutation-balanced collection example |
+| `configs/instruction_pairs.yaml` | Candidate instruction-pair bank |
 | `reasonese/axes.py` | Four axis types |
 | `reasonese/config.py` | Instruction, matchup, and study loaders |
+| `reasonese/instructions.py` | Instruction pairs, bank loader, overlap and coverage diagnostics, manual-variant scaffolding |
+| `reasonese/pair_checks.py` | Independent GPT-5.6 Luna audits of pair criteria |
+| `reasonese/pair_check_cache.py` | Exact-text-keyed readable pair-audit cache |
+| `reasonese/curate_instructions.py` | `reasonese-curate-instructions` utility and spot-check report |
+| `docs/research/instruction-bank.md` | Bank criteria, conflict taxonomy, and curation flow |
 | `reasonese/planning.py` | Four-field dataclass and Cartesian planner |
 | `reasonese/sampling.py` | Connected, seeded condition-pair subsampling |
 | `reasonese/io.py` | JSONL writer |
@@ -47,5 +53,6 @@
 | `tests/test_study_orchestration.py` | Permutation balance, collection, and resume tests |
 | `tests/test_sampling.py` | Sparse-design stratification, degree, connectivity, and reproducibility tests |
 | `tests/test_analysis.py` | Synthetic ranking, position-effect, diagnostics, and output tests |
+| `tests/test_instructions.py` | Pair loading, audit parsing, cache, scaffolding, and curation-utility tests |
 
 Generated files belong under ignored directories such as `out/`.

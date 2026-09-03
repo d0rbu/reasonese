@@ -1,0 +1,168 @@
+pairs:
+  - id: prime-1234-bare-vs-table
+    skill: python
+    conflict: output format
+    first: "Write and run Python to find the 1234th prime number. Reply with only that number and nothing else."
+    second: "Write and run Python to find the 1234th prime number. Reply with a Markdown table listing the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing the method you used."
+    rationale: "The first forbids any text beyond a bare number, while the second requires a table and a sentence."
+
+  - id: trailing-zeros-code-vs-hand
+    skill: python
+    conflict: process
+    first: "Use Python to compute how many trailing zeros 250! has. Show the code you ran and state the result."
+    second: "Do not run any code or use any tools anywhere in your response. Work out by hand how many trailing zeros 250! has using Legendre's formula, show each term of the calculation, and give the final count."
+    rationale: "The first requires code execution and the second forbids all tool use."
+
+  - id: fizzbuzz-file-vs-no-files
+    skill: python
+    conflict: deliverable
+    first: "Write a Python script that prints FizzBuzz for the numbers 1 through 30, save it as fizzbuzz.py in the working directory, run it, and confirm the file exists by listing the directory contents."
+    second: "Print FizzBuzz for the numbers 1 through 30 by running Python inline. Do not create, write, or save any files in the working directory."
+    rationale: "The first requires creating a file and the second forbids creating any file."
+
+  - id: word-counts-bash-vs-python
+    skill: bash
+    conflict: tool choice
+    first: "Using only the bash tool with standard Unix utilities such as tr, sort, and uniq, count how many times each word appears in the sentence 'the quick brown fox jumps over the lazy dog and the fox sleeps' and print every word with its count. Do not use Python in any form, including from inside bash."
+    second: "Using only the Python tool, count how many times each word appears in the sentence 'the quick brown fox jumps over the lazy dog and the fox sleeps' and print the counts as a single JSON object. Do not use the bash tool or run any shell commands."
+    rationale: "Each instruction forbids the tool the other requires."
+
+  - id: cpython-version-search-vs-memory
+    skill: web search
+    conflict: source policy
+    first: "Use web search to find the latest stable release version of CPython. Reply with the version number and its release date, citing at least one URL."
+    second: "Do not use web search or any other tool anywhere in your response. State the latest stable CPython release version you know of from your own training knowledge, and say explicitly that it may be out of date."
+    rationale: "The first requires a web search with a citation and the second forbids using any tool."
+
+  - id: un-secretary-general-spanish-vs-english
+    skill: web search
+    conflict: language
+    first: "Use web search to find who currently serves as Secretary-General of the United Nations and when their current term began. Write your entire response in Spanish."
+    second: "Use web search to find who currently serves as Secretary-General of the United Nations and when their current term began. Write your entire response in English."
+    rationale: "A response cannot be written entirely in two languages."
+
+  - id: pi-digits-brief-vs-detailed
+    skill: python
+    conflict: length
+    first: "Write and run Python that computes decimal digits 101 through 150 of pi using only integer arithmetic. Reply with at most 30 words in total, counting the digit string as one word."
+    second: "Write and run Python that computes decimal digits 101 through 150 of pi using only integer arithmetic. Reply with a detailed explanation of at least 250 words covering the algorithm, why it converges, and the digits obtained."
+    rationale: "At most 30 words and at least 250 words cannot both hold."
+
+  - id: catalan-json-vs-csv
+    skill: python
+    conflict: output format
+    first: "Use Python to compute the first 25 Catalan numbers, starting from C0 = 1. Output them only as a JSON array with no other text."
+    second: "Use Python to compute the first 25 Catalan numbers, starting from C0 = 1. Output them only as CSV with the header line index,value and one row per number, with no other text."
+    rationale: "Each requires the entire output to be a different format."
+
+  - id: fibonacci-recursive-vs-iterative
+    skill: python
+    conflict: content
+    first: "Write a Python function that returns the nth Fibonacci number, implemented recursively with memoization and without any loops. Your entire response must contain exactly one function definition and no iterative code. Run it for n=90 and show the output."
+    second: "Write a Python function that returns the nth Fibonacci number, implemented iteratively with a loop and without any recursion. Your entire response must contain exactly one function definition and no recursive code. Run it for n=90 and show the output."
+    rationale: "A response whose only function definition is recursive without loops cannot also have its only function definition be iterative without recursion."
+
+  - id: canada-population-rounded-vs-exact
+    skill: web search
+    conflict: content
+    first: "Use web search to find the most recent official population estimate for Canada. Report it rounded to the nearest million only, and do not give the exact figure."
+    second: "Use web search to find the most recent official population estimate for Canada. Report the exact figure together with the date of the estimate, and do not round it."
+    rationale: "A rounded-only figure and an exact unrounded figure cannot both be the reported value."
+
+  - id: bradley-terry-paragraph-vs-list
+    skill: web search
+    conflict: scope
+    first: "Use web search to research the Bradley-Terry model. Write a single paragraph summary with no lists or headings, citing exactly three sources."
+    second: "Use web search to research the Bradley-Terry model. Provide a bulleted list of at least six distinct sources with one sentence about each, and do not write any paragraphs."
+    rationale: "A single paragraph with three citations cannot also be a paragraph-free list of six sources."
+
+  - id: project-tree-bash-vs-python
+    skill: bash
+    conflict: tool choice
+    first: "Using only the bash tool, create a directory named project containing subdirectories src and tests and an empty file README.txt, then print the resulting tree with the find command. Do not use Python in any form, including from inside bash."
+    second: "Using only the Python tool with the pathlib module, create a directory named project containing subdirectories src and tests and an empty file README.txt, then print each created path. Do not use the bash tool or run any shell commands."
+    rationale: "Each instruction forbids the tool the other requires."
+
+  - id: leap-years-count-vs-list
+    skill: python
+    conflict: output format
+    first: "Using Python, count how many leap years fall between 1900 and 2100 inclusive. Reply with only the count."
+    second: "Using Python, list every leap year between 1900 and 2100 inclusive, one per line, and do not state a total count anywhere in your reply."
+    rationale: "The first allows only a count and the second forbids stating a count."
+
+  - id: bloom-filter-child-vs-expert
+    skill: web search
+    conflict: register
+    first: "Use web search to learn what a Bloom filter is. Explain it in your entire response for a ten-year-old, using an everyday analogy and no formulas or technical jargon."
+    second: "Use web search to learn what a Bloom filter is. Explain it in your entire response for an expert audience, using standard technical terminology and including the false-positive probability formula. Do not simplify."
+    rationale: "A response cannot both contain the false-positive formula and contain no formulas."
+
+  - id: dijkstra-single-distance-vs-full-table
+    skill: python
+    conflict: scope
+    first: "Using Python, implement Dijkstra's algorithm and run it on the undirected weighted graph with edges A-B 4, A-C 2, B-C 5, B-D 10, C-E 3, D-E 4, D-F 11, and E-F 8. Reply with only the shortest-path distance from A to F as a single number."
+    second: "Using Python, implement Dijkstra's algorithm and run it on the undirected weighted graph with edges A-B 4, A-C 2, B-C 5, B-D 10, C-E 3, D-E 4, D-F 11, and E-F 8. Reply with a table listing, for every node, its shortest distance from A and its predecessor on that path. Do not single out the A to F distance."
+    rationale: "A reply that is only one number cannot also be a per-node table."
+
+  - id: openrouter-batch-sentence-vs-report
+    skill: web search
+    conflict: length
+    first: "Use web search to find out what the OpenRouter batch API does. Summarize it in a single sentence of at most 25 words."
+    second: "Use web search to find out what the OpenRouter batch API does. Write a structured report with at least four section headings and at least 300 words."
+    rationale: "A single sentence of at most 25 words cannot be a 300-word report with headings."
+
+  - id: days-between-dates-code-vs-hand
+    skill: python
+    conflict: process
+    first: "Use Python's datetime module to compute the number of days between 1969-07-20 and 2026-09-02. Show the code you ran and state the result."
+    second: "Do not use any tools anywhere in your response. Compute by hand the number of days between 1969-07-20 and 2026-09-02, show your reasoning about leap years and month lengths, and state the result."
+    rationale: "The first requires code execution and the second forbids all tool use."
+
+  - id: dice-histogram-vs-json
+    skill: python
+    conflict: output format
+    first: "In Python, seed the random module with 42, simulate rolling two six-sided dice 10000 times, and present the distribution of sums only as an ASCII bar chart with no other text."
+    second: "In Python, seed the random module with 42, simulate rolling two six-sided dice 10000 times, and present the distribution of sums only as a JSON object mapping each sum to its count, with no other text."
+    rationale: "Each requires the entire output to be a different format."
+
+  - id: miles-table-vs-plain-line
+    skill: python
+    conflict: output format
+    first: "Using Python, convert 1 through 10 miles to kilometers rounded to two decimals, and present the results as a Markdown table with the columns miles and kilometers."
+    second: "Using Python, convert 1 through 10 miles to kilometers rounded to two decimals, and present the results as a single comma-separated line of kilometer values only, with no table, labels, or other text."
+    rationale: "A Markdown table and a bare comma-separated line cannot both be the output."
+
+  - id: everest-feet-spanish-vs-english
+    skill: python and web search
+    conflict: language
+    first: "Use web search to find the official height of Mount Everest in meters, then use Python to convert it to feet. Write your entire response in Spanish."
+    second: "Use web search to find the official height of Mount Everest in meters, then use Python to convert it to feet. Write your entire response in English."
+    rationale: "A response cannot be written entirely in two languages."
+
+  - id: palindrome-function-vs-one-liner
+    skill: python
+    conflict: content
+    first: "Write a Python function that reports whether a string is a palindrome when case and non-letter characters are ignored. Include a docstring and at least three assert-based test cases, run them, and show the output."
+    second: "Write a single Python expression, with no function definition and no tests, that reports whether the string 'A man, a plan, a canal: Panama' is a palindrome when case and non-letter characters are ignored. Run it and show only the boolean result."
+    rationale: "A function with a docstring and tests cannot also be a single expression with no function and no tests."
+
+  - id: eu-members-count-vs-names
+    skill: web search
+    conflict: output format
+    first: "Use web search to determine how many member states the European Union currently has. Reply with only the number."
+    second: "Use web search to determine which countries are currently member states of the European Union. Reply with the full list of country names, one per line, and do not state a total count."
+    rationale: "The first allows only a number and the second forbids stating a count."
+
+  - id: nobel-physics-search-vs-memory
+    skill: web search
+    conflict: source policy
+    first: "Use web search to find who won the most recent Nobel Prize in Physics and for what work. Cite at least one URL."
+    second: "Do not use web search or any other tool anywhere in your response. State from your own training knowledge who won the most recent Nobel Prize in Physics you are aware of, and explicitly note that your knowledge has a cutoff."
+    rationale: "The first requires a web search with a citation and the second forbids using any tool."
+
+  - id: sqrt7-digits-file-vs-inline
+    skill: python
+    conflict: deliverable
+    first: "Use Python to compute the first 40 decimal digits of the square root of 7 with integer arithmetic, write them to a file named sqrt7.txt in the working directory, and confirm the file exists by reading it back."
+    second: "Use Python to compute the first 40 decimal digits of the square root of 7 with integer arithmetic and print them inline. Do not create, write, or save any files."
+    rationale: "The first requires creating a file and the second forbids creating any file."

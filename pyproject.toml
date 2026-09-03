@@ -24,6 +24,7 @@ reasonese-judge-responses = "reasonese.judge_responses:main"
 reasonese-collect-data = "reasonese.collect_data:main"
 reasonese-collect-studies = "reasonese.collect_studies:main"
 reasonese-analyze = "reasonese.analyze:main"
+reasonese-curate-instructions = "reasonese.curate_instructions:main"
 
 [build-system]
 requires = ["hatchling"]
