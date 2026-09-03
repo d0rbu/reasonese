@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from contextlib import ExitStack
 from dataclasses import dataclass
@@ -187,6 +188,12 @@ def run_assistant_groups(
     completed: dict[tuple[int, int], ConversationTrace] = {}
     if not messages:
         return tuple(() for _ in groups)
+    waiting = deque(
+        (group_index, setup_index)
+        for setup_index in range(max(len(group.setups) for group in groups))
+        for group_index, group in enumerate(groups)
+        if setup_index < len(group.setups)
+    )
 
     with ExitStack() as stack:
         runtimes = {
@@ -194,7 +201,8 @@ def run_assistant_groups(
             for group_index, group in enumerate(groups)
             for setup_index, setup in enumerate(group.setups)
         }
-        with ThreadPoolExecutor(max_workers=min(client.sync_workers, len(messages))) as executor:
+        worker_count = min(client.sync_workers, len(messages))
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
 
             def submit(key: tuple[int, int]) -> Future[JsonObject]:
                 group_index, _ = key
@@ -204,10 +212,18 @@ def run_assistant_groups(
                     _assistant_request(messages[key]),
                 )
 
-            pending = {submit(key): key for key in messages}
+            pending: dict[Future[JsonObject], tuple[int, int]] = {}
+
+            def admit_waiting() -> None:
+                while waiting and len(pending) < worker_count:
+                    key = waiting.popleft()
+                    pending[submit(key)] = key
+
+            admit_waiting()
             while pending:
                 finished, _ = wait(tuple(pending), return_when=FIRST_COMPLETED)
-                for future in finished:
+                continuations: list[tuple[int, int]] = []
+                for future in sorted(finished, key=pending.__getitem__):
                     key = pending.pop(future)
                     group_index, setup_index = key
                     response = future.result()
@@ -227,7 +243,10 @@ def run_assistant_groups(
                     steps[key].append(ToolStep(response, results))
                     messages[key].append(assistant_message_from_response(response))
                     messages[key].extend(result.openrouter_dict() for result in results)
+                    continuations.append(key)
+                for key in continuations:
                     pending[submit(key)] = key
+                admit_waiting()
     return tuple(
         tuple(completed[(group_index, setup_index)] for setup_index in range(len(group.setups)))
         for group_index, group in enumerate(groups)
