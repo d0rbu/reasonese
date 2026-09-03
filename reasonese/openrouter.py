@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
+from threading import get_ident, local
 from typing import Any, Protocol, cast, runtime_checkable
 
 import requests
@@ -15,6 +17,19 @@ from reasonese.axes import Assistant, Author
 
 JsonObject = dict[str, Any]
 _TERMINAL_BATCH_STATUSES = frozenset({"completed", "failed", "cancelled", "expired"})
+
+
+def _batch_compatible(body: JsonObject) -> bool:
+    """Return whether a request avoids server tools rejected by OpenRouter batches."""
+    tools = body.get("tools")
+    if not isinstance(tools, list):
+        return True
+    return not any(
+        isinstance(tool, dict)
+        and isinstance(tool.get("type"), str)
+        and tool["type"].startswith("openrouter:")
+        for tool in tools
+    )
 
 
 def _is_model_id(value: str) -> bool:
@@ -105,6 +120,17 @@ class RequestsTransport:
         self._base_url = base_url.rstrip("/")
         self._timeout_seconds = timeout_seconds
         self._session = requests.Session()
+        self._owner_thread = get_ident()
+        self._thread_sessions = local()
+
+    def _active_session(self) -> requests.Session:
+        if get_ident() == self._owner_thread:
+            return self._session
+        session = getattr(self._thread_sessions, "session", None)
+        if session is None:
+            session = requests.Session()
+            self._thread_sessions.session = session
+        return cast(requests.Session, session)
 
     def _headers(self) -> dict[str, str]:
         return {
@@ -122,7 +148,7 @@ class RequestsTransport:
 
     @beartype
     def post_json(self, path: str, body: JsonObject) -> JsonObject:
-        response = self._session.post(
+        response = self._active_session().post(
             f"{self._base_url}{path}",
             headers=self._headers(),
             json=body,
@@ -132,7 +158,7 @@ class RequestsTransport:
 
     @beartype
     def get_json(self, path: str) -> JsonObject:
-        response = self._session.get(
+        response = self._active_session().get(
             f"{self._base_url}{path}",
             headers=self._headers(),
             timeout=self._timeout_seconds,
@@ -148,8 +174,13 @@ class OpenRouterClient:
     transport: JsonTransport
     poll_interval_seconds: float = 10.0
     batch_timeout_seconds: float = 86_400.0
+    sync_workers: int = 16
     sleep: Callable[[float], None] = field(default=time.sleep, repr=False)
     monotonic: Callable[[], float] = field(default=time.monotonic, repr=False)
+
+    def __post_init__(self) -> None:
+        if isinstance(self.sync_workers, bool) or self.sync_workers < 1:
+            raise ValueError("sync workers must be a positive integer")
 
     def complete(self, model_id: OpenRouterModelId, body: JsonObject) -> JsonObject:
         """Run one synchronous chat completion."""
@@ -166,11 +197,10 @@ class OpenRouterClient:
         prefer_batch: bool,
     ) -> tuple[JsonObject, ...]:
         """Complete requests in one model batch when possible, otherwise synchronously."""
-        if not bodies:
-            return ()
-        if prefer_batch and route.batch_model_id is not None:
-            return self._complete_batch(route.model_id, bodies)
-        return tuple(self.complete(route.model_id, body) for body in bodies)
+        return self.complete_many_grouped(
+            (CompletionGroup(route, bodies),),
+            prefer_batch=prefer_batch,
+        )[0]
 
     def complete_many_grouped(
         self,
@@ -185,15 +215,39 @@ class OpenRouterClient:
         for index, group in enumerate(groups):
             if not group.bodies:
                 results[index] = ()
-            elif prefer_batch and group.route.batch_model_id is not None:
+            elif (
+                prefer_batch
+                and group.route.batch_model_id is not None
+                and all(_batch_compatible(body) for body in group.bodies)
+            ):
                 pending.append((index, self._submit_batch(group.route.model_id, group.bodies)))
 
         pending_indexes = {index for index, _ in pending}
-        for index, group in enumerate(groups):
-            if results[index] is None and index not in pending_indexes:
-                results[index] = tuple(
-                    self.complete(group.route.model_id, body) for body in group.bodies
+        sync_work = tuple(
+            (group_index, body_index, group.route.model_id, body)
+            for group_index, group in enumerate(groups)
+            if results[group_index] is None and group_index not in pending_indexes
+            for body_index, body in enumerate(group.bodies)
+        )
+        if sync_work:
+            sync_results: dict[int, list[JsonObject | None]] = {
+                index: [None] * len(group.bodies)
+                for index, group in enumerate(groups)
+                if results[index] is None and index not in pending_indexes
+            }
+            with ThreadPoolExecutor(max_workers=min(self.sync_workers, len(sync_work))) as executor:
+                responses = executor.map(
+                    lambda work: self.complete(work[2], work[3]),
+                    sync_work,
                 )
+                for (group_index, body_index, _, _), response in zip(
+                    sync_work, responses, strict=True
+                ):
+                    sync_results[group_index][body_index] = response
+            for index, group_results in sync_results.items():
+                if any(response is None for response in group_results):
+                    raise RuntimeError("synchronous completion group was not collected")
+                results[index] = cast(tuple[JsonObject, ...], tuple(group_results))
 
         if pending:
             completed = self._wait_for_batches(tuple(job for _, job in pending))
@@ -203,13 +257,6 @@ class OpenRouterClient:
         if any(result is None for result in results):  # pragma: no cover - internal invariant
             raise RuntimeError("completion group was not executed")
         return cast(tuple[tuple[JsonObject, ...], ...], tuple(results))
-
-    def _complete_batch(
-        self,
-        model_id: OpenRouterModelId,
-        bodies: tuple[JsonObject, ...],
-    ) -> tuple[JsonObject, ...]:
-        return self._wait_for_batches((self._submit_batch(model_id, bodies),))[0]
 
     def _submit_batch(
         self,

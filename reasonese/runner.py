@@ -62,6 +62,15 @@ class RunResult:
 
 
 @beartype
+@dataclass(frozen=True, slots=True)
+class AssistantRunGroup:
+    """Independent conversation setups sharing one assistant model route."""
+
+    route: ModelRoute
+    setups: tuple[ConversationSetup, ...]
+
+
+@beartype
 def materialize_messages(
     matchup: Matchup,
     client: OpenRouterClient,
@@ -155,44 +164,80 @@ def run_assistants(
     *,
     prefer_batch: bool,
 ) -> tuple[ConversationTrace, ...]:
-    """Run many independent assistants, batching each active function-tool round."""
-    if not setups:
-        return ()
-    messages = {index: setup.openrouter_messages() for index, setup in enumerate(setups)}
-    steps = {index: [] for index in range(len(setups))}
-    completed: dict[int, ConversationTrace] = {}
-    pending = list(range(len(setups)))
+    """Run many independent assistants together through each active tool round."""
+    return run_assistant_groups(
+        (AssistantRunGroup(route, setups),),
+        client,
+        prefer_batch=prefer_batch,
+    )[0]
+
+
+@beartype
+def run_assistant_groups(
+    groups: tuple[AssistantRunGroup, ...],
+    client: OpenRouterClient,
+    *,
+    prefer_batch: bool,
+) -> tuple[tuple[ConversationTrace, ...], ...]:
+    """Run assistant-model groups concurrently through every active agent-loop round."""
+    messages = {
+        (group_index, setup_index): setup.openrouter_messages()
+        for group_index, group in enumerate(groups)
+        for setup_index, setup in enumerate(group.setups)
+    }
+    steps: dict[tuple[int, int], list[ToolStep]] = {key: [] for key in messages}
+    completed: dict[tuple[int, int], ConversationTrace] = {}
+    pending = [list(range(len(group.setups))) for group in groups]
 
     with ExitStack() as stack:
         runtimes = {
-            index: stack.enter_context(ToolRuntime(setup.readme_contents()))
-            for index, setup in enumerate(setups)
+            (group_index, setup_index): stack.enter_context(ToolRuntime(setup.readme_contents()))
+            for group_index, group in enumerate(groups)
+            for setup_index, setup in enumerate(group.setups)
         }
-        while pending:
-            responses = client.complete_many(
-                route,
-                tuple(_assistant_request(messages[index]) for index in pending),
+        while any(pending):
+            active_group_indexes = tuple(
+                group_index for group_index, indexes in enumerate(pending) if indexes
+            )
+            response_groups = client.complete_many_grouped(
+                tuple(
+                    CompletionGroup(
+                        groups[group_index].route,
+                        tuple(
+                            _assistant_request(messages[(group_index, setup_index)])
+                            for setup_index in pending[group_index]
+                        ),
+                    )
+                    for group_index in active_group_indexes
+                ),
                 prefer_batch=prefer_batch,
             )
-            next_pending: list[int] = []
-            for index, response in zip(pending, responses, strict=True):
-                calls = tool_calls_from_response(response)
-                if not calls:
-                    completed[index] = ConversationTrace(
-                        setups[index], response, tuple(steps[index])
-                    )
-                    continue
-                if len(steps[index]) == _MAX_LOCAL_TOOL_STEPS:
-                    raise RuntimeError(
-                        f"assistant exceeded {_MAX_LOCAL_TOOL_STEPS} local tool-call steps"
-                    )
-                results = tuple(runtimes[index].execute(call) for call in calls)
-                steps[index].append(ToolStep(response, results))
-                messages[index].append(assistant_message_from_response(response))
-                messages[index].extend(result.openrouter_dict() for result in results)
-                next_pending.append(index)
-            pending = next_pending
-    return tuple(completed[index] for index in range(len(setups)))
+            for group_index, responses in zip(active_group_indexes, response_groups, strict=True):
+                next_pending: list[int] = []
+                for setup_index, response in zip(pending[group_index], responses, strict=True):
+                    key = (group_index, setup_index)
+                    calls = tool_calls_from_response(response)
+                    if not calls:
+                        completed[key] = ConversationTrace(
+                            groups[group_index].setups[setup_index],
+                            response,
+                            tuple(steps[key]),
+                        )
+                        continue
+                    if len(steps[key]) == _MAX_LOCAL_TOOL_STEPS:
+                        raise RuntimeError(
+                            f"assistant exceeded {_MAX_LOCAL_TOOL_STEPS} local tool-call steps"
+                        )
+                    results = tuple(runtimes[key].execute(call) for call in calls)
+                    steps[key].append(ToolStep(response, results))
+                    messages[key].append(assistant_message_from_response(response))
+                    messages[key].extend(result.openrouter_dict() for result in results)
+                    next_pending.append(setup_index)
+                pending[group_index] = next_pending
+    return tuple(
+        tuple(completed[(group_index, setup_index)] for setup_index in range(len(group.setups)))
+        for group_index, group in enumerate(groups)
+    )
 
 
 @beartype

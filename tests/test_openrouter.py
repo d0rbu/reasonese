@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from threading import Lock
+from time import sleep
 from typing import Any, cast
 
 import pytest
@@ -55,7 +57,7 @@ def test_model_routes_match_current_openrouter_slugs() -> None:
 
 def test_sync_completion_adds_the_selected_model() -> None:
     transport = FakeTransport(posts=[_chat("done")])
-    client = OpenRouterClient(transport)
+    client = OpenRouterClient(transport, sync_workers=1)
     model = OpenRouterModelId.parse("example/model")
 
     assert client.complete(model, {"messages": []}) == _chat("done")
@@ -67,13 +69,74 @@ def test_sync_completion_adds_the_selected_model() -> None:
 def test_complete_many_falls_back_to_sync_without_a_batch_variant() -> None:
     transport = FakeTransport(posts=[_chat("one"), _chat("two")])
     route = ModelRoute(OpenRouterModelId.parse("example/model"), None)
-    client = OpenRouterClient(transport)
+    client = OpenRouterClient(transport, sync_workers=1)
 
     assert client.complete_many(route, ({"messages": []}, {"messages": []}), prefer_batch=True) == (
         _chat("one"),
         _chat("two"),
     )
     assert client.complete_many(route, (), prefer_batch=True) == ()
+
+
+def test_server_tools_fall_back_to_sync_when_a_batch_route_exists() -> None:
+    transport = FakeTransport(posts=[_chat("searched")])
+    route = ModelRoute(
+        OpenRouterModelId.parse("example/model"),
+        OpenRouterModelId.parse("example/model:batch"),
+    )
+    body = {"messages": [], "tools": [{"type": "openrouter:web_search"}]}
+
+    result = OpenRouterClient(transport).complete_many(
+        route,
+        (body,),
+        prefer_batch=True,
+    )
+
+    assert result == (_chat("searched"),)
+    assert transport.post_calls == [
+        ("/api/v1/chat/completions", {**body, "model": "example/model"})
+    ]
+
+
+class ConcurrentTransport:
+    def __init__(self) -> None:
+        self.lock = Lock()
+        self.active = 0
+        self.max_active = 0
+
+    def post_json(self, path: str, body: JsonObject) -> JsonObject:
+        with self.lock:
+            self.active += 1
+            self.max_active = max(self.max_active, self.active)
+        sleep(0.03)
+        with self.lock:
+            self.active -= 1
+        return _chat(body["messages"][0]["content"])
+
+    def get_json(self, path: str) -> JsonObject:
+        raise AssertionError(f"unexpected GET {path}")
+
+
+def test_sync_completion_groups_run_concurrently_and_restore_order() -> None:
+    transport = ConcurrentTransport()
+    route = ModelRoute(OpenRouterModelId.parse("example/model"), None)
+    bodies = tuple(
+        {"messages": [{"role": "user", "content": content}]} for content in ("one", "two", "three")
+    )
+
+    results = OpenRouterClient(transport, sync_workers=3).complete_many(
+        route,
+        bodies,
+        prefer_batch=True,
+    )
+
+    assert results == (_chat("one"), _chat("two"), _chat("three"))
+    assert transport.max_active == 3
+
+
+def test_sync_worker_count_must_be_positive() -> None:
+    with pytest.raises(ValueError, match="positive integer"):
+        OpenRouterClient(FakeTransport(), sync_workers=0)
 
 
 def _batch_result(custom_id: str, content: str) -> JsonObject:

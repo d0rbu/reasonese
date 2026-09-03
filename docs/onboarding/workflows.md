@@ -102,10 +102,11 @@ uv run reasonese-collect-studies \
   --output out/my-study-suite
 ```
 
-The suite utility batches shared message QA once, combines every pending trial for the same
-assistant, and judges all completed traces in one request group. Shared authoring and QA caches
-live at the suite root; each study's resumable traces, judgments, and observations remain in its
-own subdirectory.
+The suite utility batches shared message QA once, runs pending assistant requests concurrently,
+and judges all completed traces in one request group. Assistant inference stays synchronous so
+the OpenRouter web-search server tool remains available; authoring, QA, and judging still use
+compatible batch routes. Shared authoring and QA caches live at the suite root; each study's
+resumable traces, judgments, and observations remain in its own subdirectory.
 
 ## Analyze collected observations
 

@@ -20,8 +20,10 @@ matchup -> authored messages -> independent message QA -> conversation -> assist
 ```
 
 - `reasonese.matchup` validates an assistant and an ordered tuple of two or more datapoints.
-- `reasonese.openrouter` provides synchronous completions and overlaps independent model-grouped
-  batch jobs while preserving request and group order.
+- `reasonese.openrouter` provides bounded concurrent synchronous completions and overlaps
+  independent model-grouped batch jobs while preserving request and group order. Requests with
+  OpenRouter server tools stay on the synchronous API because those tools are rejected by the
+  Batch API.
 - `reasonese.conversation` builds authoring requests and channel-specific chat messages.
 - `reasonese.manual_messages` resolves filesystem-backed variants for the user author.
 - `reasonese.tools` defines bounded file, shell, Python, and server-side web-search tools.
@@ -80,10 +82,11 @@ study -> both input orderings x rollouts -> traces -> judgments -> observation r
 
 - `reasonese.study` defines a cell, a strongly typed input pair, and stable ordering/rollout
   trials. Its two distinct inputs produce exactly two orderings.
-- `reasonese.collect_data` batches every active assistant agent-loop round, flattens uncached
-  judge requests into one batch, and resumes at trial granularity.
+- `reasonese.collect_data` concurrently executes every active assistant agent-loop round,
+  flattens uncached judge requests into one batch, and resumes at trial granularity.
 - `reasonese.collect_studies` applies the same stages across repeated study paths, sharing
-  materialized-message and QA caches and batching trials and judgments across study boundaries.
+  materialized-message and QA caches and grouping concurrent trials and batched judgments across
+  study boundaries.
 - `reasonese.observations` joins traces and judgments into one flat row per cell and trial.
 
 Each rollout has its own trace-cache path, so repeated responses for the same ordered matchup

@@ -103,14 +103,16 @@ are cached in YAML against a fingerprint of the exact conversation trace.
 It requires exactly two distinct inputs, runs both input orderings, and collects one or more
 rollouts per ordering. With `r` rollouts, the design has `2r` trials; every cell receives `2r`
 verdicts and appears `r` times at each position. The
-collector batches uncached assistant work round-by-round (including function-tool
-continuations) and batches judge work where supported, resumes from per-rollout caches, and
-writes flat analysis-ready rows to `observations.jsonl`. The same manual-message hierarchy and
-message-QA gate apply to user-authored study inputs.
+collector runs uncached assistant work through bounded concurrent requests round-by-round
+(including function-tool continuations), batches judge work, resumes from per-rollout caches,
+and writes flat analysis-ready rows to `observations.jsonl`. Assistant requests retain the
+OpenRouter web-search tool and therefore use the synchronous API because OpenRouter does not
+support that server tool in batch jobs. The same manual-message hierarchy and message-QA gate
+apply to user-authored study inputs.
 
 `reasonese-collect-studies` accepts repeated `--study` paths and batches work across those study
 boundaries. It shares generated-message and message-QA caches at the output root, combines all
-trials for the same assistant into each agent-loop round, and submits all uncached response
+active assistant models and trials into each concurrent agent-loop round, and submits all uncached response
 judgments together. Each study keeps its own directory of traces, judgments, and observations,
 named after the study file's stem. Study filenames must therefore have distinct stems.
 
