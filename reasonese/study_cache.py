@@ -15,7 +15,7 @@ from reasonese.cache import trace_from_dict, trace_to_dict
 from reasonese.conversation import ConversationTrace
 from reasonese.judging import Judgment
 from reasonese.judgment_cache import judgment_from_dict, judgment_to_dict
-from reasonese.study import TrialId
+from reasonese.study import Trial, TrialId
 
 
 def _encode(value: dict[str, object]) -> str:
@@ -56,13 +56,18 @@ class SqliteStudyCache:
         finally:
             connection.close()
 
-    def load_traces(self) -> dict[TrialId, ConversationTrace]:
-        """Load every cached trace in one query."""
+    def load_traces(self, trials: tuple[Trial, ...]) -> dict[TrialId, ConversationTrace]:
+        """Load known trial traces in one query, reusing their validated matchups."""
         with self._connection() as connection:
             rows = connection.execute("SELECT trial_id, payload FROM traces").fetchall()
+        payloads = dict(rows)
         return {
-            TrialId.parse(trial_id): trace_from_dict(_decode(payload, record="trace"))
-            for trial_id, payload in rows
+            trial.trial_id: trace_from_dict(
+                _decode(payloads[str(trial.trial_id)], record="trace"),
+                trial.matchup,
+            )
+            for trial in trials
+            if str(trial.trial_id) in payloads
         }
 
     @beartype
@@ -76,13 +81,18 @@ class SqliteStudyCache:
                 tuple((str(trial_id), _encode(trace_to_dict(trace))) for trial_id, trace in traces),
             )
 
-    def load_judgments(self) -> dict[TrialId, Judgment]:
-        """Load every cached judgment in one query."""
+    def load_judgments(self, trials: tuple[Trial, ...]) -> dict[TrialId, Judgment]:
+        """Load known trial judgments in one query, reusing their validated matchups."""
         with self._connection() as connection:
             rows = connection.execute("SELECT trial_id, payload FROM judgments").fetchall()
+        payloads = dict(rows)
         return {
-            TrialId.parse(trial_id): judgment_from_dict(_decode(payload, record="judgment"))
-            for trial_id, payload in rows
+            trial.trial_id: judgment_from_dict(
+                _decode(payloads[str(trial.trial_id)], record="judgment"),
+                trial.matchup,
+            )
+            for trial in trials
+            if str(trial.trial_id) in payloads
         }
 
     @beartype

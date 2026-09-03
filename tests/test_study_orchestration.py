@@ -196,6 +196,14 @@ def test_two_input_study_has_two_permutations_and_two_scores_per_cell() -> None:
     assert len({trial.trial_id for trial in trials}) == 2
 
 
+def test_trials_reuse_one_validated_matchup_per_permutation() -> None:
+    trials = build_trials(_study(2))
+
+    assert trials[0].matchup is trials[1].matchup
+    assert trials[2].matchup is trials[3].matchup
+    assert trials[0].matchup is not trials[2].matchup
+
+
 def test_study_cells_pair_each_input_with_the_assistant() -> None:
     study = _study()
     assert study_cells(study) == tuple(Cell(spec, study.assistant) for spec in study.inputs)
@@ -313,7 +321,7 @@ def test_sqlite_study_cache_batches_round_trips_and_replaces(tmp_path: Path) -> 
             for trial, trace in zip(trials, traces, strict=True)
         )
     )
-    assert cache.load_traces() == {
+    assert cache.load_traces(trials) == {
         trial.trial_id: trace for trial, trace in zip(trials, traces, strict=True)
     }
 
@@ -327,8 +335,8 @@ def test_sqlite_study_cache_batches_round_trips_and_replaces(tmp_path: Path) -> 
         tuple((trial.trial_id, judgment) for trial, judgment in zip(trials, judgments, strict=True))
     )
 
-    assert cache.load_traces()[trials[0].trial_id] == replacement
-    assert cache.load_judgments() == {
+    assert cache.load_traces(trials)[trials[0].trial_id] == replacement
+    assert cache.load_judgments(trials) == {
         trial.trial_id: judgment for trial, judgment in zip(trials, judgments, strict=True)
     }
     cache.put_traces(())
@@ -348,19 +356,37 @@ def test_sqlite_study_cache_rejects_corrupt_payloads(
     payload: object,
     error: str,
 ) -> None:
+    trials = build_trials(_study())
     cache = SqliteStudyCache(tmp_path / "collection.sqlite3")
-    cache.load_traces()
+    cache.load_traces(trials)
     with sqlite3.connect(cache.path) as connection:
         connection.execute(
             f"INSERT INTO {table} (trial_id, payload) VALUES (?, ?)",
-            ("corrupt-trial", payload),
+            (str(trials[0].trial_id), payload),
         )
 
     with pytest.raises(ValueError, match=error):
         if table == "traces":
-            cache.load_traces()
+            cache.load_traces(trials)
         else:
-            cache.load_judgments()
+            cache.load_judgments(trials)
+
+
+def test_sqlite_study_cache_rejects_records_for_the_wrong_trial(tmp_path: Path) -> None:
+    study = _study()
+    trials = build_trials(study)
+    traces = tuple(_trace_for_trial(study, index) for index in range(len(trials)))
+    cache = SqliteStudyCache(tmp_path / "collection.sqlite3")
+
+    cache.put_traces(((trials[0].trial_id, traces[1]),))
+    with pytest.raises(ValueError, match="trace matchup does not match"):
+        cache.load_traces(trials)
+
+    cache.put_judgments(
+        ((trials[0].trial_id, _judgment_for_trace(traces[1], (True, False))),)
+    )
+    with pytest.raises(ValueError, match="judgment matchup does not match"):
+        cache.load_judgments(trials)
 
 
 def test_judge_traces_flattens_multiple_conversations_into_one_batch() -> None:
@@ -714,7 +740,7 @@ def test_collect_study_runs_each_active_tool_round(tmp_path: Path) -> None:
 
     cached_by_trial = SqliteStudyCache(
         tmp_path / "tool-collection" / "collection.sqlite3"
-    ).load_traces()
+    ).load_traces(result.trials)
     cached_traces = tuple(cached_by_trial[trial.trial_id] for trial in result.trials)
     assert [len(trace.tool_steps) for trace in cached_traces] == [1, 0]
     assert all(call[0] == "/api/v1/chat/completions" for call in transport.post_calls[1:4])

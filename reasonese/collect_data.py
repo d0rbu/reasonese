@@ -74,7 +74,7 @@ def _prepare_task(task: CollectionTask, manual_messages: ManualMessageSnapshot) 
         yaml.safe_dump(study_to_dict(task.study), handle, sort_keys=False, allow_unicode=True)
 
     cache = SqliteStudyCache(task.output_dir / "collection.sqlite3")
-    cached_traces = cache.load_traces()
+    cached_traces = cache.load_traces(trials)
     traces: dict[str, FingerprintedTrace] = {}
     missing_trials: list[Trial] = []
     trace_hits = 0
@@ -204,7 +204,7 @@ def collect_studies(
 
     missing_judgments: list[tuple[int, Trial, FingerprintedTrace]] = []
     for state_index, state in enumerate(states):
-        cached_judgments = state.cache.load_judgments()
+        cached_judgments = state.cache.load_judgments(state.trials)
         for trial in state.trials:
             trace = state.traces[str(trial.trial_id)]
             cached = cached_judgments.get(trial.trial_id)

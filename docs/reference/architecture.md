@@ -86,14 +86,15 @@ study -> both input orderings x rollouts -> traces -> judgments -> observation r
 ```
 
 - `reasonese.study` defines a cell, a strongly typed input pair, and stable ordering/rollout
-  trials. Its two distinct inputs produce exactly two orderings.
+  trials. Its two distinct inputs produce exactly two validated matchups, reused by every rollout.
 - `reasonese.collect_data` concurrently advances every assistant tool loop as responses arrive,
   flattens uncached judge requests into one batch, and resumes at trial granularity.
 - `reasonese.collect_studies` applies the same stages across repeated study paths, sharing
   materialized-message and QA caches and grouping concurrent trials and batched judgments across
   study boundaries.
-- `reasonese.study_cache` loads study traces and judgments with one SQLite query per table and
-  writes each completed stage in one transaction, keyed by stable trial ID.
+- `reasonese.study_cache` loads study traces and judgments with one SQLite query per table,
+  validates serialized coordinates against the known trial matchups without reparsing them, and
+  writes each completed stage in one transaction keyed by stable trial ID.
 - `reasonese.observations` batch-joins traces and judgments into flat rows, reusing cell IDs
   across every rollout of the same cell.
 
