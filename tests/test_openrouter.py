@@ -136,6 +136,7 @@ def test_sync_completion_groups_run_concurrently_and_restore_order() -> None:
 
 
 def test_sync_worker_count_must_be_positive() -> None:
+    assert OpenRouterClient(FakeTransport()).sync_workers == 8
     with pytest.raises(ValueError, match="positive integer"):
         OpenRouterClient(FakeTransport(), sync_workers=0)
 
