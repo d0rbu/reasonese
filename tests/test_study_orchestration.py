@@ -17,7 +17,13 @@ from reasonese.collect_data import main as collect_data
 from reasonese.collect_studies import collection_tasks
 from reasonese.collect_studies import main as collect_studies_cli
 from reasonese.config import load_study
-from reasonese.conversation import ConversationTrace, GeneratedMessage, GeneratedText
+from reasonese.conversation import (
+    ConversationSetup,
+    ConversationTrace,
+    GeneratedMessage,
+    GeneratedText,
+    construct_conversation,
+)
 from reasonese.judging import (
     FingerprintedTrace,
     InstructionVerdict,
@@ -27,6 +33,7 @@ from reasonese.judging import (
     trace_fingerprint,
 )
 from reasonese.manual_messages import ManualMessageLibrary
+from reasonese.matchup import Matchup
 from reasonese.message_qa import MessageQaVerdict
 from reasonese.message_qa_cache import YamlMessageQaCache
 from reasonese.observations import (
@@ -511,8 +518,20 @@ def test_write_observations_emits_jsonl(tmp_path: Path) -> None:
 
 def test_collect_study_batches_trials_and_judgments_then_resumes_without_a_key(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     study = _study(2)
+    constructed_setups = []
+
+    def track_construction(
+        matchup: Matchup,
+        generated_messages: tuple[GeneratedMessage, ...],
+    ) -> ConversationSetup:
+        setup = construct_conversation(matchup, generated_messages)
+        constructed_setups.append(setup)
+        return setup
+
+    monkeypatch.setattr("reasonese.collect_data.construct_conversation", track_construction)
     transport = FakeTransport(
         [
             _message_qa_batch(2),
@@ -539,6 +558,10 @@ def test_collect_study_batches_trials_and_judgments_then_resumes_without_a_key(
     assert warm.trace_cache_hits == 4
     assert warm.judgment_cache_hits == 4
     assert warm.observations == cold.observations
+    assert len(constructed_setups) == 2
+    assert {setup.matchup for setup in constructed_setups} == {
+        trial.matchup for trial in cold.trials
+    }
     assert len(transport.post_calls) == 6
     assert transport.post_calls[0][1]["model"] == "openai/gpt-5.6-luna"
     assert all(call[0] == "/api/v1/chat/completions" for call in transport.post_calls[1:5])

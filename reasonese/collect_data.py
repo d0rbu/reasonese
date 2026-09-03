@@ -170,12 +170,17 @@ def collect_studies(
     ] = {}
     for state, generated in zip(states, generated_by_state, strict=True):
         by_spec = {message.spec: message for message in generated}
-        for trial in state.missing_trials:
-            setup = construct_conversation(
-                trial.matchup,
-                tuple(by_spec[spec] for spec in trial.matchup.inputs),
+        setups_by_matchup = {
+            matchup: construct_conversation(
+                matchup,
+                tuple(by_spec[spec] for spec in matchup.inputs),
             )
-            assistant_work.setdefault(state.task.study.assistant, []).append((state, trial, setup))
+            for matchup in dict.fromkeys(trial.matchup for trial in state.missing_trials)
+        }
+        for trial in state.missing_trials:
+            assistant_work.setdefault(state.task.study.assistant, []).append(
+                (state, trial, setups_by_matchup[trial.matchup])
+            )
 
     if assistant_work:
         if client is None:  # pragma: no cover - guarded by materialization above
