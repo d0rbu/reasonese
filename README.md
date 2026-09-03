@@ -67,9 +67,10 @@ The utilities have separate entry points. `reasonese-axes` prints the values and
 `reasonese-plan` writes four-axis datapoints. `reasonese-run-conversation` loads a `Matchup`,
 generates any missing model-authored messages, constructs the ordered conversation, and sends
 it to the selected assistant with file-read, sandboxed bash, sandboxed Python, and web-search
-tools. It uses OpenRouter batch variants for author groups that support them; `--no-batch`
-forces synchronous authoring requests. Bash and Python execution require `bubblewrap` (`bwrap`)
-on the host.
+tools. It submits independent model-author batch jobs before polling them together, so one
+author model's queue does not block another author's submission. `--no-batch` forces
+synchronous authoring requests. Bash and Python execution require `bubblewrap` (`bwrap`) on the
+host.
 
 A matchup contains one assistant plus an ordered pair of inputs, at least one of which must use
 the explicit `user message` channel. Repeated channels are valid. Generated

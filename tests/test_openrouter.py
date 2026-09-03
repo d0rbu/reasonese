@@ -7,6 +7,7 @@ import pytest
 
 from reasonese.axes import Assistant, Author
 from reasonese.openrouter import (
+    CompletionGroup,
     JsonObject,
     ModelRoute,
     OpenRouterClient,
@@ -31,13 +32,16 @@ class FakeTransport:
         self.get_responses = gets or []
         self.post_calls: list[tuple[str, JsonObject]] = []
         self.get_calls: list[str] = []
+        self.calls: list[tuple[str, str]] = []
 
     def post_json(self, path: str, body: JsonObject) -> JsonObject:
         self.post_calls.append((path, body))
+        self.calls.append(("POST", path))
         return self.post_responses.pop(0)
 
     def get_json(self, path: str) -> JsonObject:
         self.get_calls.append(path)
+        self.calls.append(("GET", path))
         return self.get_responses.pop(0)
 
 
@@ -130,6 +134,144 @@ def test_batch_completion_polls_and_restores_submission_order() -> None:
         },
     ]
     assert transport.get_calls == ["/api/beta/batches/batch-1"] * 2
+
+
+def test_grouped_completion_submits_all_batches_before_polling() -> None:
+    transport = FakeTransport(
+        posts=[
+            {"id": "batch-1", "status": "validating"},
+            {"id": "batch-2", "status": "validating"},
+        ],
+        gets=[
+            {
+                "id": "batch-1",
+                "status": "completed",
+                "results": [
+                    _batch_result("request-1", "one-b"),
+                    _batch_result("request-0", "one-a"),
+                ],
+            },
+            {
+                "id": "batch-2",
+                "status": "completed",
+                "results": [_batch_result("request-0", "two-a")],
+            },
+        ],
+    )
+    route = ModelRoute(
+        OpenRouterModelId.parse("example/model"),
+        OpenRouterModelId.parse("example/model:batch"),
+    )
+    sleeps: list[float] = []
+    client = OpenRouterClient(
+        transport,
+        poll_interval_seconds=0.25,
+        sleep=sleeps.append,
+        monotonic=lambda: 0.0,
+    )
+
+    results = client.complete_many_grouped(
+        (
+            CompletionGroup(
+                route, ({"messages": [{"role": "user", "content": "one-a"}]}, {"messages": []})
+            ),
+            CompletionGroup(route, ({"messages": [{"role": "user", "content": "two-a"}]},)),
+        ),
+        prefer_batch=True,
+    )
+
+    assert results == ((_chat("one-a"), _chat("one-b")), (_chat("two-a"),))
+    assert transport.calls == [
+        ("POST", "/api/beta/batches"),
+        ("POST", "/api/beta/batches"),
+        ("GET", "/api/beta/batches/batch-1"),
+        ("GET", "/api/beta/batches/batch-2"),
+    ]
+    assert sleeps == [0.25]
+
+
+def test_grouped_completion_starts_batches_before_synchronous_groups() -> None:
+    transport = FakeTransport(
+        posts=[
+            {"id": "batch", "status": "validating"},
+            _chat("sync"),
+        ],
+        gets=[
+            {
+                "id": "batch",
+                "status": "completed",
+                "results": [_batch_result("request-0", "batch")],
+            }
+        ],
+    )
+    sync_route = ModelRoute(OpenRouterModelId.parse("example/sync"), None)
+    batch_route = ModelRoute(
+        OpenRouterModelId.parse("example/batch"),
+        OpenRouterModelId.parse("example/batch:batch"),
+    )
+    client = OpenRouterClient(transport, sleep=lambda _: None, monotonic=lambda: 0.0)
+
+    results = client.complete_many_grouped(
+        (
+            CompletionGroup(sync_route, ({"messages": []},)),
+            CompletionGroup(batch_route, ({"messages": []},)),
+            CompletionGroup(batch_route, ()),
+        ),
+        prefer_batch=True,
+    )
+
+    assert results == ((_chat("sync"),), (_chat("batch"),), ())
+    assert transport.calls[:2] == [
+        ("POST", "/api/beta/batches"),
+        ("POST", "/api/v1/chat/completions"),
+    ]
+
+
+def test_grouped_completion_matches_sequential_batch_payloads_and_results() -> None:
+    route = ModelRoute(
+        OpenRouterModelId.parse("example/model"),
+        OpenRouterModelId.parse("example/model:batch"),
+    )
+    groups = (
+        CompletionGroup(route, ({"messages": [{"role": "user", "content": "a"}]},)),
+        CompletionGroup(
+            route,
+            (
+                {"messages": [{"role": "user", "content": "b"}]},
+                {"messages": [{"role": "user", "content": "c"}]},
+            ),
+        ),
+    )
+    terminal_batches = [
+        {
+            "id": "batch-1",
+            "status": "completed",
+            "results": [_batch_result("request-0", "a")],
+        },
+        {
+            "id": "batch-2",
+            "status": "completed",
+            "results": [_batch_result("request-0", "b"), _batch_result("request-1", "c")],
+        },
+    ]
+    sequential_transport = FakeTransport(posts=list(terminal_batches))
+    grouped_transport = FakeTransport(posts=list(terminal_batches))
+
+    sequential = tuple(
+        OpenRouterClient(sequential_transport).complete_many(
+            group.route,
+            group.bodies,
+            prefer_batch=True,
+        )
+        for group in groups
+    )
+    grouped = OpenRouterClient(grouped_transport).complete_many_grouped(
+        groups,
+        prefer_batch=True,
+    )
+
+    assert grouped == sequential
+    assert grouped_transport.post_calls == sequential_transport.post_calls
 
 
 @pytest.mark.parametrize(

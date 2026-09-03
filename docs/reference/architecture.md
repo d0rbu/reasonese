@@ -20,7 +20,8 @@ matchup -> authored messages -> independent message QA -> conversation -> assist
 ```
 
 - `reasonese.matchup` validates an assistant and an ordered tuple of two or more datapoints.
-- `reasonese.openrouter` provides synchronous completions and model-grouped batch authoring.
+- `reasonese.openrouter` provides synchronous completions and overlaps independent model-grouped
+  batch jobs while preserving request and group order.
 - `reasonese.conversation` builds authoring requests and channel-specific chat messages.
 - `reasonese.manual_messages` resolves filesystem-backed variants for the user author.
 - `reasonese.tools` defines bounded file, shell, Python, and server-side web-search tools.
