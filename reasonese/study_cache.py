@@ -14,7 +14,7 @@ from beartype import beartype
 from reasonese.cache import trace_to_dict, traces_from_dicts
 from reasonese.conversation import ConversationTrace
 from reasonese.judging import Judgment
-from reasonese.judgment_cache import judgment_from_dict, judgment_to_dict
+from reasonese.judgment_cache import judgment_to_dict, judgments_from_dicts
 from reasonese.study import Trial, TrialId
 
 
@@ -91,13 +91,18 @@ class SqliteStudyCache:
         with self._connection() as connection:
             rows = connection.execute("SELECT trial_id, payload FROM judgments").fetchall()
         payloads = dict(rows)
-        return {
-            trial.trial_id: judgment_from_dict(
-                _decode(payloads[str(trial.trial_id)], record="judgment"),
-                trial.matchup,
-            )
+        selected = tuple(
+            (trial, _decode(payloads[str(trial.trial_id)], record="judgment"))
             for trial in trials
             if str(trial.trial_id) in payloads
+        )
+        judgments = judgments_from_dicts(
+            tuple(raw for _, raw in selected),
+            tuple(trial.matchup for trial, _ in selected),
+        )
+        return {
+            trial.trial_id: judgment
+            for (trial, _), judgment in zip(selected, judgments, strict=True)
         }
 
     @beartype
