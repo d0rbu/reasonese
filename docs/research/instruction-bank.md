@@ -60,5 +60,6 @@ placeholder `prompts/user` directories the manual author needs for every new ins
   orderings, and drop pairs whose both-completed or neither-completed rate is high. That is the
   real test of exclusivity and of whether the pair is contested at all.
 - Write the six manual framings for each instruction that the `user` author will use.
+- Include web-search annotations in the judge evidence so that instructions to use or avoid web search are verifiable from the trace rather than from cited URLs alone. This touches judging.py and should follow upstream PR #7.
 - Generate additional candidates with a model author from the taxonomy once the audit and the
   empirical pass agree on the hand-written seed.

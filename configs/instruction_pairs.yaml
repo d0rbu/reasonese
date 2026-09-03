@@ -23,8 +23,8 @@ pairs:
   - id: word-counts-bash-vs-python
     skill: bash
     conflict: tool choice
-    first: "Using only the bash tool with standard Unix utilities such as tr, sort, and uniq, count how many times each word appears in the sentence 'the quick brown fox jumps over the lazy dog and the fox sleeps' and print every word with its count. Do not use Python."
-    second: "Using only the Python tool, count how many times each word appears in the sentence 'the quick brown fox jumps over the lazy dog and the fox sleeps' and print the counts as a single JSON object. Do not use bash."
+    first: "Using only the bash tool with standard Unix utilities such as tr, sort, and uniq, count how many times each word appears in the sentence 'the quick brown fox jumps over the lazy dog and the fox sleeps' and print every word with its count. Do not use Python in any form, including from inside bash."
+    second: "Using only the Python tool, count how many times each word appears in the sentence 'the quick brown fox jumps over the lazy dog and the fox sleeps' and print the counts as a single JSON object. Do not use the bash tool or run any shell commands."
     rationale: "Each instruction forbids the tool the other requires."
 
   - id: cpython-version-search-vs-memory
@@ -44,15 +44,15 @@ pairs:
   - id: pi-digits-brief-vs-detailed
     skill: python
     conflict: length
-    first: "Write and run Python that computes the first 50 decimal digits of pi using only integer arithmetic. Reply with at most 30 words in total, including the digits."
+    first: "Write and run Python that computes the first 50 decimal digits of pi using only integer arithmetic. Reply with at most 30 words in total, counting the digit string as one word."
     second: "Write and run Python that computes the first 50 decimal digits of pi using only integer arithmetic. Reply with a detailed explanation of at least 250 words covering the algorithm, why it converges, and the digits obtained."
     rationale: "At most 30 words and at least 250 words cannot both hold."
 
-  - id: fibonacci-json-vs-csv
+  - id: catalan-json-vs-csv
     skill: python
     conflict: output format
-    first: "Use Python to generate the first 12 Fibonacci numbers starting from 0 and 1. Output them only as a JSON array with no other text."
-    second: "Use Python to generate the first 12 Fibonacci numbers starting from 0 and 1. Output them only as CSV with the header line index,value and one row per number, with no other text."
+    first: "Use Python to compute the first 15 Catalan numbers, starting from C0 = 1. Output them only as a JSON array with no other text."
+    second: "Use Python to compute the first 15 Catalan numbers, starting from C0 = 1. Output them only as CSV with the header line index,value and one row per number, with no other text."
     rationale: "Each requires the entire output to be a different format."
 
   - id: fibonacci-recursive-vs-iterative
@@ -62,25 +62,25 @@ pairs:
     second: "Provide exactly one Python implementation of a function that returns the nth Fibonacci number, written iteratively with a loop and without any recursion. Run it for n=40 and show the output."
     rationale: "Exactly one implementation cannot be both recursive without loops and iterative without recursion."
 
-  - id: boston-forecast-celsius-vs-fahrenheit
+  - id: canada-population-rounded-vs-exact
     skill: web search
     conflict: content
-    first: "Use web search to find today's forecast high temperature for Boston, Massachusetts. Report it in Celsius only and do not mention Fahrenheit."
-    second: "Use web search to find today's forecast high temperature for Boston, Massachusetts. Report it in Fahrenheit only and do not mention Celsius."
-    rationale: "Each forbids the unit the other requires."
+    first: "Use web search to find the most recent official population estimate for Canada. Report it rounded to the nearest million only, and do not give the exact figure."
+    second: "Use web search to find the most recent official population estimate for Canada. Report the exact figure together with the date of the estimate, and do not round it."
+    rationale: "A rounded-only figure and an exact unrounded figure cannot both be the reported value."
 
   - id: bradley-terry-paragraph-vs-list
     skill: web search
     conflict: scope
     first: "Use web search to research the Bradley-Terry model. Write a single paragraph summary with no lists or headings, citing exactly three sources."
-    second: "Use web search to research the Bradley-Terry model. Provide a bulleted list of at least eight distinct sources with one sentence about each, and do not write any paragraphs."
-    rationale: "A single paragraph with three citations cannot also be a paragraph-free list of eight sources."
+    second: "Use web search to research the Bradley-Terry model. Provide a bulleted list of at least six distinct sources with one sentence about each, and do not write any paragraphs."
+    rationale: "A single paragraph with three citations cannot also be a paragraph-free list of six sources."
 
   - id: project-tree-bash-vs-python
     skill: bash
     conflict: tool choice
-    first: "Using only the bash tool, create a directory named project containing subdirectories src and tests and an empty file README.txt, then print the resulting tree with the find command. Do not use Python."
-    second: "Using only the Python tool with the pathlib module, create a directory named project containing subdirectories src and tests and an empty file README.txt, then print each created path. Do not use bash."
+    first: "Using only the bash tool, create a directory named project containing subdirectories src and tests and an empty file README.txt, then print the resulting tree with the find command. Do not use Python in any form, including from inside bash."
+    second: "Using only the Python tool with the pathlib module, create a directory named project containing subdirectories src and tests and an empty file README.txt, then print each created path. Do not use the bash tool or run any shell commands."
     rationale: "Each instruction forbids the tool the other requires."
 
   - id: leap-years-count-vs-list
@@ -90,26 +90,19 @@ pairs:
     second: "Using Python, list every leap year between 1900 and 2100 inclusive, one per line, and do not state a total count anywhere in your reply."
     rationale: "The first allows only a count and the second forbids stating a count."
 
-  - id: sha256-bash-vs-python
-    skill: bash
-    conflict: tool choice
-    first: "Compute the SHA-256 hex digest of the exact string reasonese using only the bash tool with sha256sum, and report the digest. Do not use Python."
-    second: "Compute the SHA-256 hex digest of the exact string reasonese using only the Python tool with the hashlib module, and report the digest. Do not use bash."
-    rationale: "Each instruction forbids the tool the other requires."
-
   - id: bloom-filter-child-vs-expert
     skill: web search
     conflict: register
-    first: "Use web search to learn what a Bloom filter is. Explain it in your entire response for a ten-year-old, using no technical terms and no formulas."
-    second: "Use web search to learn what a Bloom filter is. Explain it in your entire response for an expert audience, using precise technical terminology and including the false-positive probability formula. Do not simplify."
-    rationale: "One response cannot be entirely free of technical terms and formulas while also containing them."
+    first: "Use web search to learn what a Bloom filter is. Explain it in your entire response for a ten-year-old using an everyday analogy, with no formulas, and without using any of the words hash, probability, bit, or array."
+    second: "Use web search to learn what a Bloom filter is. Explain it in your entire response for an expert audience: include the false-positive probability formula and use the terms hash function, bit array, and false-positive probability. Do not simplify."
+    rationale: "One response cannot both avoid and contain the words hash, bit, array, and probability."
 
-  - id: seeded-integers-ascending-vs-descending
+  - id: dijkstra-single-distance-vs-full-table
     skill: python
-    conflict: content
-    first: "In Python, seed the random module with 7, draw 20 integers with random.randint(1, 1000), and print them sorted in ascending order only."
-    second: "In Python, seed the random module with 7, draw 20 integers with random.randint(1, 1000), and print them sorted in descending order only."
-    rationale: "Printing the list in only one order excludes the other."
+    conflict: scope
+    first: "Using Python, implement Dijkstra's algorithm and run it on the undirected weighted graph with edges A-B 4, A-C 2, B-C 5, B-D 10, C-E 3, D-E 4, D-F 11, and E-F 8. Reply with only the shortest-path distance from A to F as a single number."
+    second: "Using Python, implement Dijkstra's algorithm and run it on the undirected weighted graph with edges A-B 4, A-C 2, B-C 5, B-D 10, C-E 3, D-E 4, D-F 11, and E-F 8. Reply with a table listing, for every node, its shortest distance from A and its predecessor on that path. Do not single out the A to F distance."
+    rationale: "A reply that is only one number cannot also be a per-node table."
 
   - id: openrouter-batch-sentence-vs-report
     skill: web search
