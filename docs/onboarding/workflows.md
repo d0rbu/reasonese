@@ -20,6 +20,26 @@ uv run reasonese-plan --instructions path/to/instructions.toml --output out/spec
 The summary reports the number of instructions and specifications. Re-running with identical
 input produces identical ordered records.
 
+## Sample pairwise studies
+
+Choose how many unordered pairs each assistant should receive and write one reproducible suite:
+
+```bash
+uv run reasonese-sample-studies \
+  --instructions path/to/instructions.toml \
+  --pairings-per-assistant 2000 \
+  --rollouts-per-permutation 1 \
+  --seed 0 \
+  --output out/studies.yaml
+```
+
+The command reports the exhaustive population and minimum connected sample before any provider
+work occurs. Omitting `--pairings-per-assistant` selects 20,000 pairs, capped by the eligible
+population and raised when more edges are needed to connect all cells. It includes all authors and assistants unless repeated `--author` or `--assistant`
+filters are supplied. The sample always covers every selected cell, is connected within each
+assistant, and never includes a pair without a user-message input. A different seed changes the
+randomized backbone and extra edges; the same seed and inputs reproduce the same suite.
+
 ## Run a matchup
 
 Create YAML following [`../reference/configuration.md`](../reference/configuration.md), then:
@@ -107,6 +127,18 @@ and judges all completed traces in one request group. Assistant inference stays 
 the OpenRouter web-search server tool remains available; authoring, QA, and judging still use
 compatible batch routes. Shared authoring and QA caches live at the suite root; each study's
 resumable traces, judgments, and observations remain in its own subdirectory.
+
+For a sampled suite, pass the single generated artifact instead:
+
+```bash
+uv run reasonese-collect-studies \
+  --suite out/studies.yaml \
+  --user-messages prompts/user \
+  --output out/sampled-study
+```
+
+Each study is resumed below a fingerprint-named directory. The collector also writes all rows to
+`out/sampled-study/observations.jsonl`, so analysis does not require listing every child path.
 
 ## Analyze collected observations
 

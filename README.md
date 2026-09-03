@@ -37,6 +37,12 @@ uv run reasonese-plan \
   --instructions configs/example_instructions.toml \
   --output out/example/prompt_specs.jsonl
 
+uv run reasonese-sample-studies \
+  --instructions configs/example_instructions.toml \
+  --pairings-per-assistant 250 \
+  --seed 0 \
+  --output out/example/studies.yaml
+
 export OPENROUTER_API_KEY=...
 uv run reasonese-run-conversation \
   --matchup configs/example_matchup.yaml \
@@ -57,6 +63,11 @@ uv run reasonese-collect-data \
   --study configs/example_study.yaml \
   --user-messages prompts/user \
   --output out/example-study
+
+uv run reasonese-collect-studies \
+  --suite out/example/studies.yaml \
+  --user-messages prompts/user \
+  --output out/example-suite
 
 uv run reasonese-analyze \
   --observations out/example-study/observations.jsonl \
@@ -130,6 +141,31 @@ active assistant models and trials into one completion-driven scheduler, and sub
 uncached response judgments together. Each study keeps its own directory of traces, judgments,
 and observations, named after the study file's stem. Study filenames must therefore have
 distinct stems.
+
+`reasonese-sample-studies` avoids exhaustive condition pairing. It writes one YAML suite with a
+seeded sample of valid unordered cell pairs, then replicates that exact comparison design across
+the selected assistants. The default is 20,000 pairs per assistant, capped by the eligible
+population and raised if a larger design is needed to connect every cell. An explicit
+`--pairings-per-assistant` overrides it. Every cell participates, and a connected backbone makes each
+assistant's Bradley–Terry ranking identifiable before regularization. Additional edges are
+sampled without replacement; both input orders and all requested rollouts are still collected.
+The requested pair count must therefore be at least `number of cells - 1` and cannot exceed the
+valid population. The connected backbone means this is a randomized sparse experimental design,
+not a uniform probability sample of exhaustive edges.
+
+With all axes enabled, 20 instructions produce 1,800 cells and 899,700 eligible pairs per
+assistant. The minimum connected design uses 1,799 of those pairs per assistant, about 500 times
+fewer than exhaustive pairing.
+
+By default the sampler includes every author and assistant. Repeated `--author` and
+`--assistant` options restrict those sets—for example, omitting the `user` author avoids selecting
+manual variants that have not been written yet. `reasonese-collect-studies --suite` consumes the
+artifact directly, uses study fingerprints for resumable subdirectories, and writes the combined
+analysis input to `observations.jsonl` at the suite root.
+
+The current sampler prioritizes coverage and connectivity. It does not equalize cell degrees or
+stratify sampled edges across axis combinations, so those are design improvements to consider
+before treating marginal axis summaries as confirmatory estimates.
 
 `reasonese-analyze` fits an L2-penalized Bradley–Terry ordering from each trial's cell pair.
 A completed cell beats an incomplete one; equal verdicts contribute half-wins. It also

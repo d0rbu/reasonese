@@ -14,7 +14,7 @@ from reasonese.axes import Assistant, Author, Channel, Framing, Instruction
 from reasonese.cache import YamlMessageCache
 from reasonese.collect_data import CollectionResult, CollectionTask, collect_studies, collect_study
 from reasonese.collect_data import main as collect_data
-from reasonese.collect_studies import collection_tasks
+from reasonese.collect_studies import collection_tasks, suite_collection_tasks
 from reasonese.collect_studies import main as collect_studies_cli
 from reasonese.config import load_study
 from reasonese.conversation import (
@@ -24,6 +24,7 @@ from reasonese.conversation import (
     GeneratedText,
     construct_conversation,
 )
+from reasonese.io import write_study_suite
 from reasonese.judging import (
     FingerprintedTrace,
     InstructionVerdict,
@@ -930,6 +931,7 @@ def test_collect_studies_cli_batches_tasks_then_reports_warm_cache(
 
     assert cold["trials"] == 4
     assert cold["observations"] == 8
+    assert "study_count" not in cold
     assert [item["output"] for item in cold["studies"]] == [
         str(output / "first"),
         str(output / "second"),
@@ -937,6 +939,55 @@ def test_collect_studies_cli_batches_tasks_then_reports_warm_cache(
     assert [item["trace_cache_hits"] for item in warm["studies"]] == [2, 2]
     assert [item["judgment_cache_hits"] for item in warm["studies"]] == [2, 2]
     assert len(transport.post_calls) == 6
+
+
+def test_collect_studies_cli_accepts_suite_and_writes_combined_observations(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    first = _study()
+    second = make_study(
+        (first.inputs[0], _spec("What is three plus two?", Channel.USER)),
+        Assistant.INKLING,
+        1,
+    )
+    suite_path = tmp_path / "suite.yaml"
+    write_study_suite(suite_path, (first, second))
+    manual = _manual_library(tmp_path, first, second)
+    output = tmp_path / "suite-output"
+    transport = FakeTransport(
+        [
+            _message_qa_batch(3),
+            *_assistant_responses(4),
+            _judge_batch((True, False, False, True, True, False, False, True)),
+        ]
+    )
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr("reasonese.collect_studies.RequestsTransport", lambda key: transport)
+
+    assert (
+        collect_studies_cli(
+            [
+                "--suite",
+                str(suite_path),
+                "--output",
+                str(output),
+                "--user-messages",
+                str(manual.root),
+            ]
+        )
+        == 0
+    )
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["study_count"] == 2
+    assert summary["trials"] == 4
+    assert summary["observations"] == 8
+    assert len((output / "observations.jsonl").read_text().splitlines()) == 8
+    assert {Path(item["output"]).name for item in summary["studies"]} == {
+        study_fingerprint(first),
+        study_fingerprint(second),
+    }
 
 
 def test_collection_tasks_require_paths_with_distinct_stems(tmp_path: Path) -> None:
@@ -947,6 +998,29 @@ def test_collection_tasks_require_paths_with_distinct_stems(tmp_path: Path) -> N
             (tmp_path / "one" / "same.yaml", tmp_path / "two" / "same.yaml"),
             tmp_path,
         )
+
+
+def test_suite_collection_tasks_use_stable_distinct_names(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first = _study()
+    second = make_study(
+        (first.inputs[0], _spec("Different.", Channel.USER)),
+        Assistant.INKLING,
+        1,
+    )
+    tasks = suite_collection_tasks((first, second), tmp_path)
+    assert tuple(task.output_dir.name for task in tasks) == (
+        study_fingerprint(first),
+        study_fingerprint(second),
+    )
+    with pytest.raises(ValueError, match="at least one"):
+        suite_collection_tasks((), tmp_path)
+    with pytest.raises(ValueError, match="distinct"):
+        suite_collection_tasks((first, first), tmp_path)
+    monkeypatch.setattr("reasonese.collect_studies.study_fingerprint", lambda study: "same")
+    with pytest.raises(ValueError, match="fingerprints"):
+        suite_collection_tasks((first, second), tmp_path)
 
 
 def test_collect_studies_requires_distinct_tasks(tmp_path: Path) -> None:

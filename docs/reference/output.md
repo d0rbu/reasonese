@@ -73,6 +73,15 @@ under `DIRECTORY/PATH_STEM/` with the same `study.yaml`, `collection.sqlite3`, a
 `observations.jsonl` layout above. This lets identical cells reuse the same authored message and
 QA verdict while keeping rollout traces and judgments isolated by study.
 
+`reasonese-sample-studies --output PATH` writes one YAML mapping whose `studies` list contains the
+selected assistant, rollout count, and input pair for every sampled study. With `p` pairings per
+assistant, `a` assistants, and `r` rollouts per permutation, it contains `pa` studies and plans
+`2par` assistant trials. The same `p` input pairs are used for each assistant.
+
+When `reasonese-collect-studies --suite PATH` is used, each study is collected below
+`DIRECTORY/<study fingerprint>/`. In addition to those resumable per-study artifacts, the suite
+root receives one combined `observations.jsonl` ready for analysis.
+
 ## Analysis directory
 
 `reasonese-analyze --output DIRECTORY` writes:

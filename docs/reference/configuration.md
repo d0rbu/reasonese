@@ -68,3 +68,28 @@ ordering `rollouts_per_permutation` times. See
 Pass multiple study files as repeated `--study` arguments to `reasonese-collect-studies` when
 collecting a larger design. Their filename stems must be distinct because each stem names that
 study's output subdirectory.
+
+## Sampled study suite
+
+`reasonese-sample-studies` builds all four-axis cells from an instruction TOML file, selects a
+seeded connected subset of valid unordered pairs, and writes them under one `studies` key:
+
+```yaml
+studies:
+  - assistant: Qwen3.8 Flash
+    rollouts_per_permutation: 1
+    inputs:
+      - instruction: Write a program.
+        framing: normal
+        channel: system prompt
+        author: Inkling
+      - instruction: Find the requested information.
+        framing: casual
+        channel: user message
+        author: Inkling Small
+```
+
+Every study is validated by the ordinary two-input contract. Suite entries must be distinct.
+The same selected input pairs appear for every requested assistant, enabling assistant-specific
+analyses over matched comparison designs. Use `reasonese-collect-studies --suite PATH` to collect
+the suite; fingerprint-named output directories avoid dependence on thousands of filenames.

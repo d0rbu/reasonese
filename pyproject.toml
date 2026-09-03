@@ -17,6 +17,7 @@ dependencies = [
 [project.scripts]
 reasonese-axes = "reasonese.show_axes:main"
 reasonese-plan = "reasonese.plan:main"
+reasonese-sample-studies = "reasonese.sample_studies:main"
 reasonese-run-conversation = "reasonese.run_conversation:main"
 reasonese-check-messages = "reasonese.check_messages:main"
 reasonese-judge-responses = "reasonese.judge_responses:main"

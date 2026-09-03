@@ -39,3 +39,19 @@ def load_study(path: Path) -> Study:
     """Load and validate one permutation-balanced study from YAML."""
     with path.open(encoding="utf-8") as handle:
         return study_from_dict(yaml.safe_load(handle))
+
+
+@beartype
+def load_study_suite(path: Path) -> tuple[Study, ...]:
+    """Load a non-empty sequence of distinct studies from one YAML file."""
+    with path.open(encoding="utf-8") as handle:
+        raw = yaml.safe_load(handle)
+    if not isinstance(raw, dict) or set(raw) != {"studies"}:
+        raise ValueError("study suite must contain exactly one 'studies' field")
+    raw_studies = raw["studies"]
+    if not isinstance(raw_studies, list) or not raw_studies:
+        raise ValueError("study suite must contain at least one study")
+    studies = tuple(study_from_dict(item) for item in raw_studies)
+    if len(studies) != len(set(studies)):
+        raise ValueError("study suite entries must be distinct")
+    return studies

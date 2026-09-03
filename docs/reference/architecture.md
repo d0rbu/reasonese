@@ -12,6 +12,10 @@ instruction strings -> Cartesian product -> four-field JSONL
 - `reasonese.io` writes those dataclasses as JSONL.
 - `reasonese.show_axes` prints the axis values.
 - `reasonese.plan` parses paths and writes the planned combinations.
+- `reasonese.sampling` selects a seeded connected subset of valid cell pairs without
+  materializing the exhaustive edge population.
+- `reasonese.sample_studies` writes the selected pairs, replicated across assistants, as one
+  study-suite YAML artifact.
 
 The conversation flow is:
 
@@ -92,7 +96,8 @@ study -> both input orderings x rollouts -> traces -> judgments -> observation r
   flattens uncached judge requests into one batch, and resumes at trial granularity.
 - `reasonese.collect_studies` applies the same stages across repeated study paths, sharing
   materialized-message and QA caches and grouping concurrent trials and batched judgments across
-  study boundaries.
+  study boundaries. It also consumes sampled suite YAML, uses stable fingerprint output names,
+  and writes a combined observation file.
 - `reasonese.study_cache` loads study traces and judgments with one SQLite query per table,
   validates serialized coordinates against the known trial matchups without reparsing them, and
   writes each completed stage in one transaction keyed by stable trial ID.
@@ -101,6 +106,13 @@ study -> both input orderings x rollouts -> traces -> judgments -> observation r
 
 Each rollout has its own trial-keyed trace and judgment row, so repeated identical responses do
 not collapse into one cache record. Generated instructions remain shared across the study.
+
+The sparse planner first connects all user-channel cells in a randomized chain and attaches every
+other cell to a user-channel cell. This `n - 1` edge backbone covers all cells and connects the
+comparison graph. It samples any requested additional valid edges without replacement using
+integer edge ranks, so planning memory scales with the sample rather than the exhaustive
+population. The selected input-edge set is shared across assistants; assistant models remain
+separate comparison components.
 
 The analysis flow is:
 
