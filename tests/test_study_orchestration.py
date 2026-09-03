@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from dataclasses import replace
 from pathlib import Path
+from typing import cast
 
 import pytest
 import yaml
+from beartype.roar import BeartypeCallHintParamViolation
 
 from reasonese.axes import Assistant, Author, Channel, Framing, Instruction
 from reasonese.cache import YamlMessageCache
@@ -445,6 +448,9 @@ def test_batch_observations_match_individual_conversion_and_validate_lengths() -
     ]
     with pytest.raises(ValueError, match="equal lengths"):
         observations_from_trials(trials, fingerprinted, judgments[:1])
+
+    with pytest.raises(BeartypeCallHintParamViolation):
+        replace(batched[0], completed=cast(bool, 1))
 
 
 def test_observations_preserve_missing_provider_ids() -> None:

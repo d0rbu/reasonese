@@ -46,6 +46,35 @@ class Observation:
     judge_response_id: str | None
 
 
+def _observation_from_validated(
+    trial_id: TrialId,
+    cell: CellId,
+    spec: PromptSpec,
+    assistant: Assistant,
+    permutation: PositiveInteger,
+    rollout: PositiveInteger,
+    position: PositiveInteger,
+    completed: bool,
+    fingerprint: TraceFingerprint,
+    assistant_response_id: str | None,
+    judge_response_id: str | None,
+) -> Observation:
+    """Construct a row after its enclosing batch and relationships were validated."""
+    observation = object.__new__(Observation)
+    object.__setattr__(observation, "trial_id", trial_id)
+    object.__setattr__(observation, "cell_id", cell)
+    object.__setattr__(observation, "spec", spec)
+    object.__setattr__(observation, "assistant", assistant)
+    object.__setattr__(observation, "permutation", permutation)
+    object.__setattr__(observation, "rollout", rollout)
+    object.__setattr__(observation, "position", position)
+    object.__setattr__(observation, "completed", completed)
+    object.__setattr__(observation, "trace_fingerprint", fingerprint)
+    object.__setattr__(observation, "assistant_response_id", assistant_response_id)
+    object.__setattr__(observation, "judge_response_id", judge_response_id)
+    return observation
+
+
 _POSITIONS = (PositiveInteger.parse(1), PositiveInteger.parse(2))
 
 
@@ -95,7 +124,7 @@ def _observations_from_trial(
     if judgment.trace_fingerprint != fingerprinted.fingerprint:
         raise ValueError("judgment fingerprint must equal the concrete trial trace")
     return tuple(
-        Observation(
+        _observation_from_validated(
             trial.trial_id,
             cell_ids[(spec, trial.matchup.assistant)],
             spec,
