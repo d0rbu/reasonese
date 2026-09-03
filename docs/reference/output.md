@@ -58,14 +58,30 @@ than one-hot: `[true, true]`, `[false, false]`, and mixed outcomes are all valid
 - `study.yaml`: the exact assistant, rollout count, and input cells;
 - `generated_messages.yaml`: shared materialized instruction cache;
 - `message_qa.yaml`: exact message-compliance verdicts and raw QA responses;
-- `trials/TRIAL_ID/trace.yaml`: one raw conversation trace per input ordering and rollout;
-- `judgments.yaml`: raw and parsed judgments keyed by concrete trace; and
+- `collection.sqlite3`: `traces` and `judgments` tables keyed by stable trial ID, with complete
+  records stored as JSON text; and
 - `observations.jsonl`: one flat row per cell verdict.
 
 Each observation contains the cell ID and five coordinates, permutation, rollout, one-based
 position, completion boolean, trace fingerprint, and available assistant/judge response IDs.
 This is the input to downstream analysis. Cached study traces are reused only while their
 user-authored contents still match the selected manual files.
+
+`reasonese-collect-studies --output DIRECTORY` places shared `generated_messages.yaml` and
+`message_qa.yaml` files directly under `DIRECTORY`. Every repeated `--study PATH` is collected
+under `DIRECTORY/PATH_STEM/` with the same `study.yaml`, `collection.sqlite3`, and
+`observations.jsonl` layout above. This lets identical cells reuse the same authored message and
+QA verdict while keeping rollout traces and judgments isolated by study.
+
+`reasonese-sample-studies --output PATH` writes one YAML mapping whose `studies` list contains the
+selected assistant, rollout count, and input pair for every sampled study. With `p` pairings per
+assistant, `a` assistants, and `r` rollouts per permutation, it contains `pa` studies and plans
+`2par` assistant trials. The same `p` input pairs are used for each assistant.
+
+When `reasonese-collect-studies --suite PATH` is used, each study is collected below
+`DIRECTORY/<study fingerprint>/`. Each child contains `study.yaml` and `observations.jsonl`; all
+trace and judgment rows are deduplicated into `DIRECTORY/collection.sqlite3`. The suite root also
+receives one combined `observations.jsonl` ready for analysis.
 
 ## Analysis directory
 

@@ -14,6 +14,7 @@
 | `reasonese/curate_instructions.py` | `reasonese-curate-instructions` utility and spot-check report |
 | `docs/research/instruction-bank.md` | Bank criteria, conflict taxonomy, and curation flow |
 | `reasonese/planning.py` | Four-field dataclass and Cartesian planner |
+| `reasonese/sampling.py` | Connected, seeded condition-pair subsampling |
 | `reasonese/io.py` | JSONL writer |
 | `reasonese/matchup.py` | Strongly typed matchup invariants and serialization |
 | `reasonese/conversation.py` | Authoring requests and channel rendering |
@@ -21,7 +22,7 @@
 | `prompts/user/` | Editable manual variants organized by base instruction |
 | `reasonese/tools.py` | Bounded assistant tool definitions and local execution |
 | `docs/reference/prompt-generation.md` | Exact prompts, framing guidance, and current limitations |
-| `reasonese/openrouter.py` | Synchronous and batch provider client |
+| `reasonese/openrouter.py` | Concurrent synchronous and overlapping grouped-batch provider client |
 | `reasonese/cache.py` | Readable message and trace caches |
 | `reasonese/message_qa.py` | Independent materialized-message compliance judgments |
 | `reasonese/message_qa_cache.py` | Exact-text-keyed readable QA cache |
@@ -32,6 +33,8 @@
 | `reasonese/study.py` | Cell, study, and permutation/rollout trial types |
 | `reasonese/observations.py` | Flat analysis-ready observation records |
 | `reasonese/collect_data.py` | Resumable study collector and utility |
+| `reasonese/collect_studies.py` | Cross-study batched collection utility |
+| `reasonese/sample_studies.py` | Sampled study-suite planning utility |
 | `reasonese/analysis.py` | Bradley-Terry, axis, position, and diagnostic analyses |
 | `reasonese/analyze.py` | `reasonese-analyze` reporting utility |
 | `reasonese/show_axes.py` | `reasonese-axes` utility |
@@ -48,6 +51,7 @@
 | `tests/test_judging.py` | Verdict, judgment-cache, and judge-utility tests |
 | `tests/test_message_qa.py` | Message-QA prompt, parsing, cache, and utility tests |
 | `tests/test_study_orchestration.py` | Permutation balance, collection, and resume tests |
+| `tests/test_sampling.py` | Sparse-design stratification, degree, connectivity, and reproducibility tests |
 | `tests/test_analysis.py` | Synthetic ranking, position-effect, diagnostics, and output tests |
 | `tests/test_instructions.py` | Pair loading, audit parsing, cache, scaffolding, and curation-utility tests |
 

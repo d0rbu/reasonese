@@ -13,7 +13,7 @@ from phantom import Phantom
 
 from reasonese.axes import Assistant, Author, Channel, Framing, Instruction
 from reasonese.conversation import ConversationTrace
-from reasonese.judging import Judgment, TraceFingerprint, trace_fingerprint
+from reasonese.judging import FingerprintedTrace, Judgment, TraceFingerprint
 from reasonese.matchup import prompt_spec_to_dict
 from reasonese.openrouter import JsonObject
 from reasonese.planning import PromptSpec
@@ -46,6 +46,38 @@ class Observation:
     judge_response_id: str | None
 
 
+def _observation_from_validated(
+    trial_id: TrialId,
+    cell: CellId,
+    spec: PromptSpec,
+    assistant: Assistant,
+    permutation: PositiveInteger,
+    rollout: PositiveInteger,
+    position: PositiveInteger,
+    completed: bool,
+    fingerprint: TraceFingerprint,
+    assistant_response_id: str | None,
+    judge_response_id: str | None,
+) -> Observation:
+    """Construct a row after its enclosing batch and relationships were validated."""
+    observation = object.__new__(Observation)
+    object.__setattr__(observation, "trial_id", trial_id)
+    object.__setattr__(observation, "cell_id", cell)
+    object.__setattr__(observation, "spec", spec)
+    object.__setattr__(observation, "assistant", assistant)
+    object.__setattr__(observation, "permutation", permutation)
+    object.__setattr__(observation, "rollout", rollout)
+    object.__setattr__(observation, "position", position)
+    object.__setattr__(observation, "completed", completed)
+    object.__setattr__(observation, "trace_fingerprint", fingerprint)
+    object.__setattr__(observation, "assistant_response_id", assistant_response_id)
+    object.__setattr__(observation, "judge_response_id", judge_response_id)
+    return observation
+
+
+_POSITIONS = (PositiveInteger.parse(1), PositiveInteger.parse(2))
+
+
 @beartype
 def cell_id(cell: Cell) -> CellId:
     """Hash a cell's exact coordinates into a compact stable identifier."""
@@ -70,30 +102,74 @@ def observations_from_trial(
     judgment: Judgment,
 ) -> tuple[Observation, ...]:
     """Join one trial trace and judgment into ordered cell observations."""
+    fingerprinted = FingerprintedTrace(trace)
+    cell_ids = {
+        (spec, trial.matchup.assistant): cell_id(Cell(spec, trial.matchup.assistant))
+        for spec in trial.matchup.inputs
+    }
+    return _observations_from_trial(trial, fingerprinted, judgment, cell_ids)
+
+
+def _observations_from_trial(
+    trial: Trial,
+    fingerprinted: FingerprintedTrace,
+    judgment: Judgment,
+    cell_ids: dict[tuple[PromptSpec, Assistant], CellId],
+) -> tuple[Observation, ...]:
+    trace = fingerprinted.trace
     if trace.setup.matchup != trial.matchup:
         raise ValueError("trace matchup must equal the trial matchup")
     if judgment.matchup != trial.matchup:
         raise ValueError("judgment matchup must equal the trial matchup")
-    fingerprint = trace_fingerprint(trace)
-    if judgment.trace_fingerprint != fingerprint:
+    if judgment.trace_fingerprint != fingerprinted.fingerprint:
         raise ValueError("judgment fingerprint must equal the concrete trial trace")
     return tuple(
-        Observation(
+        _observation_from_validated(
             trial.trial_id,
-            cell_id(Cell(spec, trial.matchup.assistant)),
+            cell_ids[(spec, trial.matchup.assistant)],
             spec,
             trial.matchup.assistant,
             trial.permutation,
             trial.rollout,
-            PositiveInteger.parse(index),
+            position,
             verdict.completed,
-            fingerprint,
+            fingerprinted.fingerprint,
             _response_id(trace.response),
             _response_id(verdict.response),
         )
-        for index, (spec, verdict) in enumerate(
-            zip(trial.matchup.inputs, judgment.verdicts, strict=True), start=1
+        for position, spec, verdict in zip(
+            _POSITIONS,
+            trial.matchup.inputs,
+            judgment.verdicts,
+            strict=True,
         )
+    )
+
+
+@beartype
+def observations_from_trials(
+    trials: tuple[Trial, ...],
+    traces: tuple[FingerprintedTrace, ...],
+    judgments: tuple[Judgment, ...],
+) -> tuple[Observation, ...]:
+    """Join many aligned trial records while reusing their derived cell identifiers."""
+    if len(trials) != len(traces) or len(trials) != len(judgments):
+        raise ValueError("trials, traces, and judgments must have equal lengths")
+    cell_keys = tuple(
+        dict.fromkeys(
+            (spec, trial.matchup.assistant)
+            for trial in trials
+            for spec in trial.matchup.inputs
+        )
+    )
+    cell_ids = {
+        key: cell_id(Cell(*key))
+        for key in cell_keys
+    }
+    return tuple(
+        observation
+        for trial, trace, judgment in zip(trials, traces, judgments, strict=True)
+        for observation in _observations_from_trial(trial, trace, judgment, cell_ids)
     )
 
 

@@ -1,31 +1,48 @@
 from __future__ import annotations
 
 import json
+import sqlite3
+from contextlib import closing
+from dataclasses import replace
 from pathlib import Path
+from typing import cast
 
 import pytest
 import yaml
+from beartype.roar import BeartypeCallHintParamViolation
 
 from reasonese.axes import Assistant, Author, Channel, Framing, Instruction
-from reasonese.cache import YamlTraceCache
-from reasonese.collect_data import collect_study
+from reasonese.cache import YamlMessageCache
+from reasonese.collect_data import CollectionResult, CollectionTask, collect_studies, collect_study
 from reasonese.collect_data import main as collect_data
+from reasonese.collect_studies import collection_tasks, suite_collection_tasks
+from reasonese.collect_studies import main as collect_studies_cli
 from reasonese.config import load_study
-from reasonese.conversation import ConversationTrace, GeneratedMessage, GeneratedText
+from reasonese.conversation import (
+    ConversationSetup,
+    ConversationTrace,
+    GeneratedMessage,
+    GeneratedText,
+    construct_conversation,
+)
+from reasonese.io import write_study_suite
 from reasonese.judging import (
+    FingerprintedTrace,
     InstructionVerdict,
     InstructionVerdicts,
     Judgment,
     judge_traces,
     trace_fingerprint,
 )
-from reasonese.manual_messages import ManualMessageLibrary
+from reasonese.manual_messages import ManualMessageLibrary, ManualMessageSnapshot
+from reasonese.matchup import Matchup
 from reasonese.message_qa import MessageQaVerdict
 from reasonese.message_qa_cache import YamlMessageQaCache
 from reasonese.observations import (
     cell_id,
     observation_to_dict,
     observations_from_trial,
+    observations_from_trials,
     write_observations,
 )
 from reasonese.openrouter import JsonObject, OpenRouterClient
@@ -35,6 +52,8 @@ from reasonese.study import (
     PositiveInteger,
     Study,
     StudyInputs,
+    Trial,
+    TrialId,
     build_trials,
     make_study,
     observations_per_cell,
@@ -45,6 +64,7 @@ from reasonese.study import (
     study_to_dict,
     trial_count,
 )
+from reasonese.study_cache import SqliteStudyCache
 
 
 def _spec(text: str, channel: Channel, author: Author = Author.USER) -> PromptSpec:
@@ -62,10 +82,15 @@ def _study(rollouts: int = 1, assistant: Assistant = Assistant.INKLING) -> Study
     )
 
 
-def _manual_library(tmp_path: Path, study: Study) -> ManualMessageLibrary:
+def _manual_library(tmp_path: Path, *studies: Study) -> ManualMessageLibrary:
     root = tmp_path / "manual"
     instructions = tuple(
-        dict.fromkeys(spec.instruction for spec in study.inputs if spec.author is Author.USER)
+        dict.fromkeys(
+            spec.instruction
+            for study in studies
+            for spec in study.inputs
+            if spec.author is Author.USER
+        )
     )
     for index, instruction in enumerate(instructions):
         directory = root / f"instruction-{index}"
@@ -91,15 +116,8 @@ def _batch_result(custom_id: str, response: JsonObject) -> JsonObject:
     }
 
 
-def _assistant_batch(count: int) -> JsonObject:
-    return {
-        "id": "assistant-batch",
-        "status": "completed",
-        "results": [
-            _batch_result(f"request-{index}", _chat(f"answer {index}", f"assistant-{index}"))
-            for index in range(count)
-        ],
-    }
+def _assistant_responses(count: int) -> list[JsonObject]:
+    return [_chat(f"answer {index}", f"assistant-{index}") for index in range(count)]
 
 
 def _tool_chat() -> JsonObject:
@@ -122,17 +140,6 @@ def _tool_chat() -> JsonObject:
                     ],
                 }
             }
-        ],
-    }
-
-
-def _assistant_batch_with_tool_and_final() -> JsonObject:
-    return {
-        "id": "assistant-batch",
-        "status": "completed",
-        "results": [
-            _batch_result("request-0", _tool_chat()),
-            _batch_result("request-1", _chat("already done", "assistant-1")),
         ],
     }
 
@@ -166,16 +173,26 @@ def _message_qa_batch(count: int) -> JsonObject:
 
 
 class FakeTransport:
-    def __init__(self, posts: list[JsonObject]) -> None:
+    def __init__(
+        self,
+        posts: list[JsonObject],
+        gets: list[JsonObject] | None = None,
+    ) -> None:
         self.posts = posts
+        self.gets = gets or []
         self.post_calls: list[tuple[str, JsonObject]] = []
+        self.calls: list[tuple[str, str]] = []
 
     def post_json(self, path: str, body: JsonObject) -> JsonObject:
         self.post_calls.append((path, body))
+        self.calls.append(("POST", path))
         return self.posts.pop(0)
 
     def get_json(self, path: str) -> JsonObject:
-        raise AssertionError(f"unexpected GET {path}")
+        self.calls.append(("GET", path))
+        if not self.gets:
+            raise AssertionError(f"unexpected GET {path}")
+        return self.gets.pop(0)
 
 
 def test_two_input_study_has_two_permutations_and_two_scores_per_cell() -> None:
@@ -191,6 +208,16 @@ def test_two_input_study_has_two_permutations_and_two_scores_per_cell() -> None:
     first, second = study.inputs
     assert {trial.matchup.inputs for trial in trials} == {(first, second), (second, first)}
     assert len({trial.trial_id for trial in trials}) == 2
+
+
+def test_trials_reuse_one_validated_matchup_per_permutation() -> None:
+    trials = build_trials(_study(2))
+
+    assert trials[0].matchup is trials[1].matchup
+    assert trials[2].matchup is trials[3].matchup
+    assert trials[0].matchup is not trials[2].matchup
+    with pytest.raises(BeartypeCallHintParamViolation):
+        replace(trials[0], rollout=cast(PositiveInteger, 0))
 
 
 def test_study_cells_pair_each_input_with_the_assistant() -> None:
@@ -298,6 +325,100 @@ def _judgment_for_trace(trace: ConversationTrace, values: tuple[bool, ...]) -> J
     return Judgment(trace.setup.matchup, trace_fingerprint(trace), verdicts)
 
 
+def test_sqlite_study_cache_batches_round_trips_and_replaces(tmp_path: Path) -> None:
+    study = _study()
+    trials = build_trials(study)
+    traces = tuple(_trace_for_trial(study, index) for index in range(len(trials)))
+    cache = SqliteStudyCache(tmp_path / "nested" / "collection.sqlite3")
+
+    cache.put_traces(
+        tuple(
+            (trial.trial_id, trace)
+            for trial, trace in zip(trials, traces, strict=True)
+        )
+    )
+    assert cache.load_traces(trials) == {
+        trial.trial_id: trace for trial, trace in zip(trials, traces, strict=True)
+    }
+
+    replacement = _trace_for_trial(study, 0, "replacement")
+    cache.put_traces(((trials[0].trial_id, replacement),))
+    judgments = (
+        _judgment_for_trace(replacement, (True, False)),
+        _judgment_for_trace(traces[1], (False, True)),
+    )
+    cache.put_judgments(
+        tuple((trial.trial_id, judgment) for trial, judgment in zip(trials, judgments, strict=True))
+    )
+
+    assert cache.load_traces(trials)[trials[0].trial_id] == replacement
+    assert cache.load_judgments(trials) == {
+        trial.trial_id: judgment for trial, judgment in zip(trials, judgments, strict=True)
+    }
+    cache.put_traces(())
+    cache.put_judgments(())
+
+
+def test_sqlite_trace_cache_reuses_setups_across_rollouts(tmp_path: Path) -> None:
+    study = _study(2)
+    trials = build_trials(study)
+    traces = tuple(_trace_for_trial(study, index) for index in range(len(trials)))
+    cache = SqliteStudyCache(tmp_path / "collection.sqlite3")
+    cache.put_traces(tuple(zip((trial.trial_id for trial in trials), traces, strict=True)))
+
+    loaded = cache.load_traces(trials)
+
+    assert loaded[trials[0].trial_id].setup is loaded[trials[1].trial_id].setup
+    assert loaded[trials[2].trial_id].setup is loaded[trials[3].trial_id].setup
+    assert loaded[trials[0].trial_id].setup is not loaded[trials[2].trial_id].setup
+
+
+@pytest.mark.parametrize(
+    ("table", "payload", "error"),
+    [
+        ("traces", "not JSON", "not valid JSON"),
+        ("judgments", sqlite3.Binary(b"{}"), "payload must be text"),
+    ],
+)
+def test_sqlite_study_cache_rejects_corrupt_payloads(
+    tmp_path: Path,
+    table: str,
+    payload: object,
+    error: str,
+) -> None:
+    trials = build_trials(_study())
+    cache = SqliteStudyCache(tmp_path / "collection.sqlite3")
+    cache.load_traces(trials)
+    with closing(sqlite3.connect(cache.path)) as connection, connection:
+        connection.execute(
+            f"INSERT INTO {table} (trial_id, payload) VALUES (?, ?)",
+            (str(trials[0].trial_id), payload),
+        )
+
+    with pytest.raises(ValueError, match=error):
+        if table == "traces":
+            cache.load_traces(trials)
+        else:
+            cache.load_judgments(trials)
+
+
+def test_sqlite_study_cache_rejects_records_for_the_wrong_trial(tmp_path: Path) -> None:
+    study = _study()
+    trials = build_trials(study)
+    traces = tuple(_trace_for_trial(study, index) for index in range(len(trials)))
+    cache = SqliteStudyCache(tmp_path / "collection.sqlite3")
+
+    cache.put_traces(((trials[0].trial_id, traces[1]),))
+    with pytest.raises(ValueError, match="trace matchup does not match"):
+        cache.load_traces(trials)
+
+    cache.put_judgments(
+        ((trials[0].trial_id, _judgment_for_trace(traces[1], (True, False))),)
+    )
+    with pytest.raises(ValueError, match="judgment matchup does not match"):
+        cache.load_judgments(trials)
+
+
 def test_judge_traces_flattens_multiple_conversations_into_one_batch() -> None:
     study = _study()
     traces = (_trace_for_trial(study, 0), _trace_for_trial(study, 1))
@@ -329,6 +450,34 @@ def test_observations_join_trial_trace_and_judgment_in_position_order() -> None:
     assert row["assistant"] == "Inkling"
     assert row["assistant_response_id"] == "assistant-0"
     assert row["judge_response_id"] == "0"
+
+
+def test_batch_observations_match_individual_conversion_and_validate_lengths() -> None:
+    study = _study()
+    trials = build_trials(study)
+    traces = tuple(_trace_for_trial(study, index) for index in range(len(trials)))
+    fingerprinted = tuple(FingerprintedTrace(trace) for trace in traces)
+    judgments = tuple(
+        _judgment_for_trace(trace, values)
+        for trace, values in zip(traces, ((True, False), (False, True)), strict=True)
+    )
+
+    batched = observations_from_trials(trials, fingerprinted, judgments)
+    individual = tuple(
+        observation
+        for trial, trace, judgment in zip(trials, traces, judgments, strict=True)
+        for observation in observations_from_trial(trial, trace, judgment)
+    )
+
+    assert batched == individual
+    assert [item.fingerprint for item in fingerprinted] == [
+        trace_fingerprint(trace) for trace in traces
+    ]
+    with pytest.raises(ValueError, match="equal lengths"):
+        observations_from_trials(trials, fingerprinted, judgments[:1])
+
+    with pytest.raises(BeartypeCallHintParamViolation):
+        replace(batched[0], completed=cast(bool, 1))
 
 
 def test_observations_preserve_missing_provider_ids() -> None:
@@ -389,12 +538,36 @@ def test_write_observations_emits_jsonl(tmp_path: Path) -> None:
 
 def test_collect_study_batches_trials_and_judgments_then_resumes_without_a_key(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     study = _study(2)
+    constructed_setups = []
+    manual_match_calls = 0
+
+    def track_construction(
+        matchup: Matchup,
+        generated_messages: tuple[GeneratedMessage, ...],
+    ) -> ConversationSetup:
+        setup = construct_conversation(matchup, generated_messages)
+        constructed_setups.append(setup)
+        return setup
+
+    monkeypatch.setattr("reasonese.collect_data.construct_conversation", track_construction)
+    original_matches = ManualMessageSnapshot.matches
+
+    def track_manual_match(
+        self: ManualMessageSnapshot,
+        setup: ConversationSetup,
+    ) -> bool:
+        nonlocal manual_match_calls
+        manual_match_calls += 1
+        return original_matches(self, setup)
+
+    monkeypatch.setattr(ManualMessageSnapshot, "matches", track_manual_match)
     transport = FakeTransport(
         [
             _message_qa_batch(2),
-            _assistant_batch(4),
+            *_assistant_responses(4),
             _judge_batch((True, False, False, True, True, False, False, True)),
         ]
     )
@@ -417,20 +590,25 @@ def test_collect_study_batches_trials_and_judgments_then_resumes_without_a_key(
     assert warm.trace_cache_hits == 4
     assert warm.judgment_cache_hits == 4
     assert warm.observations == cold.observations
-    assert len(transport.post_calls) == 3
+    assert len(constructed_setups) == 2
+    assert manual_match_calls == 2
+    assert {setup.matchup for setup in constructed_setups} == {
+        trial.matchup for trial in cold.trials
+    }
+    assert len(transport.post_calls) == 6
     assert transport.post_calls[0][1]["model"] == "openai/gpt-5.6-luna"
-    assert transport.post_calls[1][1]["model"] == "thinkingmachines/inkling"
-    assert len(transport.post_calls[1][1]["requests"]) == 4
-    first_request = transport.post_calls[1][1]["requests"][0]["body"]
+    assert all(call[0] == "/api/v1/chat/completions" for call in transport.post_calls[1:5])
+    assert all(call[1]["model"] == "thinkingmachines/inkling" for call in transport.post_calls[1:5])
+    first_request = transport.post_calls[1][1]
     assert first_request["temperature"] == 0.7
     assert first_request["parallel_tool_calls"] is False
     assert any(tool["type"] == "openrouter:web_search" for tool in first_request["tools"])
-    assert transport.post_calls[2][1]["model"] == "openai/gpt-5.6-luna"
-    assert len(transport.post_calls[2][1]["requests"]) == 8
+    assert transport.post_calls[5][1]["model"] == "openai/gpt-5.6-luna"
+    assert len(transport.post_calls[5][1]["requests"]) == 8
     rows = [json.loads(line) for line in (output / "observations.jsonl").read_text().splitlines()]
     assert len(rows) == 8
     assert (output / "study.yaml").exists()
-    assert len(list((output / "trials").glob("*/trace.yaml"))) == 4
+    assert (output / "collection.sqlite3").is_file()
 
     first_directory = next(directory for directory in manual.root.iterdir() if directory.is_dir())
     (first_directory / "normal.txt").write_text("Changed manual instruction.")
@@ -438,17 +616,237 @@ def test_collect_study_batches_trials_and_judgments_then_resumes_without_a_key(
         collect_study(study, output, None, manual, prefer_batch=True)
 
 
-def test_collect_study_batches_each_active_tool_round(tmp_path: Path) -> None:
+def test_collect_study_preserves_distinct_verdicts_for_identical_rollout_traces(
+    tmp_path: Path,
+) -> None:
+    study = _study(2)
+    identical_response = _chat("same answer", "same-assistant-response")
+    transport = FakeTransport(
+        [
+            _message_qa_batch(2),
+            *(identical_response for _ in range(4)),
+            _judge_batch((True, False, False, True, True, True, False, False)),
+        ]
+    )
+    output = tmp_path / "identical-rollouts"
+    manual = _manual_library(tmp_path, study)
+
+    cold = collect_study(
+        study,
+        output,
+        OpenRouterClient(transport),
+        manual,
+        prefer_batch=True,
+    )
+    warm = collect_study(study, output, None, manual, prefer_batch=True)
+
+    assert warm.observations == cold.observations
+    assert [observation.completed for observation in warm.observations] == [
+        True,
+        False,
+        False,
+        True,
+        True,
+        True,
+        False,
+        False,
+    ]
+
+
+def test_collect_studies_batches_across_tasks_and_matches_independent_outcomes(
+    tmp_path: Path,
+) -> None:
+    first = _study()
+    shared = first.inputs[0]
+    second = make_study(
+        (shared, _spec("What is three plus two?", Channel.USER)),
+        Assistant.INKLING,
+        1,
+    )
+    studies = (first, second)
+    manual = _manual_library(tmp_path, *studies)
+    tasks = tuple(
+        CollectionTask(study, tmp_path / "suite" / f"study-{index}")
+        for index, study in enumerate(studies, start=1)
+    )
+    suite_transport = FakeTransport(
+        [
+            _message_qa_batch(3),
+            *_assistant_responses(4),
+            _judge_batch((True, False, False, True, True, False, False, True)),
+        ]
+    )
+
+    suite_results = collect_studies(
+        tasks,
+        OpenRouterClient(suite_transport, sync_workers=1),
+        manual,
+        YamlMessageCache(tmp_path / "suite" / "generated_messages.yaml"),
+        YamlMessageQaCache(tmp_path / "suite" / "message_qa.yaml"),
+        prefer_batch=True,
+    )
+
+    independent_results = tuple(
+        collect_study(
+            study,
+            tmp_path / "independent" / f"study-{index}",
+            OpenRouterClient(
+                FakeTransport(
+                    [
+                        _message_qa_batch(2),
+                        *_assistant_responses(2),
+                        _judge_batch((True, False, False, True)),
+                    ]
+                )
+            ),
+            manual,
+            prefer_batch=True,
+        )
+        for index, study in enumerate(studies, start=1)
+    )
+
+    def numeric_outcomes(result: CollectionResult) -> list[tuple[object, ...]]:
+        return [
+            (
+                observation.trial_id,
+                observation.cell_id,
+                observation.permutation,
+                observation.rollout,
+                observation.position,
+                observation.completed,
+            )
+            for observation in result.observations
+        ]
+
+    assert [numeric_outcomes(result) for result in suite_results] == [
+        numeric_outcomes(result) for result in independent_results
+    ]
+    assert len(suite_transport.post_calls) == 6
+    assert len(suite_transport.post_calls[0][1]["requests"]) == 3
+    assert all(call[0] == "/api/v1/chat/completions" for call in suite_transport.post_calls[1:5])
+    assert len(suite_transport.post_calls[5][1]["requests"]) == 8
+
+    warm_results = collect_studies(
+        tasks,
+        None,
+        manual,
+        YamlMessageCache(tmp_path / "suite" / "generated_messages.yaml"),
+        YamlMessageQaCache(tmp_path / "suite" / "message_qa.yaml"),
+        prefer_batch=True,
+    )
+    assert [result.observations for result in warm_results] == [
+        result.observations for result in suite_results
+    ]
+    assert [result.trace_cache_hits for result in warm_results] == [2, 2]
+    assert [result.judgment_cache_hits for result in warm_results] == [2, 2]
+
+    shared_tasks = tuple(
+        CollectionTask(study, tmp_path / "shared" / f"study-{index}")
+        for index, study in enumerate(studies, start=1)
+    )
+    shared_transport = FakeTransport(
+        [
+            _message_qa_batch(3),
+            *_assistant_responses(4),
+            _judge_batch((True, False, False, True, True, False, False, True)),
+        ]
+    )
+    shared_cache = SqliteStudyCache(tmp_path / "shared" / "collection.sqlite3")
+    shared_results = collect_studies(
+        shared_tasks,
+        OpenRouterClient(shared_transport, sync_workers=1),
+        manual,
+        YamlMessageCache(tmp_path / "shared" / "generated_messages.yaml"),
+        YamlMessageQaCache(tmp_path / "shared" / "message_qa.yaml"),
+        prefer_batch=True,
+        shared_cache=shared_cache,
+    )
+    shared_warm = collect_studies(
+        shared_tasks,
+        None,
+        manual,
+        YamlMessageCache(tmp_path / "shared" / "generated_messages.yaml"),
+        YamlMessageQaCache(tmp_path / "shared" / "message_qa.yaml"),
+        prefer_batch=True,
+        shared_cache=shared_cache,
+    )
+
+    assert shared_transport.post_calls == suite_transport.post_calls
+    assert shared_results == suite_results
+    assert [result.observations for result in shared_warm] == [
+        result.observations for result in shared_results
+    ]
+    assert [result.trace_cache_hits for result in shared_warm] == [2, 2]
+    assert [result.judgment_cache_hits for result in shared_warm] == [2, 2]
+    assert shared_cache.path.is_file()
+    assert not any((task.output_dir / "collection.sqlite3").exists() for task in shared_tasks)
+
+    isolated_traces = {
+        trial_id: trace
+        for task, result in zip(tasks, suite_results, strict=True)
+        for trial_id, trace in SqliteStudyCache(task.output_dir / "collection.sqlite3")
+        .load_traces(result.trials)
+        .items()
+    }
+    isolated_judgments = {
+        trial_id: judgment
+        for task, result in zip(tasks, suite_results, strict=True)
+        for trial_id, judgment in SqliteStudyCache(task.output_dir / "collection.sqlite3")
+        .load_judgments(result.trials)
+        .items()
+    }
+    all_trials = tuple(trial for result in shared_results for trial in result.trials)
+    assert shared_cache.load_traces(all_trials) == isolated_traces
+    assert shared_cache.load_judgments(all_trials) == isolated_judgments
+
+
+def test_collect_studies_runs_mixed_assistant_models_through_sync_requests(
+    tmp_path: Path,
+) -> None:
+    first = _study(assistant=Assistant.INKLING)
+    second = _study(assistant=Assistant.INKLING_SMALL)
+    tasks = (
+        CollectionTask(first, tmp_path / "mixed" / "inkling"),
+        CollectionTask(second, tmp_path / "mixed" / "inkling-small"),
+    )
+    transport = FakeTransport(
+        [
+            _message_qa_batch(2),
+            *_assistant_responses(4),
+            _judge_batch((True, False, False, True, True, False, False, True)),
+        ]
+    )
+
+    results = collect_studies(
+        tasks,
+        OpenRouterClient(transport),
+        _manual_library(tmp_path, first, second),
+        YamlMessageCache(tmp_path / "mixed" / "generated_messages.yaml"),
+        YamlMessageQaCache(tmp_path / "mixed" / "message_qa.yaml"),
+        prefer_batch=True,
+    )
+
+    assert [len(result.observations) for result in results] == [4, 4]
+    assert transport.post_calls[0][0] == "/api/beta/batches"
+    assert all(call[0] == "/api/v1/chat/completions" for call in transport.post_calls[1:5])
+    assert sorted(call[1]["model"] for call in transport.post_calls[1:5]) == [
+        "thinkingmachines/inkling",
+        "thinkingmachines/inkling",
+        "thinkingmachines/inkling-small",
+        "thinkingmachines/inkling-small",
+    ]
+    assert transport.post_calls[5][0] == "/api/beta/batches"
+    assert len(transport.post_calls[5][1]["requests"]) == 8
+
+
+def test_collect_study_runs_each_active_tool_round(tmp_path: Path) -> None:
     study = _study()
     transport = FakeTransport(
         [
             _message_qa_batch(2),
-            _assistant_batch_with_tool_and_final(),
-            {
-                "id": "assistant-followup",
-                "status": "completed",
-                "results": [_batch_result("request-0", _chat("used the file", "assistant-0"))],
-            },
+            _tool_chat(),
+            _chat("used the file", "assistant-0"),
+            _chat("already done", "assistant-1"),
             _judge_batch((True, False, False, True)),
         ]
     )
@@ -456,27 +854,24 @@ def test_collect_study_batches_each_active_tool_round(tmp_path: Path) -> None:
     result = collect_study(
         study,
         tmp_path / "tool-collection",
-        OpenRouterClient(transport),
+        OpenRouterClient(transport, sync_workers=1),
         _manual_library(tmp_path, study),
         prefer_batch=True,
     )
 
-    cached_traces = tuple(
-        YamlTraceCache(
-            tmp_path / "tool-collection" / "trials" / str(trial.trial_id) / "trace.yaml"
-        ).load()[0]
-        for trial in result.trials
-    )
+    cached_by_trial = SqliteStudyCache(
+        tmp_path / "tool-collection" / "collection.sqlite3"
+    ).load_traces(result.trials)
+    cached_traces = tuple(cached_by_trial[trial.trial_id] for trial in result.trials)
     assert [len(trace.tool_steps) for trace in cached_traces] == [1, 0]
-    assert len(transport.post_calls[1][1]["requests"]) == 2
-    assert len(transport.post_calls[2][1]["requests"]) == 1
-    followup = transport.post_calls[2][1]["requests"][0]["body"]["messages"]
+    assert all(call[0] == "/api/v1/chat/completions" for call in transport.post_calls[1:4])
+    followup = transport.post_calls[2][1]["messages"]
     assert followup[-1] == {
         "role": "tool",
         "tool_call_id": "live-read",
         "content": "Name the capital of France.",
     }
-    assert len(transport.post_calls[3][1]["requests"]) == 4
+    assert len(transport.post_calls[4][1]["requests"]) == 4
 
 
 def test_collect_study_requires_key_only_for_missing_work(tmp_path: Path) -> None:
@@ -486,9 +881,13 @@ def test_collect_study_requires_key_only_for_missing_work(tmp_path: Path) -> Non
         collect_study(study, tmp_path / "empty", None, manual, prefer_batch=True)
 
     output = tmp_path / "traces-only"
-    for trial_index, trial in enumerate(build_trials(study)):
-        trace = _trace_for_trial(study, trial_index)
-        YamlTraceCache(output / "trials" / str(trial.trial_id) / "trace.yaml").put(trace)
+    trials = build_trials(study)
+    SqliteStudyCache(output / "collection.sqlite3").put_traces(
+        tuple(
+            (trial.trial_id, _trace_for_trial(study, trial_index))
+            for trial_index, trial in enumerate(trials)
+        )
+    )
     YamlMessageQaCache(output / "message_qa.yaml").put_many(
         tuple(
             MessageQaVerdict(
@@ -519,7 +918,11 @@ def test_collect_data_cli_runs_then_reports_warm_cache(
     _write_study(study_path, _study())
     manual = _manual_library(tmp_path, _study())
     transport = FakeTransport(
-        [_message_qa_batch(2), _assistant_batch(2), _judge_batch((True, False, False, True))]
+        [
+            _message_qa_batch(2),
+            *_assistant_responses(2),
+            _judge_batch((True, False, False, True)),
+        ]
     )
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
     monkeypatch.setattr("reasonese.collect_data.RequestsTransport", lambda key: transport)
@@ -542,7 +945,278 @@ def test_collect_data_cli_runs_then_reports_warm_cache(
     assert cold["observations"] == 4
     assert warm["trace_cache_hits"] == 2
     assert warm["judgment_cache_hits"] == 2
-    assert len(transport.post_calls) == 3
+    assert len(transport.post_calls) == 4
+
+
+def test_collect_studies_cli_batches_tasks_then_reports_warm_cache(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    first = _study()
+    second = make_study(
+        (first.inputs[0], _spec("What is three plus two?", Channel.USER)),
+        Assistant.INKLING,
+        1,
+    )
+    first_path = tmp_path / "first.yaml"
+    second_path = tmp_path / "second.yaml"
+    _write_study(first_path, first)
+    _write_study(second_path, second)
+    manual = _manual_library(tmp_path, first, second)
+    output = tmp_path / "suite-output"
+    transport = FakeTransport(
+        [
+            _message_qa_batch(3),
+            *_assistant_responses(4),
+            _judge_batch((True, False, False, True, True, False, False, True)),
+        ]
+    )
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr("reasonese.collect_studies.RequestsTransport", lambda key: transport)
+    args = [
+        "--study",
+        str(first_path),
+        "--study",
+        str(second_path),
+        "--output",
+        str(output),
+        "--user-messages",
+        str(manual.root),
+    ]
+
+    assert collect_studies_cli(args) == 0
+    cold = json.loads(capsys.readouterr().out)
+    monkeypatch.delenv("OPENROUTER_API_KEY")
+    assert collect_studies_cli(args) == 0
+    warm = json.loads(capsys.readouterr().out)
+
+    assert cold["trials"] == 4
+    assert cold["observations"] == 8
+    assert "study_count" not in cold
+    assert [item["output"] for item in cold["studies"]] == [
+        str(output / "first"),
+        str(output / "second"),
+    ]
+    assert [item["trace_cache_hits"] for item in warm["studies"]] == [2, 2]
+    assert [item["judgment_cache_hits"] for item in warm["studies"]] == [2, 2]
+    assert len(transport.post_calls) == 6
+
+
+def test_collect_studies_cli_accepts_suite_and_writes_combined_observations(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    first = _study()
+    second = make_study(
+        (first.inputs[0], _spec("What is three plus two?", Channel.USER)),
+        Assistant.INKLING,
+        1,
+    )
+    suite_path = tmp_path / "suite.yaml"
+    write_study_suite(suite_path, (first, second))
+    manual = _manual_library(tmp_path, first, second)
+    output = tmp_path / "suite-output"
+    transport = FakeTransport(
+        [
+            _message_qa_batch(3),
+            *_assistant_responses(4),
+            _judge_batch((True, False, False, True, True, False, False, True)),
+        ]
+    )
+    cache_calls: list[tuple[str, Path]] = []
+    original_load_traces = SqliteStudyCache.load_traces
+    original_put_traces = SqliteStudyCache.put_traces
+    original_load_judgments = SqliteStudyCache.load_judgments
+    original_put_judgments = SqliteStudyCache.put_judgments
+
+    def record_load_traces(
+        cache: SqliteStudyCache, trials: tuple[Trial, ...]
+    ) -> dict[TrialId, ConversationTrace]:
+        cache_calls.append(("load_traces", cache.path))
+        return original_load_traces(cache, trials)
+
+    def record_put_traces(
+        cache: SqliteStudyCache,
+        traces: tuple[tuple[TrialId, ConversationTrace], ...],
+    ) -> None:
+        cache_calls.append(("put_traces", cache.path))
+        original_put_traces(cache, traces)
+
+    def record_load_judgments(
+        cache: SqliteStudyCache, trials: tuple[Trial, ...]
+    ) -> dict[TrialId, Judgment]:
+        cache_calls.append(("load_judgments", cache.path))
+        return original_load_judgments(cache, trials)
+
+    def record_put_judgments(
+        cache: SqliteStudyCache,
+        judgments: tuple[tuple[TrialId, Judgment], ...],
+    ) -> None:
+        cache_calls.append(("put_judgments", cache.path))
+        original_put_judgments(cache, judgments)
+
+    monkeypatch.setattr(SqliteStudyCache, "load_traces", record_load_traces)
+    monkeypatch.setattr(SqliteStudyCache, "put_traces", record_put_traces)
+    monkeypatch.setattr(SqliteStudyCache, "load_judgments", record_load_judgments)
+    monkeypatch.setattr(SqliteStudyCache, "put_judgments", record_put_judgments)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr("reasonese.collect_studies.RequestsTransport", lambda key: transport)
+
+    assert (
+        collect_studies_cli(
+            [
+                "--suite",
+                str(suite_path),
+                "--output",
+                str(output),
+                "--user-messages",
+                str(manual.root),
+            ]
+        )
+        == 0
+    )
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["study_count"] == 2
+    assert summary["trials"] == 4
+    assert summary["observations"] == 8
+    assert len((output / "observations.jsonl").read_text().splitlines()) == 8
+    assert {Path(item["output"]).name for item in summary["studies"]} == {
+        study_fingerprint(first),
+        study_fingerprint(second),
+    }
+    assert (output / "collection.sqlite3").is_file()
+    assert not any(
+        (Path(item["output"]) / "collection.sqlite3").exists() for item in summary["studies"]
+    )
+
+    monkeypatch.delenv("OPENROUTER_API_KEY")
+    assert (
+        collect_studies_cli(
+            [
+                "--suite",
+                str(suite_path),
+                "--output",
+                str(output),
+                "--user-messages",
+                str(manual.root),
+            ]
+        )
+        == 0
+    )
+    warm = json.loads(capsys.readouterr().out)
+    assert [item["trace_cache_hits"] for item in warm["studies"]] == [2, 2]
+    assert [item["judgment_cache_hits"] for item in warm["studies"]] == [2, 2]
+    assert len(transport.post_calls) == 6
+    assert cache_calls == [
+        ("load_traces", output / "collection.sqlite3"),
+        ("put_traces", output / "collection.sqlite3"),
+        ("load_judgments", output / "collection.sqlite3"),
+        ("put_judgments", output / "collection.sqlite3"),
+        ("load_traces", output / "collection.sqlite3"),
+        ("load_judgments", output / "collection.sqlite3"),
+    ]
+
+
+def test_collection_tasks_require_paths_with_distinct_stems(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="at least one"):
+        collection_tasks((), tmp_path)
+    with pytest.raises(ValueError, match="distinct stems"):
+        collection_tasks(
+            (tmp_path / "one" / "same.yaml", tmp_path / "two" / "same.yaml"),
+            tmp_path,
+        )
+
+
+def test_suite_collection_tasks_use_stable_distinct_names(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first = _study()
+    second = make_study(
+        (first.inputs[0], _spec("Different.", Channel.USER)),
+        Assistant.INKLING,
+        1,
+    )
+    tasks = suite_collection_tasks((first, second), tmp_path)
+    assert tuple(task.output_dir.name for task in tasks) == (
+        study_fingerprint(first),
+        study_fingerprint(second),
+    )
+    with pytest.raises(ValueError, match="at least one"):
+        suite_collection_tasks((), tmp_path)
+    with pytest.raises(ValueError, match="distinct"):
+        suite_collection_tasks((first, first), tmp_path)
+    monkeypatch.setattr("reasonese.collect_studies.study_fingerprint", lambda study: "same")
+    with pytest.raises(ValueError, match="fingerprints"):
+        suite_collection_tasks((first, second), tmp_path)
+
+
+def test_collect_studies_requires_distinct_tasks(tmp_path: Path) -> None:
+    study = _study()
+    manual = _manual_library(tmp_path, study)
+    message_cache = YamlMessageCache(tmp_path / "messages.yaml")
+    qa_cache = YamlMessageQaCache(tmp_path / "qa.yaml")
+    with pytest.raises(ValueError, match="at least one"):
+        collect_studies((), None, manual, message_cache, qa_cache, prefer_batch=True)
+    with pytest.raises(ValueError, match="output directories"):
+        collect_studies(
+            (
+                CollectionTask(study, tmp_path / "same"),
+                CollectionTask(
+                    make_study(
+                        (study.inputs[0], _spec("Different.", Channel.USER)),
+                        study.assistant,
+                        1,
+                    ),
+                    tmp_path / "same",
+                ),
+            ),
+            None,
+            manual,
+            message_cache,
+            qa_cache,
+            prefer_batch=True,
+        )
+    with pytest.raises(ValueError, match="studies"):
+        collect_studies(
+            (
+                CollectionTask(study, tmp_path / "first"),
+                CollectionTask(study, tmp_path / "second"),
+            ),
+            None,
+            manual,
+            message_cache,
+            qa_cache,
+            prefer_batch=True,
+        )
+
+
+def test_collect_studies_rejects_duplicate_trial_identifiers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first = _study()
+    second = make_study(
+        (first.inputs[0], _spec("Different.", Channel.USER)),
+        Assistant.INKLING,
+        1,
+    )
+    duplicate_trials = build_trials(first)
+    monkeypatch.setattr("reasonese.collect_data.build_trials", lambda study: duplicate_trials)
+
+    with pytest.raises(ValueError, match="trial identifiers"):
+        collect_studies(
+            (
+                CollectionTask(first, tmp_path / "first"),
+                CollectionTask(second, tmp_path / "second"),
+            ),
+            None,
+            _manual_library(tmp_path, first, second),
+            YamlMessageCache(tmp_path / "messages.yaml"),
+            YamlMessageQaCache(tmp_path / "qa.yaml"),
+            prefer_batch=True,
+            shared_cache=SqliteStudyCache(tmp_path / "collection.sqlite3"),
+        )
 
 
 def test_collect_data_cli_reports_missing_key(

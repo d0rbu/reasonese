@@ -58,6 +58,25 @@ def test_runtime_reads_seeded_readme_and_rejects_paths_outside_workspace() -> No
     assert "file does not exist" in missing.content
 
 
+def test_runtime_reset_clears_prior_files_and_seeds_the_next_readme() -> None:
+    first = GeneratedText.parse("First instruction.")
+    second = GeneratedText.parse("Second instruction.")
+    with ToolRuntime((first,)) as runtime:
+        (runtime.root / "artifact.txt").write_text("prior conversation")
+        (runtime.root / "directory").mkdir()
+        (runtime.root / "directory" / "nested.txt").write_text("prior conversation")
+        (runtime.root / "link").symlink_to("artifact.txt")
+
+        runtime.reset((second,))
+
+        assert {path.name for path in runtime.root.iterdir()} == {"README.md"}
+        assert (runtime.root / "README.md").read_text() == "Second instruction."
+
+        runtime.reset(())
+
+        assert tuple(runtime.root.iterdir()) == ()
+
+
 def test_runtime_reports_invalid_arguments_unknown_tools_and_lifecycle_errors() -> None:
     runtime = ToolRuntime(())
     with pytest.raises(RuntimeError, match="context manager"):

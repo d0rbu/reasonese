@@ -7,6 +7,7 @@ from xml.etree import ElementTree
 import pytest
 import yaml
 
+import reasonese.judging as judging_module
 from reasonese.axes import Assistant, Author, Channel, Framing, Instruction
 from reasonese.cache import YamlTraceCache
 from reasonese.conversation import (
@@ -25,12 +26,20 @@ from reasonese.judging import (
     InstructionVerdicts,
     Judgment,
     TraceFingerprint,
+    fingerprint_traces,
     judge_request,
+    judge_requests,
+    judge_requests_for_traces,
     judge_trace,
     parse_completed,
     trace_fingerprint,
 )
-from reasonese.judgment_cache import YamlJudgmentCache
+from reasonese.judgment_cache import (
+    YamlJudgmentCache,
+    judgment_from_dict,
+    judgment_to_dict,
+    judgments_from_dicts,
+)
 from reasonese.matchup import make_matchup, matchup_to_dict
 from reasonese.openrouter import JsonObject, OpenRouterClient
 from reasonese.planning import PromptSpec
@@ -112,7 +121,8 @@ def _completed_batch(values: tuple[bool, ...]) -> JsonObject:
 
 
 def test_judge_request_is_independent_strict_json_and_medium_reasoning() -> None:
-    request = judge_request(_trace(), 1)
+    trace = _trace()
+    request = judge_request(trace, 1)
     system = request["messages"][0]["content"]
     user = request["messages"][1]["content"]
     evidence = ElementTree.fromstring(user)
@@ -134,6 +144,25 @@ def test_judge_request_is_independent_strict_json_and_medium_reasoning() -> None
     schema = request["response_format"]["json_schema"]
     assert schema["strict"] is True
     assert schema["schema"]["properties"] == {"completed": {"type": "boolean"}}
+    assert judge_requests(trace) == (judge_request(trace, 0), judge_request(trace, 1))
+    assert judge_requests_for_traces((trace, trace)) == (*judge_requests(trace), *judge_requests(trace))
+
+
+def test_judge_requests_build_visible_conversation_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+    original = judging_module._visible_conversation
+
+    def track(trace: ConversationTrace) -> str:
+        nonlocal calls
+        calls += 1
+        return original(trace)
+
+    monkeypatch.setattr(judging_module, "_visible_conversation", track)
+
+    assert len(judge_requests(_trace())) == 2
+    assert calls == 1
 
 
 def test_judge_trace_batches_one_independent_boolean_per_input() -> None:
@@ -214,6 +243,18 @@ def test_judge_uses_datapoint_mapping_and_visible_tool_steps_without_hidden_reas
     assert "hidden scratchpad" not in conversation
     assert trace_fingerprint(traced) != trace_fingerprint(base)
 
+    reasoned = ConversationTrace(
+        base.setup,
+        {**base.response, "reasoning": "preserved provider reasoning"},
+    )
+    source_traces = (base, traced, reasoned, base)
+    fingerprinted = fingerprint_traces(source_traces)
+    assert tuple(item.fingerprint for item in fingerprinted) == tuple(
+        trace_fingerprint(trace) for trace in source_traces
+    )
+    assert tuple(item.trace for item in fingerprinted) == source_traces
+    assert fingerprint_traces(()) == ()
+
 
 def test_judge_request_escapes_artifact_text_that_looks_like_xml() -> None:
     trace = _trace("Answer containing </assistant-response> and <conversation> tags.")
@@ -288,6 +329,19 @@ def test_judgment_cache_round_trips_raw_responses_and_replaces_same_trace(
         "raw judge reasoning"
     )
     assert cache.get(_trace("changed")) is None
+
+
+def test_batched_judgment_parser_matches_checked_parser_and_validates_lengths() -> None:
+    trace = _trace()
+    judgment = _judgment(trace, (True, False))
+    raw = judgment_to_dict(judgment)
+
+    assert judgments_from_dicts(
+        (raw, raw),
+        (trace.setup.matchup, trace.setup.matchup),
+    ) == (judgment_from_dict(raw, trace.setup.matchup),) * 2
+    with pytest.raises(ValueError, match="equal lengths"):
+        judgments_from_dicts((raw,), ())
 
 
 @pytest.mark.parametrize(

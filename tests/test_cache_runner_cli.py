@@ -2,16 +2,19 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from threading import Event
 
 import pytest
 import yaml
 
 from reasonese.axes import Assistant, Author, Channel, Framing, Instruction
-from reasonese.cache import YamlMessageCache, YamlTraceCache
+from reasonese.cache import YamlMessageCache, YamlTraceCache, trace_to_dict, traces_from_dicts
 from reasonese.conversation import (
+    ConversationSetup,
     ConversationTrace,
     GeneratedMessage,
     GeneratedText,
+    ToolCall,
     ToolCallId,
     ToolResult,
     ToolStep,
@@ -20,10 +23,15 @@ from reasonese.conversation import (
 from reasonese.manual_messages import ManualMessageLibrary
 from reasonese.matchup import Matchup, make_matchup, matchup_to_dict
 from reasonese.message_qa_cache import YamlMessageQaCache
-from reasonese.openrouter import JsonObject, OpenRouterClient
+from reasonese.openrouter import JsonObject, ModelRoute, OpenRouterClient, OpenRouterModelId
 from reasonese.planning import PromptSpec
 from reasonese.run_conversation import main as run_conversation
-from reasonese.runner import materialize_messages, run_matchup
+from reasonese.runner import (
+    AssistantRunGroup,
+    materialize_messages,
+    run_assistant_groups,
+    run_matchup,
+)
 
 
 def _spec(
@@ -380,6 +388,29 @@ def test_empty_yaml_cache_is_empty(tmp_path: Path) -> None:
     assert YamlMessageCache(path).load() == ()
 
 
+def test_batched_trace_parser_reuses_equal_setups_and_validates_lengths() -> None:
+    matchup = _matchup(_spec("System.", Channel.SYSTEM), _spec("User.", Channel.USER))
+    generated = tuple(
+        GeneratedMessage(spec, GeneratedText.parse(str(spec.instruction)), None)
+        for spec in matchup.inputs
+    )
+    setup = construct_conversation(matchup, generated)
+    traces = (
+        ConversationTrace(setup, _chat("first", "first")),
+        ConversationTrace(setup, _chat("second", "second")),
+    )
+
+    parsed = traces_from_dicts(
+        tuple(trace_to_dict(trace) for trace in traces),
+        (matchup, matchup),
+    )
+
+    assert parsed == traces
+    assert parsed[0].setup is parsed[1].setup
+    with pytest.raises(ValueError, match="equal lengths"):
+        traces_from_dicts((trace_to_dict(traces[0]),), ())
+
+
 def test_materialize_messages_deduplicates_repeated_inputs(
     tmp_path: Path,
 ) -> None:
@@ -548,6 +579,284 @@ def test_run_matchup_executes_local_tool_calls_and_preserves_every_step(tmp_path
         "tool_call_id": "live-call",
         "content": "Repository instruction.",
     }
+
+
+class PipelinedToolTransport:
+    def __init__(self) -> None:
+        self.fast_followup_started = Event()
+
+    def post_json(self, path: str, body: JsonObject) -> JsonObject:
+        model = body["model"]
+        if model == "example/slow":
+            if not self.fast_followup_started.wait(timeout=1.0):
+                raise AssertionError("slow response blocked the fast tool continuation")
+            return _chat("slow final", "slow-final")
+        if body["messages"][-1]["role"] == "tool":
+            self.fast_followup_started.set()
+            return _chat("fast final", "fast-final")
+        return _tool_chat()
+
+    def get_json(self, path: str) -> JsonObject:
+        raise AssertionError(f"unexpected GET {path}")
+
+
+def test_assistant_tool_continuation_does_not_wait_for_slow_peer() -> None:
+    matchup = _matchup(
+        _spec("Repository instruction.", Channel.README),
+        _spec("User request.", Channel.USER),
+    )
+    generated = tuple(
+        GeneratedMessage(spec, GeneratedText.parse(str(spec.instruction)), None)
+        for spec in matchup.inputs
+    )
+    setup = construct_conversation(matchup, generated)
+    transport = PipelinedToolTransport()
+
+    traces = run_assistant_groups(
+        (
+            AssistantRunGroup(
+                ModelRoute(OpenRouterModelId.parse("example/fast"), None),
+                (setup,),
+            ),
+            AssistantRunGroup(
+                ModelRoute(OpenRouterModelId.parse("example/slow"), None),
+                (setup,),
+            ),
+        ),
+        OpenRouterClient(transport, sync_workers=2),
+    )
+
+    assert transport.fast_followup_started.is_set()
+    assert traces[0][0].response["id"] == "fast-final"
+    assert len(traces[0][0].tool_steps) == 1
+    assert traces[1][0].response["id"] == "slow-final"
+    assert traces[1][0].tool_steps == ()
+
+
+class PriorityAdmissionTransport:
+    def __init__(self) -> None:
+        self.continuation_started = Event()
+
+    def post_json(self, path: str, body: JsonObject) -> JsonObject:
+        if body["messages"][-1]["role"] == "tool":
+            self.continuation_started.set()
+            return _chat("tool complete", "priority-final")
+        user_content = next(
+            message["content"] for message in body["messages"] if message["role"] == "user"
+        )
+        if user_content == "tool-target":
+            return _tool_chat()
+        if not self.continuation_started.wait(timeout=1.0):
+            raise AssertionError("queued initial requests starved the ready continuation")
+        return _chat("blocker complete", f"final-{user_content}")
+
+    def get_json(self, path: str) -> JsonObject:
+        raise AssertionError(f"unexpected GET {path}")
+
+
+def _setup_with_user_content(content: str) -> ConversationSetup:
+    matchup = _matchup(
+        _spec("Repository instruction.", Channel.README),
+        _spec(content, Channel.USER),
+    )
+    generated = tuple(
+        GeneratedMessage(spec, GeneratedText.parse(str(spec.instruction)), None)
+        for spec in matchup.inputs
+    )
+    return construct_conversation(matchup, generated)
+
+
+def test_ready_tool_continuation_precedes_queued_initial_requests() -> None:
+    transport = PriorityAdmissionTransport()
+    setups = tuple(
+        _setup_with_user_content(content)
+        for content in ("tool-target", "blocker-1", "blocker-2")
+    )
+
+    traces = run_assistant_groups(
+        (
+            AssistantRunGroup(
+                ModelRoute(OpenRouterModelId.parse("example/priority"), None),
+                setups,
+            ),
+        ),
+        OpenRouterClient(transport, sync_workers=2),
+    )[0]
+
+    assert transport.continuation_started.is_set()
+    assert [trace.response["id"] for trace in traces] == [
+        "priority-final",
+        "final-blocker-1",
+        "final-blocker-2",
+    ]
+    assert [len(trace.tool_steps) for trace in traces] == [1, 0, 0]
+
+
+class FairGroupAdmissionTransport:
+    def __init__(self) -> None:
+        self.later_group_started = Event()
+
+    def post_json(self, path: str, body: JsonObject) -> JsonObject:
+        if body["model"] == "example/later":
+            self.later_group_started.set()
+            return _chat("later complete", "later-final")
+        if not self.later_group_started.wait(timeout=1.0):
+            raise AssertionError("the first model group starved a later model group")
+        return _chat("bulk complete", "bulk-final")
+
+    def get_json(self, path: str) -> JsonObject:
+        raise AssertionError(f"unexpected GET {path}")
+
+
+def test_initial_requests_are_admitted_round_robin_across_model_groups() -> None:
+    transport = FairGroupAdmissionTransport()
+    setup = _setup_with_user_content("request")
+
+    traces = run_assistant_groups(
+        (
+            AssistantRunGroup(
+                ModelRoute(OpenRouterModelId.parse("example/bulk"), None),
+                (setup, setup, setup),
+            ),
+            AssistantRunGroup(
+                ModelRoute(OpenRouterModelId.parse("example/later"), None),
+                (setup,),
+            ),
+        ),
+        OpenRouterClient(transport, sync_workers=2),
+    )
+
+    assert transport.later_group_started.is_set()
+    assert [[trace.response["id"] for trace in group] for group in traces] == [
+        ["bulk-final", "bulk-final", "bulk-final"],
+        ["later-final"],
+    ]
+
+
+class TrackingToolRuntime:
+    constructed = 0
+    assignments = 0
+    active = 0
+    peak_active = 0
+    exited = 0
+    executions: dict[int, int] = {}
+
+    def __init__(self, readme_contents: tuple[GeneratedText, ...]) -> None:
+        self.runtime_id = type(self).constructed
+        type(self).constructed += 1
+        self._assign()
+
+    def _assign(self) -> None:
+        self.assignment_id = type(self).assignments
+        type(self).assignments += 1
+        type(self).executions[self.assignment_id] = 0
+
+    def __enter__(self) -> TrackingToolRuntime:
+        type(self).active += 1
+        type(self).peak_active = max(type(self).peak_active, type(self).active)
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        type(self).active -= 1
+        type(self).exited += 1
+
+    def execute(self, call: ToolCall) -> ToolResult:
+        type(self).executions[self.assignment_id] += 1
+        return ToolResult(call.call_id, GeneratedText.parse(f"runtime-{self.runtime_id}"))
+
+    def reset(self, readme_contents: tuple[GeneratedText, ...]) -> None:
+        self._assign()
+
+    @classmethod
+    def reset_counters(cls) -> None:
+        cls.constructed = cls.assignments = cls.active = cls.peak_active = cls.exited = 0
+        cls.executions = {}
+
+
+class RuntimeLifecycleTransport:
+    def __init__(self) -> None:
+        self.request_counts: dict[str, int] = {}
+
+    def post_json(self, path: str, body: JsonObject) -> JsonObject:
+        content = next(
+            message["content"] for message in body["messages"] if message["role"] == "user"
+        )
+        count = self.request_counts.get(content, 0)
+        self.request_counts[content] = count + 1
+        if content == "direct" or count == 2:
+            return _chat(f"final {content}", f"final-{content}")
+        return _tool_chat()
+
+    def get_json(self, path: str) -> JsonObject:
+        raise AssertionError(f"unexpected GET {path}")
+
+
+def test_tool_runtimes_are_lazy_reused_and_bounded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    TrackingToolRuntime.reset_counters()
+    monkeypatch.setattr("reasonese.runner.ToolRuntime", TrackingToolRuntime)
+    setups = tuple(
+        _setup_with_user_content(content)
+        for content in ("tool-1", "direct", "tool-2", "tool-3", "tool-4")
+    )
+
+    traces = run_assistant_groups(
+        (
+            AssistantRunGroup(
+                ModelRoute(OpenRouterModelId.parse("example/runtime"), None),
+                setups,
+            ),
+        ),
+        OpenRouterClient(RuntimeLifecycleTransport(), sync_workers=2),
+    )[0]
+
+    assert [trace.response["id"] for trace in traces] == [
+        "final-tool-1",
+        "final-direct",
+        "final-tool-2",
+        "final-tool-3",
+        "final-tool-4",
+    ]
+    assert TrackingToolRuntime.constructed <= 2
+    assert TrackingToolRuntime.assignments == 4
+    assert TrackingToolRuntime.peak_active <= 2
+    assert TrackingToolRuntime.active == 0
+    assert TrackingToolRuntime.exited == TrackingToolRuntime.constructed
+    assert sorted(TrackingToolRuntime.executions.values()) == [2, 2, 2, 2]
+
+
+class FailingToolContinuationTransport:
+    def post_json(self, path: str, body: JsonObject) -> JsonObject:
+        if body["messages"][-1]["role"] == "tool":
+            raise RuntimeError("continuation failed")
+        return _tool_chat()
+
+    def get_json(self, path: str) -> JsonObject:
+        raise AssertionError(f"unexpected GET {path}")
+
+
+def test_tool_runtime_closes_when_a_continuation_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    TrackingToolRuntime.reset_counters()
+    monkeypatch.setattr("reasonese.runner.ToolRuntime", TrackingToolRuntime)
+
+    with pytest.raises(RuntimeError, match="continuation failed"):
+        run_assistant_groups(
+            (
+                AssistantRunGroup(
+                    ModelRoute(OpenRouterModelId.parse("example/runtime"), None),
+                    (_setup_with_user_content("tool"),),
+                ),
+            ),
+            OpenRouterClient(FailingToolContinuationTransport(), sync_workers=1),
+        )
+
+    assert TrackingToolRuntime.constructed == 1
+    assert TrackingToolRuntime.assignments == 1
+    assert TrackingToolRuntime.active == 0
+    assert TrackingToolRuntime.exited == 1
 
 
 def test_run_matchup_fails_when_assistant_exceeds_local_tool_step_limit(

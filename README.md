@@ -37,6 +37,12 @@ uv run reasonese-plan \
   --instructions configs/example_instructions.toml \
   --output out/example/prompt_specs.jsonl
 
+uv run reasonese-sample-studies \
+  --instructions configs/example_instructions.toml \
+  --pairings-per-assistant 250 \
+  --seed 0 \
+  --output out/example/studies.yaml
+
 export OPENROUTER_API_KEY=...
 uv run reasonese-curate-instructions --output out/instructions
 
@@ -60,6 +66,11 @@ uv run reasonese-collect-data \
   --user-messages prompts/user \
   --output out/example-study
 
+uv run reasonese-collect-studies \
+  --suite out/example/studies.yaml \
+  --user-messages prompts/user \
+  --output out/example-suite
+
 uv run reasonese-analyze \
   --observations out/example-study/observations.jsonl \
   --output out/example-study/analysis
@@ -69,9 +80,10 @@ The utilities have separate entry points. `reasonese-axes` prints the values and
 `reasonese-plan` writes four-axis datapoints. `reasonese-run-conversation` loads a `Matchup`,
 generates any missing model-authored messages, constructs the ordered conversation, and sends
 it to the selected assistant with file-read, sandboxed bash, sandboxed Python, and web-search
-tools. It uses OpenRouter batch variants for author groups that support them; `--no-batch`
-forces synchronous authoring requests. Bash and Python execution require `bubblewrap` (`bwrap`)
-on the host.
+tools. It submits independent model-author batch jobs before polling them together, so one
+author model's queue does not block another author's submission. `--no-batch` forces
+synchronous authoring requests. Bash and Python execution require `bubblewrap` (`bwrap`) on the
+host.
 
 A matchup contains one assistant plus an ordered pair of inputs, at least one of which must use
 the explicit `user message` channel. Repeated channels are valid. Generated
@@ -86,6 +98,8 @@ exact base text in `instruction.txt` plus one text file for each framing. The ch
 files are explicit `TODO:` placeholders; replace the variants you plan to run. A selected
 placeholder or incomplete instruction directory fails before inference. Editing a manual variant
 invalidates cached text and traces that contain its previous contents.
+The collector reads the needed variants into one immutable snapshot per invocation, avoiding
+repeated directory scans while ensuring edits are picked up on the next run.
 
 Before a new conversation is sent to its experimental assistant, `openai/gpt-5.6-luna:batch`
 independently checks every exact materialized message against the same authoring instructions
@@ -103,11 +117,62 @@ are cached in YAML against a fingerprint of the exact conversation trace.
 `reasonese-collect-data` treats each four-axis datapoint plus the chosen assistant as one cell.
 It requires exactly two distinct inputs, runs both input orderings, and collects one or more
 rollouts per ordering. With `r` rollouts, the design has `2r` trials; every cell receives `2r`
-verdicts and appears `r` times at each position. The
-collector batches uncached assistant work round-by-round (including function-tool
-continuations) and batches judge work where supported, resumes from per-rollout caches, and
-writes flat analysis-ready rows to `observations.jsonl`. The same manual-message hierarchy and
-message-QA gate apply to user-authored study inputs.
+verdicts and appears `r` times at each position. The collector runs uncached assistant work
+through eight-worker, completion-driven concurrency by default: as soon as one response requests a local tool,
+its continuation is submitted without waiting for slower peer responses. It batches judge work,
+resumes from per-rollout caches, and writes flat analysis-ready rows to `observations.jsonl`.
+Initial requests are admitted round-robin across assistant models, and ready tool continuations
+receive freed worker slots before fresh requests, so a large group cannot monopolize the queue.
+Assistant requests retain the
+OpenRouter web-search tool and therefore use the synchronous API because OpenRouter does not
+support that server tool in batch jobs. Definite HTTP 429 responses are retried a bounded number
+of times using the provider's `Retry-After` delay when present. The same manual-message hierarchy
+and message-QA gate apply to user-authored study inputs.
+
+High-volume collector traces and judgments are JSON payloads in SQLite while retaining complete
+raw provider responses. A standalone study or repeated `--study` input keeps one
+`collection.sqlite3` per study. A sampled `--suite` instead uses one shared database at the suite
+root, avoiding tens of thousands of duplicate database files and reducing each collection stage
+to one cache read and transaction. Trace fingerprints are derived once and reused through
+judgment and batched observation construction; the standalone one-conversation utilities keep
+their readable YAML caches.
+Study trials likewise share their two validated ordered matchups, which cache readers reuse while
+checking the redundant serialized coordinates for equality.
+
+`reasonese-collect-studies` accepts repeated `--study` paths and batches work across those study
+boundaries. It shares generated-message and message-QA caches at the output root, combines all
+active assistant models and trials into one completion-driven scheduler, and submits all
+uncached response judgments together. Each study keeps its own directory of traces, judgments,
+and observations, named after the study file's stem. Study filenames must therefore have
+distinct stems.
+
+`reasonese-sample-studies` avoids exhaustive condition pairing. It writes one YAML suite with a
+seeded sample of valid unordered cell pairs, then replicates that exact comparison design across
+the selected assistants. The default is 20,000 pairs per assistant, capped by the eligible
+population and raised if a larger design is needed to connect every cell. An explicit
+`--pairings-per-assistant` overrides it. The sampler gives exact proportional quotas to strata
+defined by the channel pair and the set of instruction, framing, channel, and author axes that
+differ. Within each stratum it selects from a seeded random candidate pool while preferring cells
+with lower channel-normalized degree. Both input orders and all requested rollouts are still collected.
+The requested pair count must therefore be at least `number of cells - 1` and cannot exceed the
+valid population. After sampling, a connectivity check replaces exactly `components - 1`
+redundant cycle edges with cross-component edges if needed, which is the minimum possible repair.
+It prefers same-stratum replacements to retain the proportional allocation.
+
+With all axes enabled, 20 instructions produce 1,800 cells and 899,700 eligible pairs per
+assistant. The minimum connected design uses 1,799 of those pairs per assistant, about 500 times
+fewer than exhaustive pairing.
+
+By default the sampler includes every author and assistant. Repeated `--author` and
+`--assistant` options restrict those sets—for example, omitting the `user` author avoids selecting
+manual variants that have not been written yet. `reasonese-collect-studies --suite` consumes the
+artifact directly, uses study fingerprints for resumable subdirectories, and writes the combined
+analysis input to `observations.jsonl` at the suite root.
+
+The design preserves the eligible population's stratum composition rather than weighting rare
+strata equally. Degree-aware selection also means individual edges do not have uniform inclusion
+probabilities. These choices and any connectivity repairs should be considered before treating
+marginal axis summaries as confirmatory estimates.
 
 `reasonese-analyze` fits an L2-penalized Bradley–Terry ordering from each trial's cell pair.
 A completed cell beats an incomplete one; equal verdicts contribute half-wins. It also

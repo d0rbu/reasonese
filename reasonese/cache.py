@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -104,19 +105,43 @@ class YamlMessageCache:
         )
 
 
-def _trace_from_dict(raw: object) -> ConversationTrace:
+def trace_from_dict(
+    raw: object,
+    expected_matchup: Matchup | None = None,
+) -> ConversationTrace:
+    """Parse one trace without retaining setup state across calls."""
+    return _trace_from_dict(raw, expected_matchup, {})
+
+
+def _trace_from_dict(
+    raw: object,
+    expected_matchup: Matchup | None,
+    setups: dict[tuple[Matchup, str], ConversationSetup],
+) -> ConversationTrace:
     if not isinstance(raw, dict):
         raise ValueError("cached trace must be a mapping")
     data = cast(dict[str, Any], raw)
     if set(data) != {"matchup", "conversation", "tool_steps", "response"}:
         raise ValueError("cached trace has invalid fields")
-    matchup = matchup_from_dict(data["matchup"])
+    if expected_matchup is None:
+        matchup = matchup_from_dict(data["matchup"])
+    else:
+        if data["matchup"] != matchup_to_dict(expected_matchup):
+            raise ValueError("cached trace matchup does not match expected trial")
+        matchup = expected_matchup
     raw_messages = data["conversation"]
     if not isinstance(raw_messages, list):
         raise ValueError("cached conversation must be a list")
-    messages: list[ChatMessage] = []
-    for raw_message in raw_messages:
-        messages.append(_chat_message_from_dict(raw_message))
+    setup_key = (
+        matchup,
+        json.dumps(raw_messages, sort_keys=True, separators=(",", ":"), ensure_ascii=False),
+    )
+    setup = setups.get(setup_key)
+    messages: tuple[ChatMessage, ...] | None = None
+    if setup is None:
+        messages = tuple(
+            _chat_message_from_dict(raw_message) for raw_message in raw_messages
+        )
     raw_steps = data["tool_steps"]
     if not isinstance(raw_steps, list):
         raise ValueError("cached tool_steps must be a list")
@@ -124,7 +149,26 @@ def _trace_from_dict(raw: object) -> ConversationTrace:
     response = _response(data["response"])
     if response is None:
         raise ValueError("cached trace response must not be null")
-    return ConversationTrace(ConversationSetup(matchup, tuple(messages)), response, steps)
+    if setup is None:
+        assert messages is not None
+        setup = ConversationSetup(matchup, messages)
+        setups[setup_key] = setup
+    return ConversationTrace(setup, response, steps)
+
+
+@beartype
+def traces_from_dicts(
+    raws: tuple[object, ...],
+    expected_matchups: tuple[Matchup, ...],
+) -> tuple[ConversationTrace, ...]:
+    """Parse aligned traces while reusing each distinct validated conversation setup."""
+    if len(raws) != len(expected_matchups):
+        raise ValueError("cached traces and expected matchups must have equal lengths")
+    setups: dict[tuple[Matchup, str], ConversationSetup] = {}
+    return tuple(
+        _trace_from_dict(raw, matchup, setups)
+        for raw, matchup in zip(raws, expected_matchups, strict=True)
+    )
 
 
 def _tool_call_from_dict(raw: object) -> ToolCall:
@@ -212,7 +256,7 @@ def _tool_step_from_dict(raw: object) -> ToolStep:
 
 
 @beartype
-def _trace_to_dict(trace: ConversationTrace) -> dict[str, object]:
+def trace_to_dict(trace: ConversationTrace) -> dict[str, object]:
     return {
         "matchup": matchup_to_dict(trace.setup.matchup),
         "conversation": [message.openrouter_dict() for message in trace.setup.messages],
@@ -235,7 +279,7 @@ class YamlTraceCache:
     path: Path
 
     def load(self) -> tuple[ConversationTrace, ...]:
-        return tuple(_trace_from_dict(raw) for raw in _load_list(self.path, "traces"))
+        return tuple(trace_from_dict(raw) for raw in _load_list(self.path, "traces"))
 
     def get(self, matchup: Matchup) -> ConversationTrace | None:
         return next((trace for trace in self.load() if trace.setup.matchup == matchup), None)
@@ -246,5 +290,5 @@ class YamlTraceCache:
         _write_list(
             self.path,
             "traces",
-            [_trace_to_dict(cached) for cached in by_matchup.values()],
+            [trace_to_dict(cached) for cached in by_matchup.values()],
         )

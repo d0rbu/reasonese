@@ -80,6 +80,21 @@ class Trial:
     rollout: PositiveInteger
 
 
+def _trial_from_validated(
+    trial_id: TrialId,
+    matchup: Matchup,
+    permutation: PositiveInteger,
+    rollout: PositiveInteger,
+) -> Trial:
+    """Construct one trial after the study and generated coordinates were validated."""
+    trial = object.__new__(Trial)
+    object.__setattr__(trial, "trial_id", trial_id)
+    object.__setattr__(trial, "matchup", matchup)
+    object.__setattr__(trial, "permutation", permutation)
+    object.__setattr__(trial, "rollout", rollout)
+    return trial
+
+
 @beartype
 def make_study(
     inputs: tuple[PromptSpec, ...],
@@ -146,18 +161,23 @@ def build_trials(study: Study) -> tuple[Trial, ...]:
     prefix = study_fingerprint(study)
     trials: list[Trial] = []
     first, second = study.inputs
-    for permutation_index, ordered_inputs in enumerate(
-        ((first, second), (second, first)), start=1
+    matchups = (
+        make_matchup((first, second), study.assistant),
+        make_matchup((second, first), study.assistant),
+    )
+    for permutation_index, matchup in enumerate(
+        matchups, start=1
     ):
+        permutation = cast(PositiveInteger, permutation_index)
         for rollout_index in range(1, int(study.rollouts_per_permutation) + 1):
-            permutation = PositiveInteger.parse(permutation_index)
-            rollout = PositiveInteger.parse(rollout_index)
+            rollout = cast(PositiveInteger, rollout_index)
             trials.append(
-                Trial(
-                    TrialId.parse(
+                _trial_from_validated(
+                    cast(
+                        TrialId,
                         f"{prefix}-permutation-{permutation_index:06d}-rollout-{rollout_index:04d}"
                     ),
-                    make_matchup(ordered_inputs, study.assistant),
+                    matchup,
                     permutation,
                     rollout,
                 )

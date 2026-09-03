@@ -21,7 +21,9 @@ This foundation specifies:
 - how generated messages and raw responses are cached; and
 - how one strict completion boolean is collected for each instruction; and
 - how both orderings and repeated rollouts become analysis-ready observation rows; and
-- how rankings, axis contrasts, order effects, and design diagnostics are reported.
+- how rankings, axis contrasts, order effects, and design diagnostics are reported; and
+- how an exhaustive pairing population can be replaced by a seeded axis-stratified,
+  degree-aware connected design that still covers every selected cell and counterbalances order.
 
 ## Deferred decisions
 
@@ -38,5 +40,7 @@ sample sizes and study topology are known.
 - How should model revisions and provider routing be recorded alongside stable display names?
 - How much does synthetic file-read history itself influence channel comparisons?
 - How often do audited instruction pairs still produce both-completed or neither-completed trials?
+- Should future designs weight rare axis-difference strata more heavily than their prevalence in
+  the eligible pairing population?
 
 Those questions should be resolved before interpreting future model behavior.

@@ -110,6 +110,30 @@ def test_manual_library_matches_cached_setup_and_detects_edits(tmp_path: Path) -
     assert library.matches(setup) is False
 
 
+def test_manual_snapshot_is_stable_but_next_snapshot_detects_edits(tmp_path: Path) -> None:
+    directory = _write_instruction(
+        tmp_path,
+        variants={Framing.NORMAL: "Snapshot request."},
+    )
+    spec = _spec()
+    library = ManualMessageLibrary(tmp_path)
+    snapshot = library.snapshot((spec,))
+
+    (directory / "normal.txt").write_text("Changed after snapshot.")
+
+    assert snapshot.message_for(spec) == "Snapshot request."
+    assert library.snapshot((spec,)).message_for(spec) == "Changed after snapshot."
+
+
+def test_model_only_snapshot_does_not_require_manual_directory(tmp_path: Path) -> None:
+    spec = _spec(author=Author.INKLING)
+    snapshot = ManualMessageLibrary(tmp_path / "missing").snapshot((spec,))
+
+    assert not snapshot.variants
+    with pytest.raises(ValueError, match="only defined for the user"):
+        snapshot.message_for(spec)
+
+
 def test_repository_contains_placeholder_tree_for_every_example_instruction() -> None:
     root = Path("prompts/user")
     directories = tuple(path for path in root.iterdir() if path.is_dir())
