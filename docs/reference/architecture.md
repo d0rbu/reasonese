@@ -12,8 +12,8 @@ instruction strings -> Cartesian product -> four-field JSONL
 - `reasonese.io` writes those dataclasses as JSONL.
 - `reasonese.show_axes` prints the axis values.
 - `reasonese.plan` parses paths and writes the planned combinations.
-- `reasonese.sampling` selects a seeded connected subset of valid cell pairs without
-  materializing the exhaustive edge population.
+- `reasonese.sampling` selects a seeded, axis-stratified, degree-aware subset of valid cell pairs
+  without materializing the exhaustive edge population.
 - `reasonese.sample_studies` writes the selected pairs, replicated across assistants, as one
   study-suite YAML artifact.
 
@@ -108,12 +108,18 @@ study -> both input orderings x rollouts -> traces -> judgments -> observation r
 Each rollout has its own trial-keyed trace and judgment row, so repeated identical responses do
 not collapse into one cache record. Generated instructions remain shared across the study.
 
-The sparse planner first connects all user-channel cells in a randomized chain and attaches every
-other cell to a user-channel cell. This `n - 1` edge backbone covers all cells and connects the
-comparison graph. It samples any requested additional valid edges without replacement using
-integer edge ranks, so planning memory scales with the sample rather than the exhaustive
-population. The selected input-edge set is shared across assistants; assistant models remain
-separate comparison components.
+The sparse planner streams over the eligible population to count strata defined by channel pair
+and the set of axes that differ. Largest-remainder allocation turns those counts into exact
+proportional sample quotas. A second streaming pass uses reservoir sampling to build a seeded
+candidate pool of at most three times each quota, and power-of-eight choices prefer endpoints
+with lower degree relative to their channel's target. Planning memory therefore scales with the
+requested sample rather than the exhaustive edge population.
+
+The planner then checks the sampled comparison graph. If it has `k` components, it swaps exactly
+`k - 1` redundant cycle edges for valid cross-component bridges, preferring removals in the same
+stratum. This is the minimum number of replacements that can connect `k` components while
+preserving the requested edge count. The selected edge set is shared across assistants;
+assistant models remain separate comparison components.
 
 The analysis flow is:
 

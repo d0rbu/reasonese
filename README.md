@@ -148,12 +148,14 @@ distinct stems.
 seeded sample of valid unordered cell pairs, then replicates that exact comparison design across
 the selected assistants. The default is 20,000 pairs per assistant, capped by the eligible
 population and raised if a larger design is needed to connect every cell. An explicit
-`--pairings-per-assistant` overrides it. Every cell participates, and a connected backbone makes each
-assistant's Bradley–Terry ranking identifiable before regularization. Additional edges are
-sampled without replacement; both input orders and all requested rollouts are still collected.
+`--pairings-per-assistant` overrides it. The sampler gives exact proportional quotas to strata
+defined by the channel pair and the set of instruction, framing, channel, and author axes that
+differ. Within each stratum it selects from a seeded random candidate pool while preferring cells
+with lower channel-normalized degree. Both input orders and all requested rollouts are still collected.
 The requested pair count must therefore be at least `number of cells - 1` and cannot exceed the
-valid population. The connected backbone means this is a randomized sparse experimental design,
-not a uniform probability sample of exhaustive edges.
+valid population. After sampling, a connectivity check replaces exactly `components - 1`
+redundant cycle edges with cross-component edges if needed, which is the minimum possible repair.
+It prefers same-stratum replacements to retain the proportional allocation.
 
 With all axes enabled, 20 instructions produce 1,800 cells and 899,700 eligible pairs per
 assistant. The minimum connected design uses 1,799 of those pairs per assistant, about 500 times
@@ -165,9 +167,10 @@ manual variants that have not been written yet. `reasonese-collect-studies --sui
 artifact directly, uses study fingerprints for resumable subdirectories, and writes the combined
 analysis input to `observations.jsonl` at the suite root.
 
-The current sampler prioritizes coverage and connectivity. It does not equalize cell degrees or
-stratify sampled edges across axis combinations, so those are design improvements to consider
-before treating marginal axis summaries as confirmatory estimates.
+The design preserves the eligible population's stratum composition rather than weighting rare
+strata equally. Degree-aware selection also means individual edges do not have uniform inclusion
+probabilities. These choices and any connectivity repairs should be considered before treating
+marginal axis summaries as confirmatory estimates.
 
 `reasonese-analyze` fits an L2-penalized Bradley–Terry ordering from each trial's cell pair.
 A completed cell beats an incomplete one; equal verdicts contribute half-wins. It also

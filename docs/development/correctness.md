@@ -31,6 +31,10 @@
 - Both input orderings receive the same positive number of rollouts.
 - Every cell has `2r` observations and `r` observations at each position.
 - Each rollout has a separate trace cache; repeated responses cannot collapse into one record.
+- Sparse pairing quotas are proportional to exact channel-pair and axis-difference stratum
+  populations before any required connectivity repair.
+- Sparse selection is without replacement, balances degree within channel, and repairs `k`
+  sampled components with exactly `k - 1` edge swaps.
 - Sampled suites use one root SQLite cache, require globally distinct trial IDs, and preserve the
   same requests, cache validation, judgments, and observations as per-study caches.
 - Observation rows preserve trial, permutation, rollout, one-based position, and trace identity.
