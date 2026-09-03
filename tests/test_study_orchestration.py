@@ -353,6 +353,20 @@ def test_sqlite_study_cache_batches_round_trips_and_replaces(tmp_path: Path) -> 
     cache.put_judgments(())
 
 
+def test_sqlite_trace_cache_reuses_setups_across_rollouts(tmp_path: Path) -> None:
+    study = _study(2)
+    trials = build_trials(study)
+    traces = tuple(_trace_for_trial(study, index) for index in range(len(trials)))
+    cache = SqliteStudyCache(tmp_path / "collection.sqlite3")
+    cache.put_traces(tuple(zip((trial.trial_id for trial in trials), traces, strict=True)))
+
+    loaded = cache.load_traces(trials)
+
+    assert loaded[trials[0].trial_id].setup is loaded[trials[1].trial_id].setup
+    assert loaded[trials[2].trial_id].setup is loaded[trials[3].trial_id].setup
+    assert loaded[trials[0].trial_id].setup is not loaded[trials[2].trial_id].setup
+
+
 @pytest.mark.parametrize(
     ("table", "payload", "error"),
     [

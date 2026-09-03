@@ -8,7 +8,7 @@ import pytest
 import yaml
 
 from reasonese.axes import Assistant, Author, Channel, Framing, Instruction
-from reasonese.cache import YamlMessageCache, YamlTraceCache
+from reasonese.cache import YamlMessageCache, YamlTraceCache, trace_to_dict, traces_from_dicts
 from reasonese.conversation import (
     ConversationSetup,
     ConversationTrace,
@@ -386,6 +386,29 @@ def test_empty_yaml_cache_is_empty(tmp_path: Path) -> None:
     path = tmp_path / "empty.yaml"
     path.write_text("null\n")
     assert YamlMessageCache(path).load() == ()
+
+
+def test_batched_trace_parser_reuses_equal_setups_and_validates_lengths() -> None:
+    matchup = _matchup(_spec("System.", Channel.SYSTEM), _spec("User.", Channel.USER))
+    generated = tuple(
+        GeneratedMessage(spec, GeneratedText.parse(str(spec.instruction)), None)
+        for spec in matchup.inputs
+    )
+    setup = construct_conversation(matchup, generated)
+    traces = (
+        ConversationTrace(setup, _chat("first", "first")),
+        ConversationTrace(setup, _chat("second", "second")),
+    )
+
+    parsed = traces_from_dicts(
+        tuple(trace_to_dict(trace) for trace in traces),
+        (matchup, matchup),
+    )
+
+    assert parsed == traces
+    assert parsed[0].setup is parsed[1].setup
+    with pytest.raises(ValueError, match="equal lengths"):
+        traces_from_dicts((trace_to_dict(traces[0]),), ())
 
 
 def test_materialize_messages_deduplicates_repeated_inputs(
