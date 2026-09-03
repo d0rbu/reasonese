@@ -19,14 +19,13 @@ from reasonese.check_messages import audit_messages, require_compliant_messages
 from reasonese.config import load_study
 from reasonese.conversation import (
     ConversationSetup,
-    ConversationTrace,
     GeneratedMessage,
     construct_conversation,
 )
-from reasonese.judging import Judgment, judge_traces, trace_fingerprint
+from reasonese.judging import FingerprintedTrace, Judgment, judge_fingerprinted_traces
 from reasonese.manual_messages import ManualMessageLibrary, ManualMessageSnapshot
 from reasonese.message_qa_cache import YamlMessageQaCache
-from reasonese.observations import Observation, observations_from_trial, write_observations
+from reasonese.observations import Observation, observations_from_trials, write_observations
 from reasonese.openrouter import OpenRouterClient, RequestsTransport, model_route
 from reasonese.planning import PromptSpec
 from reasonese.runner import AssistantRunGroup, materialize_specs, run_assistant_groups
@@ -50,7 +49,7 @@ class _CollectionState:
     task: CollectionTask
     cache: SqliteStudyCache
     trials: tuple[Trial, ...]
-    traces: dict[str, ConversationTrace]
+    traces: dict[str, FingerprintedTrace]
     missing_trials: list[Trial]
     trace_hits: int
     judgments: dict[str, Judgment]
@@ -76,7 +75,7 @@ def _prepare_task(task: CollectionTask, manual_messages: ManualMessageSnapshot) 
 
     cache = SqliteStudyCache(task.output_dir / "collection.sqlite3")
     cached_traces = cache.load_traces()
-    traces: dict[str, ConversationTrace] = {}
+    traces: dict[str, FingerprintedTrace] = {}
     missing_trials: list[Trial] = []
     trace_hits = 0
     for trial in trials:
@@ -88,13 +87,13 @@ def _prepare_task(task: CollectionTask, manual_messages: ManualMessageSnapshot) 
         ):
             missing_trials.append(trial)
         else:
-            traces[str(trial.trial_id)] = cached
+            traces[str(trial.trial_id)] = FingerprintedTrace(cached)
             trace_hits += 1
     return _CollectionState(task, cache, trials, traces, missing_trials, trace_hits, {}, 0)
 
 
 def _messages_from_cached_trace(state: _CollectionState) -> tuple[GeneratedMessage, ...]:
-    first_trace = state.traces[str(state.trials[0].trial_id)]
+    first_trace = state.traces[str(state.trials[0].trial_id)].trace
     content_by_spec = {
         spec: first_trace.setup.content_for_input(index)
         for index, spec in enumerate(first_trace.setup.matchup.inputs)
@@ -194,26 +193,25 @@ def collect_studies(
         )
         for (_, work), new_traces in zip(ordered_work, trace_groups, strict=True):
             for (state, trial, _), trace in zip(work, new_traces, strict=True):
-                state.traces[str(trial.trial_id)] = trace
+                state.traces[str(trial.trial_id)] = FingerprintedTrace(trace)
         for state in states:
             state.cache.put_traces(
                 tuple(
-                    (trial.trial_id, state.traces[str(trial.trial_id)])
+                    (trial.trial_id, state.traces[str(trial.trial_id)].trace)
                     for trial in state.missing_trials
                 )
             )
 
-    missing_judgments: list[tuple[int, Trial, ConversationTrace]] = []
+    missing_judgments: list[tuple[int, Trial, FingerprintedTrace]] = []
     for state_index, state in enumerate(states):
         cached_judgments = state.cache.load_judgments()
         for trial in state.trials:
             trace = state.traces[str(trial.trial_id)]
-            fingerprint = trace_fingerprint(trace)
             cached = cached_judgments.get(trial.trial_id)
             if (
                 cached is None
                 or cached.matchup != trial.matchup
-                or cached.trace_fingerprint != fingerprint
+                or cached.trace_fingerprint != trace.fingerprint
             ):
                 missing_judgments.append((state_index, trial, trace))
             else:
@@ -223,7 +221,7 @@ def collect_studies(
     if missing_judgments:
         if client is None:
             raise ValueError("OPENROUTER_API_KEY is required for uncached judgments")
-        new_judgments = judge_traces(
+        new_judgments = judge_fingerprinted_traces(
             tuple(trace for _, _, trace in missing_judgments),
             client,
         )
@@ -237,14 +235,10 @@ def collect_studies(
     results: list[CollectionResult] = []
     for state in states:
         traces = tuple(state.traces[str(trial.trial_id)] for trial in state.trials)
-        observations = tuple(
-            observation
-            for trial, trace in zip(state.trials, traces, strict=True)
-            for observation in observations_from_trial(
-                trial,
-                trace,
-                state.judgments[str(trial.trial_id)],
-            )
+        observations = observations_from_trials(
+            state.trials,
+            traces,
+            tuple(state.judgments[str(trial.trial_id)] for trial in state.trials),
         )
         write_observations(state.task.output_dir / "observations.jsonl", observations)
         results.append(

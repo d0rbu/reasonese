@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import html
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from beartype import beartype
 from phantom import Phantom
@@ -29,6 +29,18 @@ def _is_trace_fingerprint(value: str) -> bool:
 
 class TraceFingerprint(str, Phantom[str], predicate=_is_trace_fingerprint, bound=str):
     """SHA-256 of the exact matchup, delivered messages, and assistant response."""
+
+
+@beartype
+@dataclass(frozen=True, slots=True)
+class FingerprintedTrace:
+    """A conversation trace paired with its derived immutable cache fingerprint."""
+
+    trace: ConversationTrace
+    fingerprint: TraceFingerprint = field(init=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "fingerprint", trace_fingerprint(self.trace))
 
 
 @beartype
@@ -196,20 +208,29 @@ def judge_traces(
     traces: tuple[ConversationTrace, ...], client: OpenRouterClient
 ) -> tuple[Judgment, ...]:
     """Judge multiple traces in one flattened GPT-5.6 Luna batch."""
+    return judge_fingerprinted_traces(tuple(FingerprintedTrace(trace) for trace in traces), client)
+
+
+@beartype
+def judge_fingerprinted_traces(
+    traces: tuple[FingerprintedTrace, ...], client: OpenRouterClient
+) -> tuple[Judgment, ...]:
+    """Judge pre-fingerprinted traces in one flattened GPT-5.6 Luna batch."""
     if not traces:
         return ()
     responses = client.complete_many(
         JUDGE_ROUTE,
         tuple(
-            judge_request(trace, index)
-            for trace in traces
-            for index in range(len(trace.setup.matchup.inputs))
+            judge_request(item.trace, index)
+            for item in traces
+            for index in range(len(item.trace.setup.matchup.inputs))
         ),
         prefer_batch=True,
     )
     judgments: list[Judgment] = []
     response_index = 0
-    for trace in traces:
+    for item in traces:
+        trace = item.trace
         count = len(trace.setup.matchup.inputs)
         trace_responses = responses[response_index : response_index + count]
         response_index += count
@@ -219,5 +240,5 @@ def judge_traces(
                 for spec, response in zip(trace.setup.matchup.inputs, trace_responses, strict=True)
             )
         )
-        judgments.append(Judgment(trace.setup.matchup, trace_fingerprint(trace), verdicts))
+        judgments.append(Judgment(trace.setup.matchup, item.fingerprint, verdicts))
     return tuple(judgments)

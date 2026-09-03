@@ -67,7 +67,8 @@ conversation trace -> one batch item per input -> aligned boolean verdicts
 ```
 
 - `reasonese.judging` builds independent strict-JSON requests for GPT-5.6 Luna batch, parses
-  exact booleans, and binds the verdict tuple to the matchup's input order.
+  exact booleans, and binds the verdict tuple to the matchup's input order. Its
+  `FingerprintedTrace` derives the trace fingerprint once for reuse across collection stages.
 - `reasonese.judgment_cache` keys judgments by matchup and a SHA-256 fingerprint of the exact
   delivered conversation and assistant response.
 - `reasonese.judge_responses` is the standalone cache-aware judging utility.
@@ -93,7 +94,8 @@ study -> both input orderings x rollouts -> traces -> judgments -> observation r
   study boundaries.
 - `reasonese.study_cache` loads study traces and judgments with one SQLite query per table and
   writes each completed stage in one transaction, keyed by stable trial ID.
-- `reasonese.observations` joins traces and judgments into one flat row per cell and trial.
+- `reasonese.observations` batch-joins traces and judgments into flat rows, reusing cell IDs
+  across every rollout of the same cell.
 
 Each rollout has its own trial-keyed trace and judgment row, so repeated identical responses do
 not collapse into one cache record. Generated instructions remain shared across the study.
