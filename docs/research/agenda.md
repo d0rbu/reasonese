@@ -38,5 +38,7 @@ sample sizes and study topology are known.
 - How well do message-QA verdicts agree with blinded human semantic-equivalence ratings?
 - How should model revisions and provider routing be recorded alongside stable display names?
 - How much does synthetic file-read history itself influence channel comparisons?
+- Should sparse pair selection balance cell degrees or stratify instruction and axis contrasts,
+  rather than use the current connected-backbone plus uniform-extra-edge design?
 
 Those questions should be resolved before interpreting future model behavior.

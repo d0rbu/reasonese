@@ -12,6 +12,8 @@ from reasonese.axes import Assistant, Channel
 from reasonese.planning import PromptSpec
 from reasonese.study import PositiveInteger, Study, StudyInputs, make_study
 
+DEFAULT_PAIRINGS_PER_ASSISTANT = 20_000
+
 
 def _spec_key(spec: PromptSpec) -> tuple[str, str, str, str]:
     return (
@@ -53,6 +55,16 @@ def minimum_connected_pairings(specs: tuple[PromptSpec, ...]) -> PositiveInteger
     """Return the fewest edges that can cover and connect every specification."""
     _partition_specs(specs)
     return PositiveInteger.parse(len(specs) - 1)
+
+
+@beartype
+def default_pairing_count(specs: tuple[PromptSpec, ...]) -> PositiveInteger:
+    """Choose 20,000 pairs, capped by the population and raised for connectivity."""
+    population = int(pairing_population_size(specs))
+    minimum = int(minimum_connected_pairings(specs))
+    return PositiveInteger.parse(
+        min(population, max(DEFAULT_PAIRINGS_PER_ASSISTANT, minimum))
+    )
 
 
 def _user_pair_rank(first: int, second: int, user_count: int) -> int:

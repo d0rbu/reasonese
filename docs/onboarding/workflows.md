@@ -34,7 +34,8 @@ uv run reasonese-sample-studies \
 ```
 
 The command reports the exhaustive population and minimum connected sample before any provider
-work occurs. It includes all authors and assistants unless repeated `--author` or `--assistant`
+work occurs. Omitting `--pairings-per-assistant` selects 20,000 pairs, capped by the eligible
+population and raised when more edges are needed to connect all cells. It includes all authors and assistants unless repeated `--author` or `--assistant`
 filters are supplied. The sample always covers every selected cell, is connected within each
 assistant, and never includes a pair without a user-message input. A different seed changes the
 randomized backbone and extra edges; the same seed and inputs reproduce the same suite.

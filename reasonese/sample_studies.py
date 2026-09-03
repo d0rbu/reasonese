@@ -16,6 +16,7 @@ from reasonese.io import write_study_suite
 from reasonese.planning import build_prompt_specs
 from reasonese.sampling import (
     build_sampled_studies,
+    default_pairing_count,
     minimum_connected_pairings,
     pairing_population_size,
 )
@@ -35,7 +36,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="reasonese-sample-studies")
     parser.add_argument("--instructions", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--pairings-per-assistant", type=int, required=True)
+    parser.add_argument(
+        "--pairings-per-assistant",
+        type=int,
+        help="default: 20,000, capped by the eligible population",
+    )
     parser.add_argument("--rollouts-per-permutation", type=int, default=1)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--author", action="append", type=Author, choices=tuple(Author))
@@ -49,11 +54,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         specs = tuple(
             spec for spec in build_prompt_specs(instructions) if spec.author in authors
         )
-        pairings = PositiveInteger.parse(args.pairings_per_assistant)
         rollouts = PositiveInteger.parse(args.rollouts_per_permutation)
         seed = Natural.parse(args.seed)
         population = pairing_population_size(specs)
         minimum = minimum_connected_pairings(specs)
+        pairings = (
+            default_pairing_count(specs)
+            if args.pairings_per_assistant is None
+            else PositiveInteger.parse(args.pairings_per_assistant)
+        )
         studies = build_sampled_studies(specs, assistants, pairings, rollouts, seed)
         write_study_suite(args.output, studies)
     except (OSError, TypeError, ValueError) as error:

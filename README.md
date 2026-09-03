@@ -144,7 +144,9 @@ distinct stems.
 
 `reasonese-sample-studies` avoids exhaustive condition pairing. It writes one YAML suite with a
 seeded sample of valid unordered cell pairs, then replicates that exact comparison design across
-the selected assistants. Every cell participates, and a connected backbone makes each
+the selected assistants. The default is 20,000 pairs per assistant, capped by the eligible
+population and raised if a larger design is needed to connect every cell. An explicit
+`--pairings-per-assistant` overrides it. Every cell participates, and a connected backbone makes each
 assistant's Bradley–Terry ranking identifiable before regularization. Additional edges are
 sampled without replacement; both input orders and all requested rollouts are still collected.
 The requested pair count must therefore be at least `number of cells - 1` and cannot exceed the
@@ -160,6 +162,10 @@ By default the sampler includes every author and assistant. Repeated `--author` 
 manual variants that have not been written yet. `reasonese-collect-studies --suite` consumes the
 artifact directly, uses study fingerprints for resumable subdirectories, and writes the combined
 analysis input to `observations.jsonl` at the suite root.
+
+The current sampler prioritizes coverage and connectivity. It does not equalize cell degrees or
+stratify sampled edges across axis combinations, so those are design improvements to consider
+before treating marginal axis summaries as confirmatory estimates.
 
 `reasonese-analyze` fits an L2-penalized Bradley–Terry ordering from each trial's cell pair.
 A completed cell beats an incomplete one; equal verdicts contribute half-wins. It also

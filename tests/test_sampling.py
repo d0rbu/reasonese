@@ -14,6 +14,7 @@ from reasonese.planning import PromptSpec, build_prompt_specs
 from reasonese.sample_studies import main as sample_studies
 from reasonese.sampling import (
     build_sampled_studies,
+    default_pairing_count,
     minimum_connected_pairings,
     pairing_population_size,
     sample_study_inputs,
@@ -69,6 +70,16 @@ def test_twenty_instruction_design_size() -> None:
     assert len(specs) == 1_800
     assert pairing_population_size(specs) == 899_700
     assert minimum_connected_pairings(specs) == 1_799
+    assert default_pairing_count(specs) == 20_000
+
+
+def test_default_pairing_count_is_capped_and_preserves_connectivity() -> None:
+    assert default_pairing_count(_specs()) == pairing_population_size(_specs())
+
+    instructions = tuple(Instruction.parse(f"Task {index}.") for index in range(250))
+    specs = build_prompt_specs(instructions)
+    assert minimum_connected_pairings(specs) == 22_499
+    assert default_pairing_count(specs) == 22_499
 
 
 def test_seeded_sample_is_unique_connected_and_order_independent() -> None:
@@ -256,6 +267,34 @@ def test_sample_studies_cli_writes_filtered_suite(
     }
     assert len(studies) == 17
     assert {study.assistant for study in studies} == {Assistant.INKLING}
+
+
+def test_sample_studies_cli_uses_capped_default(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    instructions = tmp_path / "instructions.toml"
+    instructions.write_text('instructions = ["Do the task."]\n')
+    output = tmp_path / "suite.yaml"
+
+    assert (
+        sample_studies(
+            [
+                "--instructions",
+                str(instructions),
+                "--output",
+                str(output),
+                "--author",
+                str(Author.USER),
+                "--assistant",
+                str(Assistant.INKLING),
+            ]
+        )
+        == 0
+    )
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["pairing_population_per_assistant"] == 87
+    assert summary["pairings_per_assistant"] == 87
+    assert len(load_study_suite(output)) == 87
 
 
 def test_sample_studies_cli_reports_invalid_values(
