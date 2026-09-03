@@ -57,6 +57,13 @@ class PairCheck:
     issues: tuple[CheckIssue, ...]
     response: JsonObject
 
+    def __post_init__(self) -> None:
+        """Require the structured verdict and its explanations to agree."""
+        if self.passes and self.issues:
+            raise ValueError("passing pair check must not contain issues")
+        if not self.passes and not self.issues:
+            raise ValueError("failing pair check must contain at least one issue")
+
     @property
     def requires_tools(self) -> bool:
         """Return whether at least one instruction needs code execution or search."""
@@ -88,12 +95,8 @@ class PairCheck:
 
     @beartype
     def matches(self, pair: InstructionPair) -> bool:
-        """Return whether this check audited the exact instruction texts of a pair."""
-        return (
-            self.pair.pair_id == pair.pair_id
-            and self.pair.first == pair.first
-            and self.pair.second == pair.second
-        )
+        """Return whether this check audited the pair's complete evidence."""
+        return self.pair == pair
 
 
 _SANDBOX = (

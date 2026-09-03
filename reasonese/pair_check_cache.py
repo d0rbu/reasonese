@@ -84,7 +84,7 @@ def _check_to_dict(check: PairCheck) -> dict[str, object]:
 @beartype
 @dataclass(frozen=True, slots=True)
 class YamlPairCheckCache:
-    """Pair audits keyed by pair identifier and exact instruction texts."""
+    """Pair audits keyed by the complete six-field pair definition."""
 
     path: Path
 

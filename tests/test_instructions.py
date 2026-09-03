@@ -35,6 +35,7 @@ from reasonese.manual_messages import ManualMessageLibrary
 from reasonese.openrouter import JsonObject, OpenRouterClient
 from reasonese.pair_check_cache import YamlPairCheckCache
 from reasonese.pair_checks import (
+    CheckIssue,
     Difficulty,
     InstructionAssessment,
     PairCheck,
@@ -54,6 +55,7 @@ def _pair(
     *,
     skill: Skill = Skill.PYTHON,
     conflict: ConflictType = ConflictType.OUTPUT_FORMAT,
+    rationale: str = "Only a count versus never a count.",
 ) -> InstructionPair:
     return InstructionPair(
         PairId.parse(pair_id),
@@ -61,7 +63,7 @@ def _pair(
         conflict,
         Instruction.parse(first),
         Instruction.parse(second),
-        Rationale.parse("Only a count versus never a count."),
+        Rationale.parse(rationale),
     )
 
 
@@ -257,6 +259,9 @@ def test_parse_pair_check_reports_passes_and_failure_reasons() -> None:
     assert passed.failure_reasons() == ()
     assert passed.matches(_pair())
     assert not passed.matches(_pair(first="Different text."))
+    assert not passed.matches(_pair(skill=Skill.WEB_SEARCH))
+    assert not passed.matches(_pair(conflict=ConflictType.PROCESS))
+    assert not passed.matches(_pair(rationale="Changed rationale."))
     assert passed.response["choices"][0]["message"]["reasoning"] == "why"
 
     failed = parse_pair_check(
@@ -283,12 +288,6 @@ def test_parse_pair_check_reports_passes_and_failure_reasons() -> None:
     assert one_sided.passes is True
     assert failed.issues == ("Needs network.", "Answerable from memory.")
 
-    bare = parse_pair_check(_pair(), _chat(_audit(exclusive=False)))
-    assert bare.passes is False
-    assert bare.issues == ()
-    assert bare.failure_reasons() == ("instructions are not mutually exclusive",)
-
-
 @pytest.mark.parametrize(
     ("payload", "error"),
     [
@@ -303,6 +302,8 @@ def test_parse_pair_check_reports_passes_and_failure_reasons() -> None:
         (_audit(difficulty=(True, 2)), "difficulty must be an integer"),
         (_audit(difficulty=(2, 9)), "Could not parse"),
         (_audit(issues=("",)), "Could not parse"),
+        (_audit(issues=("Contradicts a passing verdict.",)), "passing pair check must not"),
+        (_audit(exclusive=False), "failing pair check must contain"),
     ],
 )
 def test_parse_pair_check_rejects_malformed_results(payload: object, error: str) -> None:
@@ -334,16 +335,19 @@ def test_check_pairs_can_use_synchronous_completions() -> None:
     assert [int(check.second.difficulty) for check in checks] == [3, 4]
 
 
-def test_pair_check_cache_round_trips_and_matches_exact_text(tmp_path: Path) -> None:
+def test_pair_check_cache_round_trips_and_matches_complete_pair(tmp_path: Path) -> None:
     cache = YamlPairCheckCache(tmp_path / "nested" / "checks.yaml")
     assert cache.load() == ()
-    check = parse_pair_check(_pair(), _chat(_audit(issues=("Advisory note.",))))
+    check = parse_pair_check(_pair(), _chat(_audit()))
     cache.put_many((check,))
     cache.put_many((check,))
 
     assert cache.load() == (check,)
     assert cache.get(_pair()) == check
     assert cache.get(_pair(first="Edited instruction text.")) is None
+    assert cache.get(_pair(skill=Skill.WEB_SEARCH)) is None
+    assert cache.get(_pair(conflict=ConflictType.PROCESS)) is None
+    assert cache.get(_pair(rationale="Edited rationale.")) is None
     assert cache.get(_pair("other-id")) is None
 
 
@@ -358,6 +362,8 @@ def test_pair_check_cache_round_trips_and_matches_exact_text(tmp_path: Path) -> 
         (lambda record: record["second"].pop("difficulty"), "second assessment has invalid"),
         (lambda record: record["first"].update(feasible="y"), "first booleans are invalid"),
         (lambda record: record["second"].update(difficulty=True), "difficulty must be an integer"),
+        (lambda record: record.update(issues=["Contradiction."]), "passing pair check must not"),
+        (lambda record: record.update(mutually_exclusive=False), "failing pair check must contain"),
     ],
 )
 def test_pair_check_cache_rejects_invalid_records(
@@ -521,6 +527,25 @@ def test_assessment_and_difficulty_types_enforce_bounds() -> None:
     assert check.passes is True
     no_tools = InstructionAssessment(True, False, Difficulty.parse(3))
     assert no_tools.passes is True
-    unagentic = PairCheck(_pair(), no_tools, no_tools, True, (), {"id": "x"})
+    unagentic = PairCheck(
+        _pair(),
+        no_tools,
+        no_tools,
+        True,
+        (CheckIssue.parse("Neither instruction requires tools."),),
+        {"id": "x"},
+    )
     assert unagentic.passes is False
     assert unagentic.failure_reasons() == ("neither instruction requires tools",)
+
+    with pytest.raises(ValueError, match="passing pair check must not"):
+        PairCheck(
+            _pair(),
+            assessment,
+            assessment,
+            True,
+            (CheckIssue.parse("Contradiction."),),
+            {"id": "x"},
+        )
+    with pytest.raises(ValueError, match="failing pair check must contain"):
+        PairCheck(_pair(), no_tools, no_tools, True, (), {"id": "x"})

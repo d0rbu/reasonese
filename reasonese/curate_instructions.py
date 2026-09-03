@@ -65,7 +65,7 @@ def audit_pairs(
     *,
     prefer_batch: bool = True,
 ) -> tuple[tuple[PairCheck, ...], Natural]:
-    """Audit pairs, judging only those whose exact texts have no cached audit."""
+    """Audit pairs, judging only those whose complete definition has no cached audit."""
     cached = cache.load()
     check_by_id: dict[PairId, PairCheck] = {}
     for pair in pairs:

@@ -48,11 +48,15 @@ candidate pairs -> deterministic diagnostics -> cached LLM audit -> report -> ma
 ```
 
 `reasonese-curate-instructions` loads the bank, computes coverage and cross-pair lexical overlap,
-audits any pair whose exact texts have no cached audit in one judge batch, and writes
+audits any pair whose complete six-field definition has no cached audit in one judge batch, and writes
 `report.md` with an audit table, the overlap table, and every pair's full text for spot-checking.
 It exits nonzero when any audited pair fails a criterion. `--no-batch` sends synchronous requests,
 which is faster when only a few edited pairs need re-auditing. `--scaffold-user-prompts` creates the
 placeholder `prompts/user` directories the manual author needs for every new instruction.
+
+The generated cache includes raw provider responses and is ignored with the rest of `out/`. Any PR
+or paper claim about a completed audit should therefore attach the cache and report as artifacts,
+including the route and audit date; the checked-in bank alone is not evidence that an audit ran.
 
 ## Open steps
 
