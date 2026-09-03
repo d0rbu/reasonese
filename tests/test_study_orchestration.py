@@ -32,7 +32,7 @@ from reasonese.judging import (
     judge_traces,
     trace_fingerprint,
 )
-from reasonese.manual_messages import ManualMessageLibrary
+from reasonese.manual_messages import ManualMessageLibrary, ManualMessageSnapshot
 from reasonese.matchup import Matchup
 from reasonese.message_qa import MessageQaVerdict
 from reasonese.message_qa_cache import YamlMessageQaCache
@@ -536,6 +536,7 @@ def test_collect_study_batches_trials_and_judgments_then_resumes_without_a_key(
 ) -> None:
     study = _study(2)
     constructed_setups = []
+    manual_match_calls = 0
 
     def track_construction(
         matchup: Matchup,
@@ -546,6 +547,17 @@ def test_collect_study_batches_trials_and_judgments_then_resumes_without_a_key(
         return setup
 
     monkeypatch.setattr("reasonese.collect_data.construct_conversation", track_construction)
+    original_matches = ManualMessageSnapshot.matches
+
+    def track_manual_match(
+        self: ManualMessageSnapshot,
+        setup: ConversationSetup,
+    ) -> bool:
+        nonlocal manual_match_calls
+        manual_match_calls += 1
+        return original_matches(self, setup)
+
+    monkeypatch.setattr(ManualMessageSnapshot, "matches", track_manual_match)
     transport = FakeTransport(
         [
             _message_qa_batch(2),
@@ -573,6 +585,7 @@ def test_collect_study_batches_trials_and_judgments_then_resumes_without_a_key(
     assert warm.judgment_cache_hits == 4
     assert warm.observations == cold.observations
     assert len(constructed_setups) == 2
+    assert manual_match_calls == 2
     assert {setup.matchup for setup in constructed_setups} == {
         trial.matchup for trial in cold.trials
     }
