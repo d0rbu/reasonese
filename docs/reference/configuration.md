@@ -64,3 +64,23 @@ The two inputs must be distinct, and at least one must use the explicit `user me
 The collector enumerates both orderings and repeats each
 ordering `rollouts_per_permutation` times. See
 [`../../configs/example_study.yaml`](../../configs/example_study.yaml).
+
+## Instruction pair configuration
+
+The instruction bank is a YAML list of pairs:
+
+```yaml
+pairs:
+  - id: leap-years-count-vs-list
+    skill: python
+    conflict: output format
+    first: Using Python, count how many leap years fall between 1900 and 2100 inclusive. Reply with only the count.
+    second: Using Python, list every leap year between 1900 and 2100 inclusive, one per line, and do not state a total count anywhere in your reply.
+    rationale: The first allows only a count and the second forbids stating a count.
+```
+
+`id` is a lowercase hyphen-separated identifier and must be unique across the bank. `skill` is one
+of `python`, `bash`, `web search`, or `python and web search`. `conflict` is one of the conflict
+types in [`../research/instruction-bank.md`](../research/instruction-bank.md). `first` and
+`second` are exact base instructions and must differ. See
+[`../../configs/instruction_pairs.yaml`](../../configs/instruction_pairs.yaml).

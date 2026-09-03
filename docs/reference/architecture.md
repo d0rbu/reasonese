@@ -104,3 +104,19 @@ The L2 penalty produces a numerical total order even under separation. Compariso
 components are reported because relative levels across disconnected components are not
 identified by the data. Marginal axis comparisons are explicitly descriptive rather than
 causal when the cell design does not independently balance those axes.
+
+The curation flow is:
+
+```text
+candidate pairs -> overlap and coverage diagnostics -> cached pair audit -> report
+```
+
+- `reasonese.instructions` defines `InstructionPair`, its YAML loader, lexical-overlap and
+  coverage diagnostics, and placeholder scaffolding for `prompts/user`.
+- `reasonese.pair_checks` builds strict-JSON audit requests for GPT-5.6 Luna batch and parses
+  per-instruction feasibility, tool requirement, and difficulty plus pair exclusivity.
+- `reasonese.pair_check_cache` keys audits by pair identifier and exact instruction texts.
+- `reasonese.curate_instructions` is the fail-closed `reasonese-curate-instructions` utility.
+
+The audit is quality control over candidate text. It does not replace the empirical check that
+collected trials rarely complete both instructions or neither.

@@ -38,6 +38,8 @@ uv run reasonese-plan \
   --output out/example/prompt_specs.jsonl
 
 export OPENROUTER_API_KEY=...
+uv run reasonese-curate-instructions --output out/instructions
+
 uv run reasonese-run-conversation \
   --matchup configs/example_matchup.yaml \
   --user-messages prompts/user \
@@ -117,6 +119,18 @@ and rankings under 0.1×/1×/10× regularization.
 The report keeps important limits visible: axis margins are descriptive unless the collected
 cells form an appropriate balanced factorial design, and absolute ordering between disconnected
 Bradley–Terry components is regularization-dependent rather than empirically identified.
+
+## Instruction bank
+
+Studies need instruction pairs that one response cannot both complete, so the bank in
+[`configs/instruction_pairs.yaml`](configs/instruction_pairs.yaml) is a list of pairs, each with a
+skill, a conflict type, and a rationale. `reasonese-curate-instructions` reports coverage and
+cross-pair lexical overlap, audits every pair's feasibility, tool requirement, difficulty band, and
+mutual exclusivity in one `openai/gpt-5.6-luna:batch` job, caches the raw audits, and writes
+`out/instructions/report.md` with every pair's full text for manual spot-checking. It exits nonzero
+when any audited pair fails. `--scaffold-user-prompts prompts/user` creates the placeholder manual
+variant directories that new instructions need. The criteria and conflict taxonomy are in
+[`docs/research/instruction-bank.md`](docs/research/instruction-bank.md).
 
 ## Implementation notes
 

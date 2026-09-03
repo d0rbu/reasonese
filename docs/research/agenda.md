@@ -12,6 +12,7 @@ This foundation specifies:
 
 - which values currently belong to each axis;
 - how simple base instructions are configured;
+- how candidate instruction pairs are audited against the bank criteria before collection;
 - how every axis combination is enumerated; and
 - how those combinations are serialized without ambiguity;
 - how model authors generate framed messages;
@@ -36,5 +37,6 @@ sample sizes and study topology are known.
 - How well do message-QA verdicts agree with blinded human semantic-equivalence ratings?
 - How should model revisions and provider routing be recorded alongside stable display names?
 - How much does synthetic file-read history itself influence channel comparisons?
+- How often do audited instruction pairs still produce both-completed or neither-completed trials?
 
 Those questions should be resolved before interpreting future model behavior.
