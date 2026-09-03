@@ -19,10 +19,16 @@ from reasonese.check_messages import audit_messages, require_compliant_messages
 from reasonese.config import load_study
 from reasonese.conversation import (
     ConversationSetup,
+    ConversationTrace,
     GeneratedMessage,
     construct_conversation,
 )
-from reasonese.judging import FingerprintedTrace, Judgment, judge_fingerprinted_traces
+from reasonese.judging import (
+    FingerprintedTrace,
+    Judgment,
+    fingerprint_traces,
+    judge_fingerprinted_traces,
+)
 from reasonese.manual_messages import ManualMessageLibrary, ManualMessageSnapshot
 from reasonese.message_qa_cache import YamlMessageQaCache
 from reasonese.observations import Observation, observations_from_trials, write_observations
@@ -77,6 +83,7 @@ def _prepare_task(task: CollectionTask, manual_messages: ManualMessageSnapshot) 
     cached_traces = cache.load_traces(trials)
     traces: dict[str, FingerprintedTrace] = {}
     missing_trials: list[Trial] = []
+    cached_to_fingerprint: list[tuple[Trial, ConversationTrace]] = []
     trace_hits = 0
     for trial in trials:
         cached = cached_traces.get(trial.trial_id)
@@ -87,8 +94,14 @@ def _prepare_task(task: CollectionTask, manual_messages: ManualMessageSnapshot) 
         ):
             missing_trials.append(trial)
         else:
-            traces[str(trial.trial_id)] = FingerprintedTrace(cached)
-            trace_hits += 1
+            cached_to_fingerprint.append((trial, cached))
+    for (trial, _), fingerprinted in zip(
+        cached_to_fingerprint,
+        fingerprint_traces(tuple(trace for _, trace in cached_to_fingerprint)),
+        strict=True,
+    ):
+        traces[str(trial.trial_id)] = fingerprinted
+        trace_hits += 1
     return _CollectionState(task, cache, trials, traces, missing_trials, trace_hits, {}, 0)
 
 
@@ -197,8 +210,9 @@ def collect_studies(
             client,
         )
         for (_, work), new_traces in zip(ordered_work, trace_groups, strict=True):
-            for (state, trial, _), trace in zip(work, new_traces, strict=True):
-                state.traces[str(trial.trial_id)] = FingerprintedTrace(trace)
+            fingerprinted_traces = fingerprint_traces(new_traces)
+            for (state, trial, _), trace in zip(work, fingerprinted_traces, strict=True):
+                state.traces[str(trial.trial_id)] = trace
         for state in states:
             state.cache.put_traces(
                 tuple(
