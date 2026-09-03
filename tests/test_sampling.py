@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from pathlib import Path
+from random import Random
 
 import pytest
 import yaml
 from phantom.interval import Natural
 
+import reasonese.sampling as sampling_module
 from reasonese.axes import Assistant, Author, Channel, Framing, Instruction
 from reasonese.config import load_study_suite
 from reasonese.io import write_study_suite
@@ -54,6 +57,70 @@ def _reachable(pairings: tuple[StudyInputs, ...]) -> set[PromptSpec]:
     return reached
 
 
+def _pairing_stratum(
+    pairing: tuple[PromptSpec, PromptSpec],
+) -> tuple[tuple[Channel, Channel], tuple[str, ...]]:
+    first, second = pairing
+    if first.channel is not Channel.USER:
+        first, second = second, first
+    differing_axes = tuple(
+        name
+        for name, differs in (
+            ("instruction", first.instruction != second.instruction),
+            ("framing", first.framing != second.framing),
+            ("channel", first.channel != second.channel),
+            ("author", first.author != second.author),
+        )
+        if differs
+    )
+    return (first.channel, second.channel), differing_axes
+
+
+def _factorial_specs() -> tuple[PromptSpec, ...]:
+    return tuple(
+        PromptSpec(instruction, framing, channel, author)
+        for instruction in tuple(Instruction.parse(f"Task {index}.") for index in range(4))
+        for framing in Framing
+        for channel in Channel
+        for author in (Author.USER, Author.INKLING)
+    )
+
+
+def _eligible_pairs(
+    specs: tuple[PromptSpec, ...],
+) -> tuple[tuple[PromptSpec, PromptSpec], ...]:
+    return tuple(
+        (first, second)
+        for index, first in enumerate(specs)
+        for second in specs[index + 1 :]
+        if first.channel is Channel.USER or second.channel is Channel.USER
+    )
+
+
+def _proportional_counts(
+    population_counts: Counter[tuple[tuple[Channel, Channel], tuple[str, ...]]],
+    requested: int,
+) -> Counter[tuple[tuple[Channel, Channel], tuple[str, ...]]]:
+    population = sum(population_counts.values())
+    result = Counter(
+        {
+            stratum: requested * count // population
+            for stratum, count in population_counts.items()
+        }
+    )
+    remaining = requested - sum(result.values())
+    ordered = sorted(
+        population_counts,
+        key=lambda stratum: (
+            -(requested * population_counts[stratum] % population),
+            tuple(str(channel) for channel in stratum[0]),
+            stratum[1],
+        ),
+    )
+    result.update(ordered[:remaining])
+    return result
+
+
 def test_pairing_counts_respect_the_user_channel_constraint() -> None:
     specs = _specs()
     assert pairing_population_size(specs) == 7
@@ -97,6 +164,98 @@ def test_seeded_sample_is_unique_connected_and_order_independent() -> None:
     assert all(any(spec.channel is Channel.USER for spec in pairing) for pairing in first)
 
 
+def test_sample_is_exactly_axis_stratified_and_degree_balanced() -> None:
+    specs = _factorial_specs()
+    requested = 1_000
+    pairings = sample_study_inputs(
+        specs,
+        PositiveInteger.parse(requested),
+        Natural.parse(0),
+    )
+    population_counts = Counter(_pairing_stratum(pair) for pair in _eligible_pairs(specs))
+    sample_counts = Counter(
+        _pairing_stratum((pairing[0], pairing[1])) for pairing in pairings
+    )
+    degrees = Counter(spec for pairing in pairings for spec in pairing)
+
+    assert len(population_counts) == 23
+    assert sample_counts == _proportional_counts(population_counts, requested)
+    assert _reachable(pairings) == set(specs)
+    assert len(pairings) == len({frozenset(pairing) for pairing in pairings}) == requested
+    for channel, maximum_spread in (
+        (Channel.USER, 3),
+        (Channel.SYSTEM, 2),
+        (Channel.README, 2),
+    ):
+        channel_degrees = [degrees[spec] for spec in specs if spec.channel is channel]
+        assert max(channel_degrees) - min(channel_degrees) <= maximum_spread
+
+
+@pytest.mark.parametrize("specs", [_specs(), _factorial_specs()])
+def test_combinatorial_stratum_counts_match_exhaustive_enumeration(
+    specs: tuple[PromptSpec, ...],
+) -> None:
+    user_specs, other_specs = sampling_module._partition_specs(specs)
+    ordered_specs = user_specs + other_specs
+    population = int(pairing_population_size(specs))
+    enumerated = Counter(
+        sampling_module._stratum_for_rank(
+            rank,
+            ordered_specs,
+            len(user_specs),
+            len(other_specs),
+        )
+        for rank in range(population)
+    )
+
+    assert (
+        sampling_module._stratum_population_counts(
+            population,
+            ordered_specs,
+            len(user_specs),
+            len(other_specs),
+        )
+        == enumerated
+    )
+
+
+def test_minimum_designs_are_connected_and_cover_every_cell_across_seeds() -> None:
+    specs = _factorial_specs()
+    minimum = PositiveInteger.parse(len(specs) - 1)
+    for seed in range(10):
+        pairings = sample_study_inputs(specs, minimum, Natural.parse(seed))
+        degrees = Counter(spec for pairing in pairings for spec in pairing)
+
+        assert len(pairings) == len(specs) - 1
+        assert _reachable(pairings) == set(specs)
+        assert all(degrees[spec] >= 1 for spec in specs)
+
+
+def test_connectivity_repair_uses_the_minimum_number_of_edge_swaps() -> None:
+    specs = tuple(_spec(name, Channel.USER) for name in ("A", "B", "C", "D", "E", "F"))
+    selected = {
+        sampling_module._user_pair_rank(first, second, len(specs))
+        for first, second in ((0, 1), (1, 2), (0, 2), (3, 4), (4, 5), (3, 5))
+    }
+
+    repaired = sampling_module._repair_connectivity(
+        selected,
+        specs,
+        len(specs),
+        0,
+        Random(0),
+    )
+    pairings = tuple(
+        StudyInputs.parse((specs[first], specs[second]))
+        for rank in repaired
+        for first, second in (sampling_module._user_pair_from_rank(rank, len(specs)),)
+    )
+
+    assert len(repaired) == len(selected)
+    assert len(selected - repaired) == len(repaired - selected) == 1
+    assert _reachable(pairings) == set(specs)
+
+
 def test_minimum_and_exhaustive_samples_cover_edge_cases() -> None:
     specs = _specs()
     minimum = sample_study_inputs(specs, PositiveInteger.parse(4), Natural.parse(0))
@@ -123,6 +282,10 @@ def test_minimum_and_exhaustive_samples_cover_edge_cases() -> None:
         for index, first in enumerate(all_user)
         for second in all_user[index + 1 :]
     }
+    all_user_minimum = sample_study_inputs(
+        all_user, PositiveInteger.parse(3), Natural.parse(1)
+    )
+    assert _reachable(all_user_minimum) == set(all_user)
 
 
 @pytest.mark.parametrize(

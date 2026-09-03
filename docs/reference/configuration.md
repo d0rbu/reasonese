@@ -72,7 +72,8 @@ study's output subdirectory.
 ## Sampled study suite
 
 `reasonese-sample-studies` builds all four-axis cells from an instruction TOML file, selects a
-seeded connected subset of valid unordered pairs, and writes them under one `studies` key:
+seeded axis-stratified, degree-aware, connected subset of valid unordered pairs, and writes them
+under one `studies` key:
 
 ```yaml
 studies:

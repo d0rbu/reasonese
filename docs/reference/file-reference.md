@@ -45,7 +45,7 @@
 | `tests/test_judging.py` | Verdict, judgment-cache, and judge-utility tests |
 | `tests/test_message_qa.py` | Message-QA prompt, parsing, cache, and utility tests |
 | `tests/test_study_orchestration.py` | Permutation balance, collection, and resume tests |
-| `tests/test_sampling.py` | Sparse-design coverage, connectivity, and reproducibility tests |
+| `tests/test_sampling.py` | Sparse-design stratification, degree, connectivity, and reproducibility tests |
 | `tests/test_analysis.py` | Synthetic ranking, position-effect, diagnostics, and output tests |
 
 Generated files belong under ignored directories such as `out/`.
