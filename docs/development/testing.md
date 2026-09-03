@@ -13,7 +13,8 @@ contracts, cache behavior, conversation execution, independent judging, exact bo
 exact-text message QA and fail-closed inference, trace-sensitive judgment caching, pairwise
 ordering, position balance, resumable data
 collection, synthetic Bradley-Terry recovery, ties, clustered bootstrap, disconnected graphs,
-axis and position effects, analysis artifacts, and all seven utilities.
+axis and position effects, sparse-design connectivity and reproducibility, analysis artifacts,
+and all nine utilities.
 
 All tests are offline. A separately authorized live smoke test is needed to validate current
 provider availability and behavior.

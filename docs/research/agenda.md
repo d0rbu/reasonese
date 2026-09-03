@@ -20,7 +20,9 @@ This foundation specifies:
 - how generated messages and raw responses are cached; and
 - how one strict completion boolean is collected for each instruction; and
 - how both orderings and repeated rollouts become analysis-ready observation rows; and
-- how rankings, axis contrasts, order effects, and design diagnostics are reported.
+- how rankings, axis contrasts, order effects, and design diagnostics are reported; and
+- how an exhaustive pairing population can be replaced by a seeded connected design that still
+  covers every selected cell and counterbalances order.
 
 ## Deferred decisions
 
