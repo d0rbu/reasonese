@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from contextlib import ExitStack
 from dataclasses import dataclass
 
@@ -153,7 +154,7 @@ def run_assistant(
 ) -> ConversationTrace:
     """Run one assistant, executing bounded local function calls until it answers."""
     route = ModelRoute(model_id, None)
-    return run_assistants((setup,), route, client, prefer_batch=False)[0]
+    return run_assistants((setup,), route, client)[0]
 
 
 @beartype
@@ -161,25 +162,17 @@ def run_assistants(
     setups: tuple[ConversationSetup, ...],
     route: ModelRoute,
     client: OpenRouterClient,
-    *,
-    prefer_batch: bool,
 ) -> tuple[ConversationTrace, ...]:
-    """Run many independent assistants together through each active tool round."""
-    return run_assistant_groups(
-        (AssistantRunGroup(route, setups),),
-        client,
-        prefer_batch=prefer_batch,
-    )[0]
+    """Run many independent assistants through completion-driven tool loops."""
+    return run_assistant_groups((AssistantRunGroup(route, setups),), client)[0]
 
 
 @beartype
 def run_assistant_groups(
     groups: tuple[AssistantRunGroup, ...],
     client: OpenRouterClient,
-    *,
-    prefer_batch: bool,
 ) -> tuple[tuple[ConversationTrace, ...], ...]:
-    """Run assistant-model groups concurrently through every active agent-loop round."""
+    """Run assistant-model groups without blocking fast tool continuations on slow peers."""
     messages = {
         (group_index, setup_index): setup.openrouter_messages()
         for group_index, group in enumerate(groups)
@@ -187,7 +180,8 @@ def run_assistant_groups(
     }
     steps: dict[tuple[int, int], list[ToolStep]] = {key: [] for key in messages}
     completed: dict[tuple[int, int], ConversationTrace] = {}
-    pending = [list(range(len(group.setups))) for group in groups]
+    if not messages:
+        return tuple(() for _ in groups)
 
     with ExitStack() as stack:
         runtimes = {
@@ -195,27 +189,23 @@ def run_assistant_groups(
             for group_index, group in enumerate(groups)
             for setup_index, setup in enumerate(group.setups)
         }
-        while any(pending):
-            active_group_indexes = tuple(
-                group_index for group_index, indexes in enumerate(pending) if indexes
-            )
-            response_groups = client.complete_many_grouped(
-                tuple(
-                    CompletionGroup(
-                        groups[group_index].route,
-                        tuple(
-                            _assistant_request(messages[(group_index, setup_index)])
-                            for setup_index in pending[group_index]
-                        ),
-                    )
-                    for group_index in active_group_indexes
-                ),
-                prefer_batch=prefer_batch,
-            )
-            for group_index, responses in zip(active_group_indexes, response_groups, strict=True):
-                next_pending: list[int] = []
-                for setup_index, response in zip(pending[group_index], responses, strict=True):
-                    key = (group_index, setup_index)
+        with ThreadPoolExecutor(max_workers=min(client.sync_workers, len(messages))) as executor:
+
+            def submit(key: tuple[int, int]) -> Future[JsonObject]:
+                group_index, _ = key
+                return executor.submit(
+                    client.complete,
+                    groups[group_index].route.model_id,
+                    _assistant_request(messages[key]),
+                )
+
+            pending = {submit(key): key for key in messages}
+            while pending:
+                finished, _ = wait(tuple(pending), return_when=FIRST_COMPLETED)
+                for future in finished:
+                    key = pending.pop(future)
+                    group_index, setup_index = key
+                    response = future.result()
                     calls = tool_calls_from_response(response)
                     if not calls:
                         completed[key] = ConversationTrace(
@@ -232,8 +222,7 @@ def run_assistant_groups(
                     steps[key].append(ToolStep(response, results))
                     messages[key].append(assistant_message_from_response(response))
                     messages[key].extend(result.openrouter_dict() for result in results)
-                    next_pending.append(setup_index)
-                pending[group_index] = next_pending
+                    pending[submit(key)] = key
     return tuple(
         tuple(completed[(group_index, setup_index)] for setup_index in range(len(group.setups)))
         for group_index, group in enumerate(groups)

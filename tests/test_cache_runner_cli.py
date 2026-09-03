@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from threading import Event
 
 import pytest
 import yaml
@@ -20,10 +21,15 @@ from reasonese.conversation import (
 from reasonese.manual_messages import ManualMessageLibrary
 from reasonese.matchup import Matchup, make_matchup, matchup_to_dict
 from reasonese.message_qa_cache import YamlMessageQaCache
-from reasonese.openrouter import JsonObject, OpenRouterClient
+from reasonese.openrouter import JsonObject, ModelRoute, OpenRouterClient, OpenRouterModelId
 from reasonese.planning import PromptSpec
 from reasonese.run_conversation import main as run_conversation
-from reasonese.runner import materialize_messages, run_matchup
+from reasonese.runner import (
+    AssistantRunGroup,
+    materialize_messages,
+    run_assistant_groups,
+    run_matchup,
+)
 
 
 def _spec(
@@ -548,6 +554,58 @@ def test_run_matchup_executes_local_tool_calls_and_preserves_every_step(tmp_path
         "tool_call_id": "live-call",
         "content": "Repository instruction.",
     }
+
+
+class PipelinedToolTransport:
+    def __init__(self) -> None:
+        self.fast_followup_started = Event()
+
+    def post_json(self, path: str, body: JsonObject) -> JsonObject:
+        model = body["model"]
+        if model == "example/slow":
+            if not self.fast_followup_started.wait(timeout=1.0):
+                raise AssertionError("slow response blocked the fast tool continuation")
+            return _chat("slow final", "slow-final")
+        if body["messages"][-1]["role"] == "tool":
+            self.fast_followup_started.set()
+            return _chat("fast final", "fast-final")
+        return _tool_chat()
+
+    def get_json(self, path: str) -> JsonObject:
+        raise AssertionError(f"unexpected GET {path}")
+
+
+def test_assistant_tool_continuation_does_not_wait_for_slow_peer() -> None:
+    matchup = _matchup(
+        _spec("Repository instruction.", Channel.README),
+        _spec("User request.", Channel.USER),
+    )
+    generated = tuple(
+        GeneratedMessage(spec, GeneratedText.parse(str(spec.instruction)), None)
+        for spec in matchup.inputs
+    )
+    setup = construct_conversation(matchup, generated)
+    transport = PipelinedToolTransport()
+
+    traces = run_assistant_groups(
+        (
+            AssistantRunGroup(
+                ModelRoute(OpenRouterModelId.parse("example/fast"), None),
+                (setup,),
+            ),
+            AssistantRunGroup(
+                ModelRoute(OpenRouterModelId.parse("example/slow"), None),
+                (setup,),
+            ),
+        ),
+        OpenRouterClient(transport, sync_workers=2),
+    )
+
+    assert transport.fast_followup_started.is_set()
+    assert traces[0][0].response["id"] == "fast-final"
+    assert len(traces[0][0].tool_steps) == 1
+    assert traces[1][0].response["id"] == "slow-final"
+    assert traces[1][0].tool_steps == ()
 
 
 def test_run_matchup_fails_when_assistant_exceeds_local_tool_step_limit(
