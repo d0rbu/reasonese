@@ -127,11 +127,13 @@ support that server tool in batch jobs. Definite HTTP 429 responses are retried 
 of times using the provider's `Retry-After` delay when present. The same manual-message hierarchy
 and message-QA gate apply to user-authored study inputs.
 
-High-volume collector traces and judgments are JSON payloads in one `collection.sqlite3` file
-per study. This batches filesystem reads and transactional writes while retaining complete raw
-provider responses. Trace fingerprints are derived once and reused through judgment and batched
-observation construction; the standalone one-conversation utilities keep their readable YAML
-caches.
+High-volume collector traces and judgments are JSON payloads in SQLite while retaining complete
+raw provider responses. A standalone study or repeated `--study` input keeps one
+`collection.sqlite3` per study. A sampled `--suite` instead uses one shared database at the suite
+root, avoiding tens of thousands of duplicate database files and reducing each collection stage
+to one cache read and transaction. Trace fingerprints are derived once and reused through
+judgment and batched observation construction; the standalone one-conversation utilities keep
+their readable YAML caches.
 Study trials likewise share their two validated ordered matchups, which cache readers reuse while
 checking the redundant serialized coordinates for equality.
 

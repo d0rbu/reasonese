@@ -31,6 +31,8 @@
 - Both input orderings receive the same positive number of rollouts.
 - Every cell has `2r` observations and `r` observations at each position.
 - Each rollout has a separate trace cache; repeated responses cannot collapse into one record.
+- Sampled suites use one root SQLite cache, require globally distinct trial IDs, and preserve the
+  same requests, cache validation, judgments, and observations as per-study caches.
 - Observation rows preserve trial, permutation, rollout, one-based position, and trace identity.
 - Analysis requires exactly two cells at positions 1 and 2 and rejects duplicate cells or
   inconsistent metadata within trials.

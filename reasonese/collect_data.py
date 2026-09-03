@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -42,7 +42,7 @@ from reasonese.study_cache import SqliteStudyCache
 @beartype
 @dataclass(frozen=True, slots=True)
 class CollectionTask:
-    """One study and its independent trace, judgment, and observation directory."""
+    """One study and its observation directory."""
 
     study: Study
     output_dir: Path
@@ -73,14 +73,17 @@ class CollectionResult:
     judgment_cache_hits: Natural
 
 
-def _prepare_task(task: CollectionTask, manual_messages: ManualMessageSnapshot) -> _CollectionState:
-    trials = build_trials(task.study)
+def _prepare_task(
+    task: CollectionTask,
+    manual_messages: ManualMessageSnapshot,
+    cache: SqliteStudyCache,
+    trials: tuple[Trial, ...],
+    cached_traces: Mapping[TrialId, ConversationTrace],
+) -> _CollectionState:
     task.output_dir.mkdir(parents=True, exist_ok=True)
     with (task.output_dir / "study.yaml").open("w", encoding="utf-8") as handle:
         yaml.safe_dump(study_to_dict(task.study), handle, sort_keys=False, allow_unicode=True)
 
-    cache = SqliteStudyCache(task.output_dir / "collection.sqlite3")
-    cached_traces = cache.load_traces(trials)
     traces: dict[str, FingerprintedTrace] = {}
     missing_trials: list[Trial] = []
     cached_to_fingerprint: list[tuple[Trial, ConversationTrace]] = []
@@ -128,6 +131,7 @@ def collect_studies(
     qa_cache: YamlMessageQaCache,
     *,
     prefer_batch: bool,
+    shared_cache: SqliteStudyCache | None = None,
 ) -> tuple[CollectionResult, ...]:
     """Collect studies together, batching independent provider work across task boundaries."""
     if not tasks:
@@ -139,10 +143,34 @@ def collect_studies(
     if len(set(studies)) != len(studies):
         raise ValueError("collection task studies must be distinct")
 
+    trials_by_task = tuple(build_trials(task.study) for task in tasks)
+    all_trials = tuple(trial for trials in trials_by_task for trial in trials)
+    trial_ids = tuple(trial.trial_id for trial in all_trials)
+    if len(set(trial_ids)) != len(trial_ids):
+        raise ValueError("collection task trial identifiers must be distinct")
+
     manual_snapshot = manual_messages.snapshot(
         tuple(spec for task in tasks for spec in task.study.inputs)
     )
-    states = tuple(_prepare_task(task, manual_snapshot) for task in tasks)
+    if shared_cache is None:
+        caches = tuple(SqliteStudyCache(task.output_dir / "collection.sqlite3") for task in tasks)
+        cached_traces_by_task = tuple(
+            cache.load_traces(trials) for cache, trials in zip(caches, trials_by_task, strict=True)
+        )
+    else:
+        cached_traces = shared_cache.load_traces(all_trials)
+        caches = tuple(shared_cache for _ in tasks)
+        cached_traces_by_task = tuple(cached_traces for _ in tasks)
+    states = tuple(
+        _prepare_task(task, manual_snapshot, cache, trials, cached_traces_for_task)
+        for task, cache, trials, cached_traces_for_task in zip(
+            tasks,
+            caches,
+            trials_by_task,
+            cached_traces_by_task,
+            strict=True,
+        )
+    )
     specs_to_materialize = tuple(
         dict.fromkeys(
             spec for state in states if state.missing_trials for spec in state.task.study.inputs
@@ -216,17 +244,34 @@ def collect_studies(
             fingerprinted_traces = fingerprint_traces(new_traces)
             for (state, trial, _), trace in zip(work, fingerprinted_traces, strict=True):
                 state.traces[str(trial.trial_id)] = trace
-        for state in states:
-            state.cache.put_traces(
+        if shared_cache is None:
+            for state in states:
+                state.cache.put_traces(
+                    tuple(
+                        (trial.trial_id, state.traces[str(trial.trial_id)].trace)
+                        for trial in state.missing_trials
+                    )
+                )
+        else:
+            shared_cache.put_traces(
                 tuple(
                     (trial.trial_id, state.traces[str(trial.trial_id)].trace)
+                    for state in states
                     for trial in state.missing_trials
                 )
             )
 
     missing_judgments: list[tuple[int, Trial, FingerprintedTrace]] = []
-    for state_index, state in enumerate(states):
-        cached_judgments = state.cache.load_judgments(state.trials)
+    if shared_cache is None:
+        cached_judgments_by_state = tuple(
+            state.cache.load_judgments(state.trials) for state in states
+        )
+    else:
+        cached_judgments = shared_cache.load_judgments(all_trials)
+        cached_judgments_by_state = tuple(cached_judgments for _ in states)
+    for state_index, (state, cached_judgments) in enumerate(
+        zip(states, cached_judgments_by_state, strict=True)
+    ):
         for trial in state.trials:
             trace = state.traces[str(trial.trial_id)]
             cached = cached_judgments.get(trial.trial_id)
@@ -251,8 +296,17 @@ def collect_studies(
         for (state_index, trial, _), judgment in zip(missing_judgments, new_judgments, strict=True):
             states[state_index].judgments[str(trial.trial_id)] = judgment
             judgments_by_state.setdefault(state_index, []).append((trial.trial_id, judgment))
-        for state_index, judgments in judgments_by_state.items():
-            states[state_index].cache.put_judgments(tuple(judgments))
+        if shared_cache is None:
+            for state_index, judgments in judgments_by_state.items():
+                states[state_index].cache.put_judgments(tuple(judgments))
+        else:
+            shared_cache.put_judgments(
+                tuple(
+                    item
+                    for state_index in sorted(judgments_by_state)
+                    for item in judgments_by_state[state_index]
+                )
+            )
 
     results: list[CollectionResult] = []
     for state in states:

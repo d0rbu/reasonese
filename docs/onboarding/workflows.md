@@ -137,8 +137,10 @@ uv run reasonese-collect-studies \
   --output out/sampled-study
 ```
 
-Each study is resumed below a fingerprint-named directory. The collector also writes all rows to
-`out/sampled-study/observations.jsonl`, so analysis does not require listing every child path.
+Each study is resumed below a fingerprint-named directory. One shared
+`out/sampled-study/collection.sqlite3` stores all traces and judgments instead of creating a
+database per child. The collector also writes all rows to `out/sampled-study/observations.jsonl`,
+so analysis does not require listing every child path.
 
 ## Analyze collected observations
 

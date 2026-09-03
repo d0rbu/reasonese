@@ -18,6 +18,7 @@ from reasonese.message_qa_cache import YamlMessageQaCache
 from reasonese.observations import write_observations
 from reasonese.openrouter import OpenRouterClient, RequestsTransport
 from reasonese.study import Study, study_fingerprint
+from reasonese.study_cache import SqliteStudyCache
 
 
 @beartype
@@ -81,6 +82,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             YamlMessageCache(args.output / "generated_messages.yaml"),
             YamlMessageQaCache(args.output / "message_qa.yaml"),
             prefer_batch=not args.no_batch,
+            shared_cache=(
+                SqliteStudyCache(args.output / "collection.sqlite3")
+                if args.suite is not None
+                else None
+            ),
         )
         if args.suite is not None:
             write_observations(

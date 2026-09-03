@@ -51,6 +51,8 @@ from reasonese.study import (
     PositiveInteger,
     Study,
     StudyInputs,
+    Trial,
+    TrialId,
     build_trials,
     make_study,
     observations_per_cell,
@@ -676,7 +678,7 @@ def test_collect_studies_batches_across_tasks_and_matches_independent_outcomes(
 
     suite_results = collect_studies(
         tasks,
-        OpenRouterClient(suite_transport),
+        OpenRouterClient(suite_transport, sync_workers=1),
         manual,
         YamlMessageCache(tmp_path / "suite" / "generated_messages.yaml"),
         YamlMessageQaCache(tmp_path / "suite" / "message_qa.yaml"),
@@ -736,6 +738,65 @@ def test_collect_studies_batches_across_tasks_and_matches_independent_outcomes(
     ]
     assert [result.trace_cache_hits for result in warm_results] == [2, 2]
     assert [result.judgment_cache_hits for result in warm_results] == [2, 2]
+
+    shared_tasks = tuple(
+        CollectionTask(study, tmp_path / "shared" / f"study-{index}")
+        for index, study in enumerate(studies, start=1)
+    )
+    shared_transport = FakeTransport(
+        [
+            _message_qa_batch(3),
+            *_assistant_responses(4),
+            _judge_batch((True, False, False, True, True, False, False, True)),
+        ]
+    )
+    shared_cache = SqliteStudyCache(tmp_path / "shared" / "collection.sqlite3")
+    shared_results = collect_studies(
+        shared_tasks,
+        OpenRouterClient(shared_transport, sync_workers=1),
+        manual,
+        YamlMessageCache(tmp_path / "shared" / "generated_messages.yaml"),
+        YamlMessageQaCache(tmp_path / "shared" / "message_qa.yaml"),
+        prefer_batch=True,
+        shared_cache=shared_cache,
+    )
+    shared_warm = collect_studies(
+        shared_tasks,
+        None,
+        manual,
+        YamlMessageCache(tmp_path / "shared" / "generated_messages.yaml"),
+        YamlMessageQaCache(tmp_path / "shared" / "message_qa.yaml"),
+        prefer_batch=True,
+        shared_cache=shared_cache,
+    )
+
+    assert shared_transport.post_calls == suite_transport.post_calls
+    assert shared_results == suite_results
+    assert [result.observations for result in shared_warm] == [
+        result.observations for result in shared_results
+    ]
+    assert [result.trace_cache_hits for result in shared_warm] == [2, 2]
+    assert [result.judgment_cache_hits for result in shared_warm] == [2, 2]
+    assert shared_cache.path.is_file()
+    assert not any((task.output_dir / "collection.sqlite3").exists() for task in shared_tasks)
+
+    isolated_traces = {
+        trial_id: trace
+        for task, result in zip(tasks, suite_results, strict=True)
+        for trial_id, trace in SqliteStudyCache(task.output_dir / "collection.sqlite3")
+        .load_traces(result.trials)
+        .items()
+    }
+    isolated_judgments = {
+        trial_id: judgment
+        for task, result in zip(tasks, suite_results, strict=True)
+        for trial_id, judgment in SqliteStudyCache(task.output_dir / "collection.sqlite3")
+        .load_judgments(result.trials)
+        .items()
+    }
+    all_trials = tuple(trial for result in shared_results for trial in result.trials)
+    assert shared_cache.load_traces(all_trials) == isolated_traces
+    assert shared_cache.load_judgments(all_trials) == isolated_judgments
 
 
 def test_collect_studies_runs_mixed_assistant_models_through_sync_requests(
@@ -963,6 +1024,42 @@ def test_collect_studies_cli_accepts_suite_and_writes_combined_observations(
             _judge_batch((True, False, False, True, True, False, False, True)),
         ]
     )
+    cache_calls: list[tuple[str, Path]] = []
+    original_load_traces = SqliteStudyCache.load_traces
+    original_put_traces = SqliteStudyCache.put_traces
+    original_load_judgments = SqliteStudyCache.load_judgments
+    original_put_judgments = SqliteStudyCache.put_judgments
+
+    def record_load_traces(
+        cache: SqliteStudyCache, trials: tuple[Trial, ...]
+    ) -> dict[TrialId, ConversationTrace]:
+        cache_calls.append(("load_traces", cache.path))
+        return original_load_traces(cache, trials)
+
+    def record_put_traces(
+        cache: SqliteStudyCache,
+        traces: tuple[tuple[TrialId, ConversationTrace], ...],
+    ) -> None:
+        cache_calls.append(("put_traces", cache.path))
+        original_put_traces(cache, traces)
+
+    def record_load_judgments(
+        cache: SqliteStudyCache, trials: tuple[Trial, ...]
+    ) -> dict[TrialId, Judgment]:
+        cache_calls.append(("load_judgments", cache.path))
+        return original_load_judgments(cache, trials)
+
+    def record_put_judgments(
+        cache: SqliteStudyCache,
+        judgments: tuple[tuple[TrialId, Judgment], ...],
+    ) -> None:
+        cache_calls.append(("put_judgments", cache.path))
+        original_put_judgments(cache, judgments)
+
+    monkeypatch.setattr(SqliteStudyCache, "load_traces", record_load_traces)
+    monkeypatch.setattr(SqliteStudyCache, "put_traces", record_put_traces)
+    monkeypatch.setattr(SqliteStudyCache, "load_judgments", record_load_judgments)
+    monkeypatch.setattr(SqliteStudyCache, "put_judgments", record_put_judgments)
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
     monkeypatch.setattr("reasonese.collect_studies.RequestsTransport", lambda key: transport)
 
@@ -988,6 +1085,37 @@ def test_collect_studies_cli_accepts_suite_and_writes_combined_observations(
         study_fingerprint(first),
         study_fingerprint(second),
     }
+    assert (output / "collection.sqlite3").is_file()
+    assert not any(
+        (Path(item["output"]) / "collection.sqlite3").exists() for item in summary["studies"]
+    )
+
+    monkeypatch.delenv("OPENROUTER_API_KEY")
+    assert (
+        collect_studies_cli(
+            [
+                "--suite",
+                str(suite_path),
+                "--output",
+                str(output),
+                "--user-messages",
+                str(manual.root),
+            ]
+        )
+        == 0
+    )
+    warm = json.loads(capsys.readouterr().out)
+    assert [item["trace_cache_hits"] for item in warm["studies"]] == [2, 2]
+    assert [item["judgment_cache_hits"] for item in warm["studies"]] == [2, 2]
+    assert len(transport.post_calls) == 6
+    assert cache_calls == [
+        ("load_traces", output / "collection.sqlite3"),
+        ("put_traces", output / "collection.sqlite3"),
+        ("load_judgments", output / "collection.sqlite3"),
+        ("put_judgments", output / "collection.sqlite3"),
+        ("load_traces", output / "collection.sqlite3"),
+        ("load_judgments", output / "collection.sqlite3"),
+    ]
 
 
 def test_collection_tasks_require_paths_with_distinct_stems(tmp_path: Path) -> None:
@@ -1060,6 +1188,33 @@ def test_collect_studies_requires_distinct_tasks(tmp_path: Path) -> None:
             message_cache,
             qa_cache,
             prefer_batch=True,
+        )
+
+
+def test_collect_studies_rejects_duplicate_trial_identifiers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first = _study()
+    second = make_study(
+        (first.inputs[0], _spec("Different.", Channel.USER)),
+        Assistant.INKLING,
+        1,
+    )
+    duplicate_trials = build_trials(first)
+    monkeypatch.setattr("reasonese.collect_data.build_trials", lambda study: duplicate_trials)
+
+    with pytest.raises(ValueError, match="trial identifiers"):
+        collect_studies(
+            (
+                CollectionTask(first, tmp_path / "first"),
+                CollectionTask(second, tmp_path / "second"),
+            ),
+            None,
+            _manual_library(tmp_path, first, second),
+            YamlMessageCache(tmp_path / "messages.yaml"),
+            YamlMessageQaCache(tmp_path / "qa.yaml"),
+            prefer_batch=True,
+            shared_cache=SqliteStudyCache(tmp_path / "collection.sqlite3"),
         )
 
 
