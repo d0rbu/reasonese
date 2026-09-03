@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import closing
 from dataclasses import replace
 from pathlib import Path
 from typing import cast
@@ -388,7 +389,7 @@ def test_sqlite_study_cache_rejects_corrupt_payloads(
     trials = build_trials(_study())
     cache = SqliteStudyCache(tmp_path / "collection.sqlite3")
     cache.load_traces(trials)
-    with sqlite3.connect(cache.path) as connection:
+    with closing(sqlite3.connect(cache.path)) as connection, connection:
         connection.execute(
             f"INSERT INTO {table} (trial_id, payload) VALUES (?, ?)",
             (str(trials[0].trial_id), payload),
