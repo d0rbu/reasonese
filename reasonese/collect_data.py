@@ -24,7 +24,7 @@ from reasonese.conversation import (
     construct_conversation,
 )
 from reasonese.judging import Judgment, judge_traces, trace_fingerprint
-from reasonese.manual_messages import ManualMessageLibrary
+from reasonese.manual_messages import ManualMessageLibrary, ManualMessageSnapshot
 from reasonese.message_qa_cache import YamlMessageQaCache
 from reasonese.observations import Observation, observations_from_trial, write_observations
 from reasonese.openrouter import OpenRouterClient, RequestsTransport, model_route
@@ -68,7 +68,7 @@ class CollectionResult:
     judgment_cache_hits: Natural
 
 
-def _prepare_task(task: CollectionTask, manual_messages: ManualMessageLibrary) -> _CollectionState:
+def _prepare_task(task: CollectionTask, manual_messages: ManualMessageSnapshot) -> _CollectionState:
     trials = build_trials(task.study)
     task.output_dir.mkdir(parents=True, exist_ok=True)
     with (task.output_dir / "study.yaml").open("w", encoding="utf-8") as handle:
@@ -124,7 +124,10 @@ def collect_studies(
     if len(set(studies)) != len(studies):
         raise ValueError("collection task studies must be distinct")
 
-    states = tuple(_prepare_task(task, manual_messages) for task in tasks)
+    manual_snapshot = manual_messages.snapshot(
+        tuple(spec for task in tasks for spec in task.study.inputs)
+    )
+    states = tuple(_prepare_task(task, manual_snapshot) for task in tasks)
     specs_to_materialize = tuple(
         dict.fromkeys(
             spec for state in states if state.missing_trials for spec in state.task.study.inputs
@@ -140,7 +143,7 @@ def collect_studies(
                 specs_to_materialize,
                 client,
                 message_cache,
-                manual_messages,
+                manual_snapshot,
                 prefer_batch=prefer_batch,
             )
         }
