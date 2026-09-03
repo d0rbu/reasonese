@@ -92,6 +92,21 @@ execution is intentionally desired; the Luna judge remains a batch model.
 Check the design size before a live run: two inputs and `r` rollouts require `2r` assistant
 responses and `4r` judge verdicts.
 
+For multiple studies, keep their YAML filename stems distinct and collect them in one process:
+
+```bash
+uv run reasonese-collect-studies \
+  --study path/to/study-a.yaml \
+  --study path/to/study-b.yaml \
+  --user-messages prompts/user \
+  --output out/my-study-suite
+```
+
+The suite utility batches shared message QA once, combines every pending trial for the same
+assistant, and judges all completed traces in one request group. Shared authoring and QA caches
+live at the suite root; each study's resumable traces, judgments, and observations remain in its
+own subdirectory.
+
 ## Analyze collected observations
 
 One or more observation files can be combined:

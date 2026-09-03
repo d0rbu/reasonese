@@ -67,6 +67,12 @@ position, completion boolean, trace fingerprint, and available assistant/judge r
 This is the input to downstream analysis. Cached study traces are reused only while their
 user-authored contents still match the selected manual files.
 
+`reasonese-collect-studies --output DIRECTORY` places shared `generated_messages.yaml` and
+`message_qa.yaml` files directly under `DIRECTORY`. Every repeated `--study PATH` is collected
+under `DIRECTORY/PATH_STEM/` with the same `study.yaml`, `trials/`, `judgments.yaml`, and
+`observations.jsonl` layout above. This lets identical cells reuse the same authored message and
+QA verdict while keeping rollout traces and judgments isolated by study.
+
 ## Analysis directory
 
 `reasonese-analyze --output DIRECTORY` writes:

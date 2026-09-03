@@ -108,6 +108,12 @@ continuations) and batches judge work where supported, resumes from per-rollout 
 writes flat analysis-ready rows to `observations.jsonl`. The same manual-message hierarchy and
 message-QA gate apply to user-authored study inputs.
 
+`reasonese-collect-studies` accepts repeated `--study` paths and batches work across those study
+boundaries. It shares generated-message and message-QA caches at the output root, combines all
+trials for the same assistant into each agent-loop round, and submits all uncached response
+judgments together. Each study keeps its own directory of traces, judgments, and observations,
+named after the study file's stem. Study filenames must therefore have distinct stems.
+
 `reasonese-analyze` fits an L2-penalized Bradley–Terry ordering from each trial's cell pair.
 A completed cell beats an incomplete one; equal verdicts contribute half-wins. It also
 writes marginal summaries and pairwise contrasts for all five coordinates, overall position

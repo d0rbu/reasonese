@@ -7,9 +7,11 @@ import pytest
 import yaml
 
 from reasonese.axes import Assistant, Author, Channel, Framing, Instruction
-from reasonese.cache import YamlTraceCache
-from reasonese.collect_data import collect_study
+from reasonese.cache import YamlMessageCache, YamlTraceCache
+from reasonese.collect_data import CollectionResult, CollectionTask, collect_studies, collect_study
 from reasonese.collect_data import main as collect_data
+from reasonese.collect_studies import collection_tasks
+from reasonese.collect_studies import main as collect_studies_cli
 from reasonese.config import load_study
 from reasonese.conversation import ConversationTrace, GeneratedMessage, GeneratedText
 from reasonese.judging import (
@@ -62,10 +64,15 @@ def _study(rollouts: int = 1, assistant: Assistant = Assistant.INKLING) -> Study
     )
 
 
-def _manual_library(tmp_path: Path, study: Study) -> ManualMessageLibrary:
+def _manual_library(tmp_path: Path, *studies: Study) -> ManualMessageLibrary:
     root = tmp_path / "manual"
     instructions = tuple(
-        dict.fromkeys(spec.instruction for spec in study.inputs if spec.author is Author.USER)
+        dict.fromkeys(
+            spec.instruction
+            for study in studies
+            for spec in study.inputs
+            if spec.author is Author.USER
+        )
     )
     for index, instruction in enumerate(instructions):
         directory = root / f"instruction-{index}"
@@ -438,6 +445,92 @@ def test_collect_study_batches_trials_and_judgments_then_resumes_without_a_key(
         collect_study(study, output, None, manual, prefer_batch=True)
 
 
+def test_collect_studies_batches_across_tasks_and_matches_independent_outcomes(
+    tmp_path: Path,
+) -> None:
+    first = _study()
+    shared = first.inputs[0]
+    second = make_study(
+        (shared, _spec("What is three plus two?", Channel.USER)),
+        Assistant.INKLING,
+        1,
+    )
+    studies = (first, second)
+    manual = _manual_library(tmp_path, *studies)
+    tasks = tuple(
+        CollectionTask(study, tmp_path / "suite" / f"study-{index}")
+        for index, study in enumerate(studies, start=1)
+    )
+    suite_transport = FakeTransport(
+        [
+            _message_qa_batch(3),
+            _assistant_batch(4),
+            _judge_batch((True, False, False, True, True, False, False, True)),
+        ]
+    )
+
+    suite_results = collect_studies(
+        tasks,
+        OpenRouterClient(suite_transport),
+        manual,
+        YamlMessageCache(tmp_path / "suite" / "generated_messages.yaml"),
+        YamlMessageQaCache(tmp_path / "suite" / "message_qa.yaml"),
+        prefer_batch=True,
+    )
+
+    independent_results = tuple(
+        collect_study(
+            study,
+            tmp_path / "independent" / f"study-{index}",
+            OpenRouterClient(
+                FakeTransport(
+                    [
+                        _message_qa_batch(2),
+                        _assistant_batch(2),
+                        _judge_batch((True, False, False, True)),
+                    ]
+                )
+            ),
+            manual,
+            prefer_batch=True,
+        )
+        for index, study in enumerate(studies, start=1)
+    )
+
+    def numeric_outcomes(result: CollectionResult) -> list[tuple[object, ...]]:
+        return [
+            (
+                observation.trial_id,
+                observation.cell_id,
+                observation.permutation,
+                observation.rollout,
+                observation.position,
+                observation.completed,
+            )
+            for observation in result.observations
+        ]
+
+    assert [numeric_outcomes(result) for result in suite_results] == [
+        numeric_outcomes(result) for result in independent_results
+    ]
+    assert len(suite_transport.post_calls) == 3
+    assert [len(call[1]["requests"]) for call in suite_transport.post_calls] == [3, 4, 8]
+
+    warm_results = collect_studies(
+        tasks,
+        None,
+        manual,
+        YamlMessageCache(tmp_path / "suite" / "generated_messages.yaml"),
+        YamlMessageQaCache(tmp_path / "suite" / "message_qa.yaml"),
+        prefer_batch=True,
+    )
+    assert [result.observations for result in warm_results] == [
+        result.observations for result in suite_results
+    ]
+    assert [result.trace_cache_hits for result in warm_results] == [2, 2]
+    assert [result.judgment_cache_hits for result in warm_results] == [2, 2]
+
+
 def test_collect_study_batches_each_active_tool_round(tmp_path: Path) -> None:
     study = _study()
     transport = FakeTransport(
@@ -543,6 +636,110 @@ def test_collect_data_cli_runs_then_reports_warm_cache(
     assert warm["trace_cache_hits"] == 2
     assert warm["judgment_cache_hits"] == 2
     assert len(transport.post_calls) == 3
+
+
+def test_collect_studies_cli_batches_tasks_then_reports_warm_cache(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    first = _study()
+    second = make_study(
+        (first.inputs[0], _spec("What is three plus two?", Channel.USER)),
+        Assistant.INKLING,
+        1,
+    )
+    first_path = tmp_path / "first.yaml"
+    second_path = tmp_path / "second.yaml"
+    _write_study(first_path, first)
+    _write_study(second_path, second)
+    manual = _manual_library(tmp_path, first, second)
+    output = tmp_path / "suite-output"
+    transport = FakeTransport(
+        [
+            _message_qa_batch(3),
+            _assistant_batch(4),
+            _judge_batch((True, False, False, True, True, False, False, True)),
+        ]
+    )
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr("reasonese.collect_studies.RequestsTransport", lambda key: transport)
+    args = [
+        "--study",
+        str(first_path),
+        "--study",
+        str(second_path),
+        "--output",
+        str(output),
+        "--user-messages",
+        str(manual.root),
+    ]
+
+    assert collect_studies_cli(args) == 0
+    cold = json.loads(capsys.readouterr().out)
+    monkeypatch.delenv("OPENROUTER_API_KEY")
+    assert collect_studies_cli(args) == 0
+    warm = json.loads(capsys.readouterr().out)
+
+    assert cold["trials"] == 4
+    assert cold["observations"] == 8
+    assert [item["output"] for item in cold["studies"]] == [
+        str(output / "first"),
+        str(output / "second"),
+    ]
+    assert [item["trace_cache_hits"] for item in warm["studies"]] == [2, 2]
+    assert [item["judgment_cache_hits"] for item in warm["studies"]] == [2, 2]
+    assert len(transport.post_calls) == 3
+
+
+def test_collection_tasks_require_paths_with_distinct_stems(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="at least one"):
+        collection_tasks((), tmp_path)
+    with pytest.raises(ValueError, match="distinct stems"):
+        collection_tasks(
+            (tmp_path / "one" / "same.yaml", tmp_path / "two" / "same.yaml"),
+            tmp_path,
+        )
+
+
+def test_collect_studies_requires_distinct_tasks(tmp_path: Path) -> None:
+    study = _study()
+    manual = _manual_library(tmp_path, study)
+    message_cache = YamlMessageCache(tmp_path / "messages.yaml")
+    qa_cache = YamlMessageQaCache(tmp_path / "qa.yaml")
+    with pytest.raises(ValueError, match="at least one"):
+        collect_studies((), None, manual, message_cache, qa_cache, prefer_batch=True)
+    with pytest.raises(ValueError, match="output directories"):
+        collect_studies(
+            (
+                CollectionTask(study, tmp_path / "same"),
+                CollectionTask(
+                    make_study(
+                        (study.inputs[0], _spec("Different.", Channel.USER)),
+                        study.assistant,
+                        1,
+                    ),
+                    tmp_path / "same",
+                ),
+            ),
+            None,
+            manual,
+            message_cache,
+            qa_cache,
+            prefer_batch=True,
+        )
+    with pytest.raises(ValueError, match="studies"):
+        collect_studies(
+            (
+                CollectionTask(study, tmp_path / "first"),
+                CollectionTask(study, tmp_path / "second"),
+            ),
+            None,
+            manual,
+            message_cache,
+            qa_cache,
+            prefer_batch=True,
+        )
 
 
 def test_collect_data_cli_reports_missing_key(

@@ -82,6 +82,8 @@ study -> both input orderings x rollouts -> traces -> judgments -> observation r
   trials. Its two distinct inputs produce exactly two orderings.
 - `reasonese.collect_data` batches every active assistant agent-loop round, flattens uncached
   judge requests into one batch, and resumes at trial granularity.
+- `reasonese.collect_studies` applies the same stages across repeated study paths, sharing
+  materialized-message and QA caches and batching trials and judgments across study boundaries.
 - `reasonese.observations` joins traces and judgments into one flat row per cell and trial.
 
 Each rollout has its own trace-cache path, so repeated responses for the same ordered matchup

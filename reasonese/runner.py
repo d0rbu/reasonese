@@ -71,17 +71,36 @@ def materialize_messages(
     prefer_batch: bool,
 ) -> tuple[GeneratedMessage, ...]:
     """Generate each distinct uncached input, grouped by author model."""
+    return materialize_specs(
+        matchup.inputs,
+        client,
+        cache,
+        manual_messages,
+        prefer_batch=prefer_batch,
+    )
+
+
+@beartype
+def materialize_specs(
+    specs: tuple[PromptSpec, ...],
+    client: OpenRouterClient,
+    cache: YamlMessageCache,
+    manual_messages: ManualMessageLibrary,
+    *,
+    prefer_batch: bool,
+) -> tuple[GeneratedMessage, ...]:
+    """Materialize arbitrary prompt specs with one shared model-grouped cache pass."""
     materialized = {message.spec: message for message in cache.load()}
     new_messages: list[GeneratedMessage] = []
 
-    user_specs = tuple(dict.fromkeys(spec for spec in matchup.inputs if spec.author is Author.USER))
+    user_specs = tuple(dict.fromkeys(spec for spec in specs if spec.author is Author.USER))
     for spec in user_specs:
         message = GeneratedMessage(spec, manual_messages.message_for(spec), None)
         if materialized.get(spec) != message:
             materialized[spec] = message
             new_messages.append(message)
 
-    missing = tuple(dict.fromkeys(spec for spec in matchup.inputs if spec not in materialized))
+    missing = tuple(dict.fromkeys(spec for spec in specs if spec not in materialized))
 
     grouped_specs: list[tuple[PromptSpec, ...]] = []
     completion_groups: list[CompletionGroup] = []
@@ -114,7 +133,7 @@ def materialize_messages(
 
     if new_messages:
         cache.put_many(tuple(new_messages))
-    return tuple(materialized[spec] for spec in matchup.inputs)
+    return tuple(materialized[spec] for spec in specs)
 
 
 @beartype
