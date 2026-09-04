@@ -1,16 +1,12 @@
 # Instruction configuration
 
-The input is a TOML array of base-prompt strings:
+Instructions are configured only as mutually exclusive pairs, described under the instruction
+pair bank below. There is no free-form instruction list: a study pairs one side of a pair with
+the other, so a bare array of prompts could only produce pairings that carry no signal.
 
-```toml
-instructions = [
-    "Write a Python program that counts the unique words in a text file.",
-    "Find information about pathlib.Path.glob.",
-]
-```
-
-At least one instruction is required. Each string must be non-empty and have no surrounding
-whitespace. See [`../../configs/example_instructions.toml`](../../configs/example_instructions.toml).
+`reasonese-plan --pairs`, `reasonese-sample-studies --pairs`, and `reasonese-analyze --pairs`
+all read the bank. Every instruction must appear in exactly one pair, since instruction text is
+what maps a specification back to its pair and side.
 
 ## Matchup configuration
 
@@ -91,9 +87,10 @@ study's output subdirectory.
 
 ## Sampled study suite
 
-`reasonese-sample-studies` builds all four-axis cells from an instruction TOML file, selects a
-seeded axis-stratified, degree-aware, connected subset of valid unordered pairs, and writes them
-under one `studies` key:
+`reasonese-sample-studies` builds all four-axis cells for both sides of every instruction pair,
+selects a seeded axis-stratified, degree-aware, connected subset of that pair's valid unordered
+pairings, and writes them under one `studies` key. `--pairings-per-pair` sets the count per pair
+per assistant and defaults to 720:
 
 ```yaml
 studies:

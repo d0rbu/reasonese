@@ -4,6 +4,17 @@
 - Instructions are non-empty, trimmed phantom strings.
 - Every instruction produces all 90 framing, channel, and author combinations.
 - Duplicate or empty instruction collections are rejected.
+- One instruction belongs to exactly one pair, and to exactly one side of it.
+- A study pairs the two sides of one instruction pair; pairings across pairs are never formed.
+- A pair's valid edge population is a bijection onto ranks, and every edge joins opposite sides
+  and contains at least one user-message channel.
+- Sampled pair designs are connected, cover every cell, and are reproducible from a seed derived
+  from the pair identifier rather than the pair's position in the bank.
+- Instruction is not a Bradley-Terry axis; only framing, channel, and author vary within a trial.
+- Bradley-Terry fits one block per connected component, and each component self-centres on zero.
+- Ranks are within-component; the comparison graph is expected to have one component per
+  `(pair, assistant)` rather than to be connected.
+- Both-completed and neither-completed trials are counted apart, though both score as ties.
 - `PromptSpec` contains exactly the four axes and is runtime-checked by `beartype`.
 - `specs_per_instruction()` returns a phantom non-negative integer.
 - `MatchupInputs` contains exactly two datapoints and at least one explicit user-message

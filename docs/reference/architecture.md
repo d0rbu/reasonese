@@ -3,12 +3,13 @@
 The package has a deterministic planning flow:
 
 ```text
-instruction strings -> Cartesian product -> four-field JSONL
+instruction pairs -> per-side Cartesian product -> four-field JSONL
 ```
 
 - `reasonese.axes` defines the instruction phantom type and three `StrEnum` axes.
-- `reasonese.config` reads a TOML array of instruction strings.
-- `reasonese.planning` defines the four-field `PromptSpec` and enumerates combinations.
+- `reasonese.config` reads matchup and study YAML.
+- `reasonese.planning` defines the four-field `PromptSpec`, enumerates combinations, and groups
+  them into `PairSpecs` holding both sides of one instruction pair.
 - `reasonese.io` writes those dataclasses as JSONL.
 - `reasonese.show_axes` prints the axis values.
 - `reasonese.plan` parses paths and writes the planned combinations.
@@ -154,4 +155,19 @@ candidate pairs -> overlap and coverage diagnostics -> cached pair audit -> repo
 - `reasonese.curate_instructions` is the fail-closed `reasonese-curate-instructions` utility.
 
 The audit is quality control over candidate text. It does not replace the empirical check that
-collected trials rarely complete both instructions or neither.
+collected trials rarely complete both instructions or neither. That check is
+`pair_exclusivity.csv`, written by `reasonese-analyze`.
+
+Because instructions are bipartite, sampling and analysis are both scoped to one pair:
+
+```text
+pair -> bipartite edge population -> stratified degree-aware sample -> connected design
+observations -> (pair, side) blocks -> per-component Bradley-Terry -> pooled axis margins
+```
+
+- `reasonese.instructions.instruction_index` maps each instruction to its pair and side and
+  rejects reuse of one instruction across pairs.
+- `reasonese.sampling` enumerates each pair's valid edges by rank, samples within stratum
+  quotas, balances degree within channel, and repairs connectivity per pair.
+- `reasonese.analysis` fits one Bradley-Terry block per connected component, which is one
+  `(pair, assistant)`, so scores self-centre and pooled axis margins stay comparable.
