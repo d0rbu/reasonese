@@ -127,6 +127,41 @@ def load_instruction_pairs(path: Path) -> tuple[InstructionPair, ...]:
     return pairs
 
 
+class PairSide(StrEnum):
+    """Which of a pair's two instructions a datapoint carries."""
+
+    FIRST = "first"
+    SECOND = "second"
+
+
+@beartype
+@dataclass(frozen=True, slots=True)
+class PairMembership:
+    """The pair and side that one base instruction belongs to."""
+
+    pair: InstructionPair
+    side: PairSide
+
+
+@beartype
+def instruction_index(
+    pairs: tuple[InstructionPair, ...],
+) -> dict[Instruction, PairMembership]:
+    """Map every instruction to its pair and side, rejecting reuse across pairs."""
+    if not pairs:
+        raise ValueError("at least one instruction pair is required")
+    index: dict[Instruction, PairMembership] = {}
+    for pair in pairs:
+        for side, instruction in (
+            (PairSide.FIRST, pair.first),
+            (PairSide.SECOND, pair.second),
+        ):
+            if instruction in index:
+                raise ValueError(f"instruction appears in more than one pair: {instruction}")
+            index[instruction] = PairMembership(pair, side)
+    return index
+
+
 _TOKEN = re.compile(r"[a-z0-9]+")
 
 

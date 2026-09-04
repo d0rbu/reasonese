@@ -2,11 +2,13 @@
 
 ## Current step
 
-The current step turns pairs of four-axis datapoints into ordered two-instruction conversations,
-collects assistant traces, and independently judges completion of every input. The assistant
-remains matchup metadata rather than an entry axis. Study orchestration balances each cell
-over every possible position and supports repeated rollouts. Analysis provides penalized
-cell rankings, axis margins, and explicit position and robustness diagnostics.
+The current step turns the two sides of a mutually exclusive instruction pair into ordered
+two-instruction conversations, collects assistant traces, and independently judges completion of
+every input. The assistant remains matchup metadata rather than an entry axis, and instruction is
+a blocking factor rather than a treatment axis. Study orchestration balances each cell over every
+possible position and supports repeated rollouts. Analysis provides penalized within-component
+cell rankings, framing, channel, and author margins, per-pair exclusivity counts, and explicit
+position and robustness diagnostics.
 
 This foundation specifies:
 
@@ -21,8 +23,10 @@ This foundation specifies:
 - how generated messages and raw responses are cached; and
 - how one strict completion boolean is collected for each instruction; and
 - how both orderings and repeated rollouts become analysis-ready observation rows; and
-- how rankings, axis contrasts, order effects, and design diagnostics are reported; and
-- how an exhaustive pairing population can be replaced by a seeded axis-stratified,
+- how rankings, axis contrasts, order effects, and design diagnostics are reported;
+- why instruction is a blocking factor rather than a treatment axis, given that no comparison
+  crosses a pair boundary; and
+- how an exhaustive within-pair pairing population can be replaced by a seeded axis-stratified,
   degree-aware connected design that still covers every selected cell and counterbalances order.
 
 ## Deferred decisions
@@ -32,6 +36,13 @@ does not contain an empirical corpus or statistical result. Future work may add 
 models, multiplicity-aware inference, or explicit position-adjusted rankings after empirical
 sample sizes and study topology are known.
 
+Pooled axis margins currently average per-component cell scores. A Bradley-Terry model with
+axis covariates, absorbing a `(pair, side)` intercept and estimating framing, channel, and
+author contrasts directly, would give those contrasts proper standard errors from far fewer
+parameters. It is deferred rather than rejected. Until then, a pooled framing effect could in
+principle be driven by a few pairs, so per-pair spread is worth inspecting alongside the
+margin.
+
 ## Construct questions for later work
 
 - How should the six framing treatments be audited for fidelity and distinctness?
@@ -39,7 +50,6 @@ sample sizes and study topology are known.
 - How well do message-QA verdicts agree with blinded human semantic-equivalence ratings?
 - How should model revisions and provider routing be recorded alongside stable display names?
 - How much does synthetic file-read history itself influence channel comparisons?
-- How often do audited instruction pairs still produce both-completed or neither-completed trials?
 - Should future designs weight rare axis-difference strata more heavily than their prevalence in
   the eligible pairing population?
 

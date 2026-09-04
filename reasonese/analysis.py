@@ -11,12 +11,21 @@ import numpy as np
 from beartype import beartype
 from numpy.typing import NDArray
 
+from reasonese.instructions import InstructionPair, PairMembership, instruction_index
 from reasonese.observations import CellId, Observation
 from reasonese.study import Cell
 
 type AxisName = str
 type TableRow = dict[str, object]
-_AXES = ("instruction", "framing", "channel", "author", "assistant")
+# Instruction is not a treatment axis under a bipartite bank. A trial only ever
+# holds the two instructions of one pair, so the comparison graph has no edges
+# between pairs and an instruction contrast would difference arbitrary
+# per-component offsets. These three axes are the only ones that vary within a
+# trial, so they are the only ones a Bradley-Terry score can speak to.
+_AXES = ("framing", "channel", "author")
+# Constant within a trial, so their mean score is zero once components
+# self-center. Reported as descriptive strata without a Bradley-Terry column.
+_STRATA = ("assistant", "skill", "conflict", "pair")
 
 
 def _as_float(value: object) -> float:
@@ -48,6 +57,7 @@ class RankedCell:
     """One cell's fitted Bradley-Terry result and raw completion summary."""
 
     rank: int
+    component_index: int
     cell_id: CellId
     cell: Cell
     score: float
@@ -81,6 +91,8 @@ class AnalysisBundle:
     fit: BradleyTerryFit
     axis_summary: tuple[TableRow, ...]
     axis_comparisons: tuple[TableRow, ...]
+    stratum_summary: tuple[TableRow, ...]
+    pair_exclusivity: tuple[TableRow, ...]
     position_summary: tuple[TableRow, ...]
     cell_position_effects: tuple[TableRow, ...]
     axis_position_effects: tuple[TableRow, ...]
@@ -90,17 +102,29 @@ class AnalysisBundle:
 
 
 def _axis_value(observation: Observation, axis: AxisName) -> str:
-    if axis == "instruction":
-        return str(observation.spec.instruction)
     if axis == "framing":
         return str(observation.spec.framing)
     if axis == "channel":
         return str(observation.spec.channel)
     if axis == "author":
         return str(observation.spec.author)
-    if axis == "assistant":
-        return str(observation.assistant)
     raise ValueError(f"unknown axis {axis!r}")
+
+
+def _stratum_value(
+    observation: Observation,
+    membership: PairMembership,
+    stratum: AxisName,
+) -> str:
+    if stratum == "assistant":
+        return str(observation.assistant)
+    if stratum == "skill":
+        return str(membership.pair.skill)
+    if stratum == "conflict":
+        return str(membership.pair.conflict)
+    if stratum == "pair":
+        return str(membership.pair.pair_id)
+    raise ValueError(f"unknown stratum {stratum!r}")
 
 
 def _cell(observation: Observation) -> Cell:
@@ -154,6 +178,40 @@ def build_comparisons(observations: tuple[Observation, ...]) -> tuple[Comparison
         outcome = 0.5 if first.completed == second.completed else float(first.completed)
         comparisons.append(Comparison(trial_id, first.cell_id, second.cell_id, outcome))
     return tuple(comparisons)
+
+
+@beartype
+def pair_memberships(
+    observations: tuple[Observation, ...],
+    pairs: tuple[InstructionPair, ...],
+) -> dict[CellId, PairMembership]:
+    """Map every observed cell to its instruction pair and side.
+
+    Rejects instructions absent from the bank, and trials whose two cells are
+    not the two opposite sides of one pair. Both would silently break the
+    blocking structure that replaces the instruction axis.
+    """
+    index = instruction_index(pairs)
+    memberships: dict[CellId, PairMembership] = {}
+    by_trial: dict[str, list[Observation]] = defaultdict(list)
+    for observation in observations:
+        membership = index.get(observation.spec.instruction)
+        if membership is None:
+            raise ValueError(
+                "observed instruction is absent from the pair bank: "
+                f"{observation.spec.instruction}"
+            )
+        memberships[observation.cell_id] = membership
+        by_trial[str(observation.trial_id)].append(observation)
+
+    for trial_id, rows in by_trial.items():
+        pair_ids = {memberships[row.cell_id].pair.pair_id for row in rows}
+        sides = {memberships[row.cell_id].side for row in rows}
+        if len(pair_ids) != 1:
+            raise ValueError(f"trial {trial_id} mixes instructions from different pairs")
+        if len(sides) != len(rows):
+            raise ValueError(f"trial {trial_id} repeats one side of its instruction pair")
+    return memberships
 
 
 def _connected_components(
@@ -241,12 +299,52 @@ def _fit_scores(
     return scores, standard_errors, converged, iterations, objective
 
 
+def _fit_scores_by_component(
+    cell_ids: tuple[CellId, ...],
+    comparisons: tuple[Comparison, ...],
+    l2: float,
+    components: tuple[tuple[CellId, ...], ...],
+) -> tuple[NDArray[np.float64], NDArray[np.float64], bool, int, float]:
+    """Fit every connected component separately and assemble one score vector.
+
+    Scores are identified only up to a shift inside a component, so a joint fit
+    would invent an ordering between components. It would also build a dense
+    ``len(cell_ids) ** 2`` Hessian for a matrix that is block diagonal, which at
+    the pilot's cell count is several gigabytes per solve.
+    """
+    index = {cell_id: position for position, cell_id in enumerate(cell_ids)}
+    membership = {
+        cell_id: number for number, component in enumerate(components) for cell_id in component
+    }
+    grouped: list[list[Comparison]] = [[] for _ in components]
+    for comparison in comparisons:
+        grouped[membership[comparison.first]].append(comparison)
+
+    scores = np.zeros(len(cell_ids), dtype=np.float64)
+    standard_errors = np.zeros(len(cell_ids), dtype=np.float64)
+    converged = True
+    iterations = 0
+    objective = 0.0
+    for component, component_comparisons in zip(components, grouped, strict=True):
+        fitted, errors, block_converged, block_iterations, block_objective = _fit_scores(
+            component, tuple(component_comparisons), l2
+        )
+        for position, cell_id in enumerate(component):
+            scores[index[cell_id]] = fitted[position]
+            standard_errors[index[cell_id]] = errors[position]
+        converged = converged and block_converged
+        iterations = max(iterations, block_iterations)
+        objective += block_objective
+    return scores, standard_errors, converged, iterations, objective
+
+
 def _bootstrap_intervals(
     cell_ids: tuple[CellId, ...],
     comparisons: tuple[Comparison, ...],
     l2: float,
     samples: int,
     seed: int,
+    components: tuple[tuple[CellId, ...], ...],
 ) -> dict[CellId, tuple[float, float]]:
     if samples < 0:
         raise ValueError("bootstrap samples must be non-negative")
@@ -263,7 +361,7 @@ def _bootstrap_intervals(
         resampled = tuple(
             comparison for group_index in selected for comparison in trial_groups[int(group_index)]
         )
-        estimates[sample_index] = _fit_scores(cell_ids, resampled, l2)[0]
+        estimates[sample_index] = _fit_scores_by_component(cell_ids, resampled, l2, components)[0]
     lower = np.percentile(estimates, 2.5, axis=0)
     upper = np.percentile(estimates, 97.5, axis=0)
     return {
@@ -280,23 +378,26 @@ def fit_bradley_terry(
     bootstrap_samples: int = 0,
     seed: int = 0,
 ) -> BradleyTerryFit:
-    """Fit an L2-penalized total ordering with trial-cluster bootstrap intervals."""
+    """Fit an L2-penalized within-component ordering with bootstrap intervals."""
     comparisons = build_comparisons(observations)
     cells = {observation.cell_id: _cell(observation) for observation in observations}
     cell_ids = tuple(sorted(cells))
-    scores, standard_errors, converged, iterations, objective = _fit_scores(
-        cell_ids, comparisons, l2
+    components = _connected_components(cell_ids, comparisons)
+    scores, standard_errors, converged, iterations, objective = _fit_scores_by_component(
+        cell_ids, comparisons, l2, components
     )
-    intervals = _bootstrap_intervals(cell_ids, comparisons, l2, bootstrap_samples, seed)
+    intervals = _bootstrap_intervals(
+        cell_ids, comparisons, l2, bootstrap_samples, seed, components
+    )
     completions = Counter(
         observation.cell_id for observation in observations if observation.completed
     )
     counts = Counter(observation.cell_id for observation in observations)
     index = {cell_id: position for position, cell_id in enumerate(cell_ids)}
-    ordered_ids = sorted(cell_ids, key=lambda cell_id: (-scores[index[cell_id]], str(cell_id)))
     ranking = tuple(
         RankedCell(
             rank,
+            component_index,
             cell_id,
             cells[cell_id],
             float(scores[index[cell_id]]),
@@ -307,7 +408,11 @@ def fit_bradley_terry(
             intervals.get(cell_id, (None, None))[0],
             intervals.get(cell_id, (None, None))[1],
         )
-        for rank, cell_id in enumerate(ordered_ids, start=1)
+        for component_index, component in enumerate(components)
+        for rank, cell_id in enumerate(
+            sorted(component, key=lambda cell_id: (-scores[index[cell_id]], str(cell_id))),
+            start=1,
+        )
     )
     return BradleyTerryFit(
         ranking,
@@ -316,7 +421,7 @@ def fit_bradley_terry(
         objective,
         len(comparisons),
         sum(comparison.outcome == 0.5 for comparison in comparisons),
-        _connected_components(cell_ids, comparisons),
+        components,
     )
 
 
@@ -404,6 +509,87 @@ def _axis_tables(
                 }
             )
     return tuple(summary), tuple(comparisons)
+
+
+def _stratum_tables(
+    observations: tuple[Observation, ...],
+    memberships: dict[CellId, PairMembership],
+) -> tuple[TableRow, ...]:
+    """Summarize completion for the coordinates that are constant within a trial."""
+    rows: list[TableRow] = []
+    for stratum in _STRATA:
+        groups: dict[str, list[Observation]] = defaultdict(list)
+        for observation in observations:
+            value = _stratum_value(observation, memberships[observation.cell_id], stratum)
+            groups[value].append(observation)
+        for value, group in sorted(groups.items()):
+            count, successes, rate, low, high = _rate_row(group)
+            rows.append(
+                {
+                    "stratum": stratum,
+                    "value": value,
+                    "cells": len({row.cell_id for row in group}),
+                    "observations": count,
+                    "completions": successes,
+                    "completion_rate": rate,
+                    "wilson_low": low,
+                    "wilson_high": high,
+                }
+            )
+    return tuple(rows)
+
+
+@beartype
+def build_pair_exclusivity(
+    observations: tuple[Observation, ...],
+    memberships: dict[CellId, PairMembership],
+) -> tuple[TableRow, ...]:
+    """Count how often each pair produced one, both, or neither completion.
+
+    Both-completed means the pair was not exclusive in practice, which is a bank
+    defect. Neither-completed means the trial was too hard. The Bradley-Terry
+    tie count merges the two, so they are reported apart here.
+    """
+    by_trial: dict[str, list[Observation]] = defaultdict(list)
+    for observation in observations:
+        by_trial[str(observation.trial_id)].append(observation)
+
+    tallies: dict[str, Counter[str]] = defaultdict(Counter)
+    seen: dict[str, PairMembership] = {}
+    for rows in by_trial.values():
+        membership = memberships[rows[0].cell_id]
+        pair_id = str(membership.pair.pair_id)
+        seen[pair_id] = membership
+        completed = sum(row.completed for row in rows)
+        if completed == 1:
+            outcome = "exactly_one"
+        elif completed == len(rows):
+            outcome = "both_completed"
+        else:
+            outcome = "neither_completed"
+        tallies[pair_id][outcome] += 1
+        tallies[pair_id]["trials"] += 1
+
+    table: list[TableRow] = []
+    for pair_id in sorted(tallies):
+        counts = tallies[pair_id]
+        trials = counts["trials"]
+        membership = seen[pair_id]
+        table.append(
+            {
+                "pair": pair_id,
+                "skill": str(membership.pair.skill),
+                "conflict": str(membership.pair.conflict),
+                "trials": trials,
+                "exactly_one": counts["exactly_one"],
+                "both_completed": counts["both_completed"],
+                "neither_completed": counts["neither_completed"],
+                "exactly_one_rate": counts["exactly_one"] / trials,
+                "both_completed_rate": counts["both_completed"] / trials,
+                "neither_completed_rate": counts["neither_completed"] / trials,
+            }
+        )
+    return tuple(table)
 
 
 def _position_tables(
@@ -533,10 +719,33 @@ def _regularization_table(
     return tuple(rows)
 
 
+def _components_match_pair_assistant(
+    observations: tuple[Observation, ...],
+    fit: BradleyTerryFit,
+    memberships: dict[CellId, PairMembership],
+) -> bool:
+    """Return whether every component is exactly one (pair, assistant) block."""
+    assistant_by_cell = {
+        observation.cell_id: str(observation.assistant) for observation in observations
+    }
+    blocks = [
+        {
+            (str(memberships[cell_id].pair.pair_id), assistant_by_cell[cell_id])
+            for cell_id in component
+        }
+        for component in fit.connected_components
+    ]
+    if not all(len(block) == 1 for block in blocks):
+        return False
+    return len({next(iter(block)) for block in blocks}) == len(blocks)
+
+
 def _diagnostics(
     observations: tuple[Observation, ...],
     fit: BradleyTerryFit,
     regularization: tuple[TableRow, ...],
+    memberships: dict[CellId, PairMembership],
+    exclusivity: tuple[TableRow, ...],
 ) -> dict[str, object]:
     trials = {str(observation.trial_id) for observation in observations}
     cells = {observation.cell_id for observation in observations}
@@ -590,6 +799,16 @@ def _diagnostics(
             [str(cell_id) for cell_id in component] for component in fit.connected_components
         ],
         "comparison_graph_connected": len(fit.connected_components) == 1,
+        # One component per (pair, assistant) is the expected shape of a
+        # bipartite bank, not a defect. This is the check that replaces
+        # `comparison_graph_connected` as a pass or fail signal.
+        "components_match_pair_assistant": _components_match_pair_assistant(
+            observations, fit, memberships
+        ),
+        "both_completed_trials": sum(_as_int(row["both_completed"]) for row in exclusivity),
+        "neither_completed_trials": sum(
+            _as_int(row["neither_completed"]) for row in exclusivity
+        ),
         "position_balance": balance_rows,
         "position_balanced": all(bool(row["balanced"]) for row in balance_rows),
         "regularization_sensitivity": sensitivity,
@@ -602,12 +821,15 @@ def _diagnostics(
 @beartype
 def analyze_observations(
     observations: tuple[Observation, ...],
+    pairs: tuple[InstructionPair, ...],
     l2: float,
     *,
     bootstrap_samples: int,
     seed: int,
 ) -> AnalysisBundle:
-    """Run ranking, axis, order, balance, and sensitivity analyses."""
+    """Run ranking, axis, stratum, exclusivity, order, and sensitivity analyses."""
+    validate_observations(observations)
+    memberships = pair_memberships(observations, pairs)
     fit = fit_bradley_terry(
         observations,
         l2,
@@ -615,13 +837,17 @@ def analyze_observations(
         seed=seed,
     )
     axis_summary, axis_comparisons = _axis_tables(observations, fit)
+    stratum_summary = _stratum_tables(observations, memberships)
+    exclusivity = build_pair_exclusivity(observations, memberships)
     position, cell_position, axis_position, order_sensitivity = _position_tables(observations)
     regularization = _regularization_table(observations, l2)
-    diagnostics = _diagnostics(observations, fit, regularization)
+    diagnostics = _diagnostics(observations, fit, regularization, memberships, exclusivity)
     return AnalysisBundle(
         fit,
         axis_summary,
         axis_comparisons,
+        stratum_summary,
+        exclusivity,
         position,
         cell_position,
         axis_position,

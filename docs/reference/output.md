@@ -87,16 +87,22 @@ receives one combined `observations.jsonl` ready for analysis.
 
 `reasonese-analyze --output DIRECTORY` writes:
 
-- `ranking.csv`: the total Bradley–Terry ordering, penalized standard errors, clustered
-  bootstrap intervals, and raw completion rates;
-- `axis_summary.csv` and `axis_comparisons.csv`: margins and pairwise contrasts for instruction,
-  framing, channel, author, and assistant;
+- `ranking.csv`: the within-component Bradley–Terry ordering with its component index, pair,
+  and side, penalized standard errors, clustered bootstrap intervals, and raw completion rates;
+- `axis_summary.csv` and `axis_comparisons.csv`: margins and pairwise contrasts for framing,
+  channel, and author, the only coordinates that vary inside a trial;
+- `stratum_summary.csv`: completion rates for assistant, skill, conflict type, and pair, which
+  are constant within a trial and therefore carry no Bradley–Terry column;
+- `pair_exclusivity.csv`: per-pair trial counts split into exactly-one, both-completed, and
+  neither-completed;
 - `position_summary.csv`, `cell_position_effects.csv`, and `axis_position_effects.csv`;
 - `order_sensitivity.csv`: position-rate ranges and position/outcome correlations;
 - `regularization_sensitivity.csv`: scores and ranks under 0.1×, 1×, and 10× L2 penalties;
-- `diagnostics.json`: trial integrity, comparison connectivity, per-cell position balance, and
-  rank-stability summaries; and
-- `report.md`: a readable total ordering, axis table, strongest order effects, and caveats.
+- `diagnostics.json`: trial integrity, comparison connectivity, whether each component is
+  exactly one `(pair, assistant)` block, both- and neither-completed totals, per-cell position
+  balance, and rank-stability summaries; and
+- `report.md`: a readable within-component ordering, axis table, stratum table, pair-exclusivity
+  table, strongest order effects, and caveats.
 
 Within a trial, completed-versus-incomplete yields a win; equal completion verdicts yield a
 0.5 tie. This retains all-true and all-false trials. Bootstrap sampling is clustered by trial.

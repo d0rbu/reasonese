@@ -2,7 +2,6 @@
 
 | Path | Purpose |
 |---|---|
-| `configs/example_instructions.toml` | Two simple base prompts |
 | `configs/example_matchup.yaml` | Two-input conversation example |
 | `configs/example_study.yaml` | Permutation-balanced collection example |
 | `configs/instruction_pairs.yaml` | Candidate instruction-pair bank |
@@ -13,8 +12,8 @@
 | `reasonese/pair_check_cache.py` | Exact-text-keyed readable pair-audit cache |
 | `reasonese/curate_instructions.py` | `reasonese-curate-instructions` utility and spot-check report |
 | `docs/research/instruction-bank.md` | Bank criteria, conflict taxonomy, and curation flow |
-| `reasonese/planning.py` | Four-field dataclass and Cartesian planner |
-| `reasonese/sampling.py` | Connected, seeded condition-pair subsampling |
+| `reasonese/planning.py` | Four-field dataclass, Cartesian planner, and per-pair side grouping |
+| `reasonese/sampling.py` | Connected, seeded within-pair condition subsampling |
 | `reasonese/io.py` | JSONL writer |
 | `reasonese/matchup.py` | Strongly typed matchup invariants and serialization |
 | `reasonese/conversation.py` | Authoring requests and channel rendering |
