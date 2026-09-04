@@ -38,7 +38,8 @@ conversation order. See [`../../configs/example_matchup.yaml`](../../configs/exa
 An entry with `author: user` resolves its text from the `--user-messages` root used by both the
 conversation runner and study collector; it defaults to `prompts/user`. Create one child
 directory per instruction. Its `instruction.txt` must exactly match the YAML instruction, and it
-must contain `<framing>.txt` for all six framings. Directory names are descriptive only. A
+must contain `normal.txt`, `casual.txt`, and `persuasive.txt`, the three framings the `user`
+author writes. Directory names are descriptive only. A
 selected file beginning with `TODO:` is an intentional placeholder and is rejected before
 inference.
 

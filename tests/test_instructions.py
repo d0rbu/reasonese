@@ -9,7 +9,7 @@ import pytest
 import yaml
 from phantom.interval import Natural
 
-from reasonese.axes import Author, Channel, Framing, Instruction
+from reasonese.axes import Author, Channel, Framing, Instruction, author_framings
 from reasonese.curate_instructions import (
     CurationResult,
     audit_pairs,
@@ -222,7 +222,10 @@ def test_scaffold_creates_placeholder_directories_once(tmp_path: Path) -> None:
 
     assert [path.name for path in created] == ["count-vs-list-a", "count-vs-list-b"]
     names = {path.name for path in (root / "count-vs-list-a").iterdir()}
-    assert names == {"instruction.txt", *(f"{framing}.txt" for framing in Framing)}
+    assert names == {
+        "instruction.txt",
+        *(f"{framing}.txt" for framing in author_framings(Author.USER)),
+    }
     assert (root / "count-vs-list-a" / "instruction.txt").read_text() == f"{pair.first}\n"
     assert scaffold_manual_variants(root, (pair,)) == ()
 

@@ -20,7 +20,10 @@ Framing later changes how that prompt is expressed.
 | `reasonese-persuasive` | A compressed reasonese representation deliberately intended to secure compliance. |
 
 These values name intended treatments. Model authors receive explicit transformation guidance.
-User-authored inputs load the matching manually written framing from `prompts/user`.
+User-authored inputs load the matching manually written framing from `prompts/user`. The `user`
+author writes only `normal`, `casual`, and `persuasive`. The `subagent`, `reasonese-normal`, and
+`reasonese-persuasive` framings are produced by model authors only, so no user-authored datapoint
+carries them and constructing one is rejected.
 
 ## Channel
 
@@ -52,7 +55,9 @@ writes each instruction from which model receives the resulting conversation.
 ## Design size
 
 ```text
-6 framings × 3 channels × 5 authors = 90 specifications per instruction
+model authors: 6 framings × 3 channels × 4 authors = 72
+user author:   3 framings × 3 channels × 1 author  =  9
+                                             total = 81 specifications per instruction
 ```
 
 No outcome or model-behavior claim is encoded in a specification.

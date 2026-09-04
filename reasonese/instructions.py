@@ -13,7 +13,7 @@ import yaml
 from beartype import beartype
 from phantom import Phantom
 
-from reasonese.axes import Framing, Instruction, is_non_empty_trimmed
+from reasonese.axes import Author, Instruction, author_framings, is_non_empty_trimmed
 
 
 def is_pair_id(value: str) -> bool:
@@ -200,7 +200,7 @@ def scaffold_manual_variants(
                 raise ValueError(f"manual variant directory holds different text: {directory}")
             directory.mkdir()
             (directory / _SOURCE_FILE).write_text(f"{instruction}\n", encoding="utf-8")
-            for framing in Framing:
+            for framing in author_framings(Author.USER):
                 (directory / f"{framing}.txt").write_text(
                     f"TODO: Write the {framing} version of {_SOURCE_FILE}.\n",
                     encoding="utf-8",
