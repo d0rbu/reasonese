@@ -3,12 +3,13 @@
 The package has a deterministic planning flow:
 
 ```text
-instruction strings -> Cartesian product -> four-field JSONL
+instruction strings -> author-restricted Cartesian product -> four-field JSONL
 ```
 
 - `reasonese.axes` defines the instruction phantom type and three `StrEnum` axes.
 - `reasonese.config` reads a TOML array of instruction strings.
-- `reasonese.planning` defines the four-field `PromptSpec` and enumerates combinations.
+- `reasonese.planning` defines the four-field `PromptSpec` and enumerates the combinations
+  each author writes.
 - `reasonese.io` writes those dataclasses as JSONL.
 - `reasonese.show_axes` prints the axis values.
 - `reasonese.plan` parses paths and writes the planned combinations.
