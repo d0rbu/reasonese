@@ -9,7 +9,7 @@ from types import MappingProxyType
 
 from beartype import beartype
 
-from reasonese.axes import Author, Framing, Instruction
+from reasonese.axes import Author, Framing, Instruction, author_framings
 from reasonese.conversation import ConversationSetup, GeneratedText
 from reasonese.planning import PromptSpec
 
@@ -57,7 +57,10 @@ class ManualMessageLibrary:
     def _instruction_directories(self) -> dict[Instruction, Path]:
         if not self.root.is_dir():
             raise ValueError(f"manual message directory does not exist: {self.root}")
-        required = {_SOURCE_FILE, *(f"{framing}.txt" for framing in Framing)}
+        required = {
+            _SOURCE_FILE,
+            *(f"{framing}.txt" for framing in author_framings(Author.USER)),
+        }
         by_instruction: dict[Instruction, Path] = {}
         for directory in sorted(
             (entry for entry in self.root.iterdir() if entry.is_dir()),

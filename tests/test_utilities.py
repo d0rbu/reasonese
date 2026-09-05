@@ -33,9 +33,11 @@ def test_plan_writes_ninety_specs_per_instruction(
     )
 
     summary = json.loads(capsys.readouterr().out)
-    assert summary["specs_per_instruction"] == 90
-    assert summary["specs"] == 180
-    assert len(output.read_text().splitlines()) == 180
+    assert summary["specs_per_instruction"] == 81
+    assert summary["manual_framings"] == 3
+    assert summary["framings"] == 6
+    assert summary["specs"] == 162
+    assert len(output.read_text().splitlines()) == 162
 
 
 def test_plan_reports_missing_input(tmp_path: Path) -> None:

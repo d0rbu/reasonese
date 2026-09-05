@@ -2,7 +2,14 @@ from __future__ import annotations
 
 import pytest
 
-from reasonese.axes import Author, Channel, Framing, Instruction, axis_manifest
+from reasonese.axes import (
+    Author,
+    Channel,
+    Framing,
+    Instruction,
+    author_framings,
+    axis_manifest,
+)
 
 
 def test_axis_values_are_their_display_strings() -> None:
@@ -31,6 +38,17 @@ def test_axis_manifest_uses_enum_values_directly() -> None:
         "channel": list(Channel),
         "author": list(Author),
     }
+
+
+def test_user_author_writes_only_manual_framings() -> None:
+    assert author_framings(Author.USER) == (
+        Framing.NORMAL,
+        Framing.CASUAL,
+        Framing.PERSUASIVE,
+    )
+    for author in Author:
+        if author is not Author.USER:
+            assert author_framings(author) == tuple(Framing)
 
 
 def test_instruction_is_a_trimmed_non_empty_phantom_string() -> None:

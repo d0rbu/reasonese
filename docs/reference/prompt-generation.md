@@ -41,7 +41,9 @@ is to be short, natural, and explicit enough to audit and revise.
 ## User-authored messages
 
 `Author.USER` never invokes an LLM. It loads a manually written variant from `prompts/user` by
-matching the datapoint's instruction text and framing. Each instruction has one directory:
+matching the datapoint's instruction text and framing. The `user` author writes only the
+`normal`, `casual`, and `persuasive` framings; a user-authored datapoint with any other framing is
+rejected when it is constructed. Each instruction has one directory:
 
 ```text
 prompts/user/<readable-name>/
@@ -49,9 +51,6 @@ prompts/user/<readable-name>/
   normal.txt
   casual.txt
   persuasive.txt
-  subagent.txt
-  reasonese-normal.txt
-  reasonese-persuasive.txt
 ```
 
 `instruction.txt` contains the exact base instruction used in `PromptSpec`; the directory name is

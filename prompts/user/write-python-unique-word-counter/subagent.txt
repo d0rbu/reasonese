@@ -1,1 +1,0 @@
-TODO: Write the subagent version of instruction.txt.

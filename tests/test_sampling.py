@@ -10,7 +10,7 @@ import yaml
 from phantom.interval import Natural
 
 import reasonese.sampling as sampling_module
-from reasonese.axes import Assistant, Author, Channel, Framing, Instruction
+from reasonese.axes import Assistant, Author, Channel, Framing, Instruction, author_framings
 from reasonese.config import load_study_suite
 from reasonese.io import write_study_suite
 from reasonese.planning import PromptSpec, build_prompt_specs
@@ -83,6 +83,7 @@ def _factorial_specs() -> tuple[PromptSpec, ...]:
         for framing in Framing
         for channel in Channel
         for author in (Author.USER, Author.INKLING)
+        if framing in author_framings(author)
     )
 
 
@@ -134,9 +135,9 @@ def test_pairing_counts_respect_the_user_channel_constraint() -> None:
 def test_twenty_instruction_design_size() -> None:
     instructions = tuple(Instruction.parse(f"Task {index}.") for index in range(20))
     specs = build_prompt_specs(instructions)
-    assert len(specs) == 1_800
-    assert pairing_population_size(specs) == 899_700
-    assert minimum_connected_pairings(specs) == 1_799
+    assert len(specs) == 1_620
+    assert pairing_population_size(specs) == 728_730
+    assert minimum_connected_pairings(specs) == 1_619
     assert default_pairing_count(specs) == 20_000
 
 
@@ -145,8 +146,8 @@ def test_default_pairing_count_is_capped_and_preserves_connectivity() -> None:
 
     instructions = tuple(Instruction.parse(f"Task {index}.") for index in range(250))
     specs = build_prompt_specs(instructions)
-    assert minimum_connected_pairings(specs) == 22_499
-    assert default_pairing_count(specs) == 22_499
+    assert minimum_connected_pairings(specs) == 20_249
+    assert default_pairing_count(specs) == 20_249
 
 
 def test_seeded_sample_is_unique_connected_and_order_independent() -> None:
@@ -418,13 +419,13 @@ def test_sample_studies_cli_writes_filtered_suite(
         "assistants": ["Inkling"],
         "authors": ["user"],
         "instructions": 1,
-        "minimum_connected_pairings_per_assistant": 17,
+        "minimum_connected_pairings_per_assistant": 8,
         "output": str(output),
-        "pairing_population_per_assistant": 87,
+        "pairing_population_per_assistant": 21,
         "pairings_per_assistant": 17,
         "rollouts_per_permutation": 2,
         "seed": 11,
-        "specs": 18,
+        "specs": 9,
         "studies": 17,
         "trials": 68,
     }
@@ -455,9 +456,9 @@ def test_sample_studies_cli_uses_capped_default(
         == 0
     )
     summary = json.loads(capsys.readouterr().out)
-    assert summary["pairing_population_per_assistant"] == 87
-    assert summary["pairings_per_assistant"] == 87
-    assert len(load_study_suite(output)) == 87
+    assert summary["pairing_population_per_assistant"] == 21
+    assert summary["pairings_per_assistant"] == 21
+    assert len(load_study_suite(output)) == 21
 
 
 def test_sample_studies_cli_reports_invalid_values(
