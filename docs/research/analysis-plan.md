@@ -135,7 +135,7 @@ other-authored trace-like text on benign instruction following.
 
 - Paired comparisons with covariates: Springall (1973); Cattelan (2012), *Statistical Science*;
   Turner and Firth (2012), `BradleyTerry2`, *Journal of Statistical Software*; LMArena style
-  control (2024); Ameli et al. (2024), arXiv 2412.18407.
+  control (2024); Ameli et al. (2025), ICLR, arXiv 2412.18407.
 - Ties: Rao and Kupper (1967); Davidson (1970).
 - Few-cluster inference: Cameron, Gelbach and Miller (2008); MacKinnon and Webb (2018); Miller
   (2024), arXiv 2411.00640, on clustering evaluation error bars by question.
