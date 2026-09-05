@@ -4,6 +4,8 @@
 
 - [`research/axes.md`](research/axes.md): the four axis definitions
 - [`research/agenda.md`](research/agenda.md): current scope and deferred questions
+- [`research/instruction-bank.md`](research/instruction-bank.md): pair criteria, conflict taxonomy, and curation flow
+- [`research/analysis-plan.md`](research/analysis-plan.md): proposed primary analysis for the pair-restricted design
 
 ## Reference
 

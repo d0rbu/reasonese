@@ -30,7 +30,8 @@ This foundation specifies:
 The repository specifies one initial aggregation and analysis contract but committed source
 does not contain an empirical corpus or statistical result. Future work may add hierarchical
 models, multiplicity-aware inference, or explicit position-adjusted rankings after empirical
-sample sizes and study topology are known.
+sample sizes and study topology are known. A proposed primary analysis for the pair-restricted
+design is in [`analysis-plan.md`](analysis-plan.md); it is a plan, not implemented code.
 
 ## Construct questions for later work
 

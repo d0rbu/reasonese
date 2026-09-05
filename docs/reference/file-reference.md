@@ -13,6 +13,7 @@
 | `reasonese/pair_check_cache.py` | Exact-text-keyed readable pair-audit cache |
 | `reasonese/curate_instructions.py` | `reasonese-curate-instructions` utility and spot-check report |
 | `docs/research/instruction-bank.md` | Bank criteria, conflict taxonomy, and curation flow |
+| `docs/research/analysis-plan.md` | Proposed per-slot completion model, contrasts, and clustered inference |
 | `reasonese/planning.py` | Four-field dataclass and Cartesian planner |
 | `reasonese/sampling.py` | Connected, seeded condition-pair subsampling |
 | `reasonese/io.py` | JSONL writer |
