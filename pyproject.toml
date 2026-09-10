@@ -12,6 +12,7 @@ dependencies = [
     "phantom-types>=3.0.0",
     "pyyaml>=6.0.0",
     "requests>=2.32.0",
+    "threadpoolctl>=3.5.0",
 ]
 
 [project.scripts]

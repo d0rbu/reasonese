@@ -15,11 +15,14 @@ from dataclasses import replace
 from functools import cache
 from pathlib import Path
 
+import numpy as np
 import pytest
+from threadpoolctl import threadpool_info
 
 import reasonese.analysis as analysis
 import reasonese.analyze as analyze_module
 from reasonese.analysis import (
+    Comparison,
     analyze_observations,
     build_comparisons,
     build_pair_exclusivity,
@@ -38,6 +41,7 @@ from reasonese.instructions import (
 )
 from reasonese.judging import TraceFingerprint
 from reasonese.observations import (
+    CellId,
     Observation,
     cell_id,
     load_observations,
@@ -600,6 +604,179 @@ def test_analysis_cli_combines_inputs_and_prints_diagnostics(
         "position_balanced": True,
         "trials": 20,
     }
+
+
+def _reference_fit(
+    cell_ids: tuple[CellId, ...],
+    comparisons: tuple[Comparison, ...],
+    l2: float,
+    *,
+    tolerance: float = 1e-10,
+    max_iterations: int = 100,
+) -> tuple[np.ndarray, np.ndarray, bool, int, float]:
+    """The scalar-loop fit this module replaced, kept as an oracle.
+
+    Written straight from the Newton update rather than from the vectorized
+    code, so agreement between the two is evidence and not a tautology.
+    """
+    index = {cell_id: position for position, cell_id in enumerate(cell_ids)}
+    scores = np.zeros(len(cell_ids), dtype=np.float64)
+    converged = False
+    iterations = 0
+    for iteration in range(1, max_iterations + 1):
+        iterations = iteration
+        gradient = l2 * scores
+        hessian = np.eye(len(cell_ids), dtype=np.float64) * l2
+        for comparison in comparisons:
+            first = index[comparison.first]
+            second = index[comparison.second]
+            probability = analysis._sigmoid(float(scores[first] - scores[second]))
+            residual = probability - comparison.outcome
+            curvature = probability * (1.0 - probability)
+            gradient[first] += residual
+            gradient[second] -= residual
+            hessian[first, first] += curvature
+            hessian[second, second] += curvature
+            hessian[first, second] -= curvature
+            hessian[second, first] -= curvature
+        step = np.linalg.solve(hessian, gradient)
+        scores -= step
+        scores -= scores.mean()
+        if float(np.max(np.abs(step))) < tolerance:
+            converged = True
+            break
+
+    final_hessian = np.eye(len(cell_ids), dtype=np.float64) * l2
+    objective = 0.5 * l2 * float(scores @ scores)
+    for comparison in comparisons:
+        first = index[comparison.first]
+        second = index[comparison.second]
+        difference = float(scores[first] - scores[second])
+        probability = analysis._sigmoid(difference)
+        curvature = probability * (1.0 - probability)
+        final_hessian[first, first] += curvature
+        final_hessian[second, second] += curvature
+        final_hessian[first, second] -= curvature
+        final_hessian[second, first] -= curvature
+        objective += float(np.logaddexp(0.0, difference) - comparison.outcome * difference)
+    standard_errors = np.sqrt(np.diag(np.linalg.inv(final_hessian)))
+    return scores, standard_errors, converged, iterations, objective
+
+
+@pytest.mark.parametrize("l2", [0.1, 1.0, 10.0])
+def test_vectorized_fit_matches_the_scalar_reference(l2: float) -> None:
+    observations = _two_pair_observations()
+    comparisons = build_comparisons(observations)
+    cell_ids = tuple(sorted({row.cell_id for row in observations}))
+
+    fitted = analysis._fit_scores(cell_ids, comparisons, l2)
+    scores, errors, converged, iterations, objective = _reference_fit(
+        cell_ids, comparisons, l2
+    )
+
+    assert fitted.converged is converged
+    assert fitted.iterations == iterations
+    assert fitted.scores == pytest.approx(scores, abs=1e-12)
+    assert fitted.standard_errors == pytest.approx(errors, abs=1e-12)
+    assert fitted.objective == pytest.approx(objective, abs=1e-10)
+
+
+def test_vectorized_sigmoid_matches_the_scalar_one_including_the_tails() -> None:
+    values = np.array(
+        [-800.0, -50.0, -1.0, -1e-12, 0.0, 1e-12, 1.0, 50.0, 800.0], dtype=np.float64
+    )
+    with np.errstate(over="raise", under="ignore"):
+        vectorized = analysis._sigmoid_array(values)
+    expected = np.array([analysis._sigmoid(float(value)) for value in values])
+
+    assert vectorized == pytest.approx(expected, abs=1e-15)
+    assert np.all(np.isfinite(vectorized))
+    assert np.all((vectorized >= 0.0) & (vectorized <= 1.0))
+
+
+def test_penalized_hessian_matches_a_dense_accumulation() -> None:
+    observations = _synthetic_observations()
+    comparisons = build_comparisons(observations)
+    cell_ids = tuple(sorted({row.cell_id for row in observations}))
+    endpoints = analysis._endpoints(cell_ids, comparisons)
+    generator = np.random.default_rng(0)
+    curvature = generator.random(len(comparisons))
+
+    built = analysis._penalized_hessian(endpoints, curvature, len(cell_ids), 1.0)
+
+    expected = np.eye(len(cell_ids)) * 1.0
+    for position, comparison in enumerate(comparisons):
+        first = cell_ids.index(comparison.first)
+        second = cell_ids.index(comparison.second)
+        expected[first, first] += curvature[position]
+        expected[second, second] += curvature[position]
+        expected[first, second] -= curvature[position]
+        expected[second, first] -= curvature[position]
+
+    assert built == pytest.approx(expected, abs=1e-12)
+    assert built == pytest.approx(built.T, abs=1e-12)
+
+
+def test_skipping_diagnostics_keeps_the_same_scores() -> None:
+    observations = _two_pair_observations()
+    comparisons = build_comparisons(observations)
+    cell_ids = tuple(sorted({row.cell_id for row in observations}))
+    components = analysis._connected_components(cell_ids, comparisons)
+
+    full = analysis._fit_scores_by_component(cell_ids, comparisons, 1.0, components)
+    lean = analysis._fit_scores_by_component(
+        cell_ids, comparisons, 1.0, components, diagnostics=False
+    )
+
+    assert lean.scores == pytest.approx(full.scores, abs=1e-15)
+    assert lean.converged is full.converged
+    assert lean.iterations == full.iterations
+    # The bootstrap never reads these, so a lean fit must not pay for them.
+    assert lean.standard_errors is None
+    assert lean.objective is None
+    assert full.standard_errors is not None
+    assert full.objective is not None
+
+
+def test_fit_pins_blas_threads_and_restores_them(monkeypatch: pytest.MonkeyPatch) -> None:
+    observations = _synthetic_observations()
+    before = [(info["user_api"], info["num_threads"]) for info in threadpool_info()]
+    ambient = [
+        info["num_threads"] for info in threadpool_info() if info["user_api"] == "blas"
+    ]
+    if not ambient or max(ambient) == 1:
+        pytest.skip(
+            "BLAS already runs single-threaded here, so pinning cannot be observed"
+        )
+
+    seen: list[list[int]] = []
+    original = analysis._fit_scores
+
+    def spy(
+        cell_ids: tuple[CellId, ...],
+        comparisons: tuple[Comparison, ...],
+        l2: float,
+        **keywords: object,
+    ) -> analysis._ComponentFit:
+        seen.append(
+            [info["num_threads"] for info in threadpool_info() if info["user_api"] == "blas"]
+        )
+        diagnostics = keywords.get("diagnostics", True)
+        assert isinstance(diagnostics, bool)
+        return original(cell_ids, comparisons, l2, diagnostics=diagnostics)
+
+    monkeypatch.setattr(analysis, "_fit_scores", spy)
+    fit_bradley_terry(observations, 1.0)
+    monkeypatch.undo()
+
+    assert seen, "the fit never reached a component"
+    for limits in seen:
+        assert limits, "no BLAS pool was visible during the fit"
+        assert all(count == 1 for count in limits), (
+            f"BLAS threads were not pinned during the fit: {limits}"
+        )
+    after = [(info["user_api"], info["num_threads"]) for info in threadpool_info()]
+    assert after == before, "thread limits leaked out of the fit"
 
 
 def test_axis_and_stratum_lookups_reject_unknown_names() -> None:
