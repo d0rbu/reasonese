@@ -1,12 +1,25 @@
-# The four axes
+# The axes
 
-Each planned condition has four independent coordinates.
+Each planned condition has four coordinates. Three of them—framing, channel, and author—are
+independent treatments. The fourth, instruction, is a blocking factor.
 
 ## Instruction
 
 An instruction is a simple base prompt, such as asking for a program that does something or
 requesting information about a topic. It is stored directly as a non-empty, trimmed string.
 Framing later changes how that prompt is expressed.
+
+Instructions are not free. They come in 24 mutually exclusive pairs, defined in
+[`configs/instruction_pairs.yaml`](../../configs/instruction_pairs.yaml), because a trial only
+carries signal when the assistant completes one instruction and not the other. Arbitrary
+instructions cannot be paired, so a study always pairs one side of a pair with the other.
+
+That makes instruction unusable as a treatment axis. A comparison exists only between two cells
+that share a trial, and a trial only ever holds the two instructions of one pair, so the
+comparison graph has no edges between pairs. Bradley-Terry scores are identified only up to a
+per-component shift, and an instruction contrast would difference arbitrary offsets. Instruction
+therefore selects which cells can be compared, and analysis treats `(pair, side)` as a block
+rather than reporting an instruction margin.
 
 ## Framing
 
@@ -53,6 +66,11 @@ writes each instruction from which model receives the resulting conversation.
 
 ```text
 6 framings × 3 channels × 5 authors = 90 specifications per instruction
+24 pairs × 2 instructions × 90                = 4,320 specifications
+90 × 90 − 60 × 60                             = 4,500 eligible pairings per pair
 ```
+
+A pairing is eligible when it joins the two sides of one pair and at least one input uses the
+`user message` channel. The comparison graph has one component per `(pair, assistant)`.
 
 No outcome or model-behavior claim is encoded in a specification.

@@ -1,8 +1,16 @@
-"""Reproducible balanced subsamples of valid study pairings."""
+"""Reproducible balanced subsamples of within-pair study pairings.
+
+A trial only carries signal when its two instructions come from the same
+mutually exclusive pair, so the eligible population is enumerated one pair at a
+time. Within a pair the two sides are disjoint sets of specifications, which
+makes the population a rectangle minus a rectangle and the comparison graph
+bipartite on ``len(first) + len(second)`` cells.
+"""
 
 from __future__ import annotations
 
-from collections import Counter
+import hashlib
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from random import Random
 
@@ -10,175 +18,183 @@ from beartype import beartype
 from phantom.interval import Natural
 
 from reasonese.axes import Assistant, Channel
-from reasonese.planning import PromptSpec
+from reasonese.instructions import PairId
+from reasonese.planning import PairSpecs, PromptSpec
 from reasonese.study import PositiveInteger, Study, StudyInputs, make_study
 
-DEFAULT_PAIRINGS_PER_ASSISTANT = 20_000
-_CANDIDATE_MULTIPLIER = 3
+DEFAULT_PAIRINGS_PER_PAIR = 720
 _DEGREE_CHOICES = 8
 
 
 @dataclass(frozen=True, slots=True)
 class _PairingStratum:
-    """A channel pairing and the exact set of axes changed across an edge."""
+    """A channel pairing and which remaining axes differ across an edge."""
 
     channels: tuple[Channel, Channel]
-    instruction_differs: bool
     framing_differs: bool
     author_differs: bool
 
 
-def _spec_key(spec: PromptSpec) -> tuple[str, str, str, str]:
-    return (
-        str(spec.instruction),
-        str(spec.framing),
-        str(spec.channel),
-        str(spec.author),
+@dataclass(frozen=True, slots=True)
+class _Sides:
+    """One pair's two condition sets, indexed for constant-time rank arithmetic."""
+
+    first: tuple[PromptSpec, ...]
+    second: tuple[PromptSpec, ...]
+    user_first: tuple[int, ...]
+    other_first: tuple[int, ...]
+    user_second: tuple[int, ...]
+    user_first_position: dict[int, int]
+    other_first_position: dict[int, int]
+    user_second_position: dict[int, int]
+
+    @property
+    def node_count(self) -> int:
+        """Return the number of cells in the pair's bipartite comparison graph."""
+        return len(self.first) + len(self.second)
+
+    @property
+    def population(self) -> int:
+        """Return the number of distinct valid unordered pairings."""
+        return len(self.user_first) * len(self.second) + len(self.other_first) * len(
+            self.user_second
+        )
+
+    @property
+    def block(self) -> int:
+        """Return the rank at which user-first pairings give way to user-second ones."""
+        return len(self.user_first) * len(self.second)
+
+
+def _channel_partition(specs: tuple[PromptSpec, ...]) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    user = tuple(index for index, spec in enumerate(specs) if spec.channel is Channel.USER)
+    other = tuple(index for index, spec in enumerate(specs) if spec.channel is not Channel.USER)
+    return user, other
+
+
+def _sides(pair_specs: PairSpecs) -> _Sides:
+    """Validate one pair's condition sets and index them for sampling."""
+    first = pair_specs.first
+    second = pair_specs.second
+    if not first or not second:
+        raise ValueError("both sides of an instruction pair need at least one specification")
+    if len(set(first)) != len(first) or len(set(second)) != len(second):
+        raise ValueError("prompt specifications must be unique within each side")
+    if set(first) & set(second):
+        raise ValueError("the two sides of an instruction pair must not share specifications")
+
+    user_first, other_first = _channel_partition(first)
+    user_second, other_second = _channel_partition(second)
+    if not user_first and not user_second:
+        raise ValueError("at least one specification must use the user message channel")
+    # A pairing needs a user-channel endpoint, so a specification is only
+    # reachable when its own channel is `user` or the opposite side offers one.
+    if not user_second and other_first:
+        raise ValueError(
+            "every first-side specification must use the user message channel "
+            "when the second side offers none"
+        )
+    if not user_first and other_second:
+        raise ValueError(
+            "every second-side specification must use the user message channel "
+            "when the first side offers none"
+        )
+
+    return _Sides(
+        first,
+        second,
+        user_first,
+        other_first,
+        user_second,
+        {index: position for position, index in enumerate(user_first)},
+        {index: position for position, index in enumerate(other_first)},
+        {index: position for position, index in enumerate(user_second)},
     )
 
 
-def _partition_specs(
-    specs: tuple[PromptSpec, ...],
-) -> tuple[tuple[PromptSpec, ...], tuple[PromptSpec, ...]]:
-    if len(specs) < 2:
-        raise ValueError("at least two prompt specifications are required")
-    if len(specs) != len(set(specs)):
-        raise ValueError("prompt specifications must be unique")
-    ordered = tuple(sorted(specs, key=_spec_key))
-    user_specs = tuple(spec for spec in ordered if spec.channel is Channel.USER)
-    if not user_specs:
-        raise ValueError("at least one prompt specification must use the user message channel")
-    other_specs = tuple(spec for spec in ordered if spec.channel is not Channel.USER)
-    return user_specs, other_specs
+def _edge_from_rank(sides: _Sides, rank: int) -> tuple[int, int]:
+    """Decode a rank into first-side and second-side specification indices."""
+    if not 0 <= rank < sides.population:
+        raise ValueError(f"pairing rank {rank} is outside the valid population")
+    if rank < sides.block:
+        row, column = divmod(rank, len(sides.second))
+        return sides.user_first[row], column
+    row, column = divmod(rank - sides.block, len(sides.user_second))
+    return sides.other_first[row], sides.user_second[column]
 
 
-@beartype
-def pairing_population_size(specs: tuple[PromptSpec, ...]) -> PositiveInteger:
-    """Count distinct valid unordered pairs without materializing them."""
-    user_specs, other_specs = _partition_specs(specs)
-    user_count = len(user_specs)
-    other_count = len(other_specs)
-    return PositiveInteger.parse(
-        user_count * (user_count - 1) // 2 + user_count * other_count
-    )
-
-
-@beartype
-def minimum_connected_pairings(specs: tuple[PromptSpec, ...]) -> PositiveInteger:
-    """Return the fewest edges that can cover and connect every specification."""
-    _partition_specs(specs)
-    return PositiveInteger.parse(len(specs) - 1)
-
-
-@beartype
-def default_pairing_count(specs: tuple[PromptSpec, ...]) -> PositiveInteger:
-    """Choose 20,000 pairs, capped by the population and raised for connectivity."""
-    population = int(pairing_population_size(specs))
-    minimum = int(minimum_connected_pairings(specs))
-    return PositiveInteger.parse(
-        min(population, max(DEFAULT_PAIRINGS_PER_ASSISTANT, minimum))
-    )
-
-
-def _user_pair_rank(first: int, second: int, user_count: int) -> int:
-    if first > second:
-        first, second = second, first
-    return first * (2 * user_count - first - 1) // 2 + second - first - 1
-
-
-def _cross_pair_rank(user: int, other: int, user_count: int, other_count: int) -> int:
-    return user_count * (user_count - 1) // 2 + user * other_count + other
-
-
-def _user_pair_from_rank(rank: int, user_count: int) -> tuple[int, int]:
-    low = 0
-    high = user_count - 1
-    while low < high:
-        midpoint = (low + high) // 2
-        pairs_through_midpoint = (midpoint + 1) * (2 * user_count - midpoint - 2) // 2
-        if rank < pairs_through_midpoint:
-            high = midpoint
-        else:
-            low = midpoint + 1
-    first = low
-    preceding = first * (2 * user_count - first - 1) // 2
-    return first, first + 1 + rank - preceding
-
-
-def _pair_from_rank(
-    rank: int,
-    user_specs: tuple[PromptSpec, ...],
-    other_specs: tuple[PromptSpec, ...],
-) -> StudyInputs:
-    user_pair_count = len(user_specs) * (len(user_specs) - 1) // 2
-    if rank < user_pair_count:
-        first, second = _user_pair_from_rank(rank, len(user_specs))
-        return StudyInputs.parse((user_specs[first], user_specs[second]))
-    cross_rank = rank - user_pair_count
-    user, other = divmod(cross_rank, len(other_specs))
-    return StudyInputs.parse((user_specs[user], other_specs[other]))
-
-
-def _pair_indices_from_rank(
-    rank: int,
-    user_count: int,
-    other_count: int,
-) -> tuple[int, int]:
-    user_pair_count = user_count * (user_count - 1) // 2
-    if rank < user_pair_count:
-        return _user_pair_from_rank(rank, user_count)
-    user, other = divmod(rank - user_pair_count, other_count)
-    return user, user_count + other
-
-
-def _rank_from_pair_indices(
-    first: int,
-    second: int,
-    user_count: int,
-    other_count: int,
-) -> int:
-    if first < user_count and second < user_count:
-        return _user_pair_rank(first, second, user_count)
-    if second < user_count:
-        first, second = second, first
-    if first >= user_count:
+def _rank_from_edge(sides: _Sides, first_index: int, second_index: int) -> int:
+    """Encode a valid first-side and second-side index pair as its rank."""
+    if first_index in sides.user_first_position:
+        return sides.user_first_position[first_index] * len(sides.second) + second_index
+    if second_index not in sides.user_second_position:
         raise ValueError("a valid pairing must contain a user-channel specification")
-    return _cross_pair_rank(first, second - user_count, user_count, other_count)
+    return (
+        sides.block
+        + sides.other_first_position[first_index] * len(sides.user_second)
+        + sides.user_second_position[second_index]
+    )
 
 
-def _pairing_stratum(first: PromptSpec, second: PromptSpec) -> _PairingStratum:
-    if first.channel is not Channel.USER:
-        first, second = second, first
+def _edge_nodes(sides: _Sides, rank: int) -> tuple[int, int]:
+    """Return the two graph node identifiers joined by one rank."""
+    first_index, second_index = _edge_from_rank(sides, rank)
+    return first_index, len(sides.first) + second_index
+
+
+def _inputs_from_rank(sides: _Sides, rank: int) -> StudyInputs:
+    first_index, second_index = _edge_from_rank(sides, rank)
+    return StudyInputs.parse((sides.first[first_index], sides.second[second_index]))
+
+
+def _stratum(first: PromptSpec, second: PromptSpec) -> _PairingStratum:
     return _PairingStratum(
         (first.channel, second.channel),
-        first.instruction != second.instruction,
         first.framing != second.framing,
         first.author != second.author,
     )
 
 
-def _stratum_key(stratum: _PairingStratum) -> tuple[str, str, bool, bool, bool]:
+def _stratum_for_rank(sides: _Sides, rank: int) -> _PairingStratum:
+    first_index, second_index = _edge_from_rank(sides, rank)
+    return _stratum(sides.first[first_index], sides.second[second_index])
+
+
+def _stratum_key(stratum: _PairingStratum) -> tuple[str, str, bool, bool]:
     return (
         str(stratum.channels[0]),
         str(stratum.channels[1]),
-        stratum.instruction_differs,
         stratum.framing_differs,
         stratum.author_differs,
     )
 
 
-def _stratum_population_counts(
-    population: int,
-    ordered_specs: tuple[PromptSpec, ...],
-    user_count: int,
-    other_count: int,
-) -> dict[_PairingStratum, int]:
-    return dict(
-        Counter(
-            _stratum_for_rank(rank, ordered_specs, user_count, other_count)
-            for rank in range(population)
-        )
+@beartype
+def pairing_population_size(pair_specs: PairSpecs) -> PositiveInteger:
+    """Count the distinct valid within-pair pairings without materializing them."""
+    return PositiveInteger.parse(_sides(pair_specs).population)
+
+
+@beartype
+def minimum_connected_pairings(pair_specs: PairSpecs) -> PositiveInteger:
+    """Return the fewest edges that can cover and connect one pair's cells."""
+    return PositiveInteger.parse(_sides(pair_specs).node_count - 1)
+
+
+@beartype
+def default_pairing_count(pair_specs: PairSpecs) -> PositiveInteger:
+    """Choose 720 pairings, capped by the population and raised for connectivity."""
+    sides = _sides(pair_specs)
+    return PositiveInteger.parse(
+        min(sides.population, max(DEFAULT_PAIRINGS_PER_PAIR, sides.node_count - 1))
     )
+
+
+def _ranks_by_stratum(sides: _Sides) -> dict[_PairingStratum, list[int]]:
+    grouped: dict[_PairingStratum, list[int]] = defaultdict(list)
+    for rank in range(sides.population):
+        grouped[_stratum_for_rank(sides, rank)].append(rank)
+    return dict(grouped)
 
 
 def _proportional_quotas(
@@ -203,117 +219,67 @@ def _proportional_quotas(
     return quotas
 
 
-def _stratum_for_rank(
-    rank: int,
-    ordered_specs: tuple[PromptSpec, ...],
-    user_count: int,
-    other_count: int,
-) -> _PairingStratum:
-    first, second = _pair_indices_from_rank(rank, user_count, other_count)
-    return _pairing_stratum(ordered_specs[first], ordered_specs[second])
-
-
-def _candidate_ranks(
-    population_counts: dict[_PairingStratum, int],
-    quotas: dict[_PairingStratum, int],
-    population: int,
-    ordered_specs: tuple[PromptSpec, ...],
-    user_count: int,
-    other_count: int,
-    random: Random,
-) -> dict[_PairingStratum, list[int]]:
-    targets = {
-        stratum: min(population_counts[stratum], _CANDIDATE_MULTIPLIER * quota)
-        for stratum, quota in quotas.items()
-        if quota
-    }
-    candidates = {stratum: [] for stratum in targets}
-    seen: Counter[_PairingStratum] = Counter()
-    for rank in range(population):
-        stratum = _stratum_for_rank(rank, ordered_specs, user_count, other_count)
-        if stratum not in targets:
-            continue
-        seen[stratum] += 1
-        ranks = candidates[stratum]
-        target = targets[stratum]
-        if len(ranks) < target:
-            ranks.append(rank)
-        else:
-            replacement = random.randrange(seen[stratum])
-            if replacement < target:
-                ranks[replacement] = rank
-    for ranks in candidates.values():
-        random.shuffle(ranks)
-    return candidates
-
-
 def _target_channel_degrees(
-    quotas: dict[_PairingStratum, int],
-    ordered_specs: tuple[PromptSpec, ...],
+    sides: _Sides, quotas: dict[_PairingStratum, int]
 ) -> dict[Channel, float]:
     totals = dict.fromkeys(Channel, 0)
-    counts = Counter(spec.channel for spec in ordered_specs)
     for stratum, quota in quotas.items():
         for channel in stratum.channels:
             totals[channel] += quota
-    return {
-        channel: totals[channel] / counts[channel] if counts[channel] else 1.0
-        for channel in Channel
-    }
+    counts = Counter(spec.channel for spec in sides.first + sides.second)
+    targets: dict[Channel, float] = {}
+    for channel in Channel:
+        target = totals[channel] / counts[channel] if counts[channel] else 0.0
+        targets[channel] = target if target > 0.0 else 1.0
+    return targets
 
 
 def _degree_score(
+    sides: _Sides,
     rank: int,
     degrees: list[int],
-    target_degrees: dict[Channel, float],
-    ordered_specs: tuple[PromptSpec, ...],
-    user_count: int,
-    other_count: int,
+    targets: dict[Channel, float],
 ) -> tuple[float, float]:
-    first, second = _pair_indices_from_rank(rank, user_count, other_count)
-    loads = tuple(
-        (degrees[cell] + 1) / target_degrees[ordered_specs[cell].channel]
-        for cell in (first, second)
+    first_index, second_index = _edge_from_rank(sides, rank)
+    loads = (
+        (degrees[first_index] + 1) / targets[sides.first[first_index].channel],
+        (degrees[len(sides.first) + second_index] + 1)
+        / targets[sides.second[second_index].channel],
     )
     return max(loads), sum(loads)
 
 
 def _degree_aware_sample(
+    sides: _Sides,
+    ranks_by_stratum: dict[_PairingStratum, list[int]],
     quotas: dict[_PairingStratum, int],
-    candidates: dict[_PairingStratum, list[int]],
-    ordered_specs: tuple[PromptSpec, ...],
-    user_count: int,
-    other_count: int,
     random: Random,
 ) -> set[int]:
-    target_degrees = _target_channel_degrees(quotas, ordered_specs)
-    degrees = [0] * len(ordered_specs)
+    targets = _target_channel_degrees(sides, quotas)
+    degrees = [0] * sides.node_count
+    pools = {
+        stratum: list(ranks_by_stratum[stratum])
+        for stratum, quota in quotas.items()
+        if quota
+    }
+    for pool in pools.values():
+        random.shuffle(pool)
     schedule = [stratum for stratum, quota in quotas.items() for _ in range(quota)]
     random.shuffle(schedule)
+
     selected: set[int] = set()
     for stratum in schedule:
-        pool = candidates[stratum]
+        pool = pools[stratum]
         choices = random.sample(range(len(pool)), min(_DEGREE_CHOICES, len(pool)))
-        selected_index = min(
-            (
-                _degree_score(
-                    pool[index],
-                    degrees,
-                    target_degrees,
-                    ordered_specs,
-                    user_count,
-                    other_count,
-                ),
-                index,
-            )
-            for index in choices
+        chosen = min(
+            (_degree_score(sides, pool[index], degrees, targets), index) for index in choices
         )[1]
-        rank = pool[selected_index]
-        pool[selected_index] = pool[-1]
+        rank = pool[chosen]
+        pool[chosen] = pool[-1]
         pool.pop()
-        first, second = _pair_indices_from_rank(rank, user_count, other_count)
-        degrees[first] += 1
-        degrees[second] += 1
+        first_node, second_node = _edge_nodes(sides, rank)
+        degrees[first_node] += 1
+        degrees[second_node] += 1
         selected.add(rank)
     return selected
 
@@ -337,57 +303,94 @@ class _DisjointSet:
         return True
 
 
-def _repair_connectivity(
-    selected: set[int],
-    ordered_specs: tuple[PromptSpec, ...],
-    user_count: int,
-    other_count: int,
-    random: Random,
-) -> set[int]:
-    forest = _DisjointSet(len(ordered_specs))
+def _anchor_node(sides: _Sides) -> int:
+    """Return a user-channel cell every other component can always be joined to."""
+    if sides.user_first:
+        return sides.user_first[0]
+    return len(sides.first) + sides.user_second[0]
+
+
+def _bridge_rank(sides: _Sides, anchor: int, component: list[int], base: list[int]) -> int:
+    """Return a valid edge joining one component to the anchor's component.
+
+    Components holding a cell on the side opposite the anchor attach straight to
+    the anchor, which is on the user channel and therefore always a legal
+    endpoint. Once every such component is merged the base holds every cell on
+    that opposite side, so the remaining same-side components can reach it.
+    """
+    boundary = len(sides.first)
+    anchor_is_first = anchor < boundary
+    opposite = [node for node in component if (node < boundary) is not anchor_is_first]
+    if opposite:
+        partner = opposite[0]
+        return (
+            _rank_from_edge(sides, anchor, partner - boundary)
+            if anchor_is_first
+            else _rank_from_edge(sides, partner, anchor - boundary)
+        )
+
+    node = component[0]
+    spec = sides.first[node] if anchor_is_first else sides.second[node - boundary]
+    if anchor_is_first:
+        candidates = [
+            partner
+            for partner in base
+            if partner >= boundary
+            and (
+                spec.channel is Channel.USER
+                or sides.second[partner - boundary].channel is Channel.USER
+            )
+        ]
+        return _rank_from_edge(sides, node, candidates[0] - boundary)
+    candidates = [
+        partner
+        for partner in base
+        if partner < boundary
+        and (spec.channel is Channel.USER or sides.first[partner].channel is Channel.USER)
+    ]
+    return _rank_from_edge(sides, candidates[0], node - boundary)
+
+
+def _repair_connectivity(sides: _Sides, selected: set[int], random: Random) -> set[int]:
+    """Swap the fewest redundant edges needed to connect the pair's cells."""
+    forest = _DisjointSet(sides.node_count)
     shuffled = sorted(selected)
     random.shuffle(shuffled)
-    redundant: list[int] = []
-    for rank in shuffled:
-        first, second = _pair_indices_from_rank(rank, user_count, other_count)
-        if not forest.union(first, second):
-            redundant.append(rank)
+    redundant = [rank for rank in shuffled if not forest.union(*_edge_nodes(sides, rank))]
 
     components: dict[int, list[int]] = {}
-    for cell in range(len(ordered_specs)):
-        components.setdefault(forest.find(cell), []).append(cell)
+    for node in range(sides.node_count):
+        components.setdefault(forest.find(node), []).append(node)
     if len(components) == 1:
         return selected
 
-    base_root = forest.find(0)
-    base = components.pop(base_root)
-    others = list(components.values())
-    random.shuffle(others)
+    anchor = _anchor_node(sides)
+    base = components.pop(forest.find(anchor))
+    boundary = len(sides.first)
+    anchor_is_first = anchor < boundary
+    others = sorted(components.values(), key=lambda component: component[0])
+    # Components holding a cell opposite the anchor first, so that the base owns
+    # every opposite-side cell before the same-side leftovers need a partner.
+    others.sort(
+        key=lambda component: all((node < boundary) is anchor_is_first for node in component)
+    )
+
     bridges: list[int] = []
     for component in others:
-        component_users = [cell for cell in component if cell < user_count]
-        base_users = [cell for cell in base if cell < user_count]
-        if component_users:
-            first = random.choice(component_users)
-            second = random.choice(base)
-        else:
-            first = random.choice(component)
-            second = random.choice(base_users)
-        bridges.append(_rank_from_pair_indices(first, second, user_count, other_count))
+        bridges.append(_bridge_rank(sides, anchor, component, base))
         base.extend(component)
 
     if len(redundant) < len(bridges):  # pragma: no cover - follows from m >= n - 1
         raise RuntimeError("not enough cycle edges to repair comparison connectivity")
-    redundant_by_stratum: dict[_PairingStratum, list[int]] = {}
+
+    redundant_by_stratum: dict[_PairingStratum, list[int]] = defaultdict(list)
     for rank in redundant:
-        stratum = _stratum_for_rank(rank, ordered_specs, user_count, other_count)
-        redundant_by_stratum.setdefault(stratum, []).append(rank)
+        redundant_by_stratum[_stratum_for_rank(sides, rank)].append(rank)
     available = set(redundant)
     fallback = list(redundant)
     removed: list[int] = []
     for bridge in bridges:
-        bridge_stratum = _stratum_for_rank(bridge, ordered_specs, user_count, other_count)
-        matching = redundant_by_stratum.get(bridge_stratum, [])
+        matching = redundant_by_stratum[_stratum_for_rank(sides, bridge)]
         while matching and matching[-1] not in available:
             matching.pop()
         while fallback and fallback[-1] not in available:
@@ -395,97 +398,87 @@ def _repair_connectivity(
         removal = matching.pop() if matching else fallback.pop()
         available.remove(removal)
         removed.append(removal)
+
     repaired = selected.difference(removed).union(bridges)
     if len(repaired) != len(selected):  # pragma: no cover - bridges join distinct components
         raise RuntimeError("connectivity repair changed the requested pairing count")
-    check = _DisjointSet(len(ordered_specs))
+    check = _DisjointSet(sides.node_count)
     for rank in repaired:
-        first, second = _pair_indices_from_rank(rank, user_count, other_count)
-        check.union(first, second)
-    if len({check.find(cell) for cell in range(len(ordered_specs))}) != 1:
+        check.union(*_edge_nodes(sides, rank))
+    if len({check.find(node) for node in range(sides.node_count)}) != 1:  # pragma: no cover
         raise RuntimeError("comparison graph remains disconnected after repair")
     return repaired
 
 
+def _pair_seed(seed: Natural, pair_id: PairId) -> int:
+    """Derive a per-pair seed that does not depend on the pair's position."""
+    digest = hashlib.sha256(f"{int(seed)}:{pair_id}".encode()).digest()
+    return int.from_bytes(digest[:8], "big")
+
+
 @beartype
-def sample_study_inputs(
-    specs: tuple[PromptSpec, ...],
+def sample_pair_inputs(
+    pair_specs: PairSpecs,
     pairings: PositiveInteger,
     seed: Natural,
 ) -> tuple[StudyInputs, ...]:
-    """Sample stratified, degree-balanced edges and minimally repair connectivity."""
-    user_specs, other_specs = _partition_specs(specs)
-    population = int(pairing_population_size(specs))
-    minimum = int(minimum_connected_pairings(specs))
+    """Sample stratified, degree-balanced edges within one instruction pair."""
+    sides = _sides(pair_specs)
+    population = sides.population
+    minimum = sides.node_count - 1
     requested = int(pairings)
     if requested < minimum:
         raise ValueError(
-            f"pairings must be at least {minimum} to cover and connect all {len(specs)} cells"
+            f"pairings must be at least {minimum} to cover and connect all "
+            f"{sides.node_count} cells of pair {pair_specs.pair.pair_id}"
         )
     if requested > population:
-        raise ValueError(f"pairings cannot exceed the valid population of {population}")
-
-    if requested == population:
-        return tuple(
-            _pair_from_rank(rank, user_specs, other_specs) for rank in range(population)
+        raise ValueError(
+            f"pairings cannot exceed the valid population of {population} "
+            f"for pair {pair_specs.pair.pair_id}"
         )
 
-    random = Random(int(seed))
-    ordered_specs = user_specs + other_specs
-    population_counts = _stratum_population_counts(
-        population,
-        ordered_specs,
-        len(user_specs),
-        len(other_specs),
-    )
-    if sum(population_counts.values()) != population:
+    if requested == population:
+        return tuple(_inputs_from_rank(sides, rank) for rank in range(population))
+
+    random = Random(_pair_seed(seed, pair_specs.pair.pair_id))
+    ranks_by_stratum = _ranks_by_stratum(sides)
+    if sum(len(ranks) for ranks in ranks_by_stratum.values()) != population:  # pragma: no cover
         raise RuntimeError("pairing strata do not partition the valid population")
-    quotas = _proportional_quotas(population_counts, requested, population)
-    candidates = _candidate_ranks(
-        population_counts,
-        quotas,
+    quotas = _proportional_quotas(
+        {stratum: len(ranks) for stratum, ranks in ranks_by_stratum.items()},
+        requested,
         population,
-        ordered_specs,
-        len(user_specs),
-        len(other_specs),
-        random,
     )
-    selected_ranks = _degree_aware_sample(
-        quotas,
-        candidates,
-        ordered_specs,
-        len(user_specs),
-        len(other_specs),
-        random,
-    )
-    selected_ranks = _repair_connectivity(
-        selected_ranks,
-        ordered_specs,
-        len(user_specs),
-        len(other_specs),
-        random,
-    )
-    return tuple(
-        _pair_from_rank(rank, user_specs, other_specs) for rank in sorted(selected_ranks)
-    )
+    selected = _degree_aware_sample(sides, ranks_by_stratum, quotas, random)
+    selected = _repair_connectivity(sides, selected, random)
+    return tuple(_inputs_from_rank(sides, rank) for rank in sorted(selected))
 
 
 @beartype
 def build_sampled_studies(
-    specs: tuple[PromptSpec, ...],
+    pair_specs: tuple[PairSpecs, ...],
     assistants: tuple[Assistant, ...],
-    pairings_per_assistant: PositiveInteger,
+    pairings_per_pair: PositiveInteger,
     rollouts_per_permutation: PositiveInteger,
     seed: Natural,
 ) -> tuple[Study, ...]:
-    """Use one sampled comparison design for every requested assistant."""
+    """Use one sampled within-pair design for every requested assistant."""
+    if not pair_specs:
+        raise ValueError("at least one instruction pair is required")
     if not assistants:
         raise ValueError("at least one assistant is required")
     if len(assistants) != len(set(assistants)):
         raise ValueError("assistants must be unique")
-    inputs = sample_study_inputs(specs, pairings_per_assistant, seed)
+    if len({specs.pair.pair_id for specs in pair_specs}) != len(pair_specs):
+        raise ValueError("instruction pair ids must be unique")
+
+    sampled = tuple(
+        sample_pair_inputs(specs, pairings_per_pair, seed) for specs in pair_specs
+    )
     return tuple(
-        make_study(pair, assistant, int(rollouts_per_permutation))
+        make_study(inputs, assistant, int(rollouts_per_permutation))
         for assistant in assistants
-        for pair in inputs
+        for pair_inputs in sampled
+        for inputs in pair_inputs
     )

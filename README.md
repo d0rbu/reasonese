@@ -1,7 +1,8 @@
 # reasonese
 
 `reasonese` is a research codebase for studying how the same instruction changes across
-four controlled axes: instruction, framing, channel, and author.
+three controlled axes—framing, channel, and author—applied to both sides of a
+mutually exclusive instruction pair.
 
 ## Current foundation
 
@@ -13,7 +14,6 @@ its exact datapoint authoring instructions before assistant inference.
 
 | Axis | Current values |
 |---|---|
-| instruction | Simple base prompts such as “Write a program…” or “Find information…” |
 | framing | `normal`, `casual`, `persuasive`, `subagent`, `reasonese-normal`, `reasonese-persuasive` |
 | channel | `system prompt`, `user message`, `README.md` |
 | author | `user`, `Qwen3.8 Flash`, `Qwen3.8 2.4T`, `Inkling`, `Inkling Small` |
@@ -25,6 +25,12 @@ rewrite the base instruction according to the selected framing.
 Six framings, three channels, and five authors produce `6 × 3 × 5 = 90` specifications per
 base instruction. A specification is just a four-field dataclass containing those axes.
 
+Instruction is not a treatment axis. Instructions come in 24 mutually exclusive pairs, and a
+trial only ever holds the two instructions of one pair, so no comparison ever crosses a pair
+boundary. Instruction selects which cells can be compared; it is a blocking factor for sampling
+and analysis, not a coordinate whose levels are contrasted. See
+[`docs/research/axes.md`](docs/research/axes.md).
+
 ## Quickstart
 
 ```bash
@@ -34,12 +40,12 @@ uv sync
 
 uv run reasonese-axes
 uv run reasonese-plan \
-  --instructions configs/example_instructions.toml \
+  --pairs configs/instruction_pairs.yaml \
   --output out/example/prompt_specs.jsonl
 
 uv run reasonese-sample-studies \
-  --instructions configs/example_instructions.toml \
-  --pairings-per-assistant 250 \
+  --pairs configs/instruction_pairs.yaml \
+  --pairings-per-pair 720 \
   --seed 0 \
   --output out/example/studies.yaml
 
@@ -73,11 +79,12 @@ uv run reasonese-collect-studies \
 
 uv run reasonese-analyze \
   --observations out/example-study/observations.jsonl \
+  --pairs configs/instruction_pairs.yaml \
   --output out/example-study/analysis
 ```
 
 The utilities have separate entry points. `reasonese-axes` prints the values and
-`reasonese-plan` writes four-axis datapoints. `reasonese-run-conversation` loads a `Matchup`,
+`reasonese-plan` writes four-axis datapoints for both sides of every instruction pair. `reasonese-run-conversation` loads a `Matchup`,
 generates any missing model-authored messages, constructs the ordered conversation, and sends
 it to the selected assistant with file-read, sandboxed bash, sandboxed Python, and web-search
 tools. It submits independent model-author batch jobs before polling them together, so one
@@ -146,22 +153,30 @@ uncached response judgments together. Each study keeps its own directory of trac
 and observations, named after the study file's stem. Study filenames must therefore have
 distinct stems.
 
-`reasonese-sample-studies` avoids exhaustive condition pairing. It writes one YAML suite with a
-seeded sample of valid unordered cell pairs, then replicates that exact comparison design across
-the selected assistants. The default is 20,000 pairs per assistant, capped by the eligible
-population and raised if a larger design is needed to connect every cell. An explicit
-`--pairings-per-assistant` overrides it. The sampler gives exact proportional quotas to strata
-defined by the channel pair and the set of instruction, framing, channel, and author axes that
-differ. Within each stratum it selects from a seeded random candidate pool while preferring cells
-with lower channel-normalized degree. Both input orders and all requested rollouts are still collected.
-The requested pair count must therefore be at least `number of cells - 1` and cannot exceed the
-valid population. After sampling, a connectivity check replaces exactly `components - 1`
-redundant cycle edges with cross-component edges if needed, which is the minimum possible repair.
-It prefers same-stratum replacements to retain the proportional allocation.
+`reasonese-sample-studies` avoids exhaustive condition pairing. It samples one instruction pair
+at a time, because only the two instructions of a pair can be compared. Within a pair the two
+sides are disjoint sets of specifications, so the eligible population is bipartite: every valid
+edge joins a first-side cell to a second-side cell and at least one of them uses the `user
+message` channel. It writes one YAML suite and replicates that exact design across the selected
+assistants.
 
-With all axes enabled, 20 instructions produce 1,800 cells and 899,700 eligible pairs per
-assistant. The minimum connected design uses 1,799 of those pairs per assistant, about 500 times
-fewer than exhaustive pairing.
+The default is 720 pairings per pair, capped by the eligible population and raised if a larger
+design is needed to connect every cell. An explicit `--pairings-per-pair` overrides it. The
+sampler gives exact proportional quotas to strata defined by the channel pair and by which of
+framing and author differ across the edge. Instruction always differs, so it is no longer a
+stratum dimension. Within each stratum it prefers cells with lower channel-normalized degree.
+Both input orders and all requested rollouts are still collected. The requested count must be at
+least `cells in the pair - 1` and cannot exceed that pair's population. A connectivity check then
+replaces exactly `components - 1` redundant cycle edges, the minimum possible repair, preferring
+same-stratum replacements. Seeds derive from the pair id, so reordering the bank does not change
+any design.
+
+With all axes enabled, each of the 24 pairs has 180 cells and 4,500 eligible pairings, for
+108,000 eligible pairings per assistant. The minimum connected design uses 179 pairings per pair.
+The pilot default of 720 gives every cell an average degree of 8.
+
+Connectivity is required within a pair and is impossible between pairs, so the comparison graph
+has exactly one component per `(pair, assistant)`.
 
 By default the sampler includes every author and assistant. Repeated `--author` and
 `--assistant` options restrict those sets—for example, omitting the `user` author avoids selecting
@@ -174,16 +189,27 @@ strata equally. Degree-aware selection also means individual edges do not have u
 probabilities. These choices and any connectivity repairs should be considered before treating
 marginal axis summaries as confirmatory estimates.
 
-`reasonese-analyze` fits an L2-penalized Bradley–Terry ordering from each trial's cell pair.
-A completed cell beats an incomplete one; equal verdicts contribute half-wins. It also
-writes marginal summaries and pairwise contrasts for all five coordinates, overall position
-rates, cell-by-position and axis-by-position effects, order-sensitivity ranges/correlations,
-comparison-graph connectivity, position-balance checks, trial-cluster bootstrap intervals,
-and rankings under 0.1×/1×/10× regularization.
+`reasonese-analyze` fits an L2-penalized Bradley–Terry ordering **per connected component**,
+which is one `(pair, assistant)` block. A completed cell beats an incomplete one; equal verdicts
+contribute half-wins. It needs `--pairs` so it can map each instruction to its pair, side, skill,
+and conflict type.
 
-The report keeps important limits visible: axis margins are descriptive unless the collected
-cells form an appropriate balanced factorial design, and absolute ordering between disconnected
-Bradley–Terry components is regularization-dependent rather than empirically identified.
+Marginal summaries and pairwise contrasts cover framing, channel, and author, the only
+coordinates that vary inside a trial and therefore the only ones a within-component score can
+speak to. Assistant, skill, conflict type, and pair are constant within a trial, so they get a
+separate stratum table of completion rates with no Bradley–Terry column. The analysis also writes
+per-pair exclusivity counts, overall position rates, cell-by-position and axis-by-position
+effects, order-sensitivity ranges/correlations, position-balance checks, trial-cluster bootstrap
+intervals, and rankings under 0.1×/1×/10× regularization.
+
+Per-pair exclusivity is the empirical check on the bank. A both-completed trial means one
+response satisfied both instructions, so the pair was not exclusive in practice; a
+neither-completed trial means it was too hard. Bradley–Terry scores both as ties, which is why
+they are reported apart.
+
+The report keeps important limits visible: ranks are within-component and carry no meaning
+across components, and axis margins are descriptive unless the collected cells form an
+appropriate balanced factorial design.
 
 ## Instruction bank
 

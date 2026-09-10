@@ -6,12 +6,12 @@ Install Python 3.13 and [`uv`](https://docs.astral.sh/uv/), then run:
 uv sync
 uv run reasonese-axes
 uv run reasonese-plan \
-  --instructions configs/example_instructions.toml \
+  --pairs configs/instruction_pairs.yaml \
   --output out/example/prompt_specs.jsonl
 ```
 
-The first utility prints the canonical definitions. The second validates the two example
-base instructions and writes 180 prompt specifications: 90 for each instruction.
+The first utility prints the canonical definitions. The second validates the 24 instruction
+pairs and writes 4,320 prompt specifications: 90 for each of the 48 instructions.
 
 Inspect a few records with:
 

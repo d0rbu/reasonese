@@ -1,7 +1,17 @@
+"""Tests for within-pair study sampling.
+
+These run against the real 24-pair bank at its real size: 90 conditions per
+instruction side, a 4,500-edge population per pair, and the 720-edge pilot
+default. Synthetic pairs are used only where a degenerate channel mix is needed
+that the real bank cannot express.
+"""
+
 from __future__ import annotations
 
+import itertools
 import json
 from collections import Counter
+from functools import cache
 from pathlib import Path
 from random import Random
 
@@ -9,346 +19,645 @@ import pytest
 import yaml
 from phantom.interval import Natural
 
+import reasonese.sample_studies as sample_studies_module
 import reasonese.sampling as sampling_module
 from reasonese.axes import Assistant, Author, Channel, Framing, Instruction
 from reasonese.config import load_study_suite
+from reasonese.instructions import (
+    ConflictType,
+    InstructionPair,
+    PairId,
+    Rationale,
+    Skill,
+    load_instruction_pairs,
+)
 from reasonese.io import write_study_suite
-from reasonese.planning import PromptSpec, build_prompt_specs
+from reasonese.planning import PairSpecs, PromptSpec, build_pair_specs
 from reasonese.sample_studies import main as sample_studies
 from reasonese.sampling import (
+    DEFAULT_PAIRINGS_PER_PAIR,
+    _edge_from_rank,
+    _proportional_quotas,
+    _rank_from_edge,
+    _ranks_by_stratum,
+    _repair_connectivity,
+    _sides,
+    _stratum_for_rank,
     build_sampled_studies,
     default_pairing_count,
     minimum_connected_pairings,
     pairing_population_size,
-    sample_study_inputs,
+    sample_pair_inputs,
 )
 from reasonese.study import PositiveInteger, StudyInputs, study_to_dict
 
+BANK = Path("configs/instruction_pairs.yaml")
+SIDE_SIZE = 90
+POPULATION = 4500
+NODES = 2 * SIDE_SIZE
 
-def _spec(name: str, channel: Channel) -> PromptSpec:
-    return PromptSpec(
-        Instruction.parse(name),
-        Framing.NORMAL,
-        channel,
-        Author.INKLING,
+
+@cache
+def _bank() -> tuple[InstructionPair, ...]:
+    return load_instruction_pairs(BANK)
+
+
+@cache
+def _bank_specs() -> tuple[PairSpecs, ...]:
+    return build_pair_specs(_bank())
+
+
+def _first_pair() -> PairSpecs:
+    return _bank_specs()[0]
+
+
+def _synthetic_side(
+    instruction: Instruction, channels: tuple[Channel, ...]
+) -> tuple[PromptSpec, ...]:
+    """Build a side whose channels are given, keeping every spec distinct."""
+    combinations = tuple(itertools.product(Framing, Author))
+    return tuple(
+        PromptSpec(instruction, combinations[index][0], channel, combinations[index][1])
+        for index, channel in enumerate(channels)
     )
 
 
-def _specs() -> tuple[PromptSpec, ...]:
-    return (
-        _spec("A", Channel.USER),
-        _spec("B", Channel.USER),
-        _spec("C", Channel.SYSTEM),
-        _spec("D", Channel.README),
-        _spec("E", Channel.SYSTEM),
+def _synthetic_pair_specs(
+    first_channels: tuple[Channel, ...],
+    second_channels: tuple[Channel, ...],
+    pair_id: str = "probe-pair",
+) -> PairSpecs:
+    first = Instruction.parse("Do the first thing.")
+    second = Instruction.parse("Do the second thing.")
+    pair = InstructionPair(
+        PairId.parse(pair_id),
+        Skill.PYTHON,
+        ConflictType.OUTPUT_FORMAT,
+        first,
+        second,
+        Rationale.parse("The two requests cannot both be satisfied."),
+    )
+    return PairSpecs(
+        pair,
+        _synthetic_side(first, first_channels),
+        _synthetic_side(second, second_channels),
     )
 
 
-def _reachable(pairings: tuple[StudyInputs, ...]) -> set[PromptSpec]:
-    reached = {pairings[0][0]}
-    changed = True
-    while changed:
-        changed = False
-        for pairing in pairings:
-            edge = set(pairing)
-            if edge & reached and not edge <= reached:
-                reached.update(edge)
-                changed = True
+def _brute_force_edges(pair_specs: PairSpecs) -> set[tuple[int, int]]:
+    """Enumerate valid edges directly from the definition, ignoring rank maths."""
+    return {
+        (index, other)
+        for index, first in enumerate(pair_specs.first)
+        for other, second in enumerate(pair_specs.second)
+        if Channel.USER in (first.channel, second.channel)
+    }
+
+
+def _components(pair_specs: PairSpecs, pairings: tuple[StudyInputs, ...]) -> list[set[PromptSpec]]:
+    reached: list[set[PromptSpec]] = []
+    for inputs in pairings:
+        edge = set(inputs)
+        touching = [component for component in reached if component & edge]
+        merged = set(edge)
+        for component in touching:
+            merged |= component
+            reached.remove(component)
+        reached.append(merged)
+    covered = {spec for component in reached for spec in component}
+    for spec in pair_specs.first + pair_specs.second:
+        if spec not in covered:
+            reached.append({spec})
     return reached
 
 
-def _pairing_stratum(
-    pairing: tuple[PromptSpec, PromptSpec],
-) -> tuple[tuple[Channel, Channel], tuple[str, ...]]:
-    first, second = pairing
-    if first.channel is not Channel.USER:
-        first, second = second, first
-    differing_axes = tuple(
-        name
-        for name, differs in (
-            ("instruction", first.instruction != second.instruction),
-            ("framing", first.framing != second.framing),
-            ("channel", first.channel != second.channel),
-            ("author", first.author != second.author),
+# --------------------------------------------------------------------------
+# Population, bounds, and the rank encoding
+# --------------------------------------------------------------------------
+
+
+def test_every_real_pair_has_the_expected_population_and_bounds() -> None:
+    specs = _bank_specs()
+    assert len(specs) == 24
+    for pair_specs in specs:
+        assert len(pair_specs.first) == SIDE_SIZE
+        assert len(pair_specs.second) == SIDE_SIZE
+        assert int(pairing_population_size(pair_specs)) == POPULATION
+        assert int(minimum_connected_pairings(pair_specs)) == NODES - 1
+        assert int(default_pairing_count(pair_specs)) == DEFAULT_PAIRINGS_PER_PAIR
+
+
+def test_population_counts_agree_with_brute_force_enumeration() -> None:
+    cases = (
+        ((Channel.USER,) * 4, (Channel.SYSTEM,) * 3),
+        ((Channel.USER, Channel.SYSTEM, Channel.README), (Channel.USER, Channel.README)),
+        ((Channel.SYSTEM, Channel.README), (Channel.USER,) * 5),
+        ((Channel.USER,) * 2, (Channel.USER,) * 2),
+    )
+    for first_channels, second_channels in cases:
+        pair_specs = _synthetic_pair_specs(first_channels, second_channels)
+        expected = len(_brute_force_edges(pair_specs))
+        assert int(pairing_population_size(pair_specs)) == expected
+
+
+def test_default_pairing_count_is_capped_and_respects_connectivity() -> None:
+    small = _synthetic_pair_specs((Channel.USER,) * 3, (Channel.SYSTEM,) * 2)
+    # Population 6 is below the 720 default, so the population caps it, but the
+    # result still has to reach the four edges that connect five cells.
+    assert int(pairing_population_size(small)) == 6
+    assert int(default_pairing_count(small)) == 6
+
+    wide = _synthetic_pair_specs((Channel.USER,) * 12, (Channel.USER,) * 12)
+    assert int(minimum_connected_pairings(wide)) == 23
+    assert int(default_pairing_count(wide)) == 144
+
+
+def test_rank_encoding_is_a_bijection_onto_the_valid_edges() -> None:
+    pair_specs = _first_pair()
+    sides = _sides(pair_specs)
+    decoded = [_edge_from_rank(sides, rank) for rank in range(POPULATION)]
+
+    assert len(set(decoded)) == POPULATION
+    assert set(decoded) == _brute_force_edges(pair_specs)
+    for rank, (first_index, second_index) in enumerate(decoded):
+        assert _rank_from_edge(sides, first_index, second_index) == rank
+        assert Channel.USER in (
+            pair_specs.first[first_index].channel,
+            pair_specs.second[second_index].channel,
         )
-        if differs
+
+
+def test_rank_decoding_rejects_ranks_outside_the_population() -> None:
+    sides = _sides(_first_pair())
+    for rank in (-1, POPULATION, POPULATION + 1):
+        with pytest.raises(ValueError, match="outside the valid population"):
+            _edge_from_rank(sides, rank)
+
+
+def test_rank_encoding_rejects_a_pairing_without_a_user_channel() -> None:
+    pair_specs = _first_pair()
+    sides = _sides(pair_specs)
+    first_index = next(
+        index
+        for index, spec in enumerate(pair_specs.first)
+        if spec.channel is not Channel.USER
     )
-    return (first.channel, second.channel), differing_axes
+    second_index = next(
+        index
+        for index, spec in enumerate(pair_specs.second)
+        if spec.channel is not Channel.USER
+    )
+    with pytest.raises(ValueError, match="must contain a user-channel"):
+        _rank_from_edge(sides, first_index, second_index)
 
 
-def _factorial_specs() -> tuple[PromptSpec, ...]:
-    return tuple(
-        PromptSpec(instruction, framing, channel, author)
-        for instruction in tuple(Instruction.parse(f"Task {index}.") for index in range(4))
-        for framing in Framing
-        for channel in Channel
-        for author in (Author.USER, Author.INKLING)
+# --------------------------------------------------------------------------
+# Strata and quotas
+# --------------------------------------------------------------------------
+
+
+def test_strata_partition_the_population_and_match_brute_force() -> None:
+    pair_specs = _first_pair()
+    sides = _sides(pair_specs)
+    grouped = _ranks_by_stratum(sides)
+
+    assert sum(len(ranks) for ranks in grouped.values()) == POPULATION
+    assert len({rank for ranks in grouped.values() for rank in ranks}) == POPULATION
+    # Five legal channel pairings times framing-differs times author-differs.
+    assert len(grouped) == 20
+
+    expected: Counter[tuple[str, str, bool, bool]] = Counter()
+    for first_index, second_index in _brute_force_edges(pair_specs):
+        first = pair_specs.first[first_index]
+        second = pair_specs.second[second_index]
+        expected[
+            (
+                str(first.channel),
+                str(second.channel),
+                first.framing != second.framing,
+                first.author != second.author,
+            )
+        ] += 1
+    actual = {
+        (
+            str(stratum.channels[0]),
+            str(stratum.channels[1]),
+            stratum.framing_differs,
+            stratum.author_differs,
+        ): len(ranks)
+        for stratum, ranks in grouped.items()
+    }
+    assert actual == dict(expected)
+    assert all(Channel.USER in stratum.channels for stratum in grouped)
+
+
+def test_proportional_quotas_sum_to_the_request_and_break_ties_by_remainder() -> None:
+    sides = _sides(_first_pair())
+    grouped = _ranks_by_stratum(sides)
+    counts = {stratum: len(ranks) for stratum, ranks in grouped.items()}
+
+    for requested in (179, 360, 720, 1441, POPULATION - 1):
+        quotas = _proportional_quotas(counts, requested, POPULATION)
+        assert sum(quotas.values()) == requested
+        assert set(quotas) == set(counts)
+        for stratum, quota in quotas.items():
+            assert quota <= counts[stratum]
+            exact = requested * counts[stratum] / POPULATION
+            # Largest-remainder rounding never moves a quota by a whole unit.
+            assert abs(quota - exact) < 1.0
+
+
+# --------------------------------------------------------------------------
+# Sampling behaviour
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("pairings", [179, 180, 360, 720, 1440])
+@pytest.mark.parametrize("seed", [0, 1, 17])
+def test_samples_are_distinct_valid_connected_and_cover_every_cell(
+    pairings: int, seed: int
+) -> None:
+    pair_specs = _first_pair()
+    sampled = sample_pair_inputs(
+        pair_specs, PositiveInteger.parse(pairings), Natural.parse(seed)
     )
 
+    assert len(sampled) == pairings
+    assert len({frozenset(inputs) for inputs in sampled}) == pairings
+    first_side = set(pair_specs.first)
+    second_side = set(pair_specs.second)
+    for inputs in sampled:
+        assert len(inputs) == 2
+        assert any(spec.channel is Channel.USER for spec in inputs)
+        assert {inputs[0] in first_side, inputs[1] in second_side} == {True}
 
-def _eligible_pairs(
-    specs: tuple[PromptSpec, ...],
-) -> tuple[tuple[PromptSpec, PromptSpec], ...]:
-    return tuple(
-        (first, second)
-        for index, first in enumerate(specs)
-        for second in specs[index + 1 :]
-        if first.channel is Channel.USER or second.channel is Channel.USER
+    components = _components(pair_specs, sampled)
+    assert len(components) == 1
+    assert len(components[0]) == NODES
+
+
+def test_minimum_request_produces_a_spanning_tree() -> None:
+    pair_specs = _first_pair()
+    sampled = sample_pair_inputs(
+        pair_specs, PositiveInteger.parse(NODES - 1), Natural.parse(3)
     )
+    # 179 edges over 180 connected cells can only be an acyclic spanning tree.
+    assert len(sampled) == NODES - 1
+    components = _components(pair_specs, sampled)
+    assert len(components) == 1
+    assert len(components[0]) == NODES
 
 
-def _proportional_counts(
-    population_counts: Counter[tuple[tuple[Channel, Channel], tuple[str, ...]]],
-    requested: int,
-) -> Counter[tuple[tuple[Channel, Channel], tuple[str, ...]]]:
-    population = sum(population_counts.values())
-    result = Counter(
-        {
-            stratum: requested * count // population
-            for stratum, count in population_counts.items()
-        }
+def test_full_population_request_returns_every_valid_edge() -> None:
+    pair_specs = _first_pair()
+    sampled = sample_pair_inputs(
+        pair_specs, PositiveInteger.parse(POPULATION), Natural.parse(11)
     )
-    remaining = requested - sum(result.values())
-    ordered = sorted(
-        population_counts,
-        key=lambda stratum: (
-            -(requested * population_counts[stratum] % population),
-            tuple(str(channel) for channel in stratum[0]),
-            stratum[1],
-        ),
-    )
-    result.update(ordered[:remaining])
-    return result
+    assert len(sampled) == POPULATION
+    assert {frozenset(inputs) for inputs in sampled} == {
+        frozenset((pair_specs.first[first], pair_specs.second[second]))
+        for first, second in _brute_force_edges(pair_specs)
+    }
 
 
-def test_pairing_counts_respect_the_user_channel_constraint() -> None:
-    specs = _specs()
-    assert pairing_population_size(specs) == 7
-    assert minimum_connected_pairings(specs) == 4
+def test_sampling_is_reproducible_and_seed_sensitive() -> None:
+    pair_specs = _first_pair()
+    pairings = PositiveInteger.parse(720)
+    baseline = sample_pair_inputs(pair_specs, pairings, Natural.parse(5))
 
-    all_user = (_spec("A", Channel.USER), _spec("B", Channel.USER), _spec("C", Channel.USER))
-    assert pairing_population_size(all_user) == 3
-    assert minimum_connected_pairings(all_user) == 2
-
-
-def test_twenty_instruction_design_size() -> None:
-    instructions = tuple(Instruction.parse(f"Task {index}.") for index in range(20))
-    specs = build_prompt_specs(instructions)
-    assert len(specs) == 1_800
-    assert pairing_population_size(specs) == 899_700
-    assert minimum_connected_pairings(specs) == 1_799
-    assert default_pairing_count(specs) == 20_000
+    assert sample_pair_inputs(pair_specs, pairings, Natural.parse(5)) == baseline
+    assert sample_pair_inputs(pair_specs, pairings, Natural.parse(6)) != baseline
 
 
-def test_default_pairing_count_is_capped_and_preserves_connectivity() -> None:
-    assert default_pairing_count(_specs()) == pairing_population_size(_specs())
+def test_a_pair_design_does_not_depend_on_its_position_in_the_bank() -> None:
+    """Seeds derive from the pair id, so reordering the bank changes nothing."""
+    specs = _bank_specs()
+    pairings = PositiveInteger.parse(720)
+    direct = sample_pair_inputs(specs[3], pairings, Natural.parse(0))
 
-    instructions = tuple(Instruction.parse(f"Task {index}.") for index in range(250))
-    specs = build_prompt_specs(instructions)
-    assert minimum_connected_pairings(specs) == 22_499
-    assert default_pairing_count(specs) == 22_499
-
-
-def test_seeded_sample_is_unique_connected_and_order_independent() -> None:
-    specs = _specs()
-    first = sample_study_inputs(specs, PositiveInteger.parse(5), Natural.parse(7))
-    repeated = sample_study_inputs(
-        tuple(reversed(specs)), PositiveInteger.parse(5), Natural.parse(7)
-    )
-    different_seed = sample_study_inputs(specs, PositiveInteger.parse(5), Natural.parse(8))
-
-    assert first == repeated
-    assert first != different_seed
-    assert len(first) == len({frozenset(pairing) for pairing in first}) == 5
-    assert _reachable(first) == set(specs)
-    assert all(any(spec.channel is Channel.USER for spec in pairing) for pairing in first)
-
-
-def test_sample_is_exactly_axis_stratified_and_degree_balanced() -> None:
-    specs = _factorial_specs()
-    requested = 1_000
-    pairings = sample_study_inputs(
-        specs,
-        PositiveInteger.parse(requested),
+    reordered = build_sampled_studies(
+        (specs[3], specs[0]),
+        (Assistant.INKLING,),
+        pairings,
+        PositiveInteger.parse(1),
         Natural.parse(0),
     )
-    population_counts = Counter(_pairing_stratum(pair) for pair in _eligible_pairs(specs))
-    sample_counts = Counter(
-        _pairing_stratum((pairing[0], pairing[1])) for pairing in pairings
+    assert tuple(study.inputs for study in reordered[: len(direct)]) == direct
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2, 3])
+def test_degree_is_balanced_within_each_channel(seed: int) -> None:
+    pair_specs = _first_pair()
+    sampled = sample_pair_inputs(
+        pair_specs, PositiveInteger.parse(720), Natural.parse(seed)
     )
-    degrees = Counter(spec for pairing in pairings for spec in pairing)
+    degrees: Counter[PromptSpec] = Counter()
+    for inputs in sampled:
+        degrees.update(inputs)
 
-    assert len(population_counts) == 23
-    assert sample_counts == _proportional_counts(population_counts, requested)
-    assert _reachable(pairings) == set(specs)
-    assert len(pairings) == len({frozenset(pairing) for pairing in pairings}) == requested
-    for channel, maximum_spread in (
-        (Channel.USER, 3),
-        (Channel.SYSTEM, 2),
-        (Channel.README, 2),
-    ):
-        channel_degrees = [degrees[spec] for spec in specs if spec.channel is channel]
-        assert max(channel_degrees) - min(channel_degrees) <= maximum_spread
+    by_channel: dict[Channel, list[int]] = {channel: [] for channel in Channel}
+    for spec in pair_specs.first + pair_specs.second:
+        by_channel[spec.channel].append(degrees[spec])
 
-
-@pytest.mark.parametrize("specs", [_specs(), _factorial_specs()])
-def test_combinatorial_stratum_counts_match_exhaustive_enumeration(
-    specs: tuple[PromptSpec, ...],
-) -> None:
-    user_specs, other_specs = sampling_module._partition_specs(specs)
-    ordered_specs = user_specs + other_specs
-    population = int(pairing_population_size(specs))
-    enumerated = Counter(
-        sampling_module._stratum_for_rank(
-            rank,
-            ordered_specs,
-            len(user_specs),
-            len(other_specs),
-        )
-        for rank in range(population)
-    )
-
-    assert (
-        sampling_module._stratum_population_counts(
-            population,
-            ordered_specs,
-            len(user_specs),
-            len(other_specs),
-        )
-        == enumerated
-    )
-
-
-def test_minimum_designs_are_connected_and_cover_every_cell_across_seeds() -> None:
-    specs = _factorial_specs()
-    minimum = PositiveInteger.parse(len(specs) - 1)
-    for seed in range(10):
-        pairings = sample_study_inputs(specs, minimum, Natural.parse(seed))
-        degrees = Counter(spec for pairing in pairings for spec in pairing)
-
-        assert len(pairings) == len(specs) - 1
-        assert _reachable(pairings) == set(specs)
-        assert all(degrees[spec] >= 1 for spec in specs)
-
-
-def test_connectivity_repair_uses_the_minimum_number_of_edge_swaps() -> None:
-    specs = tuple(_spec(name, Channel.USER) for name in ("A", "B", "C", "D", "E", "F"))
-    selected = {
-        sampling_module._user_pair_rank(first, second, len(specs))
-        for first, second in ((0, 1), (1, 2), (0, 2), (3, 4), (4, 5), (3, 5))
+    # Stratum quotas fix each channel's endpoint total, so the mean degree is
+    # exact and identical for every seed. Only its spread is stochastic.
+    means = {
+        channel: sum(counts) / len(counts) for channel, counts in by_channel.items()
+    }
+    assert means == {
+        Channel.USER: 14.4,
+        Channel.SYSTEM: 4.8,
+        Channel.README: 4.8,
     }
 
-    repaired = sampling_module._repair_connectivity(
-        selected,
-        specs,
-        len(specs),
-        0,
-        Random(0),
-    )
-    pairings = tuple(
-        StudyInputs.parse((specs[first], specs[second]))
-        for rank in repaired
-        for first, second in (sampling_module._user_pair_from_rank(rank, len(specs)),)
-    )
+    # A greedy best-of-eight choice keeps the spread far below the roughly
+    # 15-wide tail an unbalanced Poisson draw over 60 cells would produce.
+    tolerances = {Channel.USER: 5, Channel.SYSTEM: 3, Channel.README: 3}
+    for channel, counts in by_channel.items():
+        assert len(counts) == 60
+        assert min(counts) >= 1, f"{channel} left a cell uncovered"
+        assert max(counts) - min(counts) <= tolerances[channel], (
+            f"{channel} degrees are lopsided: {sorted(counts)}"
+        )
+
+    # User-channel cells reach every partner while others only reach user-channel
+    # partners, so their degrees stay proportional rather than equal.
+    assert min(by_channel[Channel.USER]) > max(by_channel[Channel.SYSTEM])
+    assert min(by_channel[Channel.USER]) > max(by_channel[Channel.README])
+
+
+# --------------------------------------------------------------------------
+# Connectivity repair
+# --------------------------------------------------------------------------
+
+
+def _ranks_touching_second_below(sides: sampling_module._Sides, limit: int) -> set[int]:
+    return {
+        rank
+        for rank in range(sides.population)
+        if _edge_from_rank(sides, rank)[1] < limit
+    }
+
+
+def _ranks_touching_first_below(sides: sampling_module._Sides, limit: int) -> set[int]:
+    return {
+        rank
+        for rank in range(sides.population)
+        if _edge_from_rank(sides, rank)[0] < limit
+    }
+
+
+def test_repair_reconnects_isolated_second_side_cells() -> None:
+    """Isolated cells opposite the anchor attach to it directly."""
+    sides = _sides(_first_pair())
+    selected = _ranks_touching_second_below(sides, 10)
+    assert len(selected) == 600
+
+    repaired = _repair_connectivity(sides, set(selected), Random(0))
 
     assert len(repaired) == len(selected)
-    assert len(selected - repaired) == len(repaired - selected) == 1
-    assert _reachable(pairings) == set(specs)
+    forest = sampling_module._DisjointSet(sides.node_count)
+    for rank in repaired:
+        forest.union(*sampling_module._edge_nodes(sides, rank))
+    assert len({forest.find(node) for node in range(sides.node_count)}) == 1
 
 
-def test_minimum_and_exhaustive_samples_cover_edge_cases() -> None:
-    specs = _specs()
-    minimum = sample_study_inputs(specs, PositiveInteger.parse(4), Natural.parse(0))
-    exhaustive = sample_study_inputs(specs, PositiveInteger.parse(7), Natural.parse(99))
-    assert _reachable(minimum) == set(specs)
-    assert {frozenset(pairing) for pairing in exhaustive} == {
-        frozenset((first, second))
-        for index, first in enumerate(specs)
-        for second in specs[index + 1 :]
-        if first.channel is Channel.USER or second.channel is Channel.USER
+def test_repair_reconnects_isolated_first_side_cells() -> None:
+    """Isolated cells on the anchor's own side route through the opposite side."""
+    sides = _sides(_first_pair())
+    selected = _ranks_touching_first_below(sides, 10)
+    assert len(selected) == 600
+
+    repaired = _repair_connectivity(sides, set(selected), Random(1))
+
+    assert len(repaired) == len(selected)
+    forest = sampling_module._DisjointSet(sides.node_count)
+    for rank in repaired:
+        forest.union(*sampling_module._edge_nodes(sides, rank))
+    assert len({forest.find(node) for node in range(sides.node_count)}) == 1
+
+
+def test_repair_leaves_an_already_connected_selection_untouched() -> None:
+    pair_specs = _first_pair()
+    sides = _sides(pair_specs)
+    connected = {
+        _rank_from_edge(sides, sides.user_first[0], index)
+        for index in range(len(pair_specs.second))
+    } | {
+        _rank_from_edge(sides, index, sides.user_second[0])
+        for index in range(len(pair_specs.first))
     }
+    repaired = _repair_connectivity(sides, set(connected), Random(0))
+    assert repaired == connected
 
-    one_user = (_spec("A", Channel.USER), _spec("B", Channel.SYSTEM))
-    assert sample_study_inputs(
-        one_user, PositiveInteger.parse(1), Natural.parse(0)
-    ) == (StudyInputs.parse(one_user),)
 
-    all_user = tuple(_spec(name, Channel.USER) for name in ("A", "B", "C", "D"))
-    all_user_pairs = sample_study_inputs(
-        all_user, PositiveInteger.parse(6), Natural.parse(0)
-    )
-    assert {frozenset(pairing) for pairing in all_user_pairs} == {
-        frozenset((first, second))
-        for index, first in enumerate(all_user)
-        for second in all_user[index + 1 :]
+def test_repair_prefers_removing_an_edge_from_the_bridge_stratum() -> None:
+    sides = _sides(_first_pair())
+    selected = _ranks_touching_second_below(sides, 10)
+    repaired = _repair_connectivity(sides, set(selected), Random(7))
+
+    added = repaired - selected
+    removed = selected - repaired
+    assert len(added) == len(removed)
+    added_strata = Counter(_stratum_for_rank(sides, rank) for rank in added)
+    removed_strata = Counter(_stratum_for_rank(sides, rank) for rank in removed)
+    # Every bridge stratum that had a spare cycle edge gave one up, so the
+    # stratum profile of the design is preserved wherever it could be.
+    assert sum((added_strata & removed_strata).values()) >= len(added) // 2
+
+
+def _second_side_anchor_pair(first_channels: tuple[Channel, ...], users: int) -> PairSpecs:
+    """Build a pair whose only user-channel cells sit on the second side."""
+    return _synthetic_pair_specs(first_channels, (Channel.USER,) * users, "anchor-probe")
+
+
+def test_repair_reconnects_when_the_anchor_sits_on_the_second_side() -> None:
+    """With no user-channel cell on the first side the anchor flips sides."""
+    pair_specs = _second_side_anchor_pair((Channel.SYSTEM, Channel.README), 3)
+    sides = _sides(pair_specs)
+    assert sides.user_first == ()
+    assert sampling_module._anchor_node(sides) == len(pair_specs.first)
+
+    # Leave the last second-side cell isolated, on the anchor's own side.
+    selected = {
+        _rank_from_edge(sides, first, second) for first in range(2) for second in range(2)
     }
-    all_user_minimum = sample_study_inputs(
-        all_user, PositiveInteger.parse(3), Natural.parse(1)
-    )
-    assert _reachable(all_user_minimum) == set(all_user)
+    assert len(selected) == 4
+
+    repaired = _repair_connectivity(sides, set(selected), Random(0))
+
+    assert len(repaired) == len(selected)
+    forest = sampling_module._DisjointSet(sides.node_count)
+    for rank in repaired:
+        forest.union(*sampling_module._edge_nodes(sides, rank))
+    assert len({forest.find(node) for node in range(sides.node_count)}) == 1
+
+
+def test_repair_reconnects_an_isolated_first_side_cell_opposite_the_anchor() -> None:
+    pair_specs = _second_side_anchor_pair((Channel.SYSTEM, Channel.README, Channel.SYSTEM), 4)
+    sides = _sides(pair_specs)
+    assert sides.user_first == ()
+
+    # Every edge of the first two first-side cells, leaving the third isolated.
+    selected = {
+        _rank_from_edge(sides, first, second) for first in range(2) for second in range(4)
+    }
+    assert len(selected) == 8
+
+    repaired = _repair_connectivity(sides, set(selected), Random(2))
+
+    assert len(repaired) == len(selected)
+    forest = sampling_module._DisjointSet(sides.node_count)
+    for rank in repaired:
+        forest.union(*sampling_module._edge_nodes(sides, rank))
+    assert len({forest.find(node) for node in range(sides.node_count)}) == 1
+
+
+def test_sampling_works_end_to_end_with_a_second_side_anchor() -> None:
+    pair_specs = _second_side_anchor_pair((Channel.SYSTEM, Channel.README, Channel.SYSTEM), 4)
+    sampled = sample_pair_inputs(pair_specs, PositiveInteger.parse(9), Natural.parse(0))
+
+    assert len(sampled) == 9
+    components = _components(pair_specs, sampled)
+    assert len(components) == 1
+    assert len(components[0]) == 7
+
+
+# --------------------------------------------------------------------------
+# Input validation
+# --------------------------------------------------------------------------
+
+
+def test_single_rejects_a_ragged_design() -> None:
+    assert sample_studies_module._single((4500, 4500), "pairing population") == 4500
+    with pytest.raises(ValueError, match="must share the same pairing population"):
+        sample_studies_module._single((4500, 900), "pairing population")
 
 
 @pytest.mark.parametrize(
-    ("specs", "error"),
+    ("first_channels", "second_channels", "error"),
     [
-        ((_spec("A", Channel.USER),), "at least two"),
+        ((), (Channel.USER,), "at least one specification"),
+        ((Channel.USER,), (), "at least one specification"),
+        ((Channel.SYSTEM,), (Channel.README,), "user message channel"),
         (
-            (_spec("A", Channel.USER), _spec("A", Channel.USER)),
-            "must be unique",
+            (Channel.USER, Channel.SYSTEM),
+            (Channel.SYSTEM, Channel.README),
+            "when the second side offers none",
         ),
         (
-            (_spec("A", Channel.SYSTEM), _spec("B", Channel.README)),
-            "user message",
+            (Channel.SYSTEM, Channel.README),
+            (Channel.USER, Channel.SYSTEM),
+            "when the first side offers none",
         ),
     ],
 )
-def test_sampling_rejects_invalid_spec_sets(
-    specs: tuple[PromptSpec, ...], error: str
+def test_sides_reject_unusable_channel_mixes(
+    first_channels: tuple[Channel, ...],
+    second_channels: tuple[Channel, ...],
+    error: str,
 ) -> None:
+    pair_specs = _synthetic_pair_specs(first_channels, second_channels)
     with pytest.raises(ValueError, match=error):
-        pairing_population_size(specs)
+        _sides(pair_specs)
 
 
-def test_sampling_rejects_disconnected_or_oversized_requests() -> None:
-    specs = _specs()
-    with pytest.raises(ValueError, match="at least 4"):
-        sample_study_inputs(specs, PositiveInteger.parse(3), Natural.parse(0))
-    with pytest.raises(ValueError, match="cannot exceed"):
-        sample_study_inputs(specs, PositiveInteger.parse(8), Natural.parse(0))
+def test_sides_reject_duplicate_and_overlapping_specifications() -> None:
+    pair_specs = _first_pair()
+    duplicated = PairSpecs(
+        pair_specs.pair,
+        pair_specs.first + (pair_specs.first[0],),
+        pair_specs.second,
+    )
+    with pytest.raises(ValueError, match="unique within each side"):
+        _sides(duplicated)
+
+    overlapping = PairSpecs(pair_specs.pair, pair_specs.first, pair_specs.first)
+    with pytest.raises(ValueError, match="must not share specifications"):
+        _sides(overlapping)
 
 
-def test_sampled_studies_share_pairings_across_assistants() -> None:
-    specs = _specs()
+def test_sampling_rejects_requests_outside_the_valid_range() -> None:
+    pair_specs = _first_pair()
+    with pytest.raises(ValueError, match="at least 179"):
+        sample_pair_inputs(pair_specs, PositiveInteger.parse(178), Natural.parse(0))
+    with pytest.raises(ValueError, match="cannot exceed the valid population"):
+        sample_pair_inputs(
+            pair_specs, PositiveInteger.parse(POPULATION + 1), Natural.parse(0)
+        )
+
+
+# --------------------------------------------------------------------------
+# Suite construction
+# --------------------------------------------------------------------------
+
+
+def test_studies_share_one_design_across_assistants() -> None:
+    specs = _bank_specs()[:2]
+    assistants = (Assistant.INKLING, Assistant.QWEN3_8_FLASH)
     studies = build_sampled_studies(
         specs,
-        (Assistant.INKLING, Assistant.INKLING_SMALL),
-        PositiveInteger.parse(5),
-        PositiveInteger.parse(2),
-        Natural.parse(4),
+        assistants,
+        PositiveInteger.parse(200),
+        PositiveInteger.parse(1),
+        Natural.parse(0),
     )
-    assert len(studies) == 10
-    assert tuple(study.inputs for study in studies[:5]) == tuple(
-        study.inputs for study in studies[5:]
-    )
-    assert {study.assistant for study in studies} == {
-        Assistant.INKLING,
-        Assistant.INKLING_SMALL,
-    }
-    assert all(study.rollouts_per_permutation == 2 for study in studies)
 
-    with pytest.raises(ValueError, match="at least one assistant"):
+    assert len(studies) == 2 * 2 * 200
+    by_assistant: dict[Assistant, list[StudyInputs]] = {}
+    for study in studies:
+        by_assistant.setdefault(study.assistant, []).append(study.inputs)
+    assert set(by_assistant) == set(assistants)
+    designs = [tuple(inputs) for inputs in by_assistant.values()]
+    assert designs[0] == designs[1]
+
+
+def test_full_pilot_design_has_the_expected_size() -> None:
+    studies = build_sampled_studies(
+        _bank_specs(),
+        tuple(Assistant),
+        PositiveInteger.parse(DEFAULT_PAIRINGS_PER_PAIR),
+        PositiveInteger.parse(1),
+        Natural.parse(0),
+    )
+    assert len(studies) == 24 * DEFAULT_PAIRINGS_PER_PAIR * len(Assistant)
+    assert len(studies) == 69_120
+    assert len(set(studies)) == len(studies)
+    # Two orderings per study, one rollout each.
+    assert 2 * len(studies) == 138_240
+
+
+@pytest.mark.parametrize(
+    ("pair_specs", "assistants", "error"),
+    [
+        ((), (Assistant.INKLING,), "at least one instruction pair"),
+        (None, (), "at least one assistant"),
+        (None, (Assistant.INKLING, Assistant.INKLING), "assistants must be unique"),
+    ],
+)
+def test_suite_construction_rejects_invalid_inputs(
+    pair_specs: tuple[PairSpecs, ...] | None,
+    assistants: tuple[Assistant, ...],
+    error: str,
+) -> None:
+    specs = _bank_specs()[:1] if pair_specs is None else pair_specs
+    with pytest.raises(ValueError, match=error):
         build_sampled_studies(
             specs,
-            (),
-            PositiveInteger.parse(4),
+            assistants,
+            PositiveInteger.parse(200),
             PositiveInteger.parse(1),
             Natural.parse(0),
         )
-    with pytest.raises(ValueError, match="must be unique"):
+
+
+def test_suite_construction_rejects_duplicate_pair_ids() -> None:
+    duplicated = (_first_pair(), _first_pair())
+    with pytest.raises(ValueError, match="pair ids must be unique"):
         build_sampled_studies(
-            specs,
-            (Assistant.INKLING, Assistant.INKLING),
-            PositiveInteger.parse(4),
+            duplicated,
+            (Assistant.INKLING,),
+            PositiveInteger.parse(200),
             PositiveInteger.parse(1),
             Natural.parse(0),
         )
@@ -356,9 +665,9 @@ def test_sampled_studies_share_pairings_across_assistants() -> None:
 
 def test_study_suite_round_trip_and_validation(tmp_path: Path) -> None:
     studies = build_sampled_studies(
-        _specs(),
+        _bank_specs()[:1],
         (Assistant.INKLING,),
-        PositiveInteger.parse(4),
+        PositiveInteger.parse(200),
         PositiveInteger.parse(1),
         Natural.parse(0),
     )
@@ -377,114 +686,111 @@ def test_study_suite_round_trip_and_validation(tmp_path: Path) -> None:
     path.write_text("studies: []\n")
     with pytest.raises(ValueError, match="at least one"):
         load_study_suite(path)
-    path.write_text(
-        yaml.safe_dump({"studies": [study_to_dict(studies[0])] * 2})
-    )
+    path.write_text(yaml.safe_dump({"studies": [study_to_dict(studies[0])] * 2}))
     with pytest.raises(ValueError, match="distinct"):
         load_study_suite(path)
 
 
-def test_sample_studies_cli_writes_filtered_suite(
+# --------------------------------------------------------------------------
+# Command line interface
+# --------------------------------------------------------------------------
+
+
+def test_sample_studies_cli_writes_a_loadable_suite(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    instructions = tmp_path / "instructions.toml"
-    instructions.write_text('instructions = ["Do the task."]\n')
     output = tmp_path / "suite.yaml"
-
     assert (
         sample_studies(
             [
-                "--instructions",
-                str(instructions),
+                "--pairs",
+                str(BANK),
                 "--output",
                 str(output),
-                "--pairings-per-assistant",
-                "17",
-                "--rollouts-per-permutation",
-                "2",
-                "--seed",
-                "11",
-                "--author",
-                str(Author.USER),
+                "--pairings-per-pair",
+                "200",
                 "--assistant",
-                str(Assistant.INKLING),
+                "Inkling",
+                "--author",
+                "Inkling",
+                "--author",
+                "Inkling Small",
             ]
         )
         == 0
     )
+
     summary = json.loads(capsys.readouterr().out)
+    assert summary["instruction_pairs"] == 24
+    assert summary["pairings_per_pair"] == 200
+    assert summary["studies"] == 24 * 200
+    assert summary["trials"] == 2 * 24 * 200
+    assert summary["authors"] == ["Inkling", "Inkling Small"]
+    # Two authors leaves 6 framings x 3 channels x 2 authors per side.
+    assert summary["specs"] == 24 * 2 * 36
+    assert summary["pairing_population_per_pair"] == 36 * 36 - 24 * 24
+    assert summary["minimum_connected_pairings_per_pair"] == 71
+
     studies = load_study_suite(output)
-    assert summary == {
-        "assistants": ["Inkling"],
-        "authors": ["user"],
-        "instructions": 1,
-        "minimum_connected_pairings_per_assistant": 17,
-        "output": str(output),
-        "pairing_population_per_assistant": 87,
-        "pairings_per_assistant": 17,
-        "rollouts_per_permutation": 2,
-        "seed": 11,
-        "specs": 18,
-        "studies": 17,
-        "trials": 68,
-    }
-    assert len(studies) == 17
-    assert {study.assistant for study in studies} == {Assistant.INKLING}
+    assert len(studies) == 24 * 200
+    for study in studies:
+        assert study.assistant is Assistant.INKLING
+        assert {spec.author for spec in study.inputs} <= {
+            Author.INKLING,
+            Author.INKLING_SMALL,
+        }
 
 
-def test_sample_studies_cli_uses_capped_default(
+def test_sample_studies_cli_uses_the_pilot_default(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    instructions = tmp_path / "instructions.toml"
-    instructions.write_text('instructions = ["Do the task."]\n')
     output = tmp_path / "suite.yaml"
-
     assert (
         sample_studies(
             [
-                "--instructions",
-                str(instructions),
+                "--pairs",
+                str(BANK),
                 "--output",
                 str(output),
-                "--author",
-                str(Author.USER),
                 "--assistant",
-                str(Assistant.INKLING),
+                "Inkling",
             ]
         )
         == 0
     )
     summary = json.loads(capsys.readouterr().out)
-    assert summary["pairing_population_per_assistant"] == 87
-    assert summary["pairings_per_assistant"] == 87
-    assert len(load_study_suite(output)) == 87
+    assert summary["pairings_per_pair"] == DEFAULT_PAIRINGS_PER_PAIR
+    assert summary["pairing_population_per_pair"] == POPULATION
+    assert summary["studies"] == 24 * DEFAULT_PAIRINGS_PER_PAIR
 
 
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["--pairings-per-pair", "0"],
+        ["--pairings-per-pair", "178"],
+        ["--pairings-per-pair", "4501"],
+        ["--rollouts-per-permutation", "0"],
+        ["--seed", "-1"],
+        ["--author", "Inkling", "--author", "Inkling"],
+    ],
+)
 def test_sample_studies_cli_reports_invalid_values(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, arguments: list[str]
 ) -> None:
-    instructions = tmp_path / "instructions.toml"
-    instructions.write_text('instructions = ["Do the task."]\n')
-    common = [
-        "--instructions",
-        str(instructions),
-        "--output",
-        str(tmp_path / "suite.yaml"),
-        "--pairings-per-assistant",
-        "1",
-    ]
-    with pytest.raises(SystemExit, match="2"):
-        sample_studies(common)
-    assert "pairings must be at least" in capsys.readouterr().err
-
     with pytest.raises(SystemExit, match="2"):
         sample_studies(
-            common
-            + [
-                "--author",
-                str(Author.USER),
-                "--author",
-                str(Author.USER),
+            ["--pairs", str(BANK), "--output", str(tmp_path / "suite.yaml"), *arguments]
+        )
+
+
+def test_sample_studies_cli_reports_a_missing_bank(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit, match="2"):
+        sample_studies(
+            [
+                "--pairs",
+                str(tmp_path / "missing.yaml"),
+                "--output",
+                str(tmp_path / "suite.yaml"),
             ]
         )
-    assert "authors must be unique" in capsys.readouterr().err
