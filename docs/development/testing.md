@@ -19,11 +19,10 @@ and all nine utilities. Sampling and analysis tests run against the real 24-pair
 size: 99 conditions per instruction side, 5,445 eligible pairings per pair, and the 720-pairing
 default.
 
-`tests/conftest.py` pins the BLAS thread count to one before NumPy is imported. The
-Bradley-Terry fit solves one small dense system per component, and on a many-core machine
-OpenBLAS spends far longer synchronizing threads than on the arithmetic: a 180x180
-`numpy.linalg.solve` measured 2089 ms with default threads and 1.99 ms pinned to one. The same
-setting is worth exporting for real analysis runs.
+Thread pinning is no longer a test fixture. `reasonese.analysis` scopes BLAS threads around
+the fit itself, so the suite exercises the same path a real run takes and a regression there
+shows up as a failing test rather than a slow one. See
+[`../reference/architecture.md`](../reference/architecture.md).
 
 All tests are offline. A separately authorized live smoke test is needed to validate current
 provider availability and behavior.

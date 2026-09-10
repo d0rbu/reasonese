@@ -174,6 +174,13 @@ observations -> (pair, side) blocks -> per-component Bradley-Terry -> pooled axi
 - `reasonese.analysis` fits one Bradley-Terry block per connected component, which is one
   `(pair, assistant)`, so scores self-centre and pooled axis margins stay comparable.
 
+Each Newton step accumulates every comparison's gradient and curvature with `numpy.bincount`
+rather than a Python loop, and the standard errors and objective are computed only when a caller
+reads them, which the bootstrap does not. Every block is a few hundred cells, so its BLAS calls
+spend far longer synchronizing threads than doing arithmetic; `threadpoolctl` pins threads to one
+for the duration of a fit and restores the caller's settings on exit. Together these take a pilot
+analysis from hours to well under a minute.
+
 Collection routing is resolved in `openrouter.select_route` from invocation-local
 `routing.CollectionRouting`. Collection checks paid permission before cold assistant work and
 before missing warm QA/judgments. Author-message and trace records retain requested slug/transport

@@ -18,6 +18,13 @@
 - Ranks are within-component; the comparison graph is expected to have one component per
   `(pair, assistant)` rather than to be connected.
 - Both-completed and neither-completed trials are counted apart, though both score as ties.
+- The vectorized Newton step reproduces the scalar update it replaced to within 1e-12, checked
+  against an independent scalar oracle across three penalties.
+- A fit asked for no diagnostics returns the same scores, and returns no standard errors and no
+  objective rather than placeholder values.
+- BLAS threads are pinned to one for the duration of a fit and restored afterwards.
+- Cells whose scores tie to twelve decimals are ranked by cell identifier, so a difference in the
+  last bit cannot decide the order and ranks stay reproducible across machines and BLAS builds.
 - `PromptSpec` contains exactly the four axes and is runtime-checked by `beartype`.
 - `specs_per_instruction()` returns a phantom non-negative integer.
 - `MatchupInputs` contains exactly two datapoints and at least one explicit user-message

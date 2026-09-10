@@ -10,6 +10,7 @@ from dataclasses import dataclass
 import numpy as np
 from beartype import beartype
 from numpy.typing import NDArray
+from threadpoolctl import threadpool_limits
 
 from reasonese.instructions import InstructionPair, PairMembership, instruction_index
 from reasonese.observations import CellId, Observation
@@ -26,6 +27,13 @@ _AXES = ("framing", "channel", "author")
 # Constant within a trial, so their mean score is zero once components
 # self-center. Reported as descriptive strata without a Bradley-Terry column.
 _STRATA = ("assistant", "skill", "conflict", "pair")
+# Cells that tie on the data can still differ in the last bit or two, because
+# floating-point summation is not associative. Comparing raw scores would let
+# that noise decide the order and silently override the cell-id tie-break, so
+# the same data could rank differently on another machine or BLAS build.
+# Rounding first keeps ties deterministic. Newton stops at a 1e-10 step, so
+# scores carry no meaning below this anyway.
+_RANK_TOLERANCE_DIGITS = 12
 
 
 def _as_float(value: object) -> float:
@@ -245,6 +253,75 @@ def _sigmoid(value: float) -> float:
     return exponential / (1.0 + exponential)
 
 
+def _sigmoid_array(values: NDArray[np.float64]) -> NDArray[np.float64]:
+    """Evaluate the logistic function without overflowing on either tail."""
+    exponential = np.exp(-np.abs(values))
+    return np.where(values >= 0.0, 1.0, exponential) / (1.0 + exponential)
+
+
+@dataclass(frozen=True, slots=True)
+class _Endpoints:
+    """Comparison endpoints as index arrays, derived once and reused every step."""
+
+    first: NDArray[np.intp]
+    second: NDArray[np.intp]
+    outcomes: NDArray[np.float64]
+    curvature_rows: NDArray[np.intp]
+    curvature_columns: NDArray[np.intp]
+
+
+def _endpoints(cell_ids: tuple[CellId, ...], comparisons: tuple[Comparison, ...]) -> _Endpoints:
+    index = {cell_id: position for position, cell_id in enumerate(cell_ids)}
+    count = len(comparisons)
+    first = np.fromiter(
+        (index[comparison.first] for comparison in comparisons), dtype=np.intp, count=count
+    )
+    second = np.fromiter(
+        (index[comparison.second] for comparison in comparisons), dtype=np.intp, count=count
+    )
+    outcomes = np.fromiter(
+        (comparison.outcome for comparison in comparisons), dtype=np.float64, count=count
+    )
+    # Each comparison adds curvature to two diagonal entries and subtracts it
+    # from the two symmetric off-diagonal ones.
+    return _Endpoints(
+        first,
+        second,
+        outcomes,
+        np.concatenate((first, second, first, second)),
+        np.concatenate((first, second, second, first)),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _ComponentFit:
+    """Fitted scores, with the extras present only when they were asked for."""
+
+    scores: NDArray[np.float64]
+    converged: bool
+    iterations: int
+    standard_errors: NDArray[np.float64] | None
+    objective: float | None
+
+
+def _penalized_hessian(
+    endpoints: _Endpoints,
+    curvature: NDArray[np.float64],
+    size: int,
+    l2: float,
+) -> NDArray[np.float64]:
+    """Accumulate every comparison's curvature into one dense penalized Hessian."""
+    weights = np.concatenate((curvature, curvature, -curvature, -curvature))
+    flat = np.bincount(
+        endpoints.curvature_rows * size + endpoints.curvature_columns,
+        weights=weights,
+        minlength=size * size,
+    )
+    hessian = flat.reshape(size, size)
+    hessian[np.diag_indices(size)] += l2
+    return hessian
+
+
 def _fit_scores(
     cell_ids: tuple[CellId, ...],
     comparisons: tuple[Comparison, ...],
@@ -252,29 +329,33 @@ def _fit_scores(
     *,
     tolerance: float = 1e-10,
     max_iterations: int = 100,
-) -> tuple[NDArray[np.float64], NDArray[np.float64], bool, int, float]:
+    diagnostics: bool = True,
+) -> _ComponentFit:
+    """Run penalized Newton steps over one component.
+
+    ``diagnostics`` covers the standard errors and the objective. Both cost a
+    further pass over the comparisons and a matrix inversion, and the bootstrap
+    reads neither, so it turns them off.
+    """
     if l2 <= 0:
         raise ValueError("L2 penalty must be positive")
-    index = {cell_id: position for position, cell_id in enumerate(cell_ids)}
-    scores = np.zeros(len(cell_ids), dtype=np.float64)
+    size = len(cell_ids)
+    endpoints = _endpoints(cell_ids, comparisons)
+    scores = np.zeros(size, dtype=np.float64)
     converged = False
     iterations = 0
     for iteration in range(1, max_iterations + 1):
         iterations = iteration
+        difference = scores[endpoints.first] - scores[endpoints.second]
+        probability = _sigmoid_array(difference)
+        residual = probability - endpoints.outcomes
+        curvature = probability * (1.0 - probability)
+
         gradient = l2 * scores
-        hessian = np.eye(len(cell_ids), dtype=np.float64) * l2
-        for comparison in comparisons:
-            first = index[comparison.first]
-            second = index[comparison.second]
-            probability = _sigmoid(float(scores[first] - scores[second]))
-            residual = probability - comparison.outcome
-            curvature = probability * (1.0 - probability)
-            gradient[first] += residual
-            gradient[second] -= residual
-            hessian[first, first] += curvature
-            hessian[second, second] += curvature
-            hessian[first, second] -= curvature
-            hessian[second, first] -= curvature
+        gradient += np.bincount(endpoints.first, weights=residual, minlength=size)
+        gradient -= np.bincount(endpoints.second, weights=residual, minlength=size)
+        hessian = _penalized_hessian(endpoints, curvature, size, l2)
+
         step = np.linalg.solve(hessian, gradient)
         scores -= step
         scores -= scores.mean()
@@ -282,21 +363,17 @@ def _fit_scores(
             converged = True
             break
 
-    final_hessian = np.eye(len(cell_ids), dtype=np.float64) * l2
-    objective = 0.5 * l2 * float(scores @ scores)
-    for comparison in comparisons:
-        first = index[comparison.first]
-        second = index[comparison.second]
-        difference = float(scores[first] - scores[second])
-        probability = _sigmoid(difference)
-        curvature = probability * (1.0 - probability)
-        final_hessian[first, first] += curvature
-        final_hessian[second, second] += curvature
-        final_hessian[first, second] -= curvature
-        final_hessian[second, first] -= curvature
-        objective += float(np.logaddexp(0.0, difference) - comparison.outcome * difference)
+    if not diagnostics:
+        return _ComponentFit(scores, converged, iterations, None, None)
+
+    difference = scores[endpoints.first] - scores[endpoints.second]
+    probability = _sigmoid_array(difference)
+    final_hessian = _penalized_hessian(endpoints, probability * (1.0 - probability), size, l2)
+    objective = 0.5 * l2 * float(scores @ scores) + float(
+        np.sum(np.logaddexp(0.0, difference) - endpoints.outcomes * difference)
+    )
     standard_errors = np.sqrt(np.diag(np.linalg.inv(final_hessian)))
-    return scores, standard_errors, converged, iterations, objective
+    return _ComponentFit(scores, converged, iterations, standard_errors, objective)
 
 
 def _fit_scores_by_component(
@@ -304,13 +381,19 @@ def _fit_scores_by_component(
     comparisons: tuple[Comparison, ...],
     l2: float,
     components: tuple[tuple[CellId, ...], ...],
-) -> tuple[NDArray[np.float64], NDArray[np.float64], bool, int, float]:
+    *,
+    diagnostics: bool = True,
+) -> _ComponentFit:
     """Fit every connected component separately and assemble one score vector.
 
     Scores are identified only up to a shift inside a component, so a joint fit
     would invent an ordering between components. It would also build a dense
     ``len(cell_ids) ** 2`` Hessian for a matrix that is block diagonal, which at
     the pilot's cell count is several gigabytes per solve.
+
+    Every block is small, so the BLAS calls underneath spend far longer
+    synchronizing threads than doing the arithmetic. Threads are pinned for the
+    duration and restored on the way out.
     """
     index = {cell_id: position for position, cell_id in enumerate(cell_ids)}
     membership = {
@@ -321,21 +404,25 @@ def _fit_scores_by_component(
         grouped[membership[comparison.first]].append(comparison)
 
     scores = np.zeros(len(cell_ids), dtype=np.float64)
-    standard_errors = np.zeros(len(cell_ids), dtype=np.float64)
+    standard_errors = np.zeros(len(cell_ids), dtype=np.float64) if diagnostics else None
     converged = True
     iterations = 0
-    objective = 0.0
-    for component, component_comparisons in zip(components, grouped, strict=True):
-        fitted, errors, block_converged, block_iterations, block_objective = _fit_scores(
-            component, tuple(component_comparisons), l2
-        )
-        for position, cell_id in enumerate(component):
-            scores[index[cell_id]] = fitted[position]
-            standard_errors[index[cell_id]] = errors[position]
-        converged = converged and block_converged
-        iterations = max(iterations, block_iterations)
-        objective += block_objective
-    return scores, standard_errors, converged, iterations, objective
+    objective = 0.0 if diagnostics else None
+    with threadpool_limits(limits=1, user_api="blas"):
+        for component, component_comparisons in zip(components, grouped, strict=True):
+            block = _fit_scores(
+                component, tuple(component_comparisons), l2, diagnostics=diagnostics
+            )
+            for position, cell_id in enumerate(component):
+                scores[index[cell_id]] = block.scores[position]
+            if standard_errors is not None and block.standard_errors is not None:
+                for position, cell_id in enumerate(component):
+                    standard_errors[index[cell_id]] = block.standard_errors[position]
+            if objective is not None and block.objective is not None:
+                objective += block.objective
+            converged = converged and block.converged
+            iterations = max(iterations, block.iterations)
+    return _ComponentFit(scores, converged, iterations, standard_errors, objective)
 
 
 def _bootstrap_intervals(
@@ -361,7 +448,11 @@ def _bootstrap_intervals(
         resampled = tuple(
             comparison for group_index in selected for comparison in trial_groups[int(group_index)]
         )
-        estimates[sample_index] = _fit_scores_by_component(cell_ids, resampled, l2, components)[0]
+        # Only the scores are read back, so the standard errors and objective
+        # that a full fit would compute are skipped for every resample.
+        estimates[sample_index] = _fit_scores_by_component(
+            cell_ids, resampled, l2, components, diagnostics=False
+        ).scores
     lower = np.percentile(estimates, 2.5, axis=0)
     upper = np.percentile(estimates, 97.5, axis=0)
     return {
@@ -383,9 +474,11 @@ def fit_bradley_terry(
     cells = {observation.cell_id: _cell(observation) for observation in observations}
     cell_ids = tuple(sorted(cells))
     components = _connected_components(cell_ids, comparisons)
-    scores, standard_errors, converged, iterations, objective = _fit_scores_by_component(
-        cell_ids, comparisons, l2, components
-    )
+    fitted = _fit_scores_by_component(cell_ids, comparisons, l2, components)
+    scores = fitted.scores
+    standard_errors = fitted.standard_errors
+    if standard_errors is None or fitted.objective is None:  # pragma: no cover
+        raise RuntimeError("a diagnostic fit must return standard errors and an objective")
     intervals = _bootstrap_intervals(
         cell_ids, comparisons, l2, bootstrap_samples, seed, components
     )
@@ -410,15 +503,21 @@ def fit_bradley_terry(
         )
         for component_index, component in enumerate(components)
         for rank, cell_id in enumerate(
-            sorted(component, key=lambda cell_id: (-scores[index[cell_id]], str(cell_id))),
+            sorted(
+                component,
+                key=lambda cell_id: (
+                    -round(float(scores[index[cell_id]]), _RANK_TOLERANCE_DIGITS),
+                    str(cell_id),
+                ),
+            ),
             start=1,
         )
     )
     return BradleyTerryFit(
         ranking,
-        converged,
-        iterations,
-        objective,
+        fitted.converged,
+        fitted.iterations,
+        fitted.objective,
         len(comparisons),
         sum(comparison.outcome == 0.5 for comparison in comparisons),
         components,
