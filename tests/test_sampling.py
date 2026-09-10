@@ -21,7 +21,14 @@ from phantom.interval import Natural
 
 import reasonese.sample_studies as sample_studies_module
 import reasonese.sampling as sampling_module
-from reasonese.axes import Assistant, Author, Channel, Framing, Instruction
+from reasonese.axes import (
+    Assistant,
+    Author,
+    Channel,
+    Framing,
+    Instruction,
+    author_framings,
+)
 from reasonese.config import load_study_suite
 from reasonese.instructions import (
     ConflictType,
@@ -52,8 +59,11 @@ from reasonese.sampling import (
 from reasonese.study import PositiveInteger, StudyInputs, study_to_dict
 
 BANK = Path("configs/instruction_pairs.yaml")
-SIDE_SIZE = 90
-POPULATION = 4500
+# Six framings for four model authors plus three for the user author, over three
+# channels: (6 * 4 + 3) * 3 = 81 conditions per instruction side.
+SIDE_SIZE = 81
+USER_CHANNEL_SIDE = SIDE_SIZE // len(Channel)
+POPULATION = SIDE_SIZE**2 - (SIDE_SIZE - USER_CHANNEL_SIDE) ** 2
 NODES = 2 * SIDE_SIZE
 
 
@@ -75,7 +85,11 @@ def _synthetic_side(
     instruction: Instruction, channels: tuple[Channel, ...]
 ) -> tuple[PromptSpec, ...]:
     """Build a side whose channels are given, keeping every spec distinct."""
-    combinations = tuple(itertools.product(Framing, Author))
+    combinations = tuple(
+        (framing, author)
+        for framing, author in itertools.product(Framing, Author)
+        if framing in author_framings(author)
+    )
     return tuple(
         PromptSpec(instruction, combinations[index][0], channel, combinations[index][1])
         for index, channel in enumerate(channels)
@@ -111,6 +125,27 @@ def _brute_force_edges(pair_specs: PairSpecs) -> set[tuple[int, int]]:
         for index, first in enumerate(pair_specs.first)
         for other, second in enumerate(pair_specs.second)
         if Channel.USER in (first.channel, second.channel)
+    }
+
+
+def _expected_channel_means(pairings: int) -> dict[Channel, float]:
+    """Mean degree per channel implied by proportional stratum quotas.
+
+    Derived from the population by brute force rather than from the sampler's own
+    quota code, so it is an independent expectation. Largest-remainder rounding
+    can move a realized mean by a fraction of an edge, hence the tolerance where
+    this is compared.
+    """
+    pair_specs = _first_pair()
+    endpoints: Counter[Channel] = Counter()
+    for first_index, second_index in _brute_force_edges(pair_specs):
+        endpoints[pair_specs.first[first_index].channel] += 1
+        endpoints[pair_specs.second[second_index].channel] += 1
+    population = sum(endpoints.values()) // 2
+    cells = Counter(spec.channel for spec in pair_specs.first + pair_specs.second)
+    return {
+        channel: pairings * endpoints[channel] / population / cells[channel]
+        for channel in Channel
     }
 
 
@@ -272,7 +307,7 @@ def test_proportional_quotas_sum_to_the_request_and_break_ties_by_remainder() ->
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("pairings", [179, 180, 360, 720, 1440])
+@pytest.mark.parametrize("pairings", [161, 162, 360, 720, 1440])
 @pytest.mark.parametrize("seed", [0, 1, 17])
 def test_samples_are_distinct_valid_connected_and_cover_every_cell(
     pairings: int, seed: int
@@ -361,20 +396,24 @@ def test_degree_is_balanced_within_each_channel(seed: int) -> None:
 
     # Stratum quotas fix each channel's endpoint total, so the mean degree is
     # exact and identical for every seed. Only its spread is stochastic.
+    assert sum(degrees.values()) == 2 * 720
     means = {
         channel: sum(counts) / len(counts) for channel, counts in by_channel.items()
     }
-    assert means == {
-        Channel.USER: 14.4,
-        Channel.SYSTEM: 4.8,
-        Channel.README: 4.8,
-    }
+    expected = _expected_channel_means(720)
+    for channel, mean in means.items():
+        assert mean == pytest.approx(expected[channel], abs=0.05)
+    # A user-channel cell can pair with every cell opposite it, while any other
+    # cell can only reach the user-channel ones, so the ratio is exactly
+    # len(Channel) regardless of how many pairings are drawn.
+    assert means[Channel.USER] == pytest.approx(means[Channel.SYSTEM] * len(Channel))
+    assert means[Channel.SYSTEM] == pytest.approx(means[Channel.README])
 
     # A greedy best-of-eight choice keeps the spread far below the roughly
-    # 15-wide tail an unbalanced Poisson draw over 60 cells would produce.
+    # 15-wide tail an unbalanced Poisson draw over 54 cells would produce.
     tolerances = {Channel.USER: 5, Channel.SYSTEM: 3, Channel.README: 3}
     for channel, counts in by_channel.items():
-        assert len(counts) == 60
+        assert len(counts) == 2 * USER_CHANNEL_SIDE
         assert min(counts) >= 1, f"{channel} left a cell uncovered"
         assert max(counts) - min(counts) <= tolerances[channel], (
             f"{channel} degrees are lopsided: {sorted(counts)}"
@@ -411,7 +450,8 @@ def test_repair_reconnects_isolated_second_side_cells() -> None:
     """Isolated cells opposite the anchor attach to it directly."""
     sides = _sides(_first_pair())
     selected = _ranks_touching_second_below(sides, 10)
-    assert len(selected) == 600
+    # Enough edges to leave spare cycles for every bridge the repair adds.
+    assert len(selected) > sides.node_count
 
     repaired = _repair_connectivity(sides, set(selected), Random(0))
 
@@ -426,7 +466,7 @@ def test_repair_reconnects_isolated_first_side_cells() -> None:
     """Isolated cells on the anchor's own side route through the opposite side."""
     sides = _sides(_first_pair())
     selected = _ranks_touching_first_below(sides, 10)
-    assert len(selected) == 600
+    assert len(selected) > sides.node_count
 
     repaired = _repair_connectivity(sides, set(selected), Random(1))
 
@@ -579,8 +619,8 @@ def test_sides_reject_duplicate_and_overlapping_specifications() -> None:
 
 def test_sampling_rejects_requests_outside_the_valid_range() -> None:
     pair_specs = _first_pair()
-    with pytest.raises(ValueError, match="at least 179"):
-        sample_pair_inputs(pair_specs, PositiveInteger.parse(178), Natural.parse(0))
+    with pytest.raises(ValueError, match="at least 161"):
+        sample_pair_inputs(pair_specs, PositiveInteger.parse(160), Natural.parse(0))
     with pytest.raises(ValueError, match="cannot exceed the valid population"):
         sample_pair_inputs(
             pair_specs, PositiveInteger.parse(POPULATION + 1), Natural.parse(0)
@@ -768,8 +808,8 @@ def test_sample_studies_cli_uses_the_pilot_default(
     "arguments",
     [
         ["--pairings-per-pair", "0"],
-        ["--pairings-per-pair", "178"],
-        ["--pairings-per-pair", "4501"],
+        ["--pairings-per-pair", "160"],
+        ["--pairings-per-pair", "3646"],
         ["--rollouts-per-permutation", "0"],
         ["--seed", "-1"],
         ["--author", "Inkling", "--author", "Inkling"],

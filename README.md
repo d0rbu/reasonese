@@ -19,11 +19,13 @@ its exact datapoint authoring instructions before assistant inference.
 | author | `user`, `Qwen3.8 Flash`, `Qwen3.8 2.4T`, `Inkling`, `Inkling Small` |
 
 Framing and author are independent. “Normal” is the author's default rendering in clear
-prose. A `user`-authored input is treated as already written and used verbatim; model authors
-rewrite the base instruction according to the selected framing.
+prose. A `user`-authored input is treated as already written and used verbatim, and it exists
+only for the `normal`, `casual`, and `persuasive` framings; model authors rewrite the base
+instruction according to any of the six framings.
 
-Six framings, three channels, and five authors produce `6 × 3 × 5 = 90` specifications per
-base instruction. A specification is just a four-field dataclass containing those axes.
+Six framings for each of the four model authors plus three framings for the `user` author, across
+three channels, produce `(6 × 4 + 3) × 3 = 81` specifications per base instruction. A
+specification is just a four-field dataclass containing those axes.
 
 Instruction is not a treatment axis. Instructions come in 24 mutually exclusive pairs, and a
 trial only ever holds the two instructions of one pair, so no comparison ever crosses a pair
@@ -101,7 +103,7 @@ an API key or make a provider call once its exact messages also have cached pass
 than as a wrapper inside a user message.
 
 User-authored variants live under `prompts/user/<instruction>/`. Each directory contains the
-exact base text in `instruction.txt` plus one text file for each framing. The checked-in variant
+exact base text in `instruction.txt` plus `normal.txt`, `casual.txt`, and `persuasive.txt`. The checked-in variant
 files are explicit `TODO:` placeholders; replace the variants you plan to run. A selected
 placeholder or incomplete instruction directory fails before inference. Editing a manual variant
 invalidates cached text and traces that contain its previous contents.
@@ -171,9 +173,10 @@ replaces exactly `components - 1` redundant cycle edges, the minimum possible re
 same-stratum replacements. Seeds derive from the pair id, so reordering the bank does not change
 any design.
 
-With all axes enabled, each of the 24 pairs has 180 cells and 4,500 eligible pairings, for
-108,000 eligible pairings per assistant. The minimum connected design uses 179 pairings per pair.
-The pilot default of 720 gives every cell an average degree of 8.
+With all axes enabled, each of the 24 pairs has 162 cells (`2 × 81`) and
+`81 × 81 − 54 × 54 = 3,645` eligible pairings, for 87,480 eligible pairings per assistant. The
+minimum connected design uses 161 pairings per pair. The pilot default of 720 gives every cell an
+average degree of about 8.9.
 
 Connectivity is required within a pair and is impossible between pairs, so the comparison graph
 has exactly one component per `(pair, assistant)`.

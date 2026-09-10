@@ -11,7 +11,7 @@ import pytest
 import yaml
 from beartype.roar import BeartypeCallHintParamViolation
 
-from reasonese.axes import Assistant, Author, Channel, Framing, Instruction
+from reasonese.axes import Assistant, Author, Channel, Framing, Instruction, author_framings
 from reasonese.cache import YamlMessageCache
 from reasonese.collect_data import CollectionResult, CollectionTask, collect_studies, collect_study
 from reasonese.collect_data import main as collect_data
@@ -96,7 +96,7 @@ def _manual_library(tmp_path: Path, *studies: Study) -> ManualMessageLibrary:
         directory = root / f"instruction-{index}"
         directory.mkdir(parents=True)
         (directory / "instruction.txt").write_text(str(instruction))
-        for framing in Framing:
+        for framing in author_framings(Author.USER):
             (directory / f"{framing}.txt").write_text(str(instruction))
     return ManualMessageLibrary(root)
 

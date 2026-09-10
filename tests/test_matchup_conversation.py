@@ -108,6 +108,18 @@ def test_prompt_spec_yaml_requires_a_mapping() -> None:
         prompt_spec_from_dict("bad")
 
 
+def test_prompt_spec_yaml_rejects_model_only_framings_for_the_user_author() -> None:
+    with pytest.raises(ValueError, match="user author does not write the subagent framing"):
+        prompt_spec_from_dict(
+            {
+                "instruction": "One.",
+                "framing": "subagent",
+                "channel": "user message",
+                "author": "user",
+            }
+        )
+
+
 def test_authoring_request_includes_all_treatment_coordinates() -> None:
     spec = _spec(
         "Do the task.",

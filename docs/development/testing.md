@@ -16,7 +16,7 @@ collection, synthetic Bradley-Terry recovery, ties, clustered bootstrap, disconn
 axis and position effects, sparse-design stratification, degree balance, minimum connectivity
 repair, and reproducibility, analysis artifacts,
 and all nine utilities. Sampling and analysis tests run against the real 24-pair bank at its real
-size: 90 conditions per instruction side, 4,500 eligible pairings per pair, and the 720-pairing
+size: 81 conditions per instruction side, 3,645 eligible pairings per pair, and the 720-pairing
 default.
 
 `tests/conftest.py` pins the BLAS thread count to one before NumPy is imported. The
