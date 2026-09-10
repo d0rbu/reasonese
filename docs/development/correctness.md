@@ -2,7 +2,7 @@
 
 - Axis enum values are the strings written to output and shown to users.
 - Instructions are non-empty, trimmed phantom strings.
-- Every instruction produces all 81 framing, channel, and author combinations: six framings for
+- Every instruction produces all 99 framing, channel, and author combinations: six framings for
   each model author and the three manual framings for the `user` author.
 - `PromptSpec` rejects a `user` author with a framing other than `normal`, `casual`, or
   `persuasive`.
@@ -24,7 +24,7 @@
   channel; repeated channels are valid.
 - The assistant is matchup metadata, not a fifth coordinate on `PromptSpec`.
 - Materialized messages and conversations preserve the matchup's order and duplicates.
-- Model-authored cache misses are grouped by author and use a batch variant when available.
+- Model-authored cache misses are grouped by author. Free routes are preferred by default; explicit batch preference batches compatible authoring work where available.
 - User-authored text is used verbatim and has no provider response.
 - Message QA quotes the exact datapoint-derived authoring instructions and exact materialized text.
 - Message-QA verdicts contain a real boolean; pass has no issues and failure has at least one.
@@ -38,7 +38,7 @@
 - Each verdict is an actual boolean; numeric or truthy substitutes are rejected.
 - Verdicts are independent, so no invariant requires exactly one true value.
 - The judge route is `openai/gpt-5.6-luna:batch` with medium reasoning.
-- A judgment cache hit requires both the same matchup and the same exact-trace fingerprint.
+- A judgment cache hit requires the same matchup and trace fingerprint. Only terminal `:free` / `:batch` model suffixes and separate route provenance are excluded from trace identity; all other response metadata remains significant.
 - Raw judge responses are retained alongside parsed verdicts.
 - A cell is exactly one four-axis datapoint plus one assistant.
 - Study inputs are an exact distinct pair and include an explicit user message.
@@ -64,3 +64,16 @@
 
 A new axis value changes the design size and should update code, tests, examples, and the
 research definitions together.
+
+## Routing invariants
+
+- Collection defaults to preferring registered free routes, with explicit paid permission before
+  any uncached chargeable work. Paid QA, judgments, and server-side search remain chargeable even
+  when author or assistant model tokens are free.
+- Route preferences never change study definitions, cell identifiers, trial identifiers, or the
+  eligible comparison graph. Changing preferences does not force a cache miss.
+- Raw provider responses remain intact. Only top-level response model suffixes `:free` and
+  `:batch` are canonicalized for hashing; separate requested-route provenance is not hashed.
+- Scalar and batched fingerprint implementations produce exactly equal hashes.
+- Cached provenance describes its original request, never the current requested preference.
+- Route failures do not trigger paid fallback retries, regeneration, or hidden changes to tools.

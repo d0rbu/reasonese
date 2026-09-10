@@ -18,6 +18,7 @@ from reasonese.message_qa import MessageQaVerdict, check_messages
 from reasonese.message_qa_cache import YamlMessageQaCache
 from reasonese.openrouter import OpenRouterClient, RequestsTransport
 from reasonese.planning import PromptSpec
+from reasonese.routing import CollectionRouting
 
 
 @beartype
@@ -47,6 +48,8 @@ def audit_messages(
     messages: tuple[GeneratedMessage, ...],
     qa_cache: YamlMessageQaCache,
     client: OpenRouterClient | None,
+    *,
+    routing: CollectionRouting | None = None,
 ) -> MessageQaRunResult:
     """Audit messages, judging only exact uncached text."""
     if not messages:
@@ -66,6 +69,8 @@ def audit_messages(
     }
     missing = tuple(message for message in unique_messages if message.spec not in verdict_by_spec)
     if missing:
+        if routing is not None:
+            routing.require_paid(f"{len(missing)} uncached message-QA verdicts")
         if client is None:
             raise ValueError("OPENROUTER_API_KEY is required for uncached message QA")
         new_verdicts = check_messages(missing, client)

@@ -10,11 +10,11 @@ Use this rather than duplicating axis values in scripts.
 
 ## Plan an instruction set
 
-Create a TOML file following [`../reference/configuration.md`](../reference/configuration.md),
+Use the instruction-pair YAML bank described in [`../reference/configuration.md`](../reference/configuration.md),
 then run:
 
 ```bash
-uv run reasonese-plan --instructions path/to/instructions.toml --output out/specs.jsonl
+uv run reasonese-plan --pairs configs/instruction_pairs.yaml --output out/specs.jsonl
 ```
 
 The summary reports the number of instructions and specifications. Re-running with identical
@@ -52,7 +52,7 @@ Create YAML following [`../reference/configuration.md`](../reference/configurati
 
 ```bash
 export OPENROUTER_API_KEY=...
-uv run reasonese-run-conversation --matchup path/to/matchup.yaml
+uv run reasonese-run-conversation --allow-paid --matchup path/to/matchup.yaml
 ```
 
 For each user-authored instruction, add its exact base text to `instruction.txt` and replace the
@@ -101,7 +101,7 @@ Create study YAML following [`../reference/configuration.md`](../reference/confi
 
 ```bash
 export OPENROUTER_API_KEY=...
-uv run reasonese-collect-data \
+uv run reasonese-collect-data --allow-paid \
   --study path/to/study.yaml \
   --user-messages prompts/user \
   --output out/my-study
@@ -121,7 +121,7 @@ responses and `4r` judge verdicts.
 For multiple studies, keep their YAML filename stems distinct and collect them in one process:
 
 ```bash
-uv run reasonese-collect-studies \
+uv run reasonese-collect-studies --allow-paid \
   --study path/to/study-a.yaml \
   --study path/to/study-b.yaml \
   --user-messages prompts/user \
@@ -137,7 +137,7 @@ resumable traces, judgments, and observations remain in its own subdirectory.
 For a sampled suite, pass the single generated artifact instead:
 
 ```bash
-uv run reasonese-collect-studies \
+uv run reasonese-collect-studies --allow-paid \
   --suite out/studies.yaml \
   --user-messages prompts/user \
   --output out/sampled-study

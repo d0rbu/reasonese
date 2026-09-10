@@ -44,6 +44,7 @@ class Author(StrEnum):
     QWEN3_8_2_4T = "Qwen3.8 2.4T"
     INKLING = "Inkling"
     INKLING_SMALL = "Inkling Small"
+    GEMMA_4_31B_IT = "Gemma 4 31B"
 
 
 MANUAL_FRAMINGS: tuple[Framing, ...] = (Framing.NORMAL, Framing.CASUAL, Framing.PERSUASIVE)
@@ -64,6 +65,7 @@ class Assistant(StrEnum):
     QWEN3_8_2_4T = "Qwen3.8 2.4T"
     INKLING = "Inkling"
     INKLING_SMALL = "Inkling Small"
+    GEMMA_4_31B_IT = "Gemma 4 31B"
 
 
 @beartype

@@ -1,7 +1,7 @@
 """Tests for within-pair study sampling.
 
-These run against the real 24-pair bank at its real size: 90 conditions per
-instruction side, a 4,500-edge population per pair, and the 720-edge pilot
+These run against the real 24-pair bank at its real size: 99 conditions per
+instruction side, a 5,445-edge population per pair, and the 720-edge pilot
 default. Synthetic pairs are used only where a degenerate channel mix is needed
 that the real bank cannot express.
 """
@@ -59,9 +59,9 @@ from reasonese.sampling import (
 from reasonese.study import PositiveInteger, StudyInputs, study_to_dict
 
 BANK = Path("configs/instruction_pairs.yaml")
-# Six framings for four model authors plus three for the user author, over three
-# channels: (6 * 4 + 3) * 3 = 81 conditions per instruction side.
-SIDE_SIZE = 81
+# Six framings for five model authors plus three for the user author, over three
+# channels: (6 * 5 + 3) * 3 = 99 conditions per instruction side.
+SIDE_SIZE = 99
 USER_CHANNEL_SIDE = SIDE_SIZE // len(Channel)
 POPULATION = SIDE_SIZE**2 - (SIDE_SIZE - USER_CHANNEL_SIDE) ** 2
 NODES = 2 * SIDE_SIZE
@@ -291,7 +291,7 @@ def test_proportional_quotas_sum_to_the_request_and_break_ties_by_remainder() ->
     grouped = _ranks_by_stratum(sides)
     counts = {stratum: len(ranks) for stratum, ranks in grouped.items()}
 
-    for requested in (179, 360, 720, 1441, POPULATION - 1):
+    for requested in (215, 432, 720, 1441, POPULATION - 1):
         quotas = _proportional_quotas(counts, requested, POPULATION)
         assert sum(quotas.values()) == requested
         assert set(quotas) == set(counts)
@@ -307,7 +307,7 @@ def test_proportional_quotas_sum_to_the_request_and_break_ties_by_remainder() ->
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("pairings", [161, 162, 360, 720, 1440])
+@pytest.mark.parametrize("pairings", [NODES - 1, NODES, 360, 720, 1440])
 @pytest.mark.parametrize("seed", [0, 1, 17])
 def test_samples_are_distinct_valid_connected_and_cover_every_cell(
     pairings: int, seed: int
@@ -336,7 +336,7 @@ def test_minimum_request_produces_a_spanning_tree() -> None:
     sampled = sample_pair_inputs(
         pair_specs, PositiveInteger.parse(NODES - 1), Natural.parse(3)
     )
-    # 179 edges over 180 connected cells can only be an acyclic spanning tree.
+    # 197 edges over 198 connected cells can only be an acyclic spanning tree.
     assert len(sampled) == NODES - 1
     components = _components(pair_specs, sampled)
     assert len(components) == 1
@@ -410,7 +410,7 @@ def test_degree_is_balanced_within_each_channel(seed: int) -> None:
     assert means[Channel.SYSTEM] == pytest.approx(means[Channel.README])
 
     # A greedy best-of-eight choice keeps the spread far below the roughly
-    # 15-wide tail an unbalanced Poisson draw over 54 cells would produce.
+    # 15-wide tail an unbalanced Poisson draw over 66 cells would produce.
     tolerances = {Channel.USER: 5, Channel.SYSTEM: 3, Channel.README: 3}
     for channel, counts in by_channel.items():
         assert len(counts) == 2 * USER_CHANNEL_SIDE
@@ -619,8 +619,8 @@ def test_sides_reject_duplicate_and_overlapping_specifications() -> None:
 
 def test_sampling_rejects_requests_outside_the_valid_range() -> None:
     pair_specs = _first_pair()
-    with pytest.raises(ValueError, match="at least 161"):
-        sample_pair_inputs(pair_specs, PositiveInteger.parse(160), Natural.parse(0))
+    with pytest.raises(ValueError, match="at least 197"):
+        sample_pair_inputs(pair_specs, PositiveInteger.parse(NODES - 2), Natural.parse(0))
     with pytest.raises(ValueError, match="cannot exceed the valid population"):
         sample_pair_inputs(
             pair_specs, PositiveInteger.parse(POPULATION + 1), Natural.parse(0)
@@ -638,12 +638,12 @@ def test_studies_share_one_design_across_assistants() -> None:
     studies = build_sampled_studies(
         specs,
         assistants,
-        PositiveInteger.parse(200),
+        PositiveInteger.parse(240),
         PositiveInteger.parse(1),
         Natural.parse(0),
     )
 
-    assert len(studies) == 2 * 2 * 200
+    assert len(studies) == 2 * 2 * 240
     by_assistant: dict[Assistant, list[StudyInputs]] = {}
     for study in studies:
         by_assistant.setdefault(study.assistant, []).append(study.inputs)
@@ -661,10 +661,10 @@ def test_full_pilot_design_has_the_expected_size() -> None:
         Natural.parse(0),
     )
     assert len(studies) == 24 * DEFAULT_PAIRINGS_PER_PAIR * len(Assistant)
-    assert len(studies) == 69_120
+    assert len(studies) == 86_400
     assert len(set(studies)) == len(studies)
     # Two orderings per study, one rollout each.
-    assert 2 * len(studies) == 138_240
+    assert 2 * len(studies) == 172_800
 
 
 @pytest.mark.parametrize(
@@ -685,7 +685,7 @@ def test_suite_construction_rejects_invalid_inputs(
         build_sampled_studies(
             specs,
             assistants,
-            PositiveInteger.parse(200),
+            PositiveInteger.parse(240),
             PositiveInteger.parse(1),
             Natural.parse(0),
         )
@@ -697,7 +697,7 @@ def test_suite_construction_rejects_duplicate_pair_ids() -> None:
         build_sampled_studies(
             duplicated,
             (Assistant.INKLING,),
-            PositiveInteger.parse(200),
+            PositiveInteger.parse(240),
             PositiveInteger.parse(1),
             Natural.parse(0),
         )
@@ -707,7 +707,7 @@ def test_study_suite_round_trip_and_validation(tmp_path: Path) -> None:
     studies = build_sampled_studies(
         _bank_specs()[:1],
         (Assistant.INKLING,),
-        PositiveInteger.parse(200),
+        PositiveInteger.parse(240),
         PositiveInteger.parse(1),
         Natural.parse(0),
     )
@@ -808,8 +808,8 @@ def test_sample_studies_cli_uses_the_pilot_default(
     "arguments",
     [
         ["--pairings-per-pair", "0"],
-        ["--pairings-per-pair", "160"],
-        ["--pairings-per-pair", "3646"],
+        ["--pairings-per-pair", str(NODES - 2)],
+        ["--pairings-per-pair", str(POPULATION + 1)],
         ["--rollouts-per-permutation", "0"],
         ["--seed", "-1"],
         ["--author", "Inkling", "--author", "Inkling"],
