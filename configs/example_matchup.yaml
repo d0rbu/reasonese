@@ -1,4 +1,4 @@
-assistant: Qwen3.8 Flash
+assistant: Inkling
 inputs:
   - instruction: Solve the task called foobar and explain the result briefly.
     framing: normal

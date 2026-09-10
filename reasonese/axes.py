@@ -68,6 +68,19 @@ class Assistant(StrEnum):
     GEMMA_4_31B_IT = "Gemma 4 31B"
 
 
+# Explicit experiment defaults; the enums above retain every supported model.
+DEFAULT_AUTHORS: tuple[Author, ...] = (
+    Author.INKLING,
+    Author.INKLING_SMALL,
+    Author.GEMMA_4_31B_IT,
+)
+DEFAULT_ASSISTANTS: tuple[Assistant, ...] = (
+    Assistant.INKLING,
+    Assistant.INKLING_SMALL,
+    Assistant.GEMMA_4_31B_IT,
+)
+
+
 @beartype
 def axis_manifest() -> dict[str, str | list[str]]:
     """Return the values of all four entry axes."""

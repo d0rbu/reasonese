@@ -5,7 +5,7 @@
 | `configs/example_matchup.yaml` | Two-input conversation example |
 | `configs/example_study.yaml` | Permutation-balanced collection example |
 | `configs/instruction_pairs.yaml` | Candidate instruction-pair bank |
-| `reasonese/axes.py` | Four axis types |
+| `reasonese/axes.py` | Four axis types and default author/assistant selections |
 | `reasonese/config.py` | Instruction, matchup, and study loaders |
 | `reasonese/instructions.py` | Instruction pairs, bank loader, overlap and coverage diagnostics, manual-variant scaffolding |
 | `reasonese/pair_checks.py` | Independent GPT-5.6 Luna audits of pair criteria |

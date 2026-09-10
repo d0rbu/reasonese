@@ -13,7 +13,7 @@ what maps a specification back to its pair and side.
 A matchup selects one assistant and an ordered list of entry datapoints:
 
 ```yaml
-assistant: Qwen3.8 Flash
+assistant: Inkling
 inputs:
   - instruction: Solve the task called foobar and explain the result briefly.
     framing: normal
@@ -44,7 +44,7 @@ inference.
 A study adds a positive rollout count to an assistant and an unordered pair of inputs:
 
 ```yaml
-assistant: Qwen3.8 Flash
+assistant: Inkling
 rollouts_per_permutation: 2
 inputs:
   - instruction: Solve the task called foobar and explain the result briefly.
@@ -91,11 +91,12 @@ study's output subdirectory.
 `reasonese-sample-studies` builds all four-axis cells for both sides of every instruction pair,
 selects a seeded axis-stratified, degree-aware, connected subset of that pair's valid unordered
 pairings, and writes them under one `studies` key. `--pairings-per-pair` sets the count per pair
-per assistant and defaults to 720:
+per assistant and defaults to 720. Default authors and assistants are Inkling, Inkling Small,
+and Gemma 4 31B, all of which have registered `:free` routes:
 
 ```yaml
 studies:
-  - assistant: Qwen3.8 Flash
+  - assistant: Inkling
     rollouts_per_permutation: 1
     inputs:
       - instruction: Write a program.
@@ -149,5 +150,12 @@ assistant counts refer to trials, not the number of tool continuations. Mixed pa
 can report the same author in both cached and materialized groups.
 
 The planner accepts repeated `--author` and the sampler accepts repeated `--author` and
-`--assistant` filters, including `Gemma 4 31B`. Duplicate values are rejected. Filtering preserves
+`--assistant` filters, including `Gemma 4 31B`. Both default author selection and default assistant selection
+contain only Inkling, Inkling Small, and Gemma 4 31B. Supplying a filter replaces its default
+set; it does not append to it. Other supported models and `author: user` remain available
+explicitly. Duplicate values are rejected. Filtering preserves
 existing specification order; the planner summary counts only selected conditions.
+
+These defaults apply when generating new plans and suites. Existing suite YAML and cached
+responses keep their original models and provenance; regenerate a suite to adopt the new model
+selection, and use separate caches if you need fresh collection on the free routes.

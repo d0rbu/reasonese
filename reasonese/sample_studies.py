@@ -10,7 +10,7 @@ from pathlib import Path
 from beartype import beartype
 from phantom.interval import Natural
 
-from reasonese.axes import Assistant, Author
+from reasonese.axes import DEFAULT_ASSISTANTS, DEFAULT_AUTHORS, Assistant, Author
 from reasonese.instructions import load_instruction_pairs
 from reasonese.io import write_study_suite
 from reasonese.planning import PairSpecs, build_pair_specs
@@ -51,14 +51,26 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument("--rollouts-per-permutation", type=int, default=1)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--author", action="append", type=Author, choices=tuple(Author))
-    parser.add_argument("--assistant", action="append", type=Assistant, choices=tuple(Assistant))
+    parser.add_argument(
+        "--author",
+        action="append",
+        type=Author,
+        choices=tuple(Author),
+        help="repeat to override default authors: Inkling, Inkling Small, Gemma 4 31B",
+    )
+    parser.add_argument(
+        "--assistant",
+        action="append",
+        type=Assistant,
+        choices=tuple(Assistant),
+        help="repeat to override default assistants: Inkling, Inkling Small, Gemma 4 31B",
+    )
     args = parser.parse_args(argv)
 
     try:
         pairs = load_instruction_pairs(args.pairs)
-        authors = _unique_values(args.author or tuple(Author), "authors")
-        assistants = _unique_values(args.assistant or tuple(Assistant), "assistants")
+        authors = _unique_values(args.author or DEFAULT_AUTHORS, "authors")
+        assistants = _unique_values(args.assistant or DEFAULT_ASSISTANTS, "assistants")
         pair_specs = tuple(
             PairSpecs(
                 item.pair,

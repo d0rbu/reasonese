@@ -33,14 +33,16 @@ def test_plan_writes_selected_specs_for_each_side_of_every_pair(
     )
 
     summary = json.loads(capsys.readouterr().out)
-    assert summary["specs_per_instruction"] == 99
+    assert summary["specs_per_instruction"] == 54
     assert summary["manual_framings"] == 3
     assert summary["framings"] == 6
     assert summary["instruction_pairs"] == 24
     assert summary["instructions"] == 48
-    assert summary["authors"] == 6
-    assert summary["specs"] == 48 * 99
-    assert len(output.read_text().splitlines()) == 48 * 99
+    assert summary["authors"] == 3
+    assert summary["specs"] == 48 * 54
+    assert len(output.read_text().splitlines()) == 48 * 54
+    rows = [json.loads(line) for line in output.read_text().splitlines()]
+    assert {row["author"] for row in rows} == {"Inkling", "Inkling Small", "Gemma 4 31B"}
 
 
 def test_plan_filters_by_author(
