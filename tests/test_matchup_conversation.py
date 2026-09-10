@@ -79,7 +79,7 @@ def test_matchup_rejects_non_pairs_or_no_explicit_user_message() -> None:
 def test_matchup_yaml_round_trip_and_example() -> None:
     example = load_matchup(Path("configs/example_matchup.yaml"))
     assert len(example.inputs) == 2
-    assert example.assistant is Assistant.QWEN3_8_FLASH
+    assert example.assistant is Assistant.INKLING
     assert matchup_from_dict(matchup_to_dict(example)) == example
 
 

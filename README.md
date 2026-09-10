@@ -23,7 +23,7 @@ prose. A `user`-authored input is treated as already written and used verbatim, 
 only for the `normal`, `casual`, and `persuasive` framings; model authors rewrite the base
 instruction according to any of the six framings.
 
-Six framings for each of the five model authors plus three framings for the `user` author, across
+With all supported authors selected, six framings for each of the five model authors plus three framings for the `user` author, across
 three channels, produce `(6 × 5 + 3) × 3 = 99` specifications per base instruction. A
 specification is just a four-field dataclass containing those axes.
 
@@ -188,9 +188,13 @@ average degree of about 7.27 (792 pairings would give degree 8).
 Connectivity is required within a pair and is impossible between pairs, so the comparison graph
 has exactly one component per `(pair, assistant)`.
 
-By default the sampler includes every author and assistant. Repeated `--author` and
-`--assistant` options restrict those sets—for example, omitting the `user` author avoids selecting
-manual variants that have not been written yet. `reasonese-collect-studies --suite` consumes the
+The planner and sampler default to Inkling, Inkling Small, and Gemma 4 31B as authors;
+the sampler evaluates those same three assistants. The default collection route is `free`, so
+all three use their registered `:free` slugs. Repeated `--author` and `--assistant` options
+replace the corresponding default set; Qwen models and the manual `user` author remain
+available explicitly. With these defaults there are 54 conditions per instruction, 108 cells
+and 1,620 eligible pairings per pair. The 24-pair bank produces 2,592 prompt specifications
+and 51,840 sampled studies (103,680 trials at one rollout per ordering). `reasonese-collect-studies --suite` consumes the
 artifact directly, uses study fingerprints for resumable subdirectories, and writes the combined
 analysis input to `observations.jsonl` at the suite root.
 

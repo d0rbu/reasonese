@@ -800,7 +800,7 @@ def test_sample_studies_cli_uses_the_pilot_default(
     )
     summary = json.loads(capsys.readouterr().out)
     assert summary["pairings_per_pair"] == DEFAULT_PAIRINGS_PER_PAIR
-    assert summary["pairing_population_per_pair"] == POPULATION
+    assert summary["pairing_population_per_pair"] == 1620
     assert summary["studies"] == 24 * DEFAULT_PAIRINGS_PER_PAIR
 
 
@@ -808,8 +808,8 @@ def test_sample_studies_cli_uses_the_pilot_default(
     "arguments",
     [
         ["--pairings-per-pair", "0"],
-        ["--pairings-per-pair", str(NODES - 2)],
-        ["--pairings-per-pair", str(POPULATION + 1)],
+        ["--pairings-per-pair", "106"],
+        ["--pairings-per-pair", "1621"],
         ["--rollouts-per-permutation", "0"],
         ["--seed", "-1"],
         ["--author", "Inkling", "--author", "Inkling"],
@@ -834,3 +834,65 @@ def test_sample_studies_cli_reports_a_missing_bank(tmp_path: Path) -> None:
                 str(tmp_path / "suite.yaml"),
             ]
         )
+
+
+def test_default_suite_matches_explicit_free_model_selection(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from reasonese.openrouter import select_route
+    from reasonese.routing import CollectionRouting
+
+    bank = tmp_path / "pair.yaml"
+    bank.write_text(yaml.safe_dump({"pairs": yaml.safe_load(BANK.read_text())["pairs"][:1]}))
+    output = tmp_path / "default.yaml"
+    explicit = tmp_path / "explicit.yaml"
+    models = ("Inkling", "Inkling Small", "Gemma 4 31B")
+    assert sample_studies(["--pairs", str(bank), "--output", str(output)]) == 0
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["authors"] == list(models)
+    assert summary["assistants"] == list(models)
+    assert summary["specs"] == 108
+    assert summary["minimum_connected_pairings_per_pair"] == 107
+    assert summary["pairing_population_per_pair"] == 1620
+    assert summary["studies"] == 2160
+    assert summary["trials"] == 4320
+    arguments = ["--pairs", str(bank), "--output", str(explicit)]
+    for flag in ("--author", "--assistant"):
+        for model in models:
+            arguments.extend((flag, model))
+    assert sample_studies(arguments) == 0
+    assert output.read_bytes() == explicit.read_bytes()
+    studies = load_study_suite(output)
+    expected_routes = {
+        "thinkingmachines/inkling:free",
+        "thinkingmachines/inkling-small:free",
+        "google/gemma-4-31b-it:free",
+    }
+    routing = CollectionRouting()
+    for selected in (
+        {study.assistant for study in studies},
+        {spec.author for study in studies for spec in study.inputs},
+    ):
+        routes = {select_route(model, routing.preference) for model in selected}
+        assert {str(route.model_id) for route in routes} == expected_routes
+        assert all(route.batch_model_id is None for route in routes)
+
+    # Explicit choices replace the defaults, including supported nondefault models.
+    assert (
+        sample_studies(
+            [
+                "--pairs",
+                str(bank),
+                "--output",
+                str(explicit),
+                "--author",
+                "user",
+                "--assistant",
+                "Qwen3.8 Flash",
+            ]
+        )
+        == 0
+    )
+    overridden = load_study_suite(explicit)
+    assert {study.assistant for study in overridden} == {Assistant.QWEN3_8_FLASH}
+    assert {spec.author for study in overridden for spec in study.inputs} == {Author.USER}

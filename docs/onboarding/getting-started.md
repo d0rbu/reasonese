@@ -11,7 +11,9 @@ uv run reasonese-plan \
 ```
 
 The first utility prints the canonical definitions. The second validates the 24 instruction
-pairs and writes 4,752 prompt specifications: 99 for each of the 48 instructions.
+pairs and writes 2,592 prompt specifications: 54 for each of the 48 instructions, using
+Inkling, Inkling Small, and Gemma 4 31B as authors. The sampler defaults to those same three
+assistants, and collection defaults to their registered `:free` routes.
 
 Inspect a few records with:
 

@@ -9,7 +9,7 @@ from pathlib import Path
 
 from beartype import beartype
 
-from reasonese.axes import Author, Channel, Framing, author_framings
+from reasonese.axes import DEFAULT_AUTHORS, Author, Channel, Framing, author_framings
 from reasonese.instructions import load_instruction_pairs
 from reasonese.io import write_prompt_specs
 from reasonese.planning import build_pair_specs
@@ -21,11 +21,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="reasonese-plan")
     parser.add_argument("--pairs", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--author", action="append", type=Author, choices=tuple(Author))
+    parser.add_argument(
+        "--author",
+        action="append",
+        type=Author,
+        choices=tuple(Author),
+        help="repeat to override default authors: Inkling, Inkling Small, Gemma 4 31B",
+    )
     args = parser.parse_args(argv)
 
     try:
-        authors = tuple(args.author or tuple(Author))
+        authors = tuple(args.author or DEFAULT_AUTHORS)
         if len(authors) != len(set(authors)):
             raise ValueError("authors must be unique")
         pairs = load_instruction_pairs(args.pairs)

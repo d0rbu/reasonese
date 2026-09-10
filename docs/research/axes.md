@@ -82,3 +82,9 @@ A pairing is eligible when it joins the two sides of one pair and at least one i
 `user message` channel. The comparison graph has one component per `(pair, assistant)`.
 
 No outcome or model-behavior claim is encoded in a specification.
+
+The counts above describe all supported axis values. The planner and sampler default to
+Inkling, Inkling Small, and Gemma 4 31B as authors and the sampler uses those same three
+assistants. That subset has 54 specifications per instruction (2,592 across the bank),
+108 cells and 1,620 eligible pairings per pair. Explicit author/assistant filters can select
+other supported values; model availability does not change the axis definitions.
