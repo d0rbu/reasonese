@@ -26,20 +26,23 @@ Choose how many unordered pairs each assistant should receive and write one repr
 
 ```bash
 uv run reasonese-sample-studies \
-  --instructions path/to/instructions.toml \
-  --pairings-per-assistant 2000 \
+  --pairs configs/instruction_pairs.yaml \
+  --pairings-per-pair 720 \
   --rollouts-per-permutation 1 \
   --seed 0 \
   --output out/studies.yaml
 ```
 
-The command reports the exhaustive population and minimum connected sample before any provider
-work occurs. Omitting `--pairings-per-assistant` selects 20,000 pairs, capped by the eligible
-population and raised when more edges are needed to connect all cells. It includes all authors and assistants unless repeated `--author` or `--assistant`
-filters are supplied. The sample always covers every selected cell, is connected within each
-assistant, and never includes a pair without a user-message input. Pairing quotas preserve the
-eligible population's channel-pair and axis-difference strata, while candidate selection reduces
-degree imbalance within each channel. Connectivity is checked afterward and minimally repaired
+The command reports each pair's exhaustive population and minimum connected sample before any
+provider work occurs. Omitting `--pairings-per-pair` selects 720 pairings per pair, capped by the
+eligible population and raised when more edges are needed to connect all cells. It includes all
+authors and assistants unless repeated `--author` or `--assistant` filters are supplied. The
+sample always covers every selected cell, is connected within each pair, and never includes a
+pairing without a user-message input. Pairing quotas preserve the eligible population's
+channel-pair and axis-difference strata, while candidate selection reduces degree imbalance
+within each channel. Every pairing joins the two sides of one instruction pair; pairings are
+never formed across pairs, because two instructions from different pairs do not conflict and
+would produce a trial with no signal. Connectivity is checked afterward and minimally repaired
 only when needed. A different seed changes the candidates and selected edges; the same seed and
 inputs reproduce the same suite.
 

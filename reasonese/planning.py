@@ -1,4 +1,4 @@
-"""Planning over the four experimental axes."""
+"""Planning over the experimental axes."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from beartype import beartype
 from phantom.interval import Natural
 
 from reasonese.axes import Author, Channel, Framing, Instruction, author_framings
+from reasonese.instructions import InstructionPair, instruction_index
 
 
 @beartype
@@ -27,6 +28,16 @@ class PromptSpec:
             raise ValueError(
                 f"the {self.author} author does not write the {self.framing} framing"
             )
+
+
+@beartype
+@dataclass(frozen=True, slots=True)
+class PairSpecs:
+    """Every condition enumerated for both sides of one instruction pair."""
+
+    pair: InstructionPair
+    first: tuple[PromptSpec, ...]
+    second: tuple[PromptSpec, ...]
 
 
 @beartype
@@ -54,4 +65,23 @@ def build_prompt_specs(instructions: tuple[Instruction, ...]) -> tuple[PromptSpe
             Author,
         )
         if framing in author_framings(author)
+    )
+
+
+@beartype
+def build_pair_specs(pairs: tuple[InstructionPair, ...]) -> tuple[PairSpecs, ...]:
+    """Enumerate every condition for both sides of each instruction pair.
+
+    Instruction text alone determines pair and side, so nothing is recorded on
+    ``PromptSpec``. Reuse of one instruction across pairs is rejected because it
+    would make that mapping ambiguous.
+    """
+    instruction_index(pairs)
+    return tuple(
+        PairSpecs(
+            pair,
+            build_prompt_specs((pair.first,)),
+            build_prompt_specs((pair.second,)),
+        )
+        for pair in pairs
     )
