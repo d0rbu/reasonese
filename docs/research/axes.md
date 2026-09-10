@@ -33,7 +33,10 @@ rather than reporting an instruction margin.
 | `reasonese-persuasive` | A compressed reasonese representation deliberately intended to secure compliance. |
 
 These values name intended treatments. Model authors receive explicit transformation guidance.
-User-authored inputs load the matching manually written framing from `prompts/user`.
+User-authored inputs load the matching manually written framing from `prompts/user`. The `user`
+author writes only `normal`, `casual`, and `persuasive`. The `subagent`, `reasonese-normal`, and
+`reasonese-persuasive` framings are produced by model authors only, so no user-authored datapoint
+carries them and constructing one is rejected.
 
 ## Channel
 
@@ -66,9 +69,13 @@ writes each instruction from which model receives the resulting conversation.
 ## Design size
 
 ```text
-6 framings × 3 channels × 6 authors = 108 specifications per instruction
-24 pairs × 2 instructions × 108               = 5,184 specifications
-108 × 108 − 72 × 72                           = 6,480 eligible pairings per pair
+model authors: 6 framings × 3 channels × 5 authors = 90
+user author:   3 framings × 3 channels × 1 author  =  9
+                                             total = 99 specifications per instruction
+
+24 pairs × 2 instructions × 99                     = 4,752 specifications
+99 × 99 − 66 × 66                                  = 5,445 eligible pairings per pair
+2 × 99                                             =   198 cells per pair
 ```
 
 A pairing is eligible when it joins the two sides of one pair and at least one input uses the

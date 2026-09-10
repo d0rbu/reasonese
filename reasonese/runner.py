@@ -148,13 +148,16 @@ def materialize_specs(
         tuple(completion_groups),
         prefer_batch=prefer_batch,
     )
-    for authored_specs, responses, group in zip(grouped_specs, grouped_responses, completion_groups, strict=True):
+    for authored_specs, responses, group in zip(
+        grouped_specs, grouped_responses, completion_groups, strict=True
+    ):
+        provenance = completion_provenance(group.route, group.bodies, prefer_batch=prefer_batch)
         for spec, response in zip(authored_specs, responses, strict=True):
             message = GeneratedMessage(
                 spec,
                 GeneratedText.parse(response_content(response)),
                 response,
-                completion_provenance(group.route, group.bodies, prefer_batch=prefer_batch),
+                provenance,
             )
             materialized[spec] = message
             new_messages.append(message)
@@ -164,7 +167,13 @@ def materialize_specs(
     new_specs = {message.spec for message in new_messages}
     for spec in dict.fromkeys(specs):
         message = materialized[spec]
-        routing.record("author", spec.author, "manual" if spec.author is Author.USER else "new" if spec in new_specs else "cache", message.provenance, message.response)
+        routing.record(
+            "author",
+            spec.author,
+            "manual" if spec.author is Author.USER else "new" if spec in new_specs else "cache",
+            message.provenance,
+            message.response,
+        )
     return tuple(materialized[spec] for spec in specs)
 
 
@@ -266,7 +275,9 @@ def run_assistant_groups(
                         groups[group_index].setups[setup_index],
                         response,
                         tuple(steps[key]),
-                        RouteProvenance(groups[group_index].route.model_id, CompletionTransport.SYNC),
+                        RouteProvenance(
+                            groups[group_index].route.model_id, CompletionTransport.SYNC
+                        ),
                     )
                     release_runtime(key)
                     continue
@@ -310,12 +321,16 @@ def run_matchup(
             GeneratedMessage(spec, cached.setup.content_for_input(index), None)
             for index, spec in enumerate(matchup.inputs)
         )
-        require_compliant_messages(audit_messages(cached_messages, qa_cache, client, routing=routing))
+        require_compliant_messages(
+            audit_messages(cached_messages, qa_cache, client, routing=routing)
+        )
         routing.record("assistant", matchup.assistant, "cache", cached.provenance, cached.response)
         record_cached_authors((cached,), message_cache, routing)
         return RunResult(cached, True)
 
-    routing.require_paid("uncached assistant work (chargeable web search), including required message QA")
+    routing.require_paid(
+        "uncached assistant work (chargeable web search), including required message QA"
+    )
     generated = materialize_messages(
         matchup,
         client,
@@ -326,24 +341,35 @@ def run_matchup(
     )
     require_compliant_messages(audit_messages(generated, qa_cache, client, routing=routing))
     setup = construct_conversation(matchup, generated)
-    trace = run_assistant(setup, select_route(matchup.assistant, routing.preference).model_id, client)
+    trace = run_assistant(
+        setup, select_route(matchup.assistant, routing.preference).model_id, client
+    )
     trace_cache.put(trace)
     routing.record("assistant", matchup.assistant, "new", trace.provenance, trace.response)
     return RunResult(trace, False)
 
 
-def record_cached_authors(traces: tuple[ConversationTrace, ...], cache: YamlMessageCache, routing: CollectionRouting) -> None:
+def record_cached_authors(
+    traces: tuple[ConversationTrace, ...], cache: YamlMessageCache, routing: CollectionRouting
+) -> None:
     """Report only author provenance supported by matching cached text, once per message."""
     if not traces:
         return
     messages = {message.spec: message for message in cache.load()}
     delivered = dict.fromkeys(
         (spec, trace.setup.content_for_input(index))
-        for trace in traces for index, spec in enumerate(trace.setup.matchup.inputs)
+        for trace in traces
+        for index, spec in enumerate(trace.setup.matchup.inputs)
     )
     for spec, content in delivered:
         message = messages.get(spec)
         if message is not None and message.content == content:
             routing.record("author", spec.author, "cache", message.provenance, message.response)
         else:
-            routing.record("author", spec.author, "manual" if spec.author is Author.USER else "cache", None, None)
+            routing.record(
+                "author",
+                spec.author,
+                "manual" if spec.author is Author.USER else "cache",
+                None,
+                None,
+            )

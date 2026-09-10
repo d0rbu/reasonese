@@ -44,7 +44,7 @@ class OpenRouterModelId(str, Phantom[str], predicate=_is_model_id, bound=str):
 @beartype
 @dataclass(frozen=True, slots=True)
 class ModelRoute:
-    """Synchronous model slug and its optional batch variant."""
+    """Synchronous model slug and optional batch/free variants."""
 
     model_id: OpenRouterModelId
     batch_model_id: OpenRouterModelId | None
@@ -73,7 +73,10 @@ class RouteProvenance:
     transport: CompletionTransport
 
     def to_dict(self) -> dict[str, str]:
-        return {"requested_model_id": str(self.requested_model_id), "transport": str(self.transport)}
+        return {
+            "requested_model_id": str(self.requested_model_id),
+            "transport": str(self.transport),
+        }
 
 
 def provenance_from_dict(raw: object) -> RouteProvenance | None:
@@ -92,7 +95,7 @@ def canonical_model_id(slug: str) -> str:
     """Remove exactly one recognized terminal route suffix; preserve everything else."""
     for suffix in (":free", ":batch"):
         if slug.endswith(suffix):
-            return slug[:-len(suffix)]
+            return slug[: -len(suffix)]
     return slug
 
 
@@ -105,8 +108,10 @@ def fingerprint_response(response: JsonObject) -> JsonObject:
 def completion_provenance(
     route: ModelRoute, bodies: tuple[JsonObject, ...], *, prefer_batch: bool
 ) -> RouteProvenance:
-    batch = prefer_batch and route.batch_model_id is not None and all(
-        _batch_compatible(body) for body in bodies
+    batch = (
+        prefer_batch
+        and route.batch_model_id is not None
+        and all(_batch_compatible(body) for body in bodies)
     )
     return RouteProvenance(
         route.model_id, CompletionTransport.BATCH if batch else CompletionTransport.SYNC
@@ -318,7 +323,9 @@ class OpenRouterClient:
             if not group.bodies:
                 results[index] = ()
             elif (
-                completion_provenance(group.route, group.bodies, prefer_batch=prefer_batch).transport
+                completion_provenance(
+                    group.route, group.bodies, prefer_batch=prefer_batch
+                ).transport
                 is CompletionTransport.BATCH
             ):
                 pending.append((index, self._submit_batch(group.route.model_id, group.bodies)))

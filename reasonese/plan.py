@@ -9,7 +9,7 @@ from pathlib import Path
 
 from beartype import beartype
 
-from reasonese.axes import Author, Channel, Framing
+from reasonese.axes import Author, Channel, Framing, author_framings
 from reasonese.instructions import load_instruction_pairs
 from reasonese.io import write_prompt_specs
 from reasonese.planning import build_pair_specs
@@ -47,6 +47,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "framings": len(Framing),
                 "instruction_pairs": len(pairs),
                 "instructions": 2 * len(pairs),
+                "manual_framings": len(author_framings(Author.USER)),
                 "output": str(args.output),
                 "specs": len(specs),
                 "specs_per_instruction": len(specs) // (2 * len(pairs)),

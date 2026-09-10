@@ -187,11 +187,23 @@ def collect_studies(
     )
     for state in states:
         for trace in state.traces.values():
-            routing.record("assistant", state.task.study.assistant, "cache", trace.trace.provenance, trace.trace.response)
-    record_cached_authors(tuple(trace.trace for state in states for trace in state.traces.values()), message_cache, routing)
+            routing.record(
+                "assistant",
+                state.task.study.assistant,
+                "cache",
+                trace.trace.provenance,
+                trace.trace.response,
+            )
+    record_cached_authors(
+        tuple(trace.trace for state in states for trace in state.traces.values()),
+        message_cache,
+        routing,
+    )
     materialized_by_spec: dict[PromptSpec, GeneratedMessage] = {}
     if specs_to_materialize:
-        routing.require_paid("uncached assistant work (chargeable web search), including required message QA")
+        routing.require_paid(
+            "uncached assistant work (chargeable web search), including required message QA"
+        )
         if client is None:
             raise ValueError("OPENROUTER_API_KEY is required for uncached conversation trials")
         materialized_by_spec = {
@@ -260,7 +272,13 @@ def collect_studies(
             fingerprinted_traces = fingerprint_traces(new_traces)
             for (state, trial, _), trace in zip(work, fingerprinted_traces, strict=True):
                 state.traces[str(trial.trial_id)] = trace
-                routing.record("assistant", trial.matchup.assistant, "new", trace.trace.provenance, trace.trace.response)
+                routing.record(
+                    "assistant",
+                    trial.matchup.assistant,
+                    "new",
+                    trace.trace.provenance,
+                    trace.trace.response,
+                )
         if shared_cache is None:
             for state in states:
                 state.cache.put_traces(
@@ -303,7 +321,10 @@ def collect_studies(
                 state.judgment_hits += 1
 
     if missing_judgments:
-        print(f"{len(missing_judgments)} uncached judgments (including any changed trace fingerprints)", file=sys.stderr)
+        print(
+            f"{len(missing_judgments)} uncached judgments (including any changed trace fingerprints)",
+            file=sys.stderr,
+        )
         routing.require_paid(f"{len(missing_judgments)} uncached judgments")
         if client is None:
             raise ValueError("OPENROUTER_API_KEY is required for uncached judgments")
@@ -383,7 +404,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         routing = routing_from_arguments(args)
         study = load_study(args.study)
-        routing.announce(tuple(spec.author for spec in study.inputs), (study.assistant,), prefer_batch=not args.no_batch)
+        routing.announce(
+            tuple(spec.author for spec in study.inputs),
+            (study.assistant,),
+            prefer_batch=not args.no_batch,
+        )
         api_key = os.environ.get("OPENROUTER_API_KEY")
         client = OpenRouterClient(RequestsTransport(api_key)) if api_key is not None else None
         result = collect_study(

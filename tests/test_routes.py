@@ -310,7 +310,7 @@ def test_authoring_provenance_tracks_actual_endpoint(
 
 
 def test_exact_legacy_fingerprint_and_filtered_planner_bytes() -> None:
-    """Golden digests captured from main 66dff4c, independent of the new helpers."""
+    """Golden digests captured from main 2f8c634, independent of the new helpers."""
     import hashlib
     import json
 
@@ -330,7 +330,7 @@ def test_exact_legacy_fingerprint_and_filtered_planner_bytes() -> None:
     ]
     assert (
         hashlib.sha256(json.dumps(specs, sort_keys=True).encode()).hexdigest()
-        == "5a7391f47f921a593d7c8c14b032d8761682033e01b079e39ad22458434b7638"
+        == "44506ce15129a9d6f5159b9feef4ef0bd8f5e2c8ab14a2fd3a8092f5fc4d6221"
     )
 
 
@@ -470,3 +470,54 @@ def test_mixed_author_group_denial_happens_before_free_submission(tmp_path: Path
             prefer_batch=True,
         )
     assert transport.post_calls == []
+
+
+def test_failed_free_author_request_never_retries_paid(tmp_path: Path) -> None:
+    class FailedTransport(FakeTransport):
+        def post_json(self, path: str, body: dict) -> dict:
+            self.post_calls.append((path, body))
+            raise RuntimeError("free route unavailable")
+
+    study = _study()
+    spec = replace(study.inputs[0], author=Author.GEMMA_4_31B_IT)
+    transport = FailedTransport()
+    with pytest.raises(RuntimeError, match="free route unavailable"):
+        materialize_specs(
+            (spec,),
+            OpenRouterClient(transport),
+            YamlMessageCache(tmp_path / "messages.yaml"),
+            _manual_library(tmp_path, study),
+            prefer_batch=True,
+            routing=CollectionRouting(allow_paid=True),
+        )
+    assert len(transport.post_calls) == 1
+    assert transport.post_calls[0][1]["model"] == "google/gemma-4-31b-it:free"
+
+
+def test_author_provenance_is_resolved_once_per_group(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import reasonese.runner as runner
+
+    study = _study()
+    specs = tuple(replace(spec, author=Author.GEMMA_4_31B_IT) for spec in study.inputs)
+    calls = []
+    original = runner.completion_provenance
+
+    def counted(
+        route: ModelRoute, bodies: tuple[dict, ...], *, prefer_batch: bool
+    ) -> RouteProvenance:
+        calls.append(len(bodies))
+        return original(route, bodies, prefer_batch=prefer_batch)
+
+    monkeypatch.setattr(runner, "completion_provenance", counted)
+    messages = materialize_specs(
+        specs,
+        OpenRouterClient(FakeTransport(posts=[_chat("one"), _chat("two")]), sync_workers=1),
+        YamlMessageCache(tmp_path / "messages.yaml"),
+        _manual_library(tmp_path, study),
+        prefer_batch=True,
+    )
+    assert len(messages) == 2
+    assert calls == [2]
+    assert messages[0].provenance is messages[1].provenance

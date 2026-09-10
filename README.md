@@ -19,11 +19,13 @@ its exact datapoint authoring instructions before assistant inference.
 | author | `user`, `Qwen3.8 Flash`, `Qwen3.8 2.4T`, `Inkling`, `Inkling Small`, `Gemma 4 31B` |
 
 Framing and author are independent. “Normal” is the author's default rendering in clear
-prose. A `user`-authored input is treated as already written and used verbatim; model authors
-rewrite the base instruction according to the selected framing.
+prose. A `user`-authored input is treated as already written and used verbatim, and it exists
+only for the `normal`, `casual`, and `persuasive` framings; model authors rewrite the base
+instruction according to any of the six framings.
 
-Six framings, three channels, and six authors produce `6 × 3 × 6 = 108` specifications per
-base instruction. A specification is just a four-field dataclass containing those axes.
+Six framings for each of the five model authors plus three framings for the `user` author, across
+three channels, produce `(6 × 5 + 3) × 3 = 99` specifications per base instruction. A
+specification is just a four-field dataclass containing those axes.
 
 Instruction is not a treatment axis. Instructions come in 24 mutually exclusive pairs, and a
 trial only ever holds the two instructions of one pair, so no comparison ever crosses a pair
@@ -87,10 +89,17 @@ The utilities have separate entry points. `reasonese-axes` prints the values and
 `reasonese-plan` writes four-axis datapoints for both sides of every instruction pair. `reasonese-run-conversation` loads a `Matchup`,
 generates any missing model-authored messages, constructs the ordered conversation, and sends
 it to the selected assistant with file-read, sandboxed bash, sandboxed Python, and web-search
-tools. It submits independent model-author batch jobs before polling them together, so one
-author model's queue does not block another author's submission. `--route batch --allow-paid` selects batch authoring where available; the default prefers
-free synchronous routes. `--no-batch` keeps authoring synchronous and conflicts with `--route batch`. Bash and Python execution require `bubblewrap` (`bwrap`) on the
-host.
+tools. When batch authoring is selected, it submits independent author batches before polling, so one
+author model's queue does not block another author's submission. `--route batch --allow-paid`
+selects batch authoring where available; the default prefers free synchronous routes.
+`--no-batch` keeps authoring synchronous and conflicts with `--route batch`. Bash and Python
+execution require `bubblewrap` (`bwrap`) on the host.
+
+Collection requires `--allow-paid` before any uncached chargeable work. Even free model routes
+still use paid message QA, study judgments, and potentially paid assistant web search. A complete
+cache-only replay needs neither the flag nor an API key. Route selection stays outside study
+YAML; summaries preserve original cache provenance. See
+[`route configuration`](docs/reference/configuration.md#collection-route-selection-and-paid-work).
 
 A matchup contains one assistant plus an ordered pair of inputs, at least one of which must use
 the explicit `user message` channel. Repeated channels are valid. Generated
@@ -101,7 +110,7 @@ an API key or make a provider call once its exact messages also have cached pass
 than as a wrapper inside a user message.
 
 User-authored variants live under `prompts/user/<instruction>/`. Each directory contains the
-exact base text in `instruction.txt` plus one text file for each framing. The checked-in variant
+exact base text in `instruction.txt` plus `normal.txt`, `casual.txt`, and `persuasive.txt`. The checked-in variant
 files are explicit `TODO:` placeholders; replace the variants you plan to run. A selected
 placeholder or incomplete instruction directory fails before inference. Editing a manual variant
 invalidates cached text and traces that contain its previous contents.
@@ -171,9 +180,10 @@ replaces exactly `components - 1` redundant cycle edges, the minimum possible re
 same-stratum replacements. Seeds derive from the pair id, so reordering the bank does not change
 any design.
 
-With all axes enabled, each of the 24 pairs has 216 cells and 6,480 eligible pairings, for
-155,520 eligible pairings per assistant. The minimum connected design uses 215 pairings per pair.
-The pilot default of 720 gives every cell an average degree of 6.67 (864 would preserve degree 8).
+With all axes enabled, each of the 24 pairs has 198 cells (`2 × 99`) and
+`99 × 99 − 66 × 66 = 5,445` eligible pairings, for 130,680 eligible pairings per assistant. The
+minimum connected design uses 197 pairings per pair. The pilot default of 720 gives every cell an
+average degree of about 7.27 (792 pairings would give degree 8).
 
 Connectivity is required within a pair and is impossible between pairs, so the comparison graph
 has exactly one component per `(pair, assistant)`.

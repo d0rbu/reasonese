@@ -37,7 +37,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         routing = routing_from_arguments(args)
         matchup = load_matchup(args.matchup)
-        routing.announce(tuple(spec.author for spec in matchup.inputs), (matchup.assistant,), prefer_batch=not args.no_batch)
+        routing.announce(
+            tuple(spec.author for spec in matchup.inputs),
+            (matchup.assistant,),
+            prefer_batch=not args.no_batch,
+        )
         message_cache = YamlMessageCache(args.message_cache)
         qa_cache = YamlMessageQaCache(args.message_qa_cache)
         trace_cache = YamlTraceCache(args.trace_cache)
@@ -50,8 +54,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 GeneratedMessage(spec, cached.setup.content_for_input(index), None)
                 for index, spec in enumerate(matchup.inputs)
             )
-            require_compliant_messages(audit_messages(cached_messages, qa_cache, client, routing=routing))
-            routing.record("assistant", matchup.assistant, "cache", cached.provenance, cached.response)
+            require_compliant_messages(
+                audit_messages(cached_messages, qa_cache, client, routing=routing)
+            )
+            routing.record(
+                "assistant", matchup.assistant, "cache", cached.provenance, cached.response
+            )
             record_cached_authors((cached,), message_cache, routing)
             result = {
                 "routes": routing.summary(),
@@ -65,7 +73,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(json.dumps(result, sort_keys=True))
             return 0
 
-        routing.require_paid("uncached assistant work (chargeable web search), including required message QA")
+        routing.require_paid(
+            "uncached assistant work (chargeable web search), including required message QA"
+        )
         if client is None:
             raise ValueError("OPENROUTER_API_KEY is required for an uncached matchup")
         run = run_matchup(

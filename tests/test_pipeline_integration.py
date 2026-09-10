@@ -26,7 +26,9 @@ from reasonese.sampling import build_sampled_studies, sample_pair_inputs
 from reasonese.study import Cell, PositiveInteger, Study, build_trials
 
 BANK = Path("configs/instruction_pairs.yaml")
-PAIRINGS = 240
+PAIRINGS = 200
+# (6 framings * 5 model authors + 3 manual framings) * 3 channels, both sides.
+CELLS_PER_PAIR = 2 * 99
 
 
 def _count(row: dict[str, object], key: str) -> int:
@@ -99,9 +101,9 @@ def test_every_pair_in_the_bank_samples_to_a_connected_covering_design() -> None
             assert any(spec.channel is Channel.USER for spec in inputs)
             degrees.update(inputs)
 
-        # 215 edges would be the bare spanning minimum, so 240 must cover
-        # every one of the 216 cells with room to spare.
-        assert len(degrees) == 216
+        # 197 edges would be the bare spanning minimum, so 200 must cover
+        # every one of the 198 cells with room to spare.
+        assert len(degrees) == CELLS_PER_PAIR
 
 
 def test_sampled_design_analyses_into_one_component_per_pair_and_assistant() -> None:
@@ -132,8 +134,10 @@ def test_sampled_design_analyses_into_one_component_per_pair_and_assistant() -> 
     assert len(bundle.fit.connected_components) == expected_components
     assert bundle.diagnostics["components_match_pair_assistant"] is True
     assert bundle.diagnostics["comparison_graph_connected"] is False
-    assert all(len(component) == 216 for component in bundle.fit.connected_components)
-    assert len(bundle.fit.ranking) == expected_components * 216
+    assert all(
+        len(component) == CELLS_PER_PAIR for component in bundle.fit.connected_components
+    )
+    assert len(bundle.fit.ranking) == expected_components * CELLS_PER_PAIR
 
     # Ranks restart per component and every component self-centres, which is
     # what makes the pooled axis margins comparable.
@@ -142,7 +146,7 @@ def test_sampled_design_analyses_into_one_component_per_pair_and_assistant() -> 
         by_component.setdefault(item.component_index, []).append(item.score)
     assert len(by_component) == expected_components
     for scores in by_component.values():
-        assert len(scores) == 216
+        assert len(scores) == CELLS_PER_PAIR
         assert sum(scores) == pytest.approx(0.0, abs=1e-9)
 
     # Instruction and assistant no longer appear as Bradley-Terry axes.

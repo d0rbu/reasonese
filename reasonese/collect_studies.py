@@ -49,8 +49,7 @@ def suite_collection_tasks(
     if len(names) != len(set(names)):
         raise ValueError("study fingerprints must be distinct")
     return tuple(
-        CollectionTask(study, output_dir / name)
-        for study, name in zip(studies, names, strict=True)
+        CollectionTask(study, output_dir / name) for study, name in zip(studies, names, strict=True)
     )
 
 
@@ -76,7 +75,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             studies = load_study_suite(args.suite)
             tasks = suite_collection_tasks(studies, args.output)
             study_paths = tuple(args.suite for _ in studies)
-        routing.announce(tuple(spec.author for task in tasks for spec in task.study.inputs), tuple(task.study.assistant for task in tasks), prefer_batch=not args.no_batch)
+        routing.announce(
+            tuple(spec.author for task in tasks for spec in task.study.inputs),
+            tuple(task.study.assistant for task in tasks),
+            prefer_batch=not args.no_batch,
+        )
         api_key = os.environ.get("OPENROUTER_API_KEY")
         client = OpenRouterClient(RequestsTransport(api_key)) if api_key is not None else None
         results = collect_studies(

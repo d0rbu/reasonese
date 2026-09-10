@@ -4,7 +4,14 @@ from pathlib import Path
 
 import pytest
 
-from reasonese.axes import Assistant, Author, Channel, Framing, Instruction
+from reasonese.axes import (
+    Assistant,
+    Author,
+    Channel,
+    Framing,
+    Instruction,
+    author_framings,
+)
 from reasonese.conversation import GeneratedMessage, GeneratedText, construct_conversation
 from reasonese.manual_messages import ManualMessageLibrary
 from reasonese.matchup import make_matchup
@@ -30,7 +37,7 @@ def _write_instruction(
     directory.mkdir(parents=True)
     (directory / "instruction.txt").write_text(instruction)
     variants = variants or {}
-    for framing in Framing:
+    for framing in author_framings(Author.USER):
         (directory / f"{framing}.txt").write_text(
             variants.get(framing, f"manual {framing} version")
         )
@@ -78,8 +85,10 @@ def test_manual_library_validates_root_complete_trees_and_unique_sources(tmp_pat
     directory = incomplete / "task"
     directory.mkdir(parents=True)
     (directory / "instruction.txt").write_text("Do the task.")
-    with pytest.raises(ValueError, match="is missing"):
+    with pytest.raises(ValueError, match="is missing") as missing:
         ManualMessageLibrary(incomplete).message_for(_spec())
+    assert "casual.txt" in str(missing.value)
+    assert "subagent.txt" not in str(missing.value)
 
     duplicate = tmp_path / "duplicate"
     _write_instruction(duplicate, "first")
@@ -138,8 +147,9 @@ def test_repository_contains_placeholder_tree_for_every_example_instruction() ->
     root = Path("prompts/user")
     directories = tuple(path for path in root.iterdir() if path.is_dir())
     assert len(directories) == 4
-    expected = {"instruction.txt", *(f"{framing}.txt" for framing in Framing)}
+    manual_framings = author_framings(Author.USER)
+    expected = {"instruction.txt", *(f"{framing}.txt" for framing in manual_framings)}
     for directory in directories:
         assert {path.name for path in directory.iterdir() if path.is_file()} == expected
-        for framing in Framing:
+        for framing in manual_framings:
             assert (directory / f"{framing}.txt").read_text().startswith("TODO:")

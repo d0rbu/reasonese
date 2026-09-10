@@ -11,7 +11,7 @@ uv run reasonese-plan \
 ```
 
 The first utility prints the canonical definitions. The second validates the 24 instruction
-pairs and writes 5,184 prompt specifications: 108 for each of the 48 instructions.
+pairs and writes 4,752 prompt specifications: 99 for each of the 48 instructions.
 
 Inspect a few records with:
 

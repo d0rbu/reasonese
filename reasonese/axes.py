@@ -47,6 +47,17 @@ class Author(StrEnum):
     GEMMA_4_31B_IT = "Gemma 4 31B"
 
 
+MANUAL_FRAMINGS: tuple[Framing, ...] = (Framing.NORMAL, Framing.CASUAL, Framing.PERSUASIVE)
+
+
+@beartype
+def author_framings(author: Author) -> tuple[Framing, ...]:
+    """Return the framings an author writes; the user writes only the manual framings."""
+    if author is Author.USER:
+        return MANUAL_FRAMINGS
+    return tuple(Framing)
+
+
 class Assistant(StrEnum):
     """The model that receives the generated conversation."""
 

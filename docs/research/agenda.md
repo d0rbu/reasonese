@@ -67,7 +67,7 @@ free routes are development-only and pooling is inappropriate. Do not combine du
 from independent runs into one analysis file; analyze the matched runs separately.
 
 With the current 24-pair bank, six authors (including user), and five assistants, exhaustive
-collection is 1,555,200 trials at one rollout per ordering. The unchanged 720-pairing sampled
-default is 172,800 trials, versus 138,240 with four assistants. Mean degree is now 6.67 rather than
-8; 864 pairings would maintain degree 8, but this issue does not change the pilot default. These
+collection is 1,306,800 trials at one rollout per ordering. The unchanged 720-pairing sampled
+default is 172,800 trials, versus 138,240 with four assistants. Mean degree is now 7.27 rather than
+8.89 on main before Gemma; 792 pairings would give degree 8, but this issue does not change the pilot default. These
 are design counts, not cost estimates or evidence that any provider can serve the full pilot.
