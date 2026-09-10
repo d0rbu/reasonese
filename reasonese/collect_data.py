@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,9 +33,15 @@ from reasonese.judging import (
 from reasonese.manual_messages import ManualMessageLibrary, ManualMessageSnapshot
 from reasonese.message_qa_cache import YamlMessageQaCache
 from reasonese.observations import Observation, observations_from_trials, write_observations
-from reasonese.openrouter import OpenRouterClient, RequestsTransport, model_route
+from reasonese.openrouter import OpenRouterClient, RequestsTransport, select_route
 from reasonese.planning import PromptSpec
-from reasonese.runner import AssistantRunGroup, materialize_specs, run_assistant_groups
+from reasonese.routing import CollectionRouting, add_route_arguments, routing_from_arguments
+from reasonese.runner import (
+    AssistantRunGroup,
+    materialize_specs,
+    record_cached_authors,
+    run_assistant_groups,
+)
 from reasonese.study import Study, Trial, TrialId, build_trials, study_to_dict
 from reasonese.study_cache import SqliteStudyCache
 
@@ -131,9 +138,11 @@ def collect_studies(
     qa_cache: YamlMessageQaCache,
     *,
     prefer_batch: bool,
+    routing: CollectionRouting | None = None,
     shared_cache: SqliteStudyCache | None = None,
 ) -> tuple[CollectionResult, ...]:
     """Collect studies together, batching independent provider work across task boundaries."""
+    routing = routing or CollectionRouting()
     if not tasks:
         raise ValueError("at least one collection task is required")
     output_dirs = tuple(task.output_dir for task in tasks)
@@ -176,8 +185,13 @@ def collect_studies(
             spec for state in states if state.missing_trials for spec in state.task.study.inputs
         )
     )
+    for state in states:
+        for trace in state.traces.values():
+            routing.record("assistant", state.task.study.assistant, "cache", trace.trace.provenance, trace.trace.response)
+    record_cached_authors(tuple(trace.trace for state in states for trace in state.traces.values()), message_cache, routing)
     materialized_by_spec: dict[PromptSpec, GeneratedMessage] = {}
     if specs_to_materialize:
+        routing.require_paid("uncached assistant work (chargeable web search), including required message QA")
         if client is None:
             raise ValueError("OPENROUTER_API_KEY is required for uncached conversation trials")
         materialized_by_spec = {
@@ -188,6 +202,7 @@ def collect_studies(
                 message_cache,
                 manual_snapshot,
                 prefer_batch=prefer_batch,
+                routing=routing,
             )
         }
 
@@ -205,6 +220,7 @@ def collect_studies(
             tuple(message for messages in generated_by_state for message in messages),
             qa_cache,
             client,
+            routing=routing,
         )
     )
 
@@ -233,7 +249,7 @@ def collect_studies(
         trace_groups = run_assistant_groups(
             tuple(
                 AssistantRunGroup(
-                    model_route(assistant),
+                    select_route(assistant, routing.preference),
                     tuple(setup for _, _, setup in work),
                 )
                 for assistant, work in ordered_work
@@ -244,6 +260,7 @@ def collect_studies(
             fingerprinted_traces = fingerprint_traces(new_traces)
             for (state, trial, _), trace in zip(work, fingerprinted_traces, strict=True):
                 state.traces[str(trial.trial_id)] = trace
+                routing.record("assistant", trial.matchup.assistant, "new", trace.trace.provenance, trace.trace.response)
         if shared_cache is None:
             for state in states:
                 state.cache.put_traces(
@@ -286,6 +303,8 @@ def collect_studies(
                 state.judgment_hits += 1
 
     if missing_judgments:
+        print(f"{len(missing_judgments)} uncached judgments (including any changed trace fingerprints)", file=sys.stderr)
+        routing.require_paid(f"{len(missing_judgments)} uncached judgments")
         if client is None:
             raise ValueError("OPENROUTER_API_KEY is required for uncached judgments")
         new_judgments = judge_fingerprinted_traces(
@@ -336,6 +355,7 @@ def collect_study(
     manual_messages: ManualMessageLibrary,
     *,
     prefer_batch: bool,
+    routing: CollectionRouting | None = None,
 ) -> CollectionResult:
     """Collect or resume every permutation and rollout in one study."""
     return collect_studies(
@@ -345,6 +365,7 @@ def collect_study(
         YamlMessageCache(output_dir / "generated_messages.yaml"),
         YamlMessageQaCache(output_dir / "message_qa.yaml"),
         prefer_batch=prefer_batch,
+        routing=routing,
     )[0]
 
 
@@ -356,10 +377,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--user-messages", type=Path, default=Path("prompts/user"))
     parser.add_argument("--no-batch", action="store_true")
+    add_route_arguments(parser)
     args = parser.parse_args(argv)
 
     try:
+        routing = routing_from_arguments(args)
         study = load_study(args.study)
+        routing.announce(tuple(spec.author for spec in study.inputs), (study.assistant,), prefer_batch=not args.no_batch)
         api_key = os.environ.get("OPENROUTER_API_KEY")
         client = OpenRouterClient(RequestsTransport(api_key)) if api_key is not None else None
         result = collect_study(
@@ -368,6 +392,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             client,
             ManualMessageLibrary(args.user_messages),
             prefer_batch=not args.no_batch,
+            routing=routing,
         )
     except (OSError, RuntimeError, TimeoutError, TypeError, ValueError) as error:
         parser.error(str(error))
@@ -375,6 +400,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(
         json.dumps(
             {
+                "routes": routing.summary(),
                 "cells": len(study.inputs),
                 "judgment_cache_hits": int(result.judgment_cache_hits),
                 "observations": len(result.observations),

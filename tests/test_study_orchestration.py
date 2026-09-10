@@ -45,8 +45,9 @@ from reasonese.observations import (
     observations_from_trials,
     write_observations,
 )
-from reasonese.openrouter import JsonObject, OpenRouterClient
+from reasonese.openrouter import JsonObject, OpenRouterClient, RoutePreference
 from reasonese.planning import PromptSpec
+from reasonese.routing import CollectionRouting
 from reasonese.study import (
     Cell,
     PositiveInteger,
@@ -579,9 +580,9 @@ def test_collect_study_batches_trials_and_judgments_then_resumes_without_a_key(
         output,
         OpenRouterClient(transport),
         manual,
-        prefer_batch=True,
+        routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True,
     )
-    warm = collect_study(study, output, None, manual, prefer_batch=True)
+    warm = collect_study(study, output, None, manual, routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True)
 
     assert len(cold.trials) == 4
     assert len(cold.observations) == 8
@@ -613,7 +614,7 @@ def test_collect_study_batches_trials_and_judgments_then_resumes_without_a_key(
     first_directory = next(directory for directory in manual.root.iterdir() if directory.is_dir())
     (first_directory / "normal.txt").write_text("Changed manual instruction.")
     with pytest.raises(ValueError, match="conversation trials"):
-        collect_study(study, output, None, manual, prefer_batch=True)
+        collect_study(study, output, None, manual, routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True)
 
 
 def test_collect_study_preserves_distinct_verdicts_for_identical_rollout_traces(
@@ -636,9 +637,9 @@ def test_collect_study_preserves_distinct_verdicts_for_identical_rollout_traces(
         output,
         OpenRouterClient(transport),
         manual,
-        prefer_batch=True,
+        routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True,
     )
-    warm = collect_study(study, output, None, manual, prefer_batch=True)
+    warm = collect_study(study, output, None, manual, routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True)
 
     assert warm.observations == cold.observations
     assert [observation.completed for observation in warm.observations] == [
@@ -683,7 +684,7 @@ def test_collect_studies_batches_across_tasks_and_matches_independent_outcomes(
         manual,
         YamlMessageCache(tmp_path / "suite" / "generated_messages.yaml"),
         YamlMessageQaCache(tmp_path / "suite" / "message_qa.yaml"),
-        prefer_batch=True,
+        routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True,
     )
 
     independent_results = tuple(
@@ -700,7 +701,7 @@ def test_collect_studies_batches_across_tasks_and_matches_independent_outcomes(
                 )
             ),
             manual,
-            prefer_batch=True,
+            routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True,
         )
         for index, study in enumerate(studies, start=1)
     )
@@ -732,7 +733,7 @@ def test_collect_studies_batches_across_tasks_and_matches_independent_outcomes(
         manual,
         YamlMessageCache(tmp_path / "suite" / "generated_messages.yaml"),
         YamlMessageQaCache(tmp_path / "suite" / "message_qa.yaml"),
-        prefer_batch=True,
+        routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True,
     )
     assert [result.observations for result in warm_results] == [
         result.observations for result in suite_results
@@ -758,7 +759,7 @@ def test_collect_studies_batches_across_tasks_and_matches_independent_outcomes(
         manual,
         YamlMessageCache(tmp_path / "shared" / "generated_messages.yaml"),
         YamlMessageQaCache(tmp_path / "shared" / "message_qa.yaml"),
-        prefer_batch=True,
+        routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True,
         shared_cache=shared_cache,
     )
     shared_warm = collect_studies(
@@ -767,7 +768,7 @@ def test_collect_studies_batches_across_tasks_and_matches_independent_outcomes(
         manual,
         YamlMessageCache(tmp_path / "shared" / "generated_messages.yaml"),
         YamlMessageQaCache(tmp_path / "shared" / "message_qa.yaml"),
-        prefer_batch=True,
+        routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True,
         shared_cache=shared_cache,
     )
 
@@ -823,7 +824,7 @@ def test_collect_studies_runs_mixed_assistant_models_through_sync_requests(
         _manual_library(tmp_path, first, second),
         YamlMessageCache(tmp_path / "mixed" / "generated_messages.yaml"),
         YamlMessageQaCache(tmp_path / "mixed" / "message_qa.yaml"),
-        prefer_batch=True,
+        routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True,
     )
 
     assert [len(result.observations) for result in results] == [4, 4]
@@ -856,7 +857,7 @@ def test_collect_study_runs_each_active_tool_round(tmp_path: Path) -> None:
         tmp_path / "tool-collection",
         OpenRouterClient(transport, sync_workers=1),
         _manual_library(tmp_path, study),
-        prefer_batch=True,
+        routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True,
     )
 
     cached_by_trial = SqliteStudyCache(
@@ -878,7 +879,7 @@ def test_collect_study_requires_key_only_for_missing_work(tmp_path: Path) -> Non
     study = _study()
     manual = _manual_library(tmp_path, study)
     with pytest.raises(ValueError, match="conversation trials"):
-        collect_study(study, tmp_path / "empty", None, manual, prefer_batch=True)
+        collect_study(study, tmp_path / "empty", None, manual, routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True)
 
     output = tmp_path / "traces-only"
     trials = build_trials(study)
@@ -901,7 +902,7 @@ def test_collect_study_requires_key_only_for_missing_work(tmp_path: Path) -> Non
         )
     )
     with pytest.raises(ValueError, match="uncached judgments"):
-        collect_study(study, output, None, manual, prefer_batch=True)
+        collect_study(study, output, None, manual, routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True)
 
 
 def _write_study(path: Path, study: Study) -> None:
@@ -935,10 +936,10 @@ def test_collect_data_cli_runs_then_reports_warm_cache(
         str(manual.root),
     ]
 
-    assert collect_data(args) == 0
+    assert collect_data(["--allow-paid", "--route", "paid", *args]) == 0
     cold = json.loads(capsys.readouterr().out)
     monkeypatch.delenv("OPENROUTER_API_KEY")
-    assert collect_data(args) == 0
+    assert collect_data(["--allow-paid", "--route", "paid", *args]) == 0
     warm = json.loads(capsys.readouterr().out)
 
     assert cold["trials"] == 2
@@ -985,10 +986,10 @@ def test_collect_studies_cli_batches_tasks_then_reports_warm_cache(
         str(manual.root),
     ]
 
-    assert collect_studies_cli(args) == 0
+    assert collect_studies_cli(["--allow-paid", "--route", "paid", *args]) == 0
     cold = json.loads(capsys.readouterr().out)
     monkeypatch.delenv("OPENROUTER_API_KEY")
-    assert collect_studies_cli(args) == 0
+    assert collect_studies_cli(["--allow-paid", "--route", "paid", *args]) == 0
     warm = json.loads(capsys.readouterr().out)
 
     assert cold["trials"] == 4
@@ -1067,6 +1068,9 @@ def test_collect_studies_cli_accepts_suite_and_writes_combined_observations(
     assert (
         collect_studies_cli(
             [
+                "--allow-paid",
+                "--route",
+                "paid",
                 "--suite",
                 str(suite_path),
                 "--output",
@@ -1095,6 +1099,9 @@ def test_collect_studies_cli_accepts_suite_and_writes_combined_observations(
     assert (
         collect_studies_cli(
             [
+                "--allow-paid",
+                "--route",
+                "paid",
                 "--suite",
                 str(suite_path),
                 "--output",
@@ -1158,7 +1165,7 @@ def test_collect_studies_requires_distinct_tasks(tmp_path: Path) -> None:
     message_cache = YamlMessageCache(tmp_path / "messages.yaml")
     qa_cache = YamlMessageQaCache(tmp_path / "qa.yaml")
     with pytest.raises(ValueError, match="at least one"):
-        collect_studies((), None, manual, message_cache, qa_cache, prefer_batch=True)
+        collect_studies((), None, manual, message_cache, qa_cache, routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True)
     with pytest.raises(ValueError, match="output directories"):
         collect_studies(
             (
@@ -1176,7 +1183,7 @@ def test_collect_studies_requires_distinct_tasks(tmp_path: Path) -> None:
             manual,
             message_cache,
             qa_cache,
-            prefer_batch=True,
+            routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True,
         )
     with pytest.raises(ValueError, match="studies"):
         collect_studies(
@@ -1188,7 +1195,7 @@ def test_collect_studies_requires_distinct_tasks(tmp_path: Path) -> None:
             manual,
             message_cache,
             qa_cache,
-            prefer_batch=True,
+            routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True,
         )
 
 
@@ -1214,7 +1221,7 @@ def test_collect_studies_rejects_duplicate_trial_identifiers(
             _manual_library(tmp_path, first, second),
             YamlMessageCache(tmp_path / "messages.yaml"),
             YamlMessageQaCache(tmp_path / "qa.yaml"),
-            prefer_batch=True,
+            routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True,
             shared_cache=SqliteStudyCache(tmp_path / "collection.sqlite3"),
         )
 

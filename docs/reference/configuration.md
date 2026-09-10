@@ -111,3 +111,42 @@ Every study is validated by the ordinary two-input contract. Suite entries must 
 The same selected input pairs appear for every requested assistant, enabling assistant-specific
 analyses over matched comparison designs. Use `reasonese-collect-studies --suite PATH` to collect
 the suite; fingerprint-named output directories avoid dependence on thousands of filenames.
+
+## Collection route selection and paid work
+
+All three collection commands (`reasonese-run-conversation`, `reasonese-collect-data`, and
+`reasonese-collect-studies`) accept `--route {free,paid,batch}` and `--allow-paid`. Routing is
+invocation configuration, never part of the study YAML or a treatment axis.
+
+| Preference | Model authors | Assistants |
+|---|---|---|
+| `free` (default) | Registered `:free` slug synchronously; otherwise paid synchronous fallback | Same |
+| `paid` | Paid synchronous slug | Paid synchronous slug |
+| `batch` | Batch API where registered and compatible; otherwise paid synchronous fallback | Paid synchronous slug under the existing web-search harness |
+
+Inkling, Inkling Small, and Gemma 4 31B have registered free routes; both Qwen models lack one.
+A failed free request never triggers a paid retry. `--no-batch` keeps authoring synchronous and
+cannot be combined with `--route batch`. Neither option changes the fixed Luna QA or response
+judge routes or their batching. Batch requests use the unsuffixed model slug on the Batch API,
+not a `:batch` slug sent to the synchronous endpoint.
+
+**No uncached chargeable collection work is allowed without `--allow-paid`.** This includes
+paid authoring, message QA, response judgments, and assistant requests that expose chargeable
+server-side web search. Thus even a cold collection using free model routes needs this opt-in:
+free token pricing is not free end-to-end collection. The harness does not remove tools or skip
+QA to avoid charges. Missing assistant work is rejected before authoring starts. A completely
+warm cache still runs without an API key or paid permission; missing QA or judgments require it.
+Standalone curation, message-checking, and response-judging commands retain their existing
+explicit paid-provider behavior; this flag governs the three collection commands.
+
+Before collection, stderr lists routes selected for missing work and the paid services involved.
+The final JSON summary's `routes` lists author-message and assistant-trial counts by source,
+requested slug, transport, and provider-reported final model. A cache hit retains its original
+route regardless of the new preference; null provenance means the historical request is unknown.
+Author counts refer to distinct materialized messages per pass, not token usage or billed requests;
+assistant counts refer to trials, not the number of tool continuations. Mixed partial resumes
+can report the same author in both cached and materialized groups.
+
+The planner accepts repeated `--author` and the sampler accepts repeated `--author` and
+`--assistant` filters, including `Gemma 4 31B`. Duplicate values are rejected. Filtering preserves
+existing specification order; the planner summary counts only selected conditions.

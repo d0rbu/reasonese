@@ -12,7 +12,7 @@ from phantom import Phantom
 
 from reasonese.axes import Assistant, Channel, Framing, is_non_empty_trimmed
 from reasonese.matchup import Matchup
-from reasonese.openrouter import JsonObject
+from reasonese.openrouter import JsonObject, RouteProvenance
 from reasonese.planning import PromptSpec
 
 
@@ -63,6 +63,7 @@ class GeneratedMessage:
     spec: PromptSpec
     content: GeneratedText
     response: JsonObject | None
+    provenance: RouteProvenance | None = None
 
 
 @beartype
@@ -216,6 +217,7 @@ class ConversationTrace:
     setup: ConversationSetup
     response: JsonObject
     tool_steps: tuple[ToolStep, ...] = ()
+    provenance: RouteProvenance | None = None
 
 
 _CHANNEL_CONTEXT = {
@@ -302,6 +304,7 @@ def _readme_call_id(
             Assistant.QWEN3_8_FLASH
             | Assistant.INKLING
             | Assistant.INKLING_SMALL
+            | Assistant.GEMMA_4_31B_IT
         ):
             return ToolCallId.parse(f"call_{digest[:24]}")
         case _:

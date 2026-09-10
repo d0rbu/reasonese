@@ -21,6 +21,7 @@ def test_axis_values_are_their_display_strings() -> None:
         "Qwen3.8 2.4T",
         "Inkling",
         "Inkling Small",
+        "Gemma 4 31B",
     ]
 
 

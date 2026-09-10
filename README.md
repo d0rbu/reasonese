@@ -16,13 +16,13 @@ its exact datapoint authoring instructions before assistant inference.
 |---|---|
 | framing | `normal`, `casual`, `persuasive`, `subagent`, `reasonese-normal`, `reasonese-persuasive` |
 | channel | `system prompt`, `user message`, `README.md` |
-| author | `user`, `Qwen3.8 Flash`, `Qwen3.8 2.4T`, `Inkling`, `Inkling Small` |
+| author | `user`, `Qwen3.8 Flash`, `Qwen3.8 2.4T`, `Inkling`, `Inkling Small`, `Gemma 4 31B` |
 
 Framing and author are independent. “Normal” is the author's default rendering in clear
 prose. A `user`-authored input is treated as already written and used verbatim; model authors
 rewrite the base instruction according to the selected framing.
 
-Six framings, three channels, and five authors produce `6 × 3 × 5 = 90` specifications per
+Six framings, three channels, and six authors produce `6 × 3 × 6 = 108` specifications per
 base instruction. A specification is just a four-field dataclass containing those axes.
 
 Instruction is not a treatment axis. Instructions come in 24 mutually exclusive pairs, and a
@@ -52,7 +52,7 @@ uv run reasonese-sample-studies \
 export OPENROUTER_API_KEY=...
 uv run reasonese-curate-instructions --output out/instructions
 
-uv run reasonese-run-conversation \
+uv run reasonese-run-conversation --allow-paid \
   --matchup configs/example_matchup.yaml \
   --user-messages prompts/user \
   --message-cache out/generated_messages.yaml \
@@ -67,12 +67,12 @@ uv run reasonese-judge-responses \
   --trace-cache out/conversation_traces.yaml \
   --judgment-cache out/judgments.yaml
 
-uv run reasonese-collect-data \
+uv run reasonese-collect-data --allow-paid \
   --study configs/example_study.yaml \
   --user-messages prompts/user \
   --output out/example-study
 
-uv run reasonese-collect-studies \
+uv run reasonese-collect-studies --allow-paid \
   --suite out/example/studies.yaml \
   --user-messages prompts/user \
   --output out/example-suite
@@ -88,8 +88,8 @@ The utilities have separate entry points. `reasonese-axes` prints the values and
 generates any missing model-authored messages, constructs the ordered conversation, and sends
 it to the selected assistant with file-read, sandboxed bash, sandboxed Python, and web-search
 tools. It submits independent model-author batch jobs before polling them together, so one
-author model's queue does not block another author's submission. `--no-batch` forces
-synchronous authoring requests. Bash and Python execution require `bubblewrap` (`bwrap`) on the
+author model's queue does not block another author's submission. `--route batch --allow-paid` selects batch authoring where available; the default prefers
+free synchronous routes. `--no-batch` keeps authoring synchronous and conflicts with `--route batch`. Bash and Python execution require `bubblewrap` (`bwrap`) on the
 host.
 
 A matchup contains one assistant plus an ordered pair of inputs, at least one of which must use
@@ -171,9 +171,9 @@ replaces exactly `components - 1` redundant cycle edges, the minimum possible re
 same-stratum replacements. Seeds derive from the pair id, so reordering the bank does not change
 any design.
 
-With all axes enabled, each of the 24 pairs has 180 cells and 4,500 eligible pairings, for
-108,000 eligible pairings per assistant. The minimum connected design uses 179 pairings per pair.
-The pilot default of 720 gives every cell an average degree of 8.
+With all axes enabled, each of the 24 pairs has 216 cells and 6,480 eligible pairings, for
+155,520 eligible pairings per assistant. The minimum connected design uses 215 pairings per pair.
+The pilot default of 720 gives every cell an average degree of 6.67 (864 would preserve degree 8).
 
 Connectivity is required within a pair and is impossible between pairs, so the comparison graph
 has exactly one component per `(pair, assistant)`.

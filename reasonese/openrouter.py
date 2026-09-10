@@ -6,6 +6,7 @@ import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
+from enum import StrEnum
 from threading import get_ident, local
 from typing import Any, Protocol, cast, runtime_checkable
 
@@ -47,6 +48,69 @@ class ModelRoute:
 
     model_id: OpenRouterModelId
     batch_model_id: OpenRouterModelId | None
+    free_model_id: OpenRouterModelId | None = None
+
+
+class RoutePreference(StrEnum):
+    """Collection routing preferences; never experimental coordinates."""
+
+    FREE = "free"
+    PAID = "paid"
+    BATCH = "batch"
+
+
+class CompletionTransport(StrEnum):
+    SYNC = "sync"
+    BATCH = "batch"
+
+
+@beartype
+@dataclass(frozen=True, slots=True)
+class RouteProvenance:
+    """The actual requested slug and endpoint kind, independently of response metadata."""
+
+    requested_model_id: OpenRouterModelId
+    transport: CompletionTransport
+
+    def to_dict(self) -> dict[str, str]:
+        return {"requested_model_id": str(self.requested_model_id), "transport": str(self.transport)}
+
+
+def provenance_from_dict(raw: object) -> RouteProvenance | None:
+    if raw is None:
+        return None
+    if not isinstance(raw, dict) or set(raw) != {"requested_model_id", "transport"}:
+        raise ValueError("route provenance has invalid fields")
+    data = cast(JsonObject, raw)
+    return RouteProvenance(
+        OpenRouterModelId.parse(data["requested_model_id"]), CompletionTransport(data["transport"])
+    )
+
+
+@beartype
+def canonical_model_id(slug: str) -> str:
+    """Remove exactly one recognized terminal route suffix; preserve everything else."""
+    for suffix in (":free", ":batch"):
+        if slug.endswith(suffix):
+            return slug[:-len(suffix)]
+    return slug
+
+
+def fingerprint_response(response: JsonObject) -> JsonObject:
+    """Project provider metadata for hashing without changing the stored payload."""
+    model = response.get("model")
+    return {**response, "model": canonical_model_id(model)} if isinstance(model, str) else response
+
+
+def completion_provenance(
+    route: ModelRoute, bodies: tuple[JsonObject, ...], *, prefer_batch: bool
+) -> RouteProvenance:
+    batch = prefer_batch and route.batch_model_id is not None and all(
+        _batch_compatible(body) for body in bodies
+    )
+    return RouteProvenance(
+        route.model_id, CompletionTransport.BATCH if batch else CompletionTransport.SYNC
+    )
 
 
 @beartype
@@ -77,10 +141,17 @@ _MODEL_ROUTES: dict[Author, ModelRoute] = {
     Author.INKLING: ModelRoute(
         OpenRouterModelId.parse("thinkingmachines/inkling"),
         OpenRouterModelId.parse("thinkingmachines/inkling:batch"),
+        OpenRouterModelId.parse("thinkingmachines/inkling:free"),
     ),
     Author.INKLING_SMALL: ModelRoute(
         OpenRouterModelId.parse("thinkingmachines/inkling-small"),
         OpenRouterModelId.parse("thinkingmachines/inkling-small:batch"),
+        OpenRouterModelId.parse("thinkingmachines/inkling-small:free"),
+    ),
+    Author.GEMMA_4_31B_IT: ModelRoute(
+        OpenRouterModelId.parse("google/gemma-4-31b-it"),
+        OpenRouterModelId.parse("google/gemma-4-31b-it:batch"),
+        OpenRouterModelId.parse("google/gemma-4-31b-it:free"),
     ),
 }
 
@@ -92,6 +163,17 @@ def model_route(model: Author | Assistant) -> ModelRoute:
     if author is Author.USER:
         raise ValueError("the user author does not have an OpenRouter model")
     return _MODEL_ROUTES[author]
+
+
+@beartype
+def select_route(model: Author | Assistant, preference: RoutePreference) -> ModelRoute:
+    """Resolve a preference before execution; never retry a failed free call as paid."""
+    route = model_route(model)
+    if preference is RoutePreference.FREE and route.free_model_id is not None:
+        return ModelRoute(route.free_model_id, None)
+    if preference is RoutePreference.BATCH:
+        return route
+    return ModelRoute(route.model_id, None)
 
 
 @runtime_checkable
@@ -236,9 +318,8 @@ class OpenRouterClient:
             if not group.bodies:
                 results[index] = ()
             elif (
-                prefer_batch
-                and group.route.batch_model_id is not None
-                and all(_batch_compatible(body) for body in group.bodies)
+                completion_provenance(group.route, group.bodies, prefer_batch=prefer_batch).transport
+                is CompletionTransport.BATCH
             ):
                 pending.append((index, self._submit_batch(group.route.model_id, group.bodies)))
 

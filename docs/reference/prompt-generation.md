@@ -116,3 +116,8 @@ The briefs are explicit operational definitions, not a claim that model-authored
 faithful sample of a model's latent language. The QA model is a fallible audit rather than a proof
 of semantic equivalence. There is not yet a bank of few-shot examples or live evidence that these
 exact briefs outperform alternatives.
+
+Gemma 4 31B uses the same deterministic `call_` plus 24-hexadecimal-character README call ID
+convention. This is a harness choice covered offline; live provider acceptance has not been
+verified. Free routes use the same prompts, tool definitions, and transcript construction as
+paid routes. Token pricing alone does not make this tool-enabled harness free to execute.

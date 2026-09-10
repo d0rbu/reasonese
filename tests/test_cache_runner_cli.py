@@ -23,8 +23,15 @@ from reasonese.conversation import (
 from reasonese.manual_messages import ManualMessageLibrary
 from reasonese.matchup import Matchup, make_matchup, matchup_to_dict
 from reasonese.message_qa_cache import YamlMessageQaCache
-from reasonese.openrouter import JsonObject, ModelRoute, OpenRouterClient, OpenRouterModelId
+from reasonese.openrouter import (
+    JsonObject,
+    ModelRoute,
+    OpenRouterClient,
+    OpenRouterModelId,
+    RoutePreference,
+)
 from reasonese.planning import PromptSpec
+from reasonese.routing import CollectionRouting
 from reasonese.run_conversation import main as run_conversation
 from reasonese.runner import (
     AssistantRunGroup,
@@ -424,7 +431,7 @@ def test_materialize_messages_deduplicates_repeated_inputs(
         OpenRouterClient(transport),
         cache,
         _manual_library(tmp_path, matchup.inputs),
-        prefer_batch=False,
+        routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=False,
     )
 
     assert [str(message.content) for message in messages] == [
@@ -450,7 +457,7 @@ def test_materialize_messages_uses_a_warm_cache_without_requests(tmp_path: Path)
             OpenRouterClient(FakeTransport([])),
             cache,
             _manual_library(tmp_path, matchup.inputs),
-            prefer_batch=True,
+            routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True,
         )
         == cached
     )
@@ -477,7 +484,7 @@ def test_run_matchup_executes_once_preserves_reasoning_and_then_hits_cache(
         trace_cache,
         qa_cache,
         manual,
-        prefer_batch=True,
+        routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True,
     )
     second = run_matchup(
         matchup,
@@ -486,7 +493,7 @@ def test_run_matchup_executes_once_preserves_reasoning_and_then_hits_cache(
         trace_cache,
         qa_cache,
         manual,
-        prefer_batch=True,
+        routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True,
     )
 
     assert first.cache_hit is False
@@ -524,7 +531,7 @@ def test_editing_a_manual_variant_invalidates_message_and_trace_caches(tmp_path:
         trace_cache,
         qa_cache,
         manual,
-        prefer_batch=False,
+        routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=False,
     )
     system_directory = next(
         directory
@@ -539,7 +546,7 @@ def test_editing_a_manual_variant_invalidates_message_and_trace_caches(tmp_path:
         trace_cache,
         qa_cache,
         manual,
-        prefer_batch=False,
+        routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=False,
     )
 
     assert first.cache_hit is False
@@ -566,7 +573,7 @@ def test_run_matchup_executes_local_tool_calls_and_preserves_every_step(tmp_path
         YamlTraceCache(tmp_path / "traces.yaml"),
         YamlMessageQaCache(tmp_path / "message-qa.yaml"),
         _manual_library(tmp_path, matchup.inputs),
-        prefer_batch=False,
+        routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=False,
     )
 
     assert result.trace.response == _chat("final answer")
@@ -872,7 +879,7 @@ def test_run_matchup_fails_when_assistant_exceeds_local_tool_step_limit(
             YamlTraceCache(tmp_path / "traces.yaml"),
             YamlMessageQaCache(tmp_path / "message-qa.yaml"),
             _manual_library(tmp_path, matchup.inputs),
-            prefer_batch=False,
+            routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=False,
         )
 
 
@@ -889,7 +896,7 @@ def test_run_matchup_stops_before_assistant_when_message_qa_fails(tmp_path: Path
             trace_cache,
             YamlMessageQaCache(tmp_path / "message-qa.yaml"),
             _manual_library(tmp_path, matchup.inputs),
-            prefer_batch=False,
+            routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=False,
         )
 
     assert trace_cache.get(matchup) is None
@@ -941,10 +948,10 @@ def test_run_conversation_cli_executes_and_warm_cache_needs_no_key(
         "--no-batch",
     ]
 
-    assert run_conversation(args) == 0
+    assert run_conversation(["--allow-paid", "--route", "paid", *args]) == 0
     cold_summary = json.loads(capsys.readouterr().out)
     monkeypatch.delenv("OPENROUTER_API_KEY")
-    assert run_conversation(args) == 0
+    assert run_conversation(["--allow-paid", "--route", "paid", *args]) == 0
     warm_summary = json.loads(capsys.readouterr().out)
 
     assert cold_summary["cache_hit"] is False

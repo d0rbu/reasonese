@@ -17,6 +17,7 @@ from reasonese.manual_messages import ManualMessageLibrary
 from reasonese.message_qa_cache import YamlMessageQaCache
 from reasonese.observations import write_observations
 from reasonese.openrouter import OpenRouterClient, RequestsTransport
+from reasonese.routing import add_route_arguments, routing_from_arguments
 from reasonese.study import Study, study_fingerprint
 from reasonese.study_cache import SqliteStudyCache
 
@@ -63,9 +64,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--user-messages", type=Path, default=Path("prompts/user"))
     parser.add_argument("--no-batch", action="store_true")
+    add_route_arguments(parser)
     args = parser.parse_args(argv)
 
     try:
+        routing = routing_from_arguments(args)
         if args.suite is None:
             study_paths = tuple(args.study)
             tasks = collection_tasks(study_paths, args.output)
@@ -73,6 +76,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             studies = load_study_suite(args.suite)
             tasks = suite_collection_tasks(studies, args.output)
             study_paths = tuple(args.suite for _ in studies)
+        routing.announce(tuple(spec.author for task in tasks for spec in task.study.inputs), tuple(task.study.assistant for task in tasks), prefer_batch=not args.no_batch)
         api_key = os.environ.get("OPENROUTER_API_KEY")
         client = OpenRouterClient(RequestsTransport(api_key)) if api_key is not None else None
         results = collect_studies(
@@ -82,6 +86,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             YamlMessageCache(args.output / "generated_messages.yaml"),
             YamlMessageQaCache(args.output / "message_qa.yaml"),
             prefer_batch=not args.no_batch,
+            routing=routing,
             shared_cache=(
                 SqliteStudyCache(args.output / "collection.sqlite3")
                 if args.suite is not None
@@ -109,6 +114,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         for path, task, result in zip(study_paths, tasks, results, strict=True)
     ]
     summary = {
+        "routes": routing.summary(),
         "observations": sum(item["observations"] for item in study_summaries),
         "output": str(args.output),
         "studies": study_summaries,

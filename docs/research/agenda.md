@@ -54,3 +54,20 @@ margin.
   the eligible pairing population?
 
 Those questions should be resolved before interpreting future model behavior.
+
+## Free-route interpretation and pilot size
+
+Free and paid routes share canonical cell identity, but their configurations and behavior are not
+verified equivalent. Before reporting pooled results, compare completion rates on matched cells
+with separately authorized free/paid collections; retain failures as well as successful trials.
+Use separate output/cache directories or cache reuse can prevent the second route from running.
+Comparing author routes requires independently generated author messages; comparing assistant
+routes can hold the authored text fixed. The comparison itself is deferred. If behavior differs,
+free routes are development-only and pooling is inappropriate. Do not combine duplicate trial IDs
+from independent runs into one analysis file; analyze the matched runs separately.
+
+With the current 24-pair bank, six authors (including user), and five assistants, exhaustive
+collection is 1,555,200 trials at one rollout per ordering. The unchanged 720-pairing sampled
+default is 172,800 trials, versus 138,240 with four assistants. Mean degree is now 6.67 rather than
+8; 864 pairings would maintain degree 8, but this issue does not change the pilot default. These
+are design counts, not cost estimates or evidence that any provider can serve the full pilot.

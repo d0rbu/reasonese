@@ -30,7 +30,7 @@ from reasonese.matchup import (
     prompt_spec_from_dict,
     prompt_spec_to_dict,
 )
-from reasonese.openrouter import JsonObject
+from reasonese.openrouter import JsonObject, provenance_from_dict
 from reasonese.planning import PromptSpec
 
 
@@ -64,12 +64,13 @@ def _message_from_dict(raw: object) -> GeneratedMessage:
     if not isinstance(raw, dict):
         raise ValueError("cached generated message must be a mapping")
     data = cast(dict[str, Any], raw)
-    if set(data) != {"input", "content", "response"}:
+    if set(data) - {"provenance"} != {"input", "content", "response"}:
         raise ValueError("cached generated message has invalid fields")
     return GeneratedMessage(
         prompt_spec_from_dict(data["input"]),
         GeneratedText.parse(data["content"]),
         _response(data["response"]),
+        provenance_from_dict(data.get("provenance")),
     )
 
 
@@ -79,6 +80,7 @@ def _message_to_dict(message: GeneratedMessage) -> dict[str, object]:
         "input": prompt_spec_to_dict(message.spec),
         "content": str(message.content),
         "response": message.response,
+        **({"provenance": message.provenance.to_dict()} if message.provenance else {}),
     }
 
 
@@ -121,7 +123,7 @@ def _trace_from_dict(
     if not isinstance(raw, dict):
         raise ValueError("cached trace must be a mapping")
     data = cast(dict[str, Any], raw)
-    if set(data) != {"matchup", "conversation", "tool_steps", "response"}:
+    if set(data) - {"provenance"} != {"matchup", "conversation", "tool_steps", "response"}:
         raise ValueError("cached trace has invalid fields")
     if expected_matchup is None:
         matchup = matchup_from_dict(data["matchup"])
@@ -153,7 +155,7 @@ def _trace_from_dict(
         assert messages is not None
         setup = ConversationSetup(matchup, messages)
         setups[setup_key] = setup
-    return ConversationTrace(setup, response, steps)
+    return ConversationTrace(setup, response, steps, provenance_from_dict(data.get("provenance")))
 
 
 @beartype
@@ -268,6 +270,7 @@ def trace_to_dict(trace: ConversationTrace) -> dict[str, object]:
             for step in trace.tool_steps
         ],
         "response": trace.response,
+        **({"provenance": trace.provenance.to_dict()} if trace.provenance else {}),
     }
 
 

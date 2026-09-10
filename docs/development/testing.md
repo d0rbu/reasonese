@@ -16,7 +16,7 @@ collection, synthetic Bradley-Terry recovery, ties, clustered bootstrap, disconn
 axis and position effects, sparse-design stratification, degree balance, minimum connectivity
 repair, and reproducibility, analysis artifacts,
 and all nine utilities. Sampling and analysis tests run against the real 24-pair bank at its real
-size: 90 conditions per instruction side, 4,500 eligible pairings per pair, and the 720-pairing
+size: 108 conditions per instruction side, 6,480 eligible pairings per pair, and the 720-pairing
 default.
 
 `tests/conftest.py` pins the BLAS thread count to one before NumPy is imported. The
@@ -27,3 +27,11 @@ setting is worth exporting for real analysis runs.
 
 All tests are offline. A separately authorized live smoke test is needed to validate current
 provider availability and behavior.
+
+Route tests cover the registry/preference/transport matrix, cold billing refusal with an API key,
+warm cache replay without permission, legacy judgment invalidation without trace recollection,
+raw-response and provenance round trips through YAML and SQLite, and narrow suffix equivalence.
+Golden digests from main `66dff4c` protect existing fingerprint bytes and filtered planner output.
+Existing transport and orchestration tests retain exact paid/batch request comparisons; real-bank
+sampling tests cover 108 conditions per side and all 6,480 valid edges, with integration fixtures
+above the new 215-edge connected minimum. All of these checks remain offline.

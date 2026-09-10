@@ -239,6 +239,7 @@ def test_conversation_preserves_input_order_and_reads_readme_with_a_tool() -> No
         (Assistant.QWEN3_8_2_4T, r"chatcmpl-tool-[0-9a-f]{16}"),
         (Assistant.INKLING, r"call_[0-9a-f]{24}"),
         (Assistant.INKLING_SMALL, r"call_[0-9a-f]{24}"),
+        (Assistant.GEMMA_4_31B_IT, r"call_[0-9a-f]{24}"),
     ],
 )
 def test_readme_call_id_matches_observed_openrouter_route_format(

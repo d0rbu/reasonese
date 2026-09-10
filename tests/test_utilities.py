@@ -16,7 +16,7 @@ def test_show_axes_prints_direct_values(capsys: pytest.CaptureFixture[str]) -> N
     assert output["author"][1] == "Qwen3.8 Flash"
 
 
-def test_plan_writes_ninety_specs_for_each_side_of_every_pair(
+def test_plan_writes_108_specs_for_each_side_of_every_pair(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     output = tmp_path / "specs.jsonl"
@@ -33,12 +33,12 @@ def test_plan_writes_ninety_specs_for_each_side_of_every_pair(
     )
 
     summary = json.loads(capsys.readouterr().out)
-    assert summary["specs_per_instruction"] == 90
+    assert summary["specs_per_instruction"] == 108
     assert summary["instruction_pairs"] == 24
     assert summary["instructions"] == 48
-    assert summary["authors"] == 5
-    assert summary["specs"] == 48 * 90
-    assert len(output.read_text().splitlines()) == 48 * 90
+    assert summary["authors"] == 6
+    assert summary["specs"] == 48 * 108
+    assert len(output.read_text().splitlines()) == 48 * 108
 
 
 def test_plan_filters_by_author(

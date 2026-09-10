@@ -53,7 +53,7 @@ integer type. `beartype` checks public functions and the `PromptSpec` constructo
 
 `MatchupInputs` is a `phantom-types` refined tuple: it contains exactly two `PromptSpec`
 objects and at least one explicit user-message channel. Repeated channels are valid.
-`Assistant` shares the four model values with model-backed authors but is
+`Assistant` shares the five model values with model-backed authors but is
 separate from the four entry axes.
 
 The OpenRouter key exists only at the transport boundary. Cache keys are structural input
@@ -171,3 +171,9 @@ observations -> (pair, side) blocks -> per-component Bradley-Terry -> pooled axi
   quotas, balances degree within channel, and repairs connectivity per pair.
 - `reasonese.analysis` fits one Bradley-Terry block per connected component, which is one
   `(pair, assistant)`, so scores self-centre and pooled axis margins stay comparable.
+
+Collection routing is resolved in `openrouter.select_route` from invocation-local
+`routing.CollectionRouting`. Collection checks paid permission before cold assistant work and
+before missing warm QA/judgments. Author-message and trace records retain requested slug/transport
+provenance separately from raw provider responses. Both fingerprint paths use the same shallow
+response projection, preserving all metadata except recognized top-level model route suffixes.
