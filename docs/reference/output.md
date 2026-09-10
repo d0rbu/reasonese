@@ -106,3 +106,29 @@ receives one combined `observations.jsonl` ready for analysis.
 
 Within a trial, completed-versus-incomplete yields a win; equal completion verdicts yield a
 0.5 tie. This retains all-true and all-false trials. Bootstrap sampling is clustered by trial.
+
+## Route provenance and fingerprint compatibility
+
+Generated messages and conversation traces may include a `provenance` mapping containing
+`requested_model_id` and `transport` (`sync` or `batch`). Raw provider `response` objects remain
+unchanged, including every intermediate tool response. Requested routing is distinct from the
+model/provider actually reported in each raw response. A trace's requested route applies to all
+its continuation requests. Preserve the generated-message cache alongside traces to audit author
+routing too. Legacy records without provenance load as unknown; readers never infer a historical
+request from the current CLI preference. New readers accept both layouts, while old readers may
+reject the added field.
+
+Fingerprinting copies only the top-level response `model` field into a canonical hash projection,
+removing one terminal `:free` or `:batch` suffix. This applies to the final response and every
+intermediate tool response. It does not rewrite the cache, strip other suffixes, touch nested model
+fields, or discard IDs, usage, reasoning, tool results, or content. Otherwise identical traces
+whose recognized route suffixes differ have identical fingerprints. Independent generations are
+not promised equal fingerprints. Separate trials/rollouts remain separate observations and
+judgments even if their fingerprints are equal.
+
+Existing unsuffixed fingerprints are unchanged. Legacy traces with recognized suffixes can have
+new fingerprints and consequently miss old judgment-cache entries. Their traces and exact-text
+QA can still be reused; only missing judgments are recomputed, with paid opt-in. Collection
+reports judgment misses (which can include normalization changes) on stderr. There is no automatic
+judgment relabeling or blanket cache invalidation. Back up an existing output directory before its
+first authorized resume so rollback retains both the original artifacts and the previous code.

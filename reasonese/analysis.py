@@ -27,6 +27,13 @@ _AXES = ("framing", "channel", "author")
 # Constant within a trial, so their mean score is zero once components
 # self-center. Reported as descriptive strata without a Bradley-Terry column.
 _STRATA = ("assistant", "skill", "conflict", "pair")
+# Cells that tie on the data can still differ in the last bit or two, because
+# floating-point summation is not associative. Comparing raw scores would let
+# that noise decide the order and silently override the cell-id tie-break, so
+# the same data could rank differently on another machine or BLAS build.
+# Rounding first keeps ties deterministic. Newton stops at a 1e-10 step, so
+# scores carry no meaning below this anyway.
+_RANK_TOLERANCE_DIGITS = 12
 
 
 def _as_float(value: object) -> float:
@@ -496,7 +503,13 @@ def fit_bradley_terry(
         )
         for component_index, component in enumerate(components)
         for rank, cell_id in enumerate(
-            sorted(component, key=lambda cell_id: (-scores[index[cell_id]], str(cell_id))),
+            sorted(
+                component,
+                key=lambda cell_id: (
+                    -round(float(scores[index[cell_id]]), _RANK_TOLERANCE_DIGITS),
+                    str(cell_id),
+                ),
+            ),
             start=1,
         )
     )

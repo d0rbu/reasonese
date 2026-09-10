@@ -26,14 +26,18 @@ from reasonese.matchup import Matchup
 from reasonese.message_qa_cache import YamlMessageQaCache
 from reasonese.openrouter import (
     CompletionGroup,
+    CompletionTransport,
     JsonObject,
     ModelRoute,
     OpenRouterClient,
     OpenRouterModelId,
-    model_route,
+    RouteProvenance,
+    completion_provenance,
     response_content,
+    select_route,
 )
 from reasonese.planning import PromptSpec
+from reasonese.routing import CollectionRouting
 from reasonese.tools import (
     ASSISTANT_TOOLS,
     ToolRuntime,
@@ -80,6 +84,7 @@ def materialize_messages(
     manual_messages: ManualMessageLibrary | ManualMessageSnapshot,
     *,
     prefer_batch: bool,
+    routing: CollectionRouting | None = None,
 ) -> tuple[GeneratedMessage, ...]:
     """Generate each distinct uncached input, grouped by author model."""
     return materialize_specs(
@@ -88,6 +93,7 @@ def materialize_messages(
         cache,
         manual_messages,
         prefer_batch=prefer_batch,
+        routing=routing,
     )
 
 
@@ -99,8 +105,10 @@ def materialize_specs(
     manual_messages: ManualMessageLibrary | ManualMessageSnapshot,
     *,
     prefer_batch: bool,
+    routing: CollectionRouting | None = None,
 ) -> tuple[GeneratedMessage, ...]:
     """Materialize arbitrary prompt specs with one shared model-grouped cache pass."""
+    routing = routing or CollectionRouting()
     manual_snapshot = (
         manual_messages.snapshot(specs)
         if isinstance(manual_messages, ManualMessageLibrary)
@@ -128,27 +136,44 @@ def materialize_specs(
         grouped_specs.append(authored_specs)
         completion_groups.append(
             CompletionGroup(
-                model_route(author),
+                select_route(author, routing.preference),
                 tuple(authoring_request(spec) for spec in authored_specs),
             )
         )
 
+    for group in completion_groups:
+        if not str(group.route.model_id).endswith(":free"):
+            routing.require_paid("uncached paid authoring")
     grouped_responses = client.complete_many_grouped(
         tuple(completion_groups),
         prefer_batch=prefer_batch,
     )
-    for authored_specs, responses in zip(grouped_specs, grouped_responses, strict=True):
+    for authored_specs, responses, group in zip(
+        grouped_specs, grouped_responses, completion_groups, strict=True
+    ):
+        provenance = completion_provenance(group.route, group.bodies, prefer_batch=prefer_batch)
         for spec, response in zip(authored_specs, responses, strict=True):
             message = GeneratedMessage(
                 spec,
                 GeneratedText.parse(response_content(response)),
                 response,
+                provenance,
             )
             materialized[spec] = message
             new_messages.append(message)
 
     if new_messages:
         cache.put_many(tuple(new_messages))
+    new_specs = {message.spec for message in new_messages}
+    for spec in dict.fromkeys(specs):
+        message = materialized[spec]
+        routing.record(
+            "author",
+            spec.author,
+            "manual" if spec.author is Author.USER else "new" if spec in new_specs else "cache",
+            message.provenance,
+            message.response,
+        )
     return tuple(materialized[spec] for spec in specs)
 
 
@@ -250,6 +275,9 @@ def run_assistant_groups(
                         groups[group_index].setups[setup_index],
                         response,
                         tuple(steps[key]),
+                        RouteProvenance(
+                            groups[group_index].route.model_id, CompletionTransport.SYNC
+                        ),
                     )
                     release_runtime(key)
                     continue
@@ -282,8 +310,10 @@ def run_matchup(
     manual_messages: ManualMessageLibrary,
     *,
     prefer_batch: bool,
+    routing: CollectionRouting | None = None,
 ) -> RunResult:
     """Return a cached trace or execute the complete matchup through OpenRouter."""
+    routing = routing or CollectionRouting()
     manual_snapshot = manual_messages.snapshot(matchup.inputs)
     cached = trace_cache.get(matchup)
     if cached is not None and manual_snapshot.matches(cached.setup):
@@ -291,18 +321,55 @@ def run_matchup(
             GeneratedMessage(spec, cached.setup.content_for_input(index), None)
             for index, spec in enumerate(matchup.inputs)
         )
-        require_compliant_messages(audit_messages(cached_messages, qa_cache, client))
+        require_compliant_messages(
+            audit_messages(cached_messages, qa_cache, client, routing=routing)
+        )
+        routing.record("assistant", matchup.assistant, "cache", cached.provenance, cached.response)
+        record_cached_authors((cached,), message_cache, routing)
         return RunResult(cached, True)
 
+    routing.require_paid(
+        "uncached assistant work (chargeable web search), including required message QA"
+    )
     generated = materialize_messages(
         matchup,
         client,
         message_cache,
         manual_snapshot,
         prefer_batch=prefer_batch,
+        routing=routing,
     )
-    require_compliant_messages(audit_messages(generated, qa_cache, client))
+    require_compliant_messages(audit_messages(generated, qa_cache, client, routing=routing))
     setup = construct_conversation(matchup, generated)
-    trace = run_assistant(setup, model_route(matchup.assistant).model_id, client)
+    trace = run_assistant(
+        setup, select_route(matchup.assistant, routing.preference).model_id, client
+    )
     trace_cache.put(trace)
+    routing.record("assistant", matchup.assistant, "new", trace.provenance, trace.response)
     return RunResult(trace, False)
+
+
+def record_cached_authors(
+    traces: tuple[ConversationTrace, ...], cache: YamlMessageCache, routing: CollectionRouting
+) -> None:
+    """Report only author provenance supported by matching cached text, once per message."""
+    if not traces:
+        return
+    messages = {message.spec: message for message in cache.load()}
+    delivered = dict.fromkeys(
+        (spec, trace.setup.content_for_input(index))
+        for trace in traces
+        for index, spec in enumerate(trace.setup.matchup.inputs)
+    )
+    for spec, content in delivered:
+        message = messages.get(spec)
+        if message is not None and message.content == content:
+            routing.record("author", spec.author, "cache", message.provenance, message.response)
+        else:
+            routing.record(
+                "author",
+                spec.author,
+                "manual" if spec.author is Author.USER else "cache",
+                None,
+                None,
+            )

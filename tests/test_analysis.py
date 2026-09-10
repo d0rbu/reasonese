@@ -681,6 +681,56 @@ def test_vectorized_fit_matches_the_scalar_reference(l2: float) -> None:
     assert fitted.objective == pytest.approx(objective, abs=1e-10)
 
 
+def test_tied_cells_rank_by_cell_id_and_ignore_last_bit_noise(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A one-ULP difference must not decide the order of two tied cells.
+
+    Summation order is not associative, so the same tie can land on either side
+    of zero depending on the machine or BLAS build. Ranking has to be stable
+    against that, otherwise published ranks are not reproducible.
+    """
+    observations = _two_pair_observations()
+    baseline = fit_bradley_terry(observations, 1.0)
+    original = analysis._fit_scores_by_component
+
+    def nudged(
+        cell_ids: tuple[CellId, ...],
+        comparisons: tuple[Comparison, ...],
+        l2: float,
+        components: tuple[tuple[CellId, ...], ...],
+        **keywords: object,
+    ) -> analysis._ComponentFit:
+        diagnostics = keywords.get("diagnostics", True)
+        assert isinstance(diagnostics, bool)
+        fit = original(cell_ids, comparisons, l2, components, diagnostics=diagnostics)
+        # Perturb every score by a single unit in the last place.
+        return analysis._ComponentFit(
+            np.nextafter(fit.scores, np.inf),
+            fit.converged,
+            fit.iterations,
+            fit.standard_errors,
+            fit.objective,
+        )
+
+    monkeypatch.setattr(analysis, "_fit_scores_by_component", nudged)
+    perturbed = fit_bradley_terry(observations, 1.0)
+    monkeypatch.undo()
+
+    assert [item.cell_id for item in perturbed.ranking] == [
+        item.cell_id for item in baseline.ranking
+    ]
+
+    # And the tie-break itself is by cell id, not by arrival order.
+    for component in baseline.connected_components:
+        ranked = [item for item in baseline.ranking if item.cell_id in set(component)]
+        for left, right in zip(ranked, ranked[1:], strict=False):
+            rounded_left = round(left.score, analysis._RANK_TOLERANCE_DIGITS)
+            rounded_right = round(right.score, analysis._RANK_TOLERANCE_DIGITS)
+            if rounded_left == rounded_right:
+                assert str(left.cell_id) < str(right.cell_id)
+
+
 def test_vectorized_sigmoid_matches_the_scalar_one_including_the_tails() -> None:
     values = np.array(
         [-800.0, -50.0, -1.0, -1e-12, 0.0, 1e-12, 1.0, 50.0, 800.0], dtype=np.float64

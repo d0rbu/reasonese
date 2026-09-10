@@ -38,7 +38,7 @@ def _pair(pair_id: str, first: str, second: str) -> InstructionPair:
 
 def test_specs_per_instruction_is_a_non_negative_integer() -> None:
     count = specs_per_instruction()
-    assert count == 81
+    assert count == 99
     assert isinstance(count, Natural)
 
 
@@ -102,7 +102,7 @@ def test_pair_specs_enumerate_both_sides_of_the_real_bank() -> None:
             }
 
     every_spec = [spec for item in pair_specs for spec in item.first + item.second]
-    assert len(every_spec) == 24 * 2 * 81
+    assert len(every_spec) == 24 * 2 * 99
     assert len(set(every_spec)) == len(every_spec)
 
 

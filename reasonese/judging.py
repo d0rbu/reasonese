@@ -17,6 +17,7 @@ from reasonese.openrouter import (
     ModelRoute,
     OpenRouterClient,
     OpenRouterModelId,
+    fingerprint_response,
     response_content,
 )
 from reasonese.planning import PromptSpec
@@ -118,12 +119,12 @@ def trace_fingerprint(trace: ConversationTrace) -> TraceFingerprint:
             "conversation": trace.setup.openrouter_messages(),
             "tool_steps": [
                 {
-                    "response": step.response,
+                    "response": fingerprint_response(step.response),
                     "results": [result.openrouter_dict() for result in step.results],
                 }
                 for step in trace.tool_steps
             ],
-            "response": trace.response,
+            "response": fingerprint_response(trace.response),
         },
         sort_keys=True,
         separators=(",", ":"),
@@ -169,7 +170,7 @@ def fingerprint_traces(
             setup_json[trace.setup] = serialized
         conversation_json, matchup_json = serialized
         response_json = json.dumps(
-            trace.response,
+            fingerprint_response(trace.response),
             sort_keys=True,
             separators=(",", ":"),
             ensure_ascii=False,
@@ -177,7 +178,7 @@ def fingerprint_traces(
         tool_steps_json = json.dumps(
             [
                 {
-                    "response": step.response,
+                    "response": fingerprint_response(step.response),
                     "results": [result.openrouter_dict() for result in step.results],
                 }
                 for step in trace.tool_steps

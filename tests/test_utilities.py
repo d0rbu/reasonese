@@ -16,7 +16,7 @@ def test_show_axes_prints_direct_values(capsys: pytest.CaptureFixture[str]) -> N
     assert output["author"][1] == "Qwen3.8 Flash"
 
 
-def test_plan_writes_ninety_specs_for_each_side_of_every_pair(
+def test_plan_writes_selected_specs_for_each_side_of_every_pair(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     output = tmp_path / "specs.jsonl"
@@ -33,14 +33,14 @@ def test_plan_writes_ninety_specs_for_each_side_of_every_pair(
     )
 
     summary = json.loads(capsys.readouterr().out)
-    assert summary["specs_per_instruction"] == 81
+    assert summary["specs_per_instruction"] == 99
     assert summary["manual_framings"] == 3
     assert summary["framings"] == 6
     assert summary["instruction_pairs"] == 24
     assert summary["instructions"] == 48
-    assert summary["authors"] == 5
-    assert summary["specs"] == 48 * 81
-    assert len(output.read_text().splitlines()) == 48 * 81
+    assert summary["authors"] == 6
+    assert summary["specs"] == 48 * 99
+    assert len(output.read_text().splitlines()) == 48 * 99
 
 
 def test_plan_filters_by_author(
@@ -123,3 +123,21 @@ def test_plan_reports_missing_input(tmp_path: Path) -> None:
 def test_plan_requires_its_arguments() -> None:
     with pytest.raises(SystemExit, match="2"):
         plan([])
+
+
+@pytest.mark.parametrize(('authors', 'per_instruction'), [
+    (['Gemma 4 31B'], 18),
+    (['user'], 9),
+    (['Gemma 4 31B', 'user'], 27),
+])
+def test_filtered_summary_counts_selected_framings(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], authors: list[str], per_instruction: int
+) -> None:
+    output = tmp_path / 'specs.jsonl'
+    assert plan(['--pairs', 'configs/instruction_pairs.yaml', '--output', str(output),
+                 *(value for author in authors for value in ('--author', author))]) == 0
+    summary = json.loads(capsys.readouterr().out)
+    assert summary['specs_per_instruction'] == per_instruction
+    assert summary['specs'] == 48 * per_instruction
+    rows = [json.loads(line) for line in output.read_text().splitlines()]
+    assert {row['author'] for row in rows} == set(authors)

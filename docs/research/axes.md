@@ -55,6 +55,7 @@ the datapoint's ordered position in the transcript.
 - `Qwen3.8 2.4T`
 - `Inkling`
 - `Inkling Small`
+- `Gemma 4 31B`
 
 The enum strings above are the display values; there is no second label or identifier map.
 Author means whoever writes the framed instruction, not the executor model.
@@ -62,19 +63,19 @@ Author means whoever writes the framed instruction, not the executor model.
 ## Assistant
 
 The assistant is not a fifth entry axis. A `Matchup` places an ordered tuple of four-axis
-datapoints in front of one of the four model-backed author values. This cleanly separates who
+datapoints in front of one of the five model-backed author values. This cleanly separates who
 writes each instruction from which model receives the resulting conversation.
 
 ## Design size
 
 ```text
-model authors: 6 framings × 3 channels × 4 authors = 72
+model authors: 6 framings × 3 channels × 5 authors = 90
 user author:   3 framings × 3 channels × 1 author  =  9
-                                             total = 81 specifications per instruction
+                                             total = 99 specifications per instruction
 
-24 pairs × 2 instructions × 81                     = 3,888 specifications
-81 × 81 − 54 × 54                                  = 3,645 eligible pairings per pair
-2 × 81                                             =   162 cells per pair
+24 pairs × 2 instructions × 99                     = 4,752 specifications
+99 × 99 − 66 × 66                                  = 5,445 eligible pairings per pair
+2 × 99                                             =   198 cells per pair
 ```
 
 A pairing is eligible when it joins the two sides of one pair and at least one input uses the

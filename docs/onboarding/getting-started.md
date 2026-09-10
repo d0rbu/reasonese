@@ -11,7 +11,7 @@ uv run reasonese-plan \
 ```
 
 The first utility prints the canonical definitions. The second validates the 24 instruction
-pairs and writes 3,888 prompt specifications: 81 for each of the 48 instructions.
+pairs and writes 4,752 prompt specifications: 99 for each of the 48 instructions.
 
 Inspect a few records with:
 
@@ -25,7 +25,7 @@ To execute the example matchup, provide the API key through the environment:
 
 ```bash
 export OPENROUTER_API_KEY=...
-uv run reasonese-run-conversation --matchup configs/example_matchup.yaml
+uv run reasonese-run-conversation --allow-paid --matchup configs/example_matchup.yaml
 ```
 
 If the matchup contains `author: user`, first replace the selected `TODO:` variant under
@@ -57,7 +57,7 @@ This uses `openai/gpt-5.6-luna:batch` at medium reasoning and writes
 For a balanced dataset rather than one matchup, run:
 
 ```bash
-uv run reasonese-collect-data \
+uv run reasonese-collect-data --allow-paid \
   --study configs/example_study.yaml \
   --user-messages prompts/user \
   --output out/example-study

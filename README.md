@@ -16,15 +16,15 @@ its exact datapoint authoring instructions before assistant inference.
 |---|---|
 | framing | `normal`, `casual`, `persuasive`, `subagent`, `reasonese-normal`, `reasonese-persuasive` |
 | channel | `system prompt`, `user message`, `README.md` |
-| author | `user`, `Qwen3.8 Flash`, `Qwen3.8 2.4T`, `Inkling`, `Inkling Small` |
+| author | `user`, `Qwen3.8 Flash`, `Qwen3.8 2.4T`, `Inkling`, `Inkling Small`, `Gemma 4 31B` |
 
 Framing and author are independent. “Normal” is the author's default rendering in clear
 prose. A `user`-authored input is treated as already written and used verbatim, and it exists
 only for the `normal`, `casual`, and `persuasive` framings; model authors rewrite the base
 instruction according to any of the six framings.
 
-Six framings for each of the four model authors plus three framings for the `user` author, across
-three channels, produce `(6 × 4 + 3) × 3 = 81` specifications per base instruction. A
+Six framings for each of the five model authors plus three framings for the `user` author, across
+three channels, produce `(6 × 5 + 3) × 3 = 99` specifications per base instruction. A
 specification is just a four-field dataclass containing those axes.
 
 Instruction is not a treatment axis. Instructions come in 24 mutually exclusive pairs, and a
@@ -54,7 +54,7 @@ uv run reasonese-sample-studies \
 export OPENROUTER_API_KEY=...
 uv run reasonese-curate-instructions --output out/instructions
 
-uv run reasonese-run-conversation \
+uv run reasonese-run-conversation --allow-paid \
   --matchup configs/example_matchup.yaml \
   --user-messages prompts/user \
   --message-cache out/generated_messages.yaml \
@@ -69,12 +69,12 @@ uv run reasonese-judge-responses \
   --trace-cache out/conversation_traces.yaml \
   --judgment-cache out/judgments.yaml
 
-uv run reasonese-collect-data \
+uv run reasonese-collect-data --allow-paid \
   --study configs/example_study.yaml \
   --user-messages prompts/user \
   --output out/example-study
 
-uv run reasonese-collect-studies \
+uv run reasonese-collect-studies --allow-paid \
   --suite out/example/studies.yaml \
   --user-messages prompts/user \
   --output out/example-suite
@@ -89,10 +89,17 @@ The utilities have separate entry points. `reasonese-axes` prints the values and
 `reasonese-plan` writes four-axis datapoints for both sides of every instruction pair. `reasonese-run-conversation` loads a `Matchup`,
 generates any missing model-authored messages, constructs the ordered conversation, and sends
 it to the selected assistant with file-read, sandboxed bash, sandboxed Python, and web-search
-tools. It submits independent model-author batch jobs before polling them together, so one
-author model's queue does not block another author's submission. `--no-batch` forces
-synchronous authoring requests. Bash and Python execution require `bubblewrap` (`bwrap`) on the
-host.
+tools. When batch authoring is selected, it submits independent author batches before polling, so one
+author model's queue does not block another author's submission. `--route batch --allow-paid`
+selects batch authoring where available; the default prefers free synchronous routes.
+`--no-batch` keeps authoring synchronous and conflicts with `--route batch`. Bash and Python
+execution require `bubblewrap` (`bwrap`) on the host.
+
+Collection requires `--allow-paid` before any uncached chargeable work. Even free model routes
+still use paid message QA, study judgments, and potentially paid assistant web search. A complete
+cache-only replay needs neither the flag nor an API key. Route selection stays outside study
+YAML; summaries preserve original cache provenance. See
+[`route configuration`](docs/reference/configuration.md#collection-route-selection-and-paid-work).
 
 A matchup contains one assistant plus an ordered pair of inputs, at least one of which must use
 the explicit `user message` channel. Repeated channels are valid. Generated
@@ -173,10 +180,10 @@ replaces exactly `components - 1` redundant cycle edges, the minimum possible re
 same-stratum replacements. Seeds derive from the pair id, so reordering the bank does not change
 any design.
 
-With all axes enabled, each of the 24 pairs has 162 cells (`2 × 81`) and
-`81 × 81 − 54 × 54 = 3,645` eligible pairings, for 87,480 eligible pairings per assistant. The
-minimum connected design uses 161 pairings per pair. The pilot default of 720 gives every cell an
-average degree of about 8.9.
+With all axes enabled, each of the 24 pairs has 198 cells (`2 × 99`) and
+`99 × 99 − 66 × 66 = 5,445` eligible pairings, for 130,680 eligible pairings per assistant. The
+minimum connected design uses 197 pairings per pair. The pilot default of 720 gives every cell an
+average degree of about 7.27 (792 pairings would give degree 8).
 
 Connectivity is required within a pair and is impossible between pairs, so the comparison graph
 has exactly one component per `(pair, assistant)`.
