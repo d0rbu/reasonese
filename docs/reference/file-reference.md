@@ -19,6 +19,7 @@
 | `reasonese/conversation.py` | Authoring requests and channel rendering |
 | `reasonese/manual_messages.py` | Filesystem-backed user-authored variants |
 | `prompts/user/` | Editable manual variants organized by base instruction |
+| `reasonese/write_variants.py` | Blinded local editor for hand-written user variants |
 | `reasonese/tools.py` | Bounded assistant tool definitions and local execution |
 | `docs/reference/prompt-generation.md` | Exact prompts, framing guidance, and current limitations |
 | `reasonese/routing.py` | Collection route preference, paid opt-in, and invocation summaries |

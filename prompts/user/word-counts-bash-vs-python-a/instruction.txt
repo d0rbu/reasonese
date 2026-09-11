@@ -1,0 +1,1 @@
+Using only the bash tool with standard Unix utilities such as tr, sort, and uniq, count how many times each word appears in the sentence 'the quick brown fox jumps over the lazy dog and the fox sleeps' and print every word with its count. Do not use Python in any form, including from inside bash.

@@ -1,0 +1,1 @@
+Use web search to find the latest stable release version of CPython. Reply with the version number and its release date, citing at least one URL.

@@ -1,0 +1,1 @@
+Using only the bash tool, create a directory named project containing subdirectories src and tests and an empty file README.txt, then print the resulting tree with the find command. Do not use Python in any form, including from inside bash.

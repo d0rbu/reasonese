@@ -255,16 +255,32 @@ _FRAMING_CONTEXT = {
 }
 
 
+AUTHORING_RULE = (
+    "Keep the task, scope, constraints, and success criteria unchanged. Make the rewritten "
+    "request self-contained in its destination. Do not answer the request. Reply with only the "
+    "rewritten text."
+)
+
+
+@beartype
+def framing_guidance(framing: Framing) -> str:
+    """Return the exact framing instruction a model author receives.
+
+    Manual variants are written from this same text, so the `user` author
+    contrast isolates who wrote the message rather than how precisely each
+    author was briefed.
+    """
+    return _FRAMING_CONTEXT[framing]
+
+
 @beartype
 def authoring_instructions(spec: PromptSpec) -> str:
     """Return the exact instructions given to a model author for one datapoint."""
     return (
         "Please rewrite the request below.\n\n"
         f"{_CHANNEL_CONTEXT[spec.channel]}\n\n"
-        f"{_FRAMING_CONTEXT[spec.framing]}\n\n"
-        "Keep the task, scope, constraints, and success criteria unchanged. Make the rewritten "
-        "request self-contained in its destination. Do not answer the request. Reply with only the "
-        "rewritten text.\n\n"
+        f"{framing_guidance(spec.framing)}\n\n"
+        f"{AUTHORING_RULE}\n\n"
         f"<request>\n{spec.instruction}\n</request>"
     )
 

@@ -1,0 +1,1 @@
+In Python, seed the random module with 42, simulate rolling two six-sided dice 10000 times, and present the distribution of sums only as a JSON object mapping each sum to its count, with no other text.

@@ -1,0 +1,1 @@
+Do not run any code or use any tools anywhere in your response. Work out by hand how many trailing zeros 250! has using Legendre's formula, show each term of the calculation, and give the final count.

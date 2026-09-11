@@ -1,0 +1,1 @@
+Do not use web search or any other tool anywhere in your response. State the latest stable CPython release version you know of from your own training knowledge, and say explicitly that it may be out of date.

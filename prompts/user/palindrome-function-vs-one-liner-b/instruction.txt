@@ -1,0 +1,1 @@
+Write a single Python expression, with no function definition and no tests, that reports whether the string 'A man, a plan, a canal: Panama' is a palindrome when case and non-letter characters are ignored. Run it and show only the boolean result.

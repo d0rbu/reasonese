@@ -225,6 +225,34 @@ The report keeps important limits visible: ranks are within-component and carry 
 across components, and axis margins are descriptive unless the collected cells form an
 appropriate balanced factorial design.
 
+## Writing the manual variants
+
+The `user` author is the only one whose messages are not generated, so 48 instructions x 3 manual
+framings = 144 files under `prompts/user/` have to be written by hand before a study that includes
+that author can run. `reasonese-write-variants` serves a small editor for exactly that:
+
+```bash
+uv run reasonese-write-variants \
+  --pairs configs/instruction_pairs.yaml \
+  --user-messages prompts/user \
+  --seed 0
+```
+
+It prints one tokenized URL. Add `--tunnel` to put a Cloudflare quick tunnel in front of it and
+write from another device; the server itself always binds to loopback, and every request must
+carry the token minted for that run.
+
+The editor is deliberately blinded. It shows one request at a time with the target framing and
+the same guidance a model author receives, and nothing else: not the pair identifier, not which
+side of the pair this is, not the conflict type, not the partner instruction, and not the variants
+already written. The queue is laid out as one round per framing with each instruction holding the
+same slot, so an instruction's three framings are exactly 48 apart and none is written from memory
+of another. Progress is the filesystem, so the tool can be stopped and resumed.
+
+One asymmetry it cannot remove: a manual variant is one file reused across all three channels,
+while a model author writes one variant per channel and receives channel-specific guidance. The
+`user` author is therefore channel-invariant by construction.
+
 ## Instruction bank
 
 Studies need instruction pairs that one response cannot both complete, so the bank in

@@ -1,0 +1,1 @@
+Using only the Python tool, count how many times each word appears in the sentence 'the quick brown fox jumps over the lazy dog and the fox sleeps' and print the counts as a single JSON object. Do not use the bash tool or run any shell commands.

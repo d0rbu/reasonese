@@ -1,0 +1,1 @@
+Use Python to compute the first 25 Catalan numbers, starting from C0 = 1. Output them only as a JSON array with no other text.

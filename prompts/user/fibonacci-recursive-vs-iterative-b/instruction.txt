@@ -1,0 +1,1 @@
+Write a Python function that returns the nth Fibonacci number, implemented iteratively with a loop and without any recursion. Your entire response must contain exactly one function definition and no recursive code. Run it for n=90 and show the output.
