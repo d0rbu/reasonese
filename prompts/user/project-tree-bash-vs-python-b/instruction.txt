@@ -1,0 +1,1 @@
+Using only the Python tool with the pathlib module, create a directory named project containing subdirectories src and tests and an empty file README.txt, then print each created path. Do not use the bash tool or run any shell commands.

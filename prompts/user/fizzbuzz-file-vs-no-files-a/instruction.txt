@@ -1,0 +1,1 @@
+Write a Python script that prints FizzBuzz for the numbers 1 through 30, save it as fizzbuzz.py in the working directory, run it, and confirm the file exists by listing the directory contents.

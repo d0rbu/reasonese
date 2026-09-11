@@ -1,0 +1,1 @@
+Use web search to find the most recent official population estimate for Canada. Report it rounded to the nearest million only, and do not give the exact figure.

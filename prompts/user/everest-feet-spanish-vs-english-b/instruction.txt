@@ -1,0 +1,1 @@
+Use web search to find the official height of Mount Everest in meters, then use Python to convert it to feet. Write your entire response in English.

@@ -1,0 +1,1 @@
+Print FizzBuzz for the numbers 1 through 30 by running Python inline. Do not create, write, or save any files in the working directory.

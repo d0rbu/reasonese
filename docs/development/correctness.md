@@ -23,6 +23,13 @@
 - A fit asked for no diagnostics returns the same scores, and returns no standard errors and no
   objective rather than placeholder values.
 - BLAS threads are pinned to one for the duration of a fit and restored afterwards.
+- The variant editor never sends the pair identifier, side, skill, conflict type, directory
+  slug, or partner instruction to the page; a task is addressed only by its queue index.
+- An instruction's framings are exactly one round apart in the writing queue, so no variant
+  is written next to another variant of the same request.
+- The editor shows the same framing guidance a model author receives, so the `user` contrast
+  is about who wrote the message rather than how precisely each author was briefed.
+- The editor binds to loopback and rejects any request without the run's token.
 - Cells whose scores tie to twelve decimals are ranked by cell identifier, so a difference in the
   last bit cannot decide the order and ranks stay reproducible across machines and BLAS builds.
 - `PromptSpec` contains exactly the four axes and is runtime-checked by `beartype`.

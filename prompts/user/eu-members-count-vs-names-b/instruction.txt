@@ -1,0 +1,1 @@
+Use web search to determine which countries are currently member states of the European Union. Reply with the full list of country names, one per line, and do not state a total count.

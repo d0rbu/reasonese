@@ -1,0 +1,1 @@
+Write and run Python that computes decimal digits 101 through 150 of pi using only integer arithmetic. Reply with at most 30 words in total, counting the digit string as one word.

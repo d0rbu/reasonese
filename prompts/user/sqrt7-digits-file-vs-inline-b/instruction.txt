@@ -1,0 +1,1 @@
+Use Python to compute the first 40 decimal digits of the square root of 7 with integer arithmetic and print them inline. Do not create, write, or save any files.

@@ -13,6 +13,7 @@ from reasonese.axes import (
     author_framings,
 )
 from reasonese.conversation import GeneratedMessage, GeneratedText, construct_conversation
+from reasonese.instructions import load_instruction_pairs
 from reasonese.manual_messages import ManualMessageLibrary
 from reasonese.matchup import make_matchup
 from reasonese.planning import PromptSpec
@@ -143,13 +144,24 @@ def test_model_only_snapshot_does_not_require_manual_directory(tmp_path: Path) -
         snapshot.message_for(spec)
 
 
-def test_repository_contains_placeholder_tree_for_every_example_instruction() -> None:
+def test_repository_contains_a_variant_tree_for_every_bank_instruction() -> None:
     root = Path("prompts/user")
     directories = tuple(path for path in root.iterdir() if path.is_dir())
-    assert len(directories) == 4
+    pairs = load_instruction_pairs(Path("configs/instruction_pairs.yaml"))
+    instructions = {
+        str(instruction) for pair in pairs for instruction in pair.instructions
+    }
+
+    assert len(directories) == len(instructions) == 48
     manual_framings = author_framings(Author.USER)
     expected = {"instruction.txt", *(f"{framing}.txt" for framing in manual_framings)}
+    covered: set[str] = set()
     for directory in directories:
         assert {path.name for path in directory.iterdir() if path.is_file()} == expected
+        covered.add((directory / "instruction.txt").read_text(encoding="utf-8").strip())
         for framing in manual_framings:
-            assert (directory / f"{framing}.txt").read_text().startswith("TODO:")
+            content = (directory / f"{framing}.txt").read_text(encoding="utf-8").strip()
+            assert content, f"{directory.name}/{framing}.txt is empty"
+    # Every bank instruction has somewhere to put its manual variants, and no
+    # directory belongs to an instruction the bank no longer contains.
+    assert covered == instructions

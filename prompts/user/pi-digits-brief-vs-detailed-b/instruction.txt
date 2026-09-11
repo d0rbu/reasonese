@@ -1,0 +1,1 @@
+Write and run Python that computes decimal digits 101 through 150 of pi using only integer arithmetic. Reply with a detailed explanation of at least 250 words covering the algorithm, why it converges, and the digits obtained.

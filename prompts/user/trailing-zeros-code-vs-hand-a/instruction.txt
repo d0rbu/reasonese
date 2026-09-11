@@ -1,0 +1,1 @@
+Use Python to compute how many trailing zeros 250! has. Show the code you ran and state the result.

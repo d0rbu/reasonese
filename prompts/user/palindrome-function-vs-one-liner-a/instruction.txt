@@ -1,0 +1,1 @@
+Write a Python function that reports whether a string is a palindrome when case and non-letter characters are ignored. Include a docstring and at least three assert-based test cases, run them, and show the output.

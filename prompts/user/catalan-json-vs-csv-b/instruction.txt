@@ -1,0 +1,1 @@
+Use Python to compute the first 25 Catalan numbers, starting from C0 = 1. Output them only as CSV with the header line index,value and one row per number, with no other text.

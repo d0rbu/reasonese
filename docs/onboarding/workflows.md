@@ -20,6 +20,23 @@ uv run reasonese-plan --pairs configs/instruction_pairs.yaml --output out/specs.
 The summary reports the number of instructions and specifications. Re-running with identical
 input produces identical ordered records.
 
+## Write the manual variants
+
+Studies that include the `user` author need its 144 hand-written variants first. Serve the
+blinded editor and work through the queue:
+
+```bash
+uv run reasonese-write-variants \
+  --pairs configs/instruction_pairs.yaml \
+  --user-messages prompts/user \
+  --seed 0 \
+  --tunnel
+```
+
+The summary reports how many variants remain and the tokenized URL to open. Collection fails
+closed on any variant still holding its `TODO:` placeholder, so a half-finished set cannot be
+collected by accident.
+
 ## Sample pairwise studies
 
 Choose how many unordered pairs each assistant should receive and write one reproducible suite:
