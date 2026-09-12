@@ -13,16 +13,16 @@ what maps a specification back to its pair and side.
 A matchup selects one assistant and an ordered list of entry datapoints:
 
 ```yaml
-assistant: Inkling
+assistant: Nemotron 3.5 Lightning
 inputs:
   - instruction: Solve the task called foobar and explain the result briefly.
     framing: normal
     channel: system prompt
-    author: Inkling
+    author: Nemotron 3.5 Lightning
   - instruction: What is two plus two? Answer with the number only.
     framing: casual
     channel: user message
-    author: Inkling Small
+    author: Gemma 4 31B
 ```
 
 The list must contain exactly two entries and at least one entry whose channel is
@@ -44,17 +44,17 @@ inference.
 A study adds a positive rollout count to an assistant and an unordered pair of inputs:
 
 ```yaml
-assistant: Inkling
+assistant: Nemotron 3.5 Lightning
 rollouts_per_permutation: 2
 inputs:
   - instruction: Solve the task called foobar and explain the result briefly.
     framing: normal
     channel: system prompt
-    author: Inkling
+    author: Nemotron 3.5 Lightning
   - instruction: What is two plus two? Answer with the number only.
     framing: casual
     channel: user message
-    author: Inkling Small
+    author: Gemma 4 31B
 ```
 
 The two inputs must be distinct, and at least one must use the explicit `user message` channel.
@@ -91,22 +91,22 @@ study's output subdirectory.
 `reasonese-sample-studies` builds all four-axis cells for both sides of every instruction pair,
 selects a seeded axis-stratified, degree-aware, connected subset of that pair's valid unordered
 pairings, and writes them under one `studies` key. `--pairings-per-pair` sets the count per pair
-per assistant and defaults to 720. Default authors and assistants are Inkling, Inkling Small,
-and Gemma 4 31B, all of which have registered `:free` routes:
+per assistant and defaults to 720. Default authors and assistants are Nemotron 3.5 Lightning
+and Gemma 4 31B, both of which have registered `:free` routes:
 
 ```yaml
 studies:
-  - assistant: Inkling
+  - assistant: Nemotron 3.5 Lightning
     rollouts_per_permutation: 1
     inputs:
       - instruction: Write a program.
         framing: normal
         channel: system prompt
-        author: Inkling
+        author: Nemotron 3.5 Lightning
       - instruction: Find the requested information.
         framing: casual
         channel: user message
-        author: Inkling Small
+        author: Gemma 4 31B
 ```
 
 Every study is validated by the ordinary two-input contract. Suite entries must be distinct.
@@ -126,7 +126,7 @@ invocation configuration, never part of the study YAML or a treatment axis.
 | `paid` | Paid synchronous slug | Paid synchronous slug |
 | `batch` | Batch API where registered and compatible; otherwise paid synchronous fallback | Paid synchronous slug under the existing web-search harness |
 
-Inkling, Inkling Small, and Gemma 4 31B have registered free routes; both Qwen models lack one.
+Nemotron 3.5 Lightning, Inkling, Inkling Small, and Gemma 4 31B have registered free routes; both Qwen models lack one.
 A failed free request never triggers a paid retry. `--no-batch` keeps authoring synchronous and
 cannot be combined with `--route batch`. Neither option changes the fixed Luna QA or response
 judge routes or their batching. Batch requests use the unsuffixed model slug on the Batch API,
@@ -151,7 +151,7 @@ can report the same author in both cached and materialized groups.
 
 The planner accepts repeated `--author` and the sampler accepts repeated `--author` and
 `--assistant` filters, including `Gemma 4 31B`. Both default author selection and default assistant selection
-contain only Inkling, Inkling Small, and Gemma 4 31B. Supplying a filter replaces its default
+contain only Nemotron 3.5 Lightning and Gemma 4 31B. Supplying a filter replaces its default
 set; it does not append to it. Other supported models and `author: user` remain available
 explicitly. Duplicate values are rejected. Filtering preserves
 existing specification order; the planner summary counts only selected conditions.
@@ -159,3 +159,9 @@ existing specification order; the planner summary counts only selected condition
 These defaults apply when generating new plans and suites. Existing suite YAML and cached
 responses keep their original models and provenance; regenerate a suite to adopt the new model
 selection, and use separate caches if you need fresh collection on the free routes.
+
+Nemotron 3.5 Lightning uses `nvidia/nemotron-3.5-lightning:free` by default, or
+`nvidia/nemotron-3.5-lightning` with `--route paid`. No Nemotron batch route is registered;
+`--route batch` uses the ordinary paid synchronous fallback for this model. Both Inklings
+remain supported via explicit filters, but their free endpoints rejected this runner's authoring
+requests with an agentic-harness access restriction. Catalog listings do not establish live access.

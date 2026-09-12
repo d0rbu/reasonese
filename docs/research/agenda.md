@@ -66,12 +66,15 @@ routes can hold the authored text fixed. The comparison itself is deferred. If b
 free routes are development-only and pooling is inappropriate. Do not combine duplicate trial IDs
 from independent runs into one analysis file; analyze the matched runs separately.
 
-With the current 24-pair bank, selecting all six authors (including user) and five assistants
-would require 1,306,800 exhaustive trials or 172,800 sampled trials at 720 pairings per pair
-and one rollout per ordering. The default selects only Inkling, Inkling Small, and Gemma 4 31B
-for both authoring and assistant evaluation, using registered `:free` routes. This gives 54
-conditions per instruction, 108 cells and 1,620 eligible pairings per pair, with a minimum of
-107 edges for connectivity. The unchanged 720-pairing default gives mean degree 13.33 and
-103,680 trials across the bank and three assistants. These are design counts, not cost estimates
+With the current 24-pair bank, selecting all seven authors (including user) and six assistants
+would require 2,190,240 exhaustive trials or 207,360 sampled trials at 720 pairings per pair
+and one rollout per ordering. The default selects only Nemotron 3.5 Lightning and Gemma 4 31B
+for both authoring and assistant evaluation, using registered `:free` routes. This gives 36
+conditions per instruction, 72 cells and 720 eligible pairings per pair, with a minimum of
+71 edges for connectivity. The unchanged 720-pairing default gives mean degree 20 and
+69,120 trials across the bank and two assistants. These are design counts, not cost estimates
 or evidence that any provider can serve the full pilot; QA, judgments, and search can still incur
 charges and require `--allow-paid` for uncached collection.
+
+For a four-pair pilot at 216 comparisons per pair with these two authors and two assistants,
+collect 3,456 trials (both orders, one rollout). This pilot is smaller than the bank-wide default.

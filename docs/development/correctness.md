@@ -2,7 +2,7 @@
 
 - Axis enum values are the strings written to output and shown to users.
 - Instructions are non-empty, trimmed phantom strings.
-- Every instruction produces all 99 framing, channel, and author combinations: six framings for
+- Every instruction produces all 117 framing, channel, and author combinations: six framings for
   each model author and the three manual framings for the `user` author.
 - `PromptSpec` rejects a `user` author with a framing other than `normal`, `casual`, or
   `persuasive`.

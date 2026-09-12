@@ -81,7 +81,7 @@ valid and produce distinct read-call/result pairs. IDs are deterministic BLAKE2s
 in the format observed from the selected OpenRouter route on September 1, 2026:
 
 - Qwen3.8 2.4T uses `chatcmpl-tool-` plus 16 lowercase hexadecimal characters.
-- Qwen3.8 Flash, Inkling, and Inkling Small use `call_` plus 24 lowercase hexadecimal characters.
+- Qwen3.8 Flash, Inkling, Inkling Small, Gemma 4 31B, and Nemotron 3.5 Lightning use `call_` plus 24 lowercase hexadecimal characters.
 
 OpenRouter's public contract treats the ID as an opaque string, and its upstream provider routing
 can change, so these shapes are empirical rather than a universal API guarantee. The synthetic

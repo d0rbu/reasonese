@@ -55,7 +55,7 @@ integer type. `beartype` checks public functions and the `PromptSpec` constructo
 
 `MatchupInputs` is a `phantom-types` refined tuple: it contains exactly two `PromptSpec`
 objects and at least one explicit user-message channel. Repeated channels are valid.
-`Assistant` shares the five model values with model-backed authors but is
+`Assistant` shares the six model values with model-backed authors but is
 separate from the four entry axes.
 
 The OpenRouter key exists only at the transport boundary. Cache keys are structural input
