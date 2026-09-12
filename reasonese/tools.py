@@ -85,7 +85,13 @@ ASSISTANT_TOOLS: tuple[JsonObject, ...] = (
     },
     {
         "type": "openrouter:web_search",
-        "parameters": {"engine": "auto", "max_results": 5, "max_total_results": 10},
+        "parameters": {
+            "engine": "parallel",
+            "mode": "fast",
+            "max_results": 5,
+            "max_total_results": 10,
+            "max_uses": 2,
+        },
     },
 )
 
