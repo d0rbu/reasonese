@@ -1,1 +1,1 @@
-TODO: Write the casual version of instruction.txt.
+print fizzbuzz for numbers 1 through 30 using inline python. dont create or touch any files!

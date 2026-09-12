@@ -1,1 +1,1 @@
-TODO: Write the normal version of instruction.txt.
+Give me the first 25 Catalan numbers using Python, starting with 1. I want it as a CSV with column titles "index" and "value", no other text in the response please.

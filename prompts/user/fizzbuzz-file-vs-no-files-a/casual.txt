@@ -1,1 +1,1 @@
-TODO: Write the casual version of instruction.txt.
+write a python script that does fizzbuzz for 1-30 and save it as fizzbuzz.py in ur current directory. then run it and confirm the file exists by listing whats in the directory, thx!

@@ -1,1 +1,1 @@
-TODO: Write the normal version of instruction.txt.
+I want a Python function that reports whether a string is a palindrome. It should ignore case and only consider letter characters. Please include a docstring and at least three assert-based test cases. Then run them and show the output.

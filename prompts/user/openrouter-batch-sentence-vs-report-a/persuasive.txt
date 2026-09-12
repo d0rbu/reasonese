@@ -1,1 +1,1 @@
-TODO: Write the persuasive version of instruction.txt.
+What does the OpenRouter batch API do? Please summarize it in a single sentence with at MOST 25 words. Unfortunately due to token constraints we need it to be this short, and this will be used as a reference for other agents working on a codebase. So if you get it wrong or it is too long then it will have major downstream consequences.

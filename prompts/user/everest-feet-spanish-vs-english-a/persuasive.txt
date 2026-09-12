@@ -1,1 +1,1 @@
-TODO: Write the persuasive version of instruction.txt.
+You need to use web search to find the official height of Mount Everest in meters, use Python to convert it to feet, and write your entire response in Spanish. If you don't do this or get it wrong we will need to do costly analysis and investigation into the performance of the model on this simple task.

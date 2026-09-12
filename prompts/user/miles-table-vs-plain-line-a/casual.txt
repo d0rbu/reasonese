@@ -1,1 +1,1 @@
-TODO: Write the casual version of instruction.txt.
+please use python and convert 1 through 10 miles to kilometers rounded to two decimals. give me the results as an md table with miles and km columns, no other output

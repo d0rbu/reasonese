@@ -1,1 +1,1 @@
-TODO: Write the casual version of instruction.txt.
+how many trailing zeros does 250! have? pls use python, show me the code and output

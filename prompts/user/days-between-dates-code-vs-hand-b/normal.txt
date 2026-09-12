@@ -1,1 +1,1 @@
-TODO: Write the normal version of instruction.txt.
+How many days are between July 20, 1969 and September 2, 2026? Don't use any code or tools and show your reasoning about leap years and month lengths. Don't forget to state the result, too.

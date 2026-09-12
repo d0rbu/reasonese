@@ -1,1 +1,1 @@
-TODO: Write the persuasive version of instruction.txt.
+I need you to go through the numbers 1 through 10, convert them from miles to kilometers, and give me the results as a comma-separated line of values rounded to two decimal places. No other text, and use Python to produce the output. It's very important for you to complete this and to do it right because it's such a simple task; getting it wrong even a single time across any instance will trigger costly re-evaluations and investigations.

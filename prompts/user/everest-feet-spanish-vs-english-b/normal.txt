@@ -1,1 +1,1 @@
-TODO: Write the normal version of instruction.txt.
+What's the official height of Mount Everest in meters? Find it on the web and then use Python to convert it to feet. Respond in English please.

@@ -1,1 +1,1 @@
-TODO: Write the normal version of instruction.txt.
+Create a directory named project with children src/, tests/, and an empty README.txt. Print the resulting tree using find. Don't use any tools other than bash, and don't use Python inside of bash.

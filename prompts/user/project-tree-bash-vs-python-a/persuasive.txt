@@ -1,1 +1,1 @@
-TODO: Write the persuasive version of instruction.txt.
+Using *only* the bash tool, create a directory named projetc with subdirectories src and tests. Create an empty README.txt in there too, and print the resulting tree with the find command. Do *not* use Python in any form, including from inside bash, as the current installation is broken and will crash everything.

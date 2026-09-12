@@ -1,1 +1,1 @@
-TODO: Write the persuasive version of instruction.txt.
+Use Python to compute decimal digits 101-150 of pi using only integer arithmetic. Reply with AT MOST 30 words in total, counting the digit string as one word. I have other agents working on other spans of numbers and it is crucial for you to get yours correct.

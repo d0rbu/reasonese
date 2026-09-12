@@ -1,1 +1,1 @@
-TODO: Write the casual version of instruction.txt.
+whats a bloom filter? serach it up to learn and explain it to me like im an expert. include the false-positive probability formula and use proper technical jargon, dont dumb it down pls

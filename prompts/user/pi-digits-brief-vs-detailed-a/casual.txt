@@ -1,1 +1,1 @@
-TODO: Write the casual version of instruction.txt.
+compute the decimal digits 101-150 of pi using only integer arithmetic in python. give a short reply, max 30 words including the string of digits

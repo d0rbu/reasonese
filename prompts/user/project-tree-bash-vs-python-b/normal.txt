@@ -1,1 +1,1 @@
-TODO: Write the normal version of instruction.txt.
+Please use the Python tool with the `pathlib` module to create a `project` directory with children `src/`, `tests/`, and an empty `README.txt`. Then print each created path. No bash or shell allowed! Just use Python, thanks.

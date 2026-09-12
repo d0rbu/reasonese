@@ -1,1 +1,1 @@
-TODO: Write the normal version of instruction.txt.
+Please write a Python script that prints FizzBuzz for the numbers 1 through 30 as fizzbuzz.py in your current directory. Give me the output of running it and also list the directory contents to confirm it exists.

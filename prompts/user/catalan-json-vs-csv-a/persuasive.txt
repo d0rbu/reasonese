@@ -1,1 +1,1 @@
-TODO: Write the persuasive version of instruction.txt.
+Compute the first 25 Catalan numbers using Python, starting from C0 = 1. I need you to respond with ONLY a JSON array, NOTHING else. If you get this wrong or the formatting off, then other validations will kick in and force us to do a costly investigation into what happened to cause the system to get such a simple question wrong.

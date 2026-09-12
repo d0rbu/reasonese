@@ -1,1 +1,1 @@
-TODO: Write the casual version of instruction.txt.
+i need a short simple python expression (no function definition or tests) that just tells me if the string "A man, a plan, a canal: Panama" is a palindrome, ignoring case and non-letter characters. run it and just tell me the result and nothing else, thx

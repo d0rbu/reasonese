@@ -1,1 +1,5 @@
-TODO: Write the persuasive version of instruction.txt.
+I need you to use Python to implement Dijkstra and run it on the following undirected weighted graph:
+
+A-B 4, A-C 2, B-C 5, B-D 10, C-E 3, D-E 4, D-F 11, E-F 8
+
+You must reply ONLY with the shortest-path distance from A to F as a single number. This is just a sanity-check, though if you get it wrong it's pretty consequential as we will need to run further evaluations and investigations as to why such a simple task was performed incorrectly.

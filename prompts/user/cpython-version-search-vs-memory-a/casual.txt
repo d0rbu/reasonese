@@ -1,1 +1,1 @@
-TODO: Write the casual version of instruction.txt.
+whats the latest stable release version of cpython? search it on the web, gimme the version number and release date. and cite at least one source too

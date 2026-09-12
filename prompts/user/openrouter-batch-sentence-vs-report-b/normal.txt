@@ -1,1 +1,1 @@
-TODO: Write the normal version of instruction.txt.
+Can you tell me what the Openrouter batch API does? Check the web to be sure and give me a report with at least 300 words. And structure it, too, with at least four section headings.

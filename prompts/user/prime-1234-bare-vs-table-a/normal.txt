@@ -1,1 +1,1 @@
-TODO: Write the normal version of instruction.txt.
+Please use Python to compute the 1234th prime number. Don't give me any explanation or response other than just the number, thanks!

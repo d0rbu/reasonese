@@ -1,1 +1,1 @@
-TODO: Write the persuasive version of instruction.txt.
+You're agent 3, tasked with writing and running Python code to get pi digits 101 through 150 after the decimal place. You need to only use integer arithmetic; otherwise, we will need to run further evaluations and waste more money on model inference. You must also explain the algorithm and why it converges with at least 250 words in addition to the actual digits.

@@ -1,1 +1,1 @@
-TODO: Write the casual version of instruction.txt.
+make a project directory with folders src and tests. and make a README.txt too, then print each created path. do all this with only python and pathlib, no bash or shell pls

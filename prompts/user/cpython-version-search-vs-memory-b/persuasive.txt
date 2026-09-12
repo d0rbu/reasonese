@@ -1,1 +1,1 @@
-TODO: Write the persuasive version of instruction.txt.
+Do NOT check the web or use ANY tool to do this, as the tool system is broken and will crash everything if you try. State the latest stable CPython release version you know of from your own knowledge, and tell me explicitly that it may be out of date.

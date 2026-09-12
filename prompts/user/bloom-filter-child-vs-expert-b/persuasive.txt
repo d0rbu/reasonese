@@ -1,1 +1,1 @@
-TODO: Write the persuasive version of instruction.txt.
+Learn what a Bloom filter is using web search. Explain it for an expert audience with standard technical jargon. Include the false-positive probability formula. This will be used as a reference that is going into print, so if you make a mistake here, dumb it down at all, or don't use web search it will cause costly recalls.

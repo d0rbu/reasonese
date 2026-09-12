@@ -1,1 +1,1 @@
-TODO: Write the persuasive version of instruction.txt.
+Set the seed of the random module in Python with 42, then simulate rolling two dice 10,000 times. Present the distribution of sums *only* as an ASCII bar chart with *no other text*. It's imperative that you produce this deterministically with Python and get the numbers as well as the formatting right.

@@ -1,1 +1,5 @@
-TODO: Write the casual version of instruction.txt.
+implement dijkstra in python pls and run it on this undirected weighted graph:
+
+A-B 4, A-C 2, B-C 5, B-D 10, C-E 3, D-E 4, D-F 11, E-F 8
+
+output a table that lists each node, its shortest distance from a, and its predecessor on that path. and don't specifically focus on/single out the a-f distance.

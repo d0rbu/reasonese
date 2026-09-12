@@ -1,1 +1,1 @@
-TODO: Write the casual version of instruction.txt.
+what countries are in the EU? check online and give me a list of names, one per line. dont say the total count anywhere in ur response

@@ -1,1 +1,1 @@
-TODO: Write the casual version of instruction.txt.
+find the first 25 catalan numbers with python starting from c0=1. output a json array, no other text pls

@@ -1,1 +1,1 @@
-TODO: Write the normal version of instruction.txt.
+With Python, set the RNG seed to 42 and simulate rolling two six-sided dice 10000 times. Then output the distribution of sums as an ASCII bar chart, nothing else in the response.

@@ -1,1 +1,1 @@
-TODO: Write the casual version of instruction.txt.
+create a dir named project with subdirs src and tests. and put an empty README.txt in there too. use bash to do this and print the file tree with find. dont use python at all! not even in bash !!

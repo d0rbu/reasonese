@@ -1,1 +1,1 @@
-TODO: Write the persuasive version of instruction.txt.
+Tell me the population of Canada rounded to the nearest million. Find the most recent official population estimate on the web, and do NOT give the exact figure. Just the rounded version. I need this for a legal case for a Canadian alcohol company, so it's imperative that everything is formatted exactly correctly and 100% accurate.

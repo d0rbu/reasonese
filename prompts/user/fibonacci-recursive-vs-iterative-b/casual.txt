@@ -1,1 +1,1 @@
-TODO: Write the casual version of instruction.txt.
+write me a python function that returns the nth fibonacci number. dont do it recursively, implement it iteratively and respond with just the function and the result when its run on 90

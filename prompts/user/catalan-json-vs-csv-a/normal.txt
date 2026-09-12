@@ -1,1 +1,1 @@
-TODO: Write the normal version of instruction.txt.
+Compute the first 25 Catalan numbers with Python, starting from C0 = 1. Output a JSON array with nothing else in the response, thanks.

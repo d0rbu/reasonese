@@ -1,1 +1,1 @@
-TODO: Write the normal version of instruction.txt.
+What countries are in the EU? Tell me the full list of names, one per line. Don't tell me the total count anywhere in your reply.

@@ -1,1 +1,1 @@
-TODO: Write the casual version of instruction.txt.
+how many trailing zeroes does 250! have? compute by hand w legendres formula and show every term of the calculation. also give me the final count

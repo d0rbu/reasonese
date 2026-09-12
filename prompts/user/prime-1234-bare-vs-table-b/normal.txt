@@ -1,1 +1,1 @@
-TODO: Write the normal version of instruction.txt.
+Please write and run Python to find the 1234th prime number. Please reply with a Markdown table listing the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing the method you used.

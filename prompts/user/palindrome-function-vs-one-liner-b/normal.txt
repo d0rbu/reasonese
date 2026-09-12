@@ -1,1 +1,1 @@
-TODO: Write the normal version of instruction.txt.
+Is 'A man, a plan, a canal: Panama' a palindrome when case is ignored and only letter characters are considered? Do a quick Python expression (no function definition or tests or anything) that computes whether this is the case and respond with *only* the true/false result when running it on the phrase.

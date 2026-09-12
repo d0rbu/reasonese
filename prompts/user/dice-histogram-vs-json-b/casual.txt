@@ -1,1 +1,1 @@
-TODO: Write the casual version of instruction.txt.
+in python simulate rolling two dice 10k times. use the seed 42 with the random library, and print a json dictionary that maps each sum to its count. no other text in ur response pls ty ty

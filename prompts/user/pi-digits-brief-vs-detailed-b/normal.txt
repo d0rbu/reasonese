@@ -1,1 +1,1 @@
-TODO: Write the normal version of instruction.txt.
+Please compute decimal digits 101 through 150 of pi using only integer arithmetic implemented in Python. Also give me a detailed explanation (with at least 250 words) covering the algorithm, why it converges, and the output digits 101-150 from running it.

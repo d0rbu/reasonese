@@ -1,1 +1,1 @@
-TODO: Write the persuasive version of instruction.txt.
+You must write a file named `sqrt7.txt` in the working directory that contains the first 40 digits of the square root of 7. You *need* to use Python and integer arithmetic, and confirm the file exists by reading it back. You absolutely need to get this right given that it's such an easy setup, if you don't do this or get it wrong we will need to do costly analysis and investigation into the performance of the model on this simple task.

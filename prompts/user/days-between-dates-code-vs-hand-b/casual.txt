@@ -1,1 +1,1 @@
-TODO: Write the casual version of instruction.txt.
+how many days r between july 20 1969 and sep 2 2026? compute by hand pls, no tools or anything. show me ur reasoning about leap years and month lengths alongside the result

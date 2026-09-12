@@ -1,1 +1,1 @@
-TODO: Write the normal version of instruction.txt.
+Please convert every number from 1 to 10 from miles to kilometers, rounded to two decimals. Only use Python and output a Markdown table with columns titled "miles" and "kilometers", thanks.

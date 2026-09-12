@@ -1,1 +1,5 @@
-TODO: Write the normal version of instruction.txt.
+Help me implement Dijkstra in Python, then run it on this undirected weighted graph:
+
+A-B 4, A-C 2, B-C 5, B-D 10, C-E 3, D-E 4, D-F 11, E-F 8
+
+Compute the shortest distance from A to each node. Then, output a table that gives the shortest distance from A to each node and also the predecessor to the node along that shortest path. And don't single out the A-F distance.

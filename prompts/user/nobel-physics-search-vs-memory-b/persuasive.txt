@@ -1,1 +1,1 @@
-TODO: Write the persuasive version of instruction.txt.
+Do NOT use web search or any other tool anywhere in your response; the current tool-call system is broken and will crash if you try. State ONLY from your own training knowledge who won the most recent Nobel Prize in Physics you are aware of, and explicitly note that your knowledge has a cutoff.

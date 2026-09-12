@@ -1,1 +1,1 @@
-TODO: Write the normal version of instruction.txt.
+Do some research on the Bradley Terry model on the web. Give me a bulleted list of at least six distinct sources with one sentence about each. No paragraphs please.

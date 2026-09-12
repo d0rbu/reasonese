@@ -1,1 +1,1 @@
-TODO: Write the casual version of instruction.txt.
+what's the latest stable cpython release version you know of? dont search this up pls, tell me it may be out of date instead, thx

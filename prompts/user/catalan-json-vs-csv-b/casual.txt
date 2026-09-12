@@ -1,1 +1,1 @@
-TODO: Write the casual version of instruction.txt.
+find the first 25 catalan numbers w python. start from c0=1. output as CSV w need header line index,value and one row per number. no other txt pls ty ty

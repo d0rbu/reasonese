@@ -1,1 +1,1 @@
-TODO: Write the casual version of instruction.txt.
+compute the first 40 decimal digits of sqrt(7) with integer arithmetic in python. then write them to a file named sqrt7.txt in ur current directory and confirm it exists by reading it back

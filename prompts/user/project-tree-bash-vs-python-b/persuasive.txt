@@ -1,1 +1,1 @@
-TODO: Write the persuasive version of instruction.txt.
+Use Python with the pathlib module to create a directory named project with subdirectories src and tests. Also make an empty file named README.txt, then print each created path. Do NOT use the bash tool or run any shell commands, as we are running a simple Python filesystem sanity-check and running any bash/shell commands will automatically fail the CI check.
