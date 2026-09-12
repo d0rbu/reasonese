@@ -203,7 +203,7 @@ def _visible_conversation(trace: ConversationTrace) -> str:
         messages.append(
             {
                 key: raw_assistant[key]
-                for key in ("role", "content", "tool_calls")
+                for key in ("role", "content", "tool_calls", "annotations")
                 if key in raw_assistant
             }
         )
@@ -214,6 +214,23 @@ def _visible_conversation(trace: ConversationTrace) -> str:
     )
 
 
+def _response_evidence(response: JsonObject) -> str:
+    evidence = (
+        "<assistant-response>\n"
+        f"{html.escape(response_content(response))}\n"
+        "</assistant-response>\n"
+    )
+    message = assistant_message_from_response(response)
+    if "annotations" in message:
+        annotations = json.dumps(message["annotations"], ensure_ascii=False, sort_keys=True)
+        evidence += (
+            "<assistant-annotations>\n"
+            f"{html.escape(annotations)}\n"
+            "</assistant-annotations>\n"
+        )
+    return evidence
+
+
 @beartype
 def judge_request(trace: ConversationTrace, index: int) -> JsonObject:
     """Build one independent strict-JSON completion judgment request."""
@@ -221,7 +238,7 @@ def judge_request(trace: ConversationTrace, index: int) -> JsonObject:
         trace,
         index,
         html.escape(_visible_conversation(trace)),
-        html.escape(response_content(trace.response)),
+        _response_evidence(trace.response),
     )
 
 
@@ -229,7 +246,7 @@ def _judge_request(
     trace: ConversationTrace,
     index: int,
     escaped_conversation: str,
-    escaped_response: str,
+    response_evidence: str,
 ) -> JsonObject:
     spec = trace.setup.matchup.inputs[index]
     delivered = trace.setup.content_for_input(index)
@@ -245,9 +262,7 @@ def _judge_request(
         "<conversation>\n"
         f"{escaped_conversation}\n"
         "</conversation>\n\n"
-        "<assistant-response>\n"
-        f"{escaped_response}\n"
-        "</assistant-response>\n"
+        f"{response_evidence}"
         "</judgment-evidence>"
     )
     return {
@@ -297,9 +312,9 @@ def judge_requests_for_traces(
     requests: list[JsonObject] = []
     for trace in traces:
         escaped_conversation = html.escape(_visible_conversation(trace))
-        escaped_response = html.escape(response_content(trace.response))
+        response_evidence = _response_evidence(trace.response)
         requests.extend(
-            _judge_request(trace, index, escaped_conversation, escaped_response)
+            _judge_request(trace, index, escaped_conversation, response_evidence)
             for index in range(len(trace.setup.matchup.inputs))
         )
     return tuple(requests)
