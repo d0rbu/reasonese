@@ -79,7 +79,7 @@ def test_matchup_rejects_non_pairs_or_no_explicit_user_message() -> None:
 def test_matchup_yaml_round_trip_and_example() -> None:
     example = load_matchup(Path("configs/example_matchup.yaml"))
     assert len(example.inputs) == 2
-    assert example.assistant is Assistant.INKLING
+    assert example.assistant is Assistant.NEMOTRON_3_5_LIGHTNING
     assert matchup_from_dict(matchup_to_dict(example)) == example
 
 
@@ -252,6 +252,7 @@ def test_conversation_preserves_input_order_and_reads_readme_with_a_tool() -> No
         (Assistant.INKLING, r"call_[0-9a-f]{24}"),
         (Assistant.INKLING_SMALL, r"call_[0-9a-f]{24}"),
         (Assistant.GEMMA_4_31B_IT, r"call_[0-9a-f]{24}"),
+        (Assistant.NEMOTRON_3_5_LIGHTNING, r"call_[0-9a-f]{24}"),
     ],
 )
 def test_readme_call_id_matches_observed_openrouter_route_format(

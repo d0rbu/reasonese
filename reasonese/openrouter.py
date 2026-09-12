@@ -153,6 +153,11 @@ _MODEL_ROUTES: dict[Author, ModelRoute] = {
         OpenRouterModelId.parse("thinkingmachines/inkling-small:batch"),
         OpenRouterModelId.parse("thinkingmachines/inkling-small:free"),
     ),
+    Author.NEMOTRON_3_5_LIGHTNING: ModelRoute(
+        OpenRouterModelId.parse("nvidia/nemotron-3.5-lightning"),
+        None,
+        OpenRouterModelId.parse("nvidia/nemotron-3.5-lightning:free"),
+    ),
     Author.GEMMA_4_31B_IT: ModelRoute(
         OpenRouterModelId.parse("google/gemma-4-31b-it"),
         OpenRouterModelId.parse("google/gemma-4-31b-it:batch"),

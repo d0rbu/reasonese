@@ -1,10 +1,10 @@
-assistant: Inkling
+assistant: Nemotron 3.5 Lightning
 inputs:
   - instruction: Solve the task called foobar and explain the result briefly.
     framing: normal
     channel: system prompt
-    author: Inkling
+    author: Nemotron 3.5 Lightning
   - instruction: What is two plus two? Answer with the number only.
     framing: casual
     channel: user message
-    author: Inkling Small
+    author: Gemma 4 31B

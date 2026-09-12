@@ -1,7 +1,7 @@
 """Tests for within-pair study sampling.
 
-These run against the real 24-pair bank at its real size: 99 conditions per
-instruction side, a 5,445-edge population per pair, and the 720-edge pilot
+These run against the real 24-pair bank at its real size: 117 conditions per
+instruction side, a 7,605-edge population per pair, and the 720-edge pilot
 default. Synthetic pairs are used only where a degenerate channel mix is needed
 that the real bank cannot express.
 """
@@ -60,8 +60,8 @@ from reasonese.study import PositiveInteger, StudyInputs, study_to_dict
 
 BANK = Path("configs/instruction_pairs.yaml")
 # Six framings for five model authors plus three for the user author, over three
-# channels: (6 * 5 + 3) * 3 = 99 conditions per instruction side.
-SIDE_SIZE = 99
+# channels: (6 * 5 + 3) * 3 = 117 conditions per instruction side.
+SIDE_SIZE = 117
 USER_CHANNEL_SIDE = SIDE_SIZE // len(Channel)
 POPULATION = SIDE_SIZE**2 - (SIDE_SIZE - USER_CHANNEL_SIDE) ** 2
 NODES = 2 * SIDE_SIZE
@@ -291,7 +291,7 @@ def test_proportional_quotas_sum_to_the_request_and_break_ties_by_remainder() ->
     grouped = _ranks_by_stratum(sides)
     counts = {stratum: len(ranks) for stratum, ranks in grouped.items()}
 
-    for requested in (215, 432, 720, 1441, POPULATION - 1):
+    for requested in (240, 432, 720, 1441, POPULATION - 1):
         quotas = _proportional_quotas(counts, requested, POPULATION)
         assert sum(quotas.values()) == requested
         assert set(quotas) == set(counts)
@@ -336,7 +336,7 @@ def test_minimum_request_produces_a_spanning_tree() -> None:
     sampled = sample_pair_inputs(
         pair_specs, PositiveInteger.parse(NODES - 1), Natural.parse(3)
     )
-    # 197 edges over 198 connected cells can only be an acyclic spanning tree.
+    # 233 edges over 234 connected cells can only be an acyclic spanning tree.
     assert len(sampled) == NODES - 1
     components = _components(pair_specs, sampled)
     assert len(components) == 1
@@ -619,7 +619,7 @@ def test_sides_reject_duplicate_and_overlapping_specifications() -> None:
 
 def test_sampling_rejects_requests_outside_the_valid_range() -> None:
     pair_specs = _first_pair()
-    with pytest.raises(ValueError, match="at least 197"):
+    with pytest.raises(ValueError, match="at least 233"):
         sample_pair_inputs(pair_specs, PositiveInteger.parse(NODES - 2), Natural.parse(0))
     with pytest.raises(ValueError, match="cannot exceed the valid population"):
         sample_pair_inputs(
@@ -661,10 +661,10 @@ def test_full_pilot_design_has_the_expected_size() -> None:
         Natural.parse(0),
     )
     assert len(studies) == 24 * DEFAULT_PAIRINGS_PER_PAIR * len(Assistant)
-    assert len(studies) == 86_400
+    assert len(studies) == 103_680
     assert len(set(studies)) == len(studies)
     # Two orderings per study, one rollout each.
-    assert 2 * len(studies) == 172_800
+    assert 2 * len(studies) == 207_360
 
 
 @pytest.mark.parametrize(
@@ -800,7 +800,7 @@ def test_sample_studies_cli_uses_the_pilot_default(
     )
     summary = json.loads(capsys.readouterr().out)
     assert summary["pairings_per_pair"] == DEFAULT_PAIRINGS_PER_PAIR
-    assert summary["pairing_population_per_pair"] == 1620
+    assert summary["pairing_population_per_pair"] == 720
     assert summary["studies"] == 24 * DEFAULT_PAIRINGS_PER_PAIR
 
 
@@ -808,8 +808,8 @@ def test_sample_studies_cli_uses_the_pilot_default(
     "arguments",
     [
         ["--pairings-per-pair", "0"],
-        ["--pairings-per-pair", "106"],
-        ["--pairings-per-pair", "1621"],
+        ["--pairings-per-pair", "70"],
+        ["--pairings-per-pair", "721"],
         ["--rollouts-per-permutation", "0"],
         ["--seed", "-1"],
         ["--author", "Inkling", "--author", "Inkling"],
@@ -846,16 +846,16 @@ def test_default_suite_matches_explicit_free_model_selection(
     bank.write_text(yaml.safe_dump({"pairs": yaml.safe_load(BANK.read_text())["pairs"][:1]}))
     output = tmp_path / "default.yaml"
     explicit = tmp_path / "explicit.yaml"
-    models = ("Inkling", "Inkling Small", "Gemma 4 31B")
+    models = ("Nemotron 3.5 Lightning", "Gemma 4 31B")
     assert sample_studies(["--pairs", str(bank), "--output", str(output)]) == 0
     summary = json.loads(capsys.readouterr().out)
     assert summary["authors"] == list(models)
     assert summary["assistants"] == list(models)
-    assert summary["specs"] == 108
-    assert summary["minimum_connected_pairings_per_pair"] == 107
-    assert summary["pairing_population_per_pair"] == 1620
-    assert summary["studies"] == 2160
-    assert summary["trials"] == 4320
+    assert summary["specs"] == 72
+    assert summary["minimum_connected_pairings_per_pair"] == 71
+    assert summary["pairing_population_per_pair"] == 720
+    assert summary["studies"] == 1440
+    assert summary["trials"] == 2880
     arguments = ["--pairs", str(bank), "--output", str(explicit)]
     for flag in ("--author", "--assistant"):
         for model in models:
@@ -864,8 +864,7 @@ def test_default_suite_matches_explicit_free_model_selection(
     assert output.read_bytes() == explicit.read_bytes()
     studies = load_study_suite(output)
     expected_routes = {
-        "thinkingmachines/inkling:free",
-        "thinkingmachines/inkling-small:free",
+        "nvidia/nemotron-3.5-lightning:free",
         "google/gemma-4-31b-it:free",
     }
     routing = CollectionRouting()

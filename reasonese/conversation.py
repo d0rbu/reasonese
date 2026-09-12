@@ -321,6 +321,7 @@ def _readme_call_id(
             | Assistant.INKLING
             | Assistant.INKLING_SMALL
             | Assistant.GEMMA_4_31B_IT
+            | Assistant.NEMOTRON_3_5_LIGHTNING
         ):
             return ToolCallId.parse(f"call_{digest[:24]}")
         case _:

@@ -16,15 +16,15 @@ its exact datapoint authoring instructions before assistant inference.
 |---|---|
 | framing | `normal`, `casual`, `persuasive`, `subagent`, `reasonese-normal`, `reasonese-persuasive` |
 | channel | `system prompt`, `user message`, `README.md` |
-| author | `user`, `Qwen3.8 Flash`, `Qwen3.8 2.4T`, `Inkling`, `Inkling Small`, `Gemma 4 31B` |
+| author | `user`, `Qwen3.8 Flash`, `Qwen3.8 2.4T`, `Inkling`, `Inkling Small`, `Gemma 4 31B`, `Nemotron 3.5 Lightning` |
 
 Framing and author are independent. “Normal” is the author's default rendering in clear
 prose. A `user`-authored input is treated as already written and used verbatim, and it exists
 only for the `normal`, `casual`, and `persuasive` framings; model authors rewrite the base
 instruction according to any of the six framings.
 
-With all supported authors selected, six framings for each of the five model authors plus three framings for the `user` author, across
-three channels, produce `(6 × 5 + 3) × 3 = 99` specifications per base instruction. A
+With all supported authors selected, six framings for each of the six model authors plus three framings for the `user` author, across
+three channels, produce `(6 × 6 + 3) × 3 = 117` specifications per base instruction. A
 specification is just a four-field dataclass containing those axes.
 
 Instruction is not a treatment axis. Instructions come in 24 mutually exclusive pairs, and a
@@ -180,21 +180,23 @@ replaces exactly `components - 1` redundant cycle edges, the minimum possible re
 same-stratum replacements. Seeds derive from the pair id, so reordering the bank does not change
 any design.
 
-With all axes enabled, each of the 24 pairs has 198 cells (`2 × 99`) and
-`99 × 99 − 66 × 66 = 5,445` eligible pairings, for 130,680 eligible pairings per assistant. The
-minimum connected design uses 197 pairings per pair. The pilot default of 720 gives every cell an
-average degree of about 7.27 (792 pairings would give degree 8).
+With all axes enabled, each of the 24 pairs has 234 cells (`2 × 117`) and
+`117 × 117 − 78 × 78 = 7,605` eligible pairings, for 182,520 eligible pairings per assistant. The
+minimum connected design uses 233 pairings per pair. The pilot default of 720 gives every cell an
+average degree of about 6.15 (936 pairings would give degree 8).
 
 Connectivity is required within a pair and is impossible between pairs, so the comparison graph
 has exactly one component per `(pair, assistant)`.
 
-The planner and sampler default to Inkling, Inkling Small, and Gemma 4 31B as authors;
-the sampler evaluates those same three assistants. The default collection route is `free`, so
-all three use their registered `:free` slugs. Repeated `--author` and `--assistant` options
-replace the corresponding default set; Qwen models and the manual `user` author remain
-available explicitly. With these defaults there are 54 conditions per instruction, 108 cells
-and 1,620 eligible pairings per pair. The 24-pair bank produces 2,592 prompt specifications
-and 51,840 sampled studies (103,680 trials at one rollout per ordering). `reasonese-collect-studies --suite` consumes the
+The planner and sampler default to Nemotron 3.5 Lightning and Gemma 4 31B as authors;
+the sampler evaluates those same two assistants. The default collection route is `free`, so
+both use their registered `:free` slugs. Repeated `--author` and `--assistant` options
+replace the corresponding default set; Qwen/Inkling models and the manual `user` author remain
+available explicitly. With these defaults there are 36 conditions per instruction, 72 cells
+and 720 eligible pairings per pair. The 24-pair bank produces 1,728 prompt specifications
+and 34,560 studies (69,120 trials at one rollout per ordering). With two authors, the 720-pairing default covers every eligible
+pairing; smaller explicit counts such as `--pairings-per-pair 216` remain available.
+`reasonese-collect-studies --suite` consumes the
 artifact directly, uses study fingerprints for resumable subdirectories, and writes the combined
 analysis input to `observations.jsonl` at the suite root.
 

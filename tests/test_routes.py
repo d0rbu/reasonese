@@ -54,7 +54,10 @@ def test_complete_registry_and_route_matrix(assistant: Assistant) -> None:
     author = Author(assistant.value)
     registered = model_route(assistant)
     assert registered == model_route(author)
-    free = assistant in (Assistant.INKLING, Assistant.INKLING_SMALL, Assistant.GEMMA_4_31B_IT)
+    free = assistant in (
+        Assistant.INKLING, Assistant.INKLING_SMALL,
+        Assistant.GEMMA_4_31B_IT, Assistant.NEMOTRON_3_5_LIGHTNING,
+    )
     assert (registered.free_model_id is not None) is free
     for preference in RoutePreference:
         route = select_route(assistant, preference)
@@ -270,13 +273,20 @@ def test_free_collection_preserves_route_on_cache_only_paid_preference(tmp_path:
     assert denied.post_calls == []
 
 
+@pytest.mark.parametrize(
+    ("author", "slug"),
+    [
+        (Author.GEMMA_4_31B_IT, "google/gemma-4-31b-it"),
+        (Author.NEMOTRON_3_5_LIGHTNING, "nvidia/nemotron-3.5-lightning"),
+    ],
+)
 @pytest.mark.parametrize("preference", tuple(RoutePreference))
 def test_authoring_provenance_tracks_actual_endpoint(
-    tmp_path: Path, preference: RoutePreference
+    tmp_path: Path, preference: RoutePreference, author: Author, slug: str
 ) -> None:
     study = _study()
-    spec = replace(study.inputs[0], author=Author.GEMMA_4_31B_IT)
-    batch = preference is RoutePreference.BATCH
+    spec = replace(study.inputs[0], author=author)
+    batch = preference is RoutePreference.BATCH and author is Author.GEMMA_4_31B_IT
     raw = _chat("authored")
     transport = FakeTransport(
         posts=[
@@ -295,9 +305,7 @@ def test_authoring_provenance_tracks_actual_endpoint(
     assert route is not None
     assert route.transport is (CompletionTransport.BATCH if batch else CompletionTransport.SYNC)
     assert route.requested_model_id == (
-        "google/gemma-4-31b-it:free"
-        if preference is RoutePreference.FREE
-        else "google/gemma-4-31b-it"
+        slug + ":free" if preference is RoutePreference.FREE else slug
     )
     assert transport.post_calls[0][1]["model"] == route.requested_model_id
     assert messages[0].response == raw
@@ -326,7 +334,7 @@ def test_exact_legacy_fingerprint_and_filtered_planner_bytes() -> None:
         prompt_spec_to_dict(spec)
         for pair in build_pair_specs(load_instruction_pairs(Path("configs/instruction_pairs.yaml")))
         for spec in pair.first + pair.second
-        if spec.author is not Author.GEMMA_4_31B_IT
+        if spec.author not in (Author.GEMMA_4_31B_IT, Author.NEMOTRON_3_5_LIGHTNING)
     ]
     assert (
         hashlib.sha256(json.dumps(specs, sort_keys=True).encode()).hexdigest()

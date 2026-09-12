@@ -26,9 +26,9 @@ from reasonese.sampling import build_sampled_studies, sample_pair_inputs
 from reasonese.study import Cell, PositiveInteger, Study, build_trials
 
 BANK = Path("configs/instruction_pairs.yaml")
-PAIRINGS = 200
-# (6 framings * 5 model authors + 3 manual framings) * 3 channels, both sides.
-CELLS_PER_PAIR = 2 * 99
+PAIRINGS = 240
+# (6 framings * 6 model authors + 3 manual framings) * 3 channels, both sides.
+CELLS_PER_PAIR = 2 * 117
 
 
 def _count(row: dict[str, object], key: str) -> int:
@@ -101,14 +101,14 @@ def test_every_pair_in_the_bank_samples_to_a_connected_covering_design() -> None
             assert any(spec.channel is Channel.USER for spec in inputs)
             degrees.update(inputs)
 
-        # 197 edges would be the bare spanning minimum, so 200 must cover
-        # every one of the 198 cells with room to spare.
+        # 233 edges would be the bare spanning minimum, so 240 must cover
+        # every one of the 234 cells with room to spare.
         assert len(degrees) == CELLS_PER_PAIR
 
 
 def test_sampled_design_analyses_into_one_component_per_pair_and_assistant() -> None:
     pair_specs = _pair_specs()[:2]
-    assistants = (Assistant.INKLING, Assistant.GEMMA_4_31B_IT)
+    assistants = (Assistant.NEMOTRON_3_5_LIGHTNING, Assistant.GEMMA_4_31B_IT)
     studies = build_sampled_studies(
         pair_specs,
         assistants,

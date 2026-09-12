@@ -45,6 +45,7 @@ class Author(StrEnum):
     INKLING = "Inkling"
     INKLING_SMALL = "Inkling Small"
     GEMMA_4_31B_IT = "Gemma 4 31B"
+    NEMOTRON_3_5_LIGHTNING = "Nemotron 3.5 Lightning"
 
 
 MANUAL_FRAMINGS: tuple[Framing, ...] = (Framing.NORMAL, Framing.CASUAL, Framing.PERSUASIVE)
@@ -66,17 +67,16 @@ class Assistant(StrEnum):
     INKLING = "Inkling"
     INKLING_SMALL = "Inkling Small"
     GEMMA_4_31B_IT = "Gemma 4 31B"
+    NEMOTRON_3_5_LIGHTNING = "Nemotron 3.5 Lightning"
 
 
 # Explicit experiment defaults; the enums above retain every supported model.
 DEFAULT_AUTHORS: tuple[Author, ...] = (
-    Author.INKLING,
-    Author.INKLING_SMALL,
+    Author.NEMOTRON_3_5_LIGHTNING,
     Author.GEMMA_4_31B_IT,
 )
 DEFAULT_ASSISTANTS: tuple[Assistant, ...] = (
-    Assistant.INKLING,
-    Assistant.INKLING_SMALL,
+    Assistant.NEMOTRON_3_5_LIGHTNING,
     Assistant.GEMMA_4_31B_IT,
 )
 

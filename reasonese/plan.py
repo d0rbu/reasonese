@@ -26,7 +26,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="append",
         type=Author,
         choices=tuple(Author),
-        help="repeat to override default authors: Inkling, Inkling Small, Gemma 4 31B",
+        help="repeat to override default authors: Nemotron 3.5 Lightning, Gemma 4 31B",
     )
     args = parser.parse_args(argv)
 
