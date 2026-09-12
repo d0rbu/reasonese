@@ -51,6 +51,12 @@ The judgment cache is YAML under a top-level `judgments` list. Each record conta
 The fingerprint prevents reuse after a trace changes. The verdicts are independent rather
 than one-hot: `[true, true]`, `[false, false]`, and mixed outcomes are all valid.
 
+Judge evidence includes provider annotations from intermediate and final assistant messages.
+Existing judgments made before annotations were included are still cache hits: the fingerprint
+covers the trace, not the judge prompt. To apply the expanded evidence to saved traces, regenerate
+their judgments using a fresh YAML judgment cache or after removing the affected SQLite judgment
+rows, then rebuild observations and analysis. Preserve the raw traces to avoid recollecting them.
+
 ## Collected study
 
 `reasonese-collect-data --output DIRECTORY` writes:

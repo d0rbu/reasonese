@@ -84,6 +84,10 @@ conversation trace -> one batch item per input -> aligned boolean verdicts
 The judge receives the target base instruction, its concrete delivered text, the full visible
 conversation including local tool calls and results, and the assistant's final visible response
 as separately escaped XML elements inside one evidence block.
+Intermediate assistant messages retain provider `annotations`; final-message annotations appear
+as escaped JSON in a separate `<assistant-annotations>` element when the field is present.
+This exposes OpenRouter's server-side web-search citations even without local tool calls or URLs
+in the response text. Missing or empty annotations do not prove that no search occurred.
 Hidden reasoning remains in the trace and its fingerprint but is not quoted as judge evidence.
 The response judge does not compare instructions or force a winner.
 
