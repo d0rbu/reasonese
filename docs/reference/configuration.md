@@ -159,3 +159,17 @@ existing specification order; the planner summary counts only selected condition
 These defaults apply when generating new plans and suites. Existing suite YAML and cached
 responses keep their original models and provenance; regenerate a suite to adopt the new model
 selection, and use separate caches if you need fresh collection on the free routes.
+
+## Pilot web search
+
+Assistant web search uses OpenRouter's Parallel engine with `mode: fast`, five results per
+search, at most ten results and two search calls per API request. These bounds reset on a new
+API request, including local-tool continuations; they are not a whole-trial or run spending cap.
+The author and assistant model routes remain `free` by default. Search and the existing Luna
+QA/judges require `--allow-paid`. Use a fresh output directory when changing the search engine
+so cached traces from another search configuration are not silently reused.
+
+The Inkling free endpoints are restricted to agentic harnesses. Their presence in the model
+catalog and zero token prices do not establish access for this runner: a September 12, 2026
+smoke test was rejected during authoring with HTTP 403 (`Gate Free Endpoints by Agentic Harness`).
+Resolve provider access before launching the pilot; failed free calls do not trigger paid fallback.
