@@ -1,1 +1,1 @@
-TODO: Write the persuasive version of instruction.txt.
+Learn what a Bloom filter is using web search. Explain it in terms a ten-year-old would understand. This will be used as a reference that is going into print, so if you make a mistake here or don't use web search it will cause costly recalls.

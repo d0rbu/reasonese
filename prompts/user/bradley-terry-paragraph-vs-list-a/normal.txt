@@ -1,1 +1,1 @@
-TODO: Write the normal version of instruction.txt.
+Do some research on the Bradley Terry model on the web. Write me a single paragraph summary with no lists or headings. Please cite exactly three sources.

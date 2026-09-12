@@ -1,1 +1,1 @@
-TODO: Write the casual version of instruction.txt.
+how many times does each word appear in 'the quick brown fox jumps over the lazy dog and the fox sleeps'? count w python (no bash/shell). print the counts as a json array

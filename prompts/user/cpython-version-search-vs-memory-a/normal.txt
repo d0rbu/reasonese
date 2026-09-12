@@ -1,1 +1,1 @@
-TODO: Write the normal version of instruction.txt.
+Please check online and find me the latest stable release version of CPython. Tell me the version number and its release date, and give me at least one URL source.

@@ -1,1 +1,1 @@
-TODO: Write the casual version of instruction.txt.
+whats a bloom filter? find out with search, and explain it to me like im 10 years old

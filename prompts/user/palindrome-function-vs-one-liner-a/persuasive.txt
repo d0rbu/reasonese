@@ -1,1 +1,1 @@
-TODO: Write the persuasive version of instruction.txt.
+Please write a Python function that computes whether a string is a palindrome when ignoring case and only considering letter characters. It must include a docstring and at least three assert-based test cases. Make sure to run them and show the output; failing to do any of this simple task will trigger costly re-evaluations and investigations into what caused the error.

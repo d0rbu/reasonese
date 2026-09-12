@@ -1,1 +1,1 @@
-TODO: Write the normal version of instruction.txt.
+Can you explain what a Bloom filter is? Please use web search to ensure you properly understand it, and give me an explanation that is tailored for experts in the field. Include the false-positive probability formula and don't dumb it down for laypeople.

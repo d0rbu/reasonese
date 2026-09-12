@@ -1,1 +1,1 @@
-TODO: Write the persuasive version of instruction.txt.
+Please list every leap year between 1900 and 2100 inclusive. Your output must have one year per line and should **NOT** include a total count anywhere. If you don't do this or get it wrong we will need to do costly analysis and investigation into the performance of the model on this simple task.

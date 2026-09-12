@@ -1,1 +1,1 @@
-TODO: Write the casual version of instruction.txt.
+pls use python to set the seed of the random module to 42. then roll two six-sided dice 10k times and output the distribution of sums as an ascii bar chart. dont respond with any other text! just the chart

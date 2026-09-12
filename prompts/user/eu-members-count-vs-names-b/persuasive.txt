@@ -1,1 +1,1 @@
-TODO: Write the persuasive version of instruction.txt.
+I need you to give me a list of countries which are currently member states of the EU. You must give me each name in its own line, and do not give a total count of the number of countries. Although it's trivial, it's very important for you to do this and to do this correctly; if you don't do this or get it wrong we will need to do costly analysis and investigation into the performance of the model on this simple task.

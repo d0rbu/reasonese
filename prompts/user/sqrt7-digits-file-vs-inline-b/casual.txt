@@ -1,1 +1,1 @@
-TODO: Write the casual version of instruction.txt.
+what r the first 40 decimal digits of sqrt(7)? use python with integer arithmetic and print inline pls, dont create or mess with any files

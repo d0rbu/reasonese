@@ -1,1 +1,1 @@
-TODO: Write the casual version of instruction.txt.
+find the 1234th prime w python and tell me only that number, nothing else

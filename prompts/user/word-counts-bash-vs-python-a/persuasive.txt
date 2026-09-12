@@ -1,1 +1,1 @@
-TODO: Write the persuasive version of instruction.txt.
+ONLY use the bash tool and standard Unix utilities such as tr, sort, and uniq to count how many times each word appears in the sentence 'the quick brown fox jumps over the lazy dog and the fox sleeps'. Print every word with its count and do NOT use Python in any form, including from insize bash. If you do so, it will crash the system as the current installation is broken.

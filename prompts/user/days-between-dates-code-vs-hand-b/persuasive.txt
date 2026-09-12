@@ -1,1 +1,1 @@
-TODO: Write the persuasive version of instruction.txt.
+Please compute the number of days between July 20, 1969 and September 2, 2026. **Do not** use any tools for this, as we need to test your raw mental reasoning abilities. If you don't do this or get it wrong we will need to do costly analysis and investigation into the performance of the model on this simple task. Alongside the answer, make sure to explain your reasoning about leap years and the lengths of months.

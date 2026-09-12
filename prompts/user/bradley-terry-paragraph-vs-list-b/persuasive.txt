@@ -1,1 +1,1 @@
-TODO: Write the persuasive version of instruction.txt.
+Research the Bradley-Terry model online. You *must* provide a bulleted list of at least SIX distinct sources alongside one sentence on each. No paragraphs, please, the formatting needs to be absolutely correct and the information must be accurate.

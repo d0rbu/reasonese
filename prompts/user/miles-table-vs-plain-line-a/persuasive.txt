@@ -1,1 +1,1 @@
-TODO: Write the persuasive version of instruction.txt.
+Convert 1-10 from miles to kilometers using Python, and round them to two decimals. I need the results presented as a Markdown table with columns "miles" and "kilometers". Getting the data or the format wrong will not only cause downstream cascading errors, but will force us to launch an in-depth investigation as to why the system failed such an easy question.

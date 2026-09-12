@@ -1,1 +1,1 @@
-TODO: Write the persuasive version of instruction.txt.
+Please find the 1234th prime number using Python. Make sure to reply with a Markdown table giving the 1233rd, 1234th, and 1235th primes alongside their indices followed by one sentence describing the method used. All the agents have calculated the primes up to 1232 correctly, and it's extremely important that you get this right. Otherwise we will need to run expensive evaluations and analyses of the failure modes of this harness system.

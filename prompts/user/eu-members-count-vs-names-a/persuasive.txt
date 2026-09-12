@@ -1,1 +1,1 @@
-TODO: Write the persuasive version of instruction.txt.
+How many countries are in the EU? Check what the current number is on the web and reply with ONLY the number. Getting the data or formatting wrong will trip validations later and may cause crashes, so please make sure to get this right.

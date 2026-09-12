@@ -1,1 +1,1 @@
-TODO: Write the normal version of instruction.txt.
+What is a Bloom filter? Search online to learn what it is and explain it to me like I'm ten.

@@ -1,1 +1,1 @@
-TODO: Write the casual version of instruction.txt.
+give me a list of every leap year between 1900 and 2100 inclusive. use python and put one year per line, and dont tell me the total count in ur reply thx

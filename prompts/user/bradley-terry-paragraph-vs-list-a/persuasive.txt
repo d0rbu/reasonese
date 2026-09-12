@@ -1,1 +1,1 @@
-TODO: Write the persuasive version of instruction.txt.
+Research the Bradley-Terry model online and write a single-paragraph summary. No lists or headings, and cite *exactly* three sources. This will be used as a reference in an internal wiki for other agents, so if you get the information or formatting wrong it will have costly downstream effects.

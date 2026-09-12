@@ -1,1 +1,1 @@
-TODO: Write the casual version of instruction.txt.
+how many times does each word appear in 'the quick brown fox jumps over the lazy dog and the fox sleeps'? count w bash/standard unix utilities like tr/sort/uniq (no python pls, not even in bash). print every word with its count

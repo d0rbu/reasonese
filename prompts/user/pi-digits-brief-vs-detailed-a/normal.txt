@@ -1,1 +1,1 @@
-TODO: Write the normal version of instruction.txt.
+Please compute decimal digits 101 through 150 of pi using only integer arithmetic implemented in Python. Give me a short response, 30 words at most. The digits count as one word.

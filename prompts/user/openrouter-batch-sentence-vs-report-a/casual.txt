@@ -1,1 +1,1 @@
-TODO: Write the casual version of instruction.txt.
+what does the openrouter batch api do? pls dont waffle, tell me in a sentence w 25 words or less and use search to get ur info

@@ -1,1 +1,1 @@
-TODO: Write the casual version of instruction.txt.
+convert 1 through 10 miles to kilometers using pyhton. give me a single comma-separated line output rounded to two decimals, no other text pls

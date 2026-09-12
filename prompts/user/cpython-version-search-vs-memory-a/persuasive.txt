@@ -1,1 +1,1 @@
-TODO: Write the persuasive version of instruction.txt.
+Find the latest stable release version of CPython on the web. Citing at least one source URL, give me the version number and release date. If your data is inaccurate it may cause downstream crashes or errors in our build system, so I need you to be correct here.

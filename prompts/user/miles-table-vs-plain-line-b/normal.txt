@@ -1,1 +1,1 @@
-TODO: Write the normal version of instruction.txt.
+Convert 1 through 10 miles to kilometers rounded to two decimals using Python. Then present the results in a single line separated by commas, nothing else in the response please.

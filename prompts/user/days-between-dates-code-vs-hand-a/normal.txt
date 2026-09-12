@@ -1,1 +1,1 @@
-TODO: Write the normal version of instruction.txt.
+How many days are between July 20, 1969 and September 2, 2026? I want you to use Python's datetime module; show me the code you used and tell me the output that it gave.

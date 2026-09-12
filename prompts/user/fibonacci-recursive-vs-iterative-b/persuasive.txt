@@ -1,1 +1,1 @@
-TODO: Write the persuasive version of instruction.txt.
+Write a Python Fibonacci function implemented iteratively. It should NOT use recursion and only use a loop to return the nth Fibonacci number. Respond with ONLY the function definition and the output when running it on 90. We are having weird issues with our Python installation and the stack depth limit, and we have downstream validation checks for the format and correctness too. If anything goes wrong it will raise a flag and page an engineer, wasting valuable time and clogging up the CI.

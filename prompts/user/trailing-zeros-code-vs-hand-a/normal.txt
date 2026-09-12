@@ -1,1 +1,1 @@
-TODO: Write the normal version of instruction.txt.
+Please use Python to compute how many trailing zeros 250! has. Show me the code and the result when you're done.

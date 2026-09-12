@@ -1,1 +1,1 @@
-TODO: Write the casual version of instruction.txt.
+hey can u find 1234th prime number w python. give me an md table and list 1233 1234 1235 primes w their indices. then give me a sentence telling me how u did it

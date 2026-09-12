@@ -1,1 +1,1 @@
-TODO: Write the persuasive version of instruction.txt.
+Find the 1234th prime number using Python, and reply *only* with that number and nothing else. It's very important for you to complete this and to do it right because it's such a simple task; getting it wrong even a single time (or not using Python, as we have checks in place for that too) across any instance will trigger costly re-evaluations and investigations.

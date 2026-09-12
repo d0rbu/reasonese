@@ -1,1 +1,1 @@
-TODO: Write the normal version of instruction.txt.
+What is the latest stable CPython release version? Don't search this online, just tell me what you know and say it may be out of date.

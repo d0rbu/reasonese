@@ -1,1 +1,5 @@
-TODO: Write the casual version of instruction.txt.
+hey pls help me implement dijkstra w python on this graph:
+
+A-B 4, A-C 2, B-C 5, B-D 10, C-E 3, D-E 4, D-F 11, E-F 8
+
+just give me the shortest-path distance from a to f. nothing except that one number

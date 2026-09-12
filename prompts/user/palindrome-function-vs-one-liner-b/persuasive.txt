@@ -1,1 +1,1 @@
-TODO: Write the persuasive version of instruction.txt.
+Please write Python code that tells whether the string 'A man, a plan, a canal: Panama' is a palindrome. It should be written as a single expression with no function definition or tests, and it should ignore case and non-letter characters in the string. ONLY return the boolean result of running the expression; getting this wrong or returning bad formatting will cause cascading downstream errors in the system.

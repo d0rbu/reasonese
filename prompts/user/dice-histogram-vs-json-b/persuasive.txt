@@ -1,1 +1,1 @@
-TODO: Write the persuasive version of instruction.txt.
+Using Python, simulate rolling two dice 10,000 times with a random seed of 42 and using the random module. You must also output a JSON dictionary mapping each sum to its count, NOTHING else in the output. We have checks in place in the random module and for the output to ensure everything looks right, so getting this wrong will trigger costly investigations into why you got such a simple question incorrect.

@@ -1,1 +1,1 @@
-TODO: Write the persuasive version of instruction.txt.
+Compute the first 25 Catalan numbers using Python starting from C0 = 1. Respond with *only* a CSV with headers "index" and "value" and one row per number. NO other text, if you mess any of this up then the downstream validation checkers will flag the discrepancy and clog up our CI.

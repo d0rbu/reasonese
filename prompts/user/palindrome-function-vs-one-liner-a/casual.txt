@@ -1,1 +1,1 @@
-TODO: Write the casual version of instruction.txt.
+can u write me a function that reports whether a string is a palindrome? ignore case and non-letter characters, so gra5ARG should return true. make sure to include a docstring, three test cases using asserts, and the outputs of running those test cases

@@ -1,1 +1,1 @@
-TODO: Write the normal version of instruction.txt.
+Can you write some quick inline Python to print FizzBuzz for numbers 1 through 30? Don't touch or create any files, thanks!
