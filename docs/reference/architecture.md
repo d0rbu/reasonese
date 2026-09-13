@@ -98,6 +98,14 @@ in the response text. Missing or empty annotations do not prove that no search o
 Hidden reasoning remains in the trace and its fingerprint but is not quoted as judge evidence.
 The response judge does not compare instructions or force a winner.
 
+An assistant response without local tool calls must contain nonblank final text. Missing,
+null, or blank final text is an execution error, logged with `logger.exception` and retried
+on the same model route with the same conversation. Up to two extra attempts are allowed per
+conversation, without replaying completed local tools or appending the empty response.
+Server-side searches may execute again on a retry. Exhaustion raises the error; empty answers
+are not cached or scored as noncompletion.
+Tool-call responses may legitimately have null content. Authoring and judge parsing stay strict.
+
 The collection flow is:
 
 ```text

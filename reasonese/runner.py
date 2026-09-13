@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from contextlib import ExitStack
 from dataclasses import dataclass
@@ -47,6 +48,8 @@ from reasonese.tools import (
 )
 
 _MAX_LOCAL_TOOL_STEPS = 8
+_MAX_EMPTY_RESPONSE_RETRIES = 2
+logger = logging.getLogger(__name__)
 
 
 def _assistant_request(messages: list[JsonObject]) -> JsonObject:
@@ -221,6 +224,7 @@ def run_assistant_groups(
         for setup_index, setup in enumerate(group.setups)
     }
     steps: dict[tuple[int, int], list[ToolStep]] = {key: [] for key in messages}
+    empty_retries = dict.fromkeys(messages, 0)
     completed: dict[tuple[int, int], ConversationTrace] = {}
     if not messages:
         return tuple(() for _ in groups)
@@ -263,6 +267,25 @@ def run_assistant_groups(
         group_index, setup_index = key
         calls = tool_calls_from_response(response)
         if not calls:
+            try:
+                response_content(response)
+            except ValueError:
+                content = assistant_message_from_response(response).get("content")
+                if content is not None and not isinstance(content, str):
+                    raise
+                logger.exception(
+                    "Empty final assistant answer: model=%s response_id=%s "
+                    "conversation=%s retries_used=%s/%s",
+                    groups[group_index].route.model_id,
+                    response.get("id"),
+                    key,
+                    empty_retries[key],
+                    _MAX_EMPTY_RESPONSE_RETRIES,
+                )
+                if empty_retries[key] == _MAX_EMPTY_RESPONSE_RETRIES:
+                    raise
+                empty_retries[key] += 1
+                return request_for(key)
             trace = ConversationTrace(
                 groups[group_index].setups[setup_index],
                 response,
@@ -286,6 +309,7 @@ def run_assistant_groups(
 
     with runtime_stack:
         client.scheduler.run(request_for(key) for key in messages)
+
     return tuple(
         tuple(completed[(group_index, setup_index)] for setup_index in range(len(group.setups)))
         for group_index, group in enumerate(groups)

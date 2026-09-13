@@ -28,7 +28,7 @@ from reasonese.study import build_trials
 from reasonese.study_cache import SqliteStudyCache
 from reasonese.tools import ToolCall, ToolResult
 from tests.test_cache_runner_cli import _setup_with_user_content, _tool_chat
-from tests.test_scheduling import http_error
+from tests.test_scheduling import Clock, http_error
 from tests.test_study_orchestration import (
     _batch_result,
     _chat,
@@ -472,3 +472,147 @@ def test_failed_batch_does_not_discard_other_accepted_batch_results(failure_kind
         if failure_kind in ("poll", "all_poll")
         else []
     )
+
+
+@pytest.mark.parametrize("final_content", ["answer", ""])
+def test_empty_final_and_429_budgets_are_independent_across_tool_rounds(
+    final_content: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    clock = Clock()
+    healthy_finished = Event()
+
+    class Transport:
+        def __init__(self) -> None:
+            self.limited_bodies: list[JsonObject] = []
+            self.healthy_calls = 0
+
+        def post_json(self, path: str, body: JsonObject) -> JsonObject:
+            if body["model"] == "example/healthy":
+                self.healthy_calls += 1
+                if self.healthy_calls == 3:
+                    healthy_finished.set()
+                return _chat("healthy answer", f"healthy-{self.healthy_calls}")
+            self.limited_bodies.append(body)
+            count = len(self.limited_bodies)
+            if count % 2:
+                raise http_error(retry_after="60")
+            assert healthy_finished.is_set()
+            return {
+                2: _chat("", "empty-before-tool"),
+                4: _tool_chat(),
+                6: _chat("", "empty-after-tool"),
+                8: _chat(final_content, "last-response"),
+            }[count]
+
+        def get_json(self, path: str) -> JsonObject:
+            raise AssertionError(path)
+
+    setup = _setup_with_user_content("Read README.")
+    transport = Transport()
+    client = OpenRouterClient(
+        transport,
+        sync_workers=1,
+        rate_limit_retries=1,
+        sleep=clock.sleep,
+        monotonic=clock.monotonic,
+    )
+    groups = (
+        AssistantRunGroup(ModelRoute(OpenRouterModelId.parse("example/limited"), None), (setup,)),
+        AssistantRunGroup(ModelRoute(OpenRouterModelId.parse("example/healthy"), None), (setup,) * 3),
+    )
+    completed: dict[tuple[int, int], ConversationTrace] = {}
+
+    def remember(group: int, index: int, trace: ConversationTrace) -> None:
+        completed[(group, index)] = trace
+
+    if final_content:
+        result = run_assistant_groups(groups, client, on_trace=remember)
+        assert result[0][0].response == _chat("answer", "last-response")
+        assert len(result[0][0].tool_steps) == 1
+        assert result[0][0].tool_steps[0].response == _tool_chat()
+    else:
+        with pytest.raises(ValueError, match="assistant content is empty"):
+            run_assistant_groups(groups, client, on_trace=remember)
+        assert (0, 0) not in completed
+
+    assert [completed[(1, index)].response["id"] for index in range(3)] == [
+        "healthy-1", "healthy-2", "healthy-3"
+    ]
+    assert len(transport.limited_bodies) == 8
+    assert all(body == transport.limited_bodies[0] for body in transport.limited_bodies[:4])
+    assert all(body == transport.limited_bodies[4] for body in transport.limited_bodies[4:])
+    assert transport.limited_bodies[4]["messages"][-1]["role"] == "tool"
+    assert client.scheduler.limiters["example/limited"].generation == 4
+    empty_logs = [record for record in caplog.records if record.name == "reasonese.runner"]
+    assert len(empty_logs) == (2 if final_content else 3)
+    assert all(record.exc_info is not None for record in empty_logs)
+
+
+@pytest.mark.parametrize("shared", [False, True])
+def test_empty_final_exhaustion_preserves_healthy_trials_for_resume(
+    tmp_path: Path, shared: bool, caplog: pytest.LogCaptureFixture
+) -> None:
+    healthy_finished = Event()
+
+    class Transport(RecoveringCollectionTransport):
+        def __init__(self) -> None:
+            super().__init__()
+            self.limited = False
+            self.empty = True
+
+        def post_json(self, path: str, body: JsonObject) -> JsonObject:
+            model = body["model"]
+            if self.empty and "gemma" in model:
+                self.calls[model] += 1
+                if self.calls[model] == 3:
+                    assert healthy_finished.wait(2)
+                return _chat("", f"empty-{self.calls[model]}")
+            response = super().post_json(path, body)
+            if "nemotron" in model and self.calls[model] == 2:
+                healthy_finished.set()
+            return response
+
+    limited = _study(1, Assistant.GEMMA_4_31B_IT)
+    healthy = _study(1, Assistant.NEMOTRON_3_5_LIGHTNING)
+    tasks = (
+        CollectionTask(limited, tmp_path / "limited"),
+        CollectionTask(healthy, tmp_path / "healthy"),
+    )
+    manual = _manual_library(tmp_path, limited, healthy)
+    messages = YamlMessageCache(tmp_path / "messages.yaml")
+    qa = YamlMessageQaCache(tmp_path / "qa.yaml")
+    shared_cache = SqliteStudyCache(tmp_path / "shared.sqlite3") if shared else None
+    transport = Transport()
+
+    def collect(client: OpenRouterClient | None):
+        return collect_studies(
+            tasks,
+            client,
+            manual,
+            messages,
+            qa,
+            prefer_batch=True,
+            routing=CollectionRouting(RoutePreference.FREE, True),
+            shared_cache=shared_cache,
+        )
+
+    with pytest.raises(ValueError, match="assistant content is empty"):
+        collect(OpenRouterClient(transport, sync_workers=1))
+    assert len([record for record in caplog.records if record.name == "reasonese.runner"]) == 3
+    assert transport.batch_schemas == ["message_compliance_verdict"]
+    for task, expected in zip(tasks, (0, 2), strict=True):
+        cache = shared_cache or SqliteStudyCache(task.output_dir / "collection.sqlite3")
+        trials = build_trials(task.study)
+        assert len(cache.load_traces(trials)) == expected
+        assert cache.load_judgments(trials) == {}
+        assert not (task.output_dir / "observations.jsonl").exists()
+
+    transport.empty = False
+    resumed = collect(OpenRouterClient(transport, sync_workers=1))
+    assert [result.trace_cache_hits for result in resumed] == [0, 2]
+    assert transport.calls["nvidia/nemotron-3.5-lightning:free"] == 2
+    assert transport.calls["google/gemma-4-31b-it:free"] == 5
+    warm = collect(None)
+    assert [result.trace_cache_hits for result in warm] == [2, 2]
+    assert [result.judgment_cache_hits for result in warm] == [2, 2]
+    assert [result.observations for result in warm] == [result.observations for result in resumed]

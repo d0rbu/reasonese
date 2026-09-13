@@ -212,9 +212,11 @@ occurs.
 `OpenRouterClient(rate_limit_retries=3)` permits three retries after each request's initial
 attempt, including each tool continuation. Retry configuration moved from `RequestsTransport`
 to the client; the transport sends a single attempt. Reusing a request specification starts a
-fresh budget. Successes already in flight remain available even after another request for the
-same model exhausts its budget; that model's queued work and later continuations stop, while
-healthy models finish their queued requests.
+fresh budget. Empty answers have a separate limit of two retries per conversation; each
+retry retains the model limiter and receives its own HTTP 429 retry budget. Successes already
+in flight remain available even after another request for the same model exhausts its
+budget; that model's queued work and later continuations stop, while healthy models finish
+their queued requests.
 
 Other HTTP failures, ambiguous network errors, malformed responses, and response-callback
 errors stop all new admission and propagate after in-flight results are processed. A callback
