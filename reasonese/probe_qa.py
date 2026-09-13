@@ -77,10 +77,13 @@ class ProbeQaVerdict:
     expectation: ProbeExpectation
     complies: bool | None
     issue: str | None
+    masked_boundary_tokens: int = 0
 
     def __post_init__(self) -> None:
         if not self.context_fingerprint:
             raise ValueError("probe context fingerprint must not be empty")
+        if self.masked_boundary_tokens < 0:
+            raise ValueError("masked_boundary_tokens must be non-negative")
         roles = tuple(role for role, _ in self.role_probabilities)
         probabilities = tuple(value for _, value in self.role_probabilities)
         if len(roles) < 2 or len(set(roles)) != len(roles) or "reasoning" not in roles:
@@ -257,6 +260,7 @@ def probe_qa_report(
                 "expectation": str(row.expectation),
                 "complies": row.complies,
                 "issue": row.issue,
+                "masked_boundary_tokens": row.masked_boundary_tokens,
             }
             for row in verdicts
         ],

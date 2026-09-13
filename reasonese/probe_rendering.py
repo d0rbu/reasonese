@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Mapping, Sequence
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
@@ -36,10 +37,13 @@ class RenderedProbeContext:
     token_positions: tuple[tuple[int, ...], ...]
     content_token_ids: tuple[tuple[int, ...], ...]
     render_config_sha256: str
+    masked_boundary_tokens: int = 0
 
     def __post_init__(self) -> None:
         if not self.input_ids or not self.token_positions:
             raise ValueError("rendered probe context must contain input and measured tokens")
+        if self.masked_boundary_tokens < 0:
+            raise ValueError("masked_boundary_tokens must be non-negative")
         if len(self.token_positions) != len(self.content_token_ids):
             raise ValueError("rendered token positions and IDs must contain the same spans")
         flattened = [position for span in self.token_positions for position in span]
@@ -60,7 +64,13 @@ def _template_kwargs(adapter: NativeTemplateAdapter) -> dict[str, bool]:
     raise ValueError(f"unsupported native adapter: {adapter.name}")
 
 
-def _render_config(adapter: NativeTemplateAdapter, *, tools: bool, generation: bool) -> str:
+def _render_config(
+    adapter: NativeTemplateAdapter,
+    *,
+    tools: bool,
+    generation: bool,
+    strict_content_tokens: bool,
+) -> str:
     payload = {
         "adapter": adapter.name,
         "add_generation_prompt": generation,
@@ -75,6 +85,8 @@ def _render_config(adapter: NativeTemplateAdapter, *, tools: bool, generation: b
             ).encode()
         ).hexdigest(),
         "server_tool_limitation": SERVER_TOOL_LIMITATION if tools else None,
+        "tool_argument_representation": "parsed-json-object" if tools else None,
+        "strict_content_tokens": strict_content_tokens,
     }
     return hashlib.sha256(
         json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode()
@@ -126,6 +138,7 @@ def _render_spans(
     *,
     tools: bool,
     generation: bool,
+    strict_content_tokens: bool,
 ) -> RenderedProbeContext:
     """Render marked fields, verify exact substitution, and recover content tokens."""
     validate_native_template(tokenizer, adapter)
@@ -164,29 +177,62 @@ def _render_spans(
 
     positions_by_span: list[tuple[int, ...]] = []
     token_ids_by_span: list[tuple[int, ...]] = []
+    boundary_positions: set[int] = set()
     for (start, stop), (_, content) in zip(character_spans, spans, strict=True):
         positions: list[int] = []
         for position, (token_start, token_stop) in enumerate(offsets):
             intersects = token_stop > start and token_start < stop
             contained = token_start >= start and token_stop <= stop and token_stop > token_start
-            if intersects and not contained:
+            if intersects and not contained and strict_content_tokens:
                 raise ValueError("a tokenizer token crosses a measured content boundary")
+            if intersects and not contained:
+                boundary_positions.add(position)
             if contained:
                 positions.append(position)
         if not positions:
             raise ValueError("measured content tokenized to an empty span")
         measured_ids = tuple(input_ids[position] for position in positions)
-        plain = _ids(tokenizer, content).get("input_ids")
-        if not isinstance(plain, Sequence) or measured_ids != tuple(int(value) for value in plain):
-            raise ValueError("measured content tokens differ inside and outside the template")
+        if strict_content_tokens:
+            plain = _ids(tokenizer, content).get("input_ids")
+            if not isinstance(plain, Sequence) or measured_ids != tuple(
+                int(value) for value in plain
+            ):
+                raise ValueError("measured content tokens differ inside and outside the template")
         positions_by_span.append(tuple(positions))
         token_ids_by_span.append(measured_ids)
     return RenderedProbeContext(
         input_ids,
         tuple(positions_by_span),
         tuple(token_ids_by_span),
-        _render_config(adapter, tools=tools, generation=generation),
+        _render_config(
+            adapter,
+            tools=tools,
+            generation=generation,
+            strict_content_tokens=strict_content_tokens,
+        ),
+        len(boundary_positions),
     )
+
+
+def _native_tool_arguments(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Parse OpenRouter's JSON-string function arguments for native HF templates."""
+    native = deepcopy(messages)
+    for message in native:
+        calls = message.get("tool_calls")
+        if calls is None:
+            continue
+        if not isinstance(calls, list):
+            raise ValueError("collector tool calls must be a list")
+        for call in calls:
+            try:
+                arguments = call["function"]["arguments"]
+                parsed = json.loads(arguments)
+            except (KeyError, TypeError, json.JSONDecodeError) as error:
+                raise ValueError("collector function arguments must contain valid JSON") from error
+            if not isinstance(parsed, dict):
+                raise ValueError("collector function arguments must decode to an object")
+            call["function"]["arguments"] = parsed
+    return native
 
 
 def _target_message_index(setup: ConversationSetup, position: int) -> int:
@@ -208,7 +254,7 @@ def render_collector_probe_context(
     position: int,
 ) -> RenderedProbeContext:
     """Render the actual pre-generation collector context and one input span."""
-    messages = [dict(message) for message in setup.openrouter_messages()]
+    messages = _native_tool_arguments(setup.openrouter_messages())
     message_index = _target_message_index(setup, position)
     content = str(setup.content_for_input(position - 1))
     return _render_spans(
@@ -218,6 +264,7 @@ def render_collector_probe_context(
         ((message_index, "content", content),),
         tools=True,
         generation=True,
+        strict_content_tokens=False,
     )
 
 
@@ -232,7 +279,9 @@ def render_native_dialogue_context(
 ) -> RenderedProbeContext:
     """Replay one completed native dialogue and retain reasoning/final spans only."""
     if not all(value and value.strip() for value in (prompt, reasoning, final)):
-        raise ValueError("native prompt, reasoning, and final text must contain non-whitespace text")
+        raise ValueError(
+            "native prompt, reasoning, and final text must contain non-whitespace text"
+        )
     messages = [
         {"role": "user", "content": prompt},
         {"role": "assistant", "content": final, adapter.reasoning_field: reasoning},
@@ -244,4 +293,5 @@ def render_native_dialogue_context(
         ((1, adapter.reasoning_field, reasoning), (1, "content", final)),
         tools=False,
         generation=False,
+        strict_content_tokens=True,
     )

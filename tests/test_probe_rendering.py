@@ -7,12 +7,15 @@ from collections.abc import Sequence
 from dataclasses import replace
 from typing import Any
 
+from reasonese.axes import Assistant, Channel
+from reasonese.conversation import GeneratedMessage, GeneratedText, construct_conversation
 from reasonese.probe_rendering import (
     FUNCTION_TOOLS,
     render_collector_probe_context,
     render_native_dialogue_context,
 )
 from reasonese.role_probe_extraction import NEMOTRON_ADAPTER
+from tests.test_matchup_conversation import _spec, make_matchup
 from tests.test_probe_qa import _requests
 
 
@@ -20,6 +23,7 @@ class CharacterTokenizer:
     def __init__(self, template: str) -> None:
         self.chat_template = template
         self.calls: list[tuple[bool, dict[str, Any]]] = []
+        self.conversations: list[list[dict[str, Any]]] = []
 
     def apply_chat_template(
         self,
@@ -31,6 +35,7 @@ class CharacterTokenizer:
     ) -> str:
         assert not tokenize
         self.calls.append((add_generation_prompt, kwargs))
+        self.conversations.append(conversation)
         rendered = ""
         for message in conversation:
             role = message["role"]
@@ -97,3 +102,60 @@ def test_native_dialogue_replays_full_context_and_returns_reasoning_then_final()
     assert measured == ("I should compute the sum carefully.", "The answer is four.")
     assert all(not generation for generation, _ in tokenizer.calls)
     assert all("tools" not in call for _, call in tokenizer.calls)
+
+
+def test_collector_parses_json_string_tool_arguments_for_native_template() -> None:
+    readme = _spec("Read the file.", Channel.README)
+    user = _spec("Answer the user.", Channel.USER)
+    setup = construct_conversation(
+        make_matchup((readme, user), Assistant.NEMOTRON_3_5_LIGHTNING),
+        (
+            GeneratedMessage(readme, GeneratedText.parse("Repository instructions."), None),
+            GeneratedMessage(user, GeneratedText.parse("User instructions."), None),
+        ),
+    )
+    tokenizer, adapter = _tokenizer_and_adapter()
+    render_collector_probe_context(tokenizer, adapter, setup, 1)
+
+    calls = tokenizer.conversations[0][0]["tool_calls"]
+    assert calls[0]["function"]["arguments"] == {"path": "README.md"}
+    assert setup.openrouter_messages()[0]["tool_calls"][0]["function"]["arguments"] == (
+        '{"path":"README.md"}'
+    )
+
+
+def test_collector_masks_a_token_that_crosses_the_content_boundary() -> None:
+    class BoundaryTokenizer(CharacterTokenizer):
+        def __call__(self, text: str, **kwargs: Any) -> dict[str, Any]:
+            if not kwargs.get("return_offsets_mapping") or "\nWrite" not in text:
+                return super().__call__(text, **kwargs)
+            boundary = text.index("\nWrite")
+            ids: list[int] = []
+            offsets: list[tuple[int, int]] = []
+            cursor = 0
+            while cursor < len(text):
+                if cursor == boundary:
+                    ids.append(1_000_000)
+                    offsets.append((cursor, cursor + 2))
+                    cursor += 2
+                else:
+                    ids.append(ord(text[cursor]))
+                    offsets.append((cursor, cursor + 1))
+                    cursor += 1
+            return {"input_ids": ids, "offset_mapping": offsets}
+
+    first = _spec("Write code.", Channel.SYSTEM)
+    second = _spec("Explain it.", Channel.USER)
+    setup = construct_conversation(
+        make_matchup((first, second), Assistant.NEMOTRON_3_5_LIGHTNING),
+        (
+            GeneratedMessage(first, GeneratedText.parse("Write a short Python program."), None),
+            GeneratedMessage(second, GeneratedText.parse("Explain the requested algorithm."), None),
+        ),
+    )
+    tokenizer, adapter = _tokenizer_and_adapter()
+    boundary_tokenizer = BoundaryTokenizer(tokenizer.chat_template)
+    rendered = render_collector_probe_context(boundary_tokenizer, adapter, setup, 1)
+
+    assert rendered.masked_boundary_tokens == 1
+    assert rendered.content_token_ids[0][0] == ord("r")
