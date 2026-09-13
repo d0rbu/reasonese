@@ -696,6 +696,60 @@ def test_nemotron_kernel_revisions_load_exact_offline_snapshots(
         assert loaded is not None
         assert f"/snapshots/{revision}/" in str(loaded.__file__)
 
+    first_name, (_, first_revision) = next(iter(extraction.NEMOTRON_KERNEL_REVISIONS.items()))
+    wrong = ModuleType("wrong_kernel")
+    wrong.__file__ = str(tmp_path / "snapshots" / ("0" * 40) / "wrong.py")
+    module_mapping[first_name] = wrong
+    with pytest.raises(ValueError, match=f"already-loaded {first_name} kernel"):
+        extraction._pin_nemotron_kernel_revisions()
+    loaded_first = module_mapping[first_name]
+    assert loaded_first is not None
+    loaded_first.__file__ = str(tmp_path / "snapshots" / first_revision / "loaded.py")
+    extraction._pin_nemotron_kernel_revisions()
+
+
+def test_prefix_loader_rejects_config_before_reading_weights(tmp_path: Path) -> None:
+    pytest.importorskip("torch")
+    try:
+        from transformers.models.nemotron_h.configuration_nemotron_h import (  # ty: ignore[unresolved-import, unused-ignore-comment]
+            NemotronHConfig,
+        )
+    except ImportError:
+        pytest.skip("pinned role-probe runtime is not installed")
+
+    config = NemotronHConfig(
+        vocab_size=64,
+        hidden_size=32,
+        layers_block_type=["attention", "attention"],
+        num_attention_heads=4,
+        num_key_value_heads=2,
+        head_dim=8,
+        intermediate_size=64,
+        use_mamba_kernels=False,
+        dtype="bfloat16",
+        architectures=["WrongArchitecture"],
+    )
+    config.save_pretrained(tmp_path)
+    with pytest.raises(ValueError, match="checkpoint architecture"):
+        extraction.load_prefix_model(
+            tmp_path, NEMOTRON_ADAPTER, max_layer=1, execution_device="cpu"
+        )
+
+    config.architectures = [NEMOTRON_ADAPTER.architecture]
+    config.dtype = "float32"
+    config.save_pretrained(tmp_path)
+    with pytest.raises(ValueError, match="requires native BF16"):
+        extraction.load_prefix_model(
+            tmp_path, NEMOTRON_ADAPTER, max_layer=1, execution_device="cpu"
+        )
+
+    config.dtype = "bfloat16"
+    config.save_pretrained(tmp_path)
+    with pytest.raises(ValueError, match="lies outside"):
+        extraction.load_prefix_model(
+            tmp_path, NEMOTRON_ADAPTER, max_layer=2, execution_device="cpu"
+        )
+
 
 def test_loaded_native_prefix_exactly_matches_full_model(tmp_path: Path) -> None:
     torch = pytest.importorskip("torch")
@@ -1281,6 +1335,52 @@ def test_prefix_capture_equals_full_forward_and_stops_tail(
     for request in invalid_requests:
         with pytest.raises(ValueError):
             extraction._capture_sequences(model, test_adapter, **cast(Any, request))
+
+    original_norm = model.layers[0].norm
+
+    class TupleNorm(torch.nn.Module):
+        def forward(self, value: Any) -> tuple[Any]:
+            return (value,)
+
+    model.layers[0].norm = TupleNorm()
+    with pytest.raises(ValueError, match="unexpected batch shape"):
+        extraction._capture_sequences(
+            model,
+            test_adapter,
+            input_ids=((1, 2),),
+            token_positions=((0,),),
+            layers=(0,),
+        )
+
+    class Handle:
+        def remove(self) -> None:
+            pass
+
+    class SilentNorm(torch.nn.Module):
+        def register_forward_hook(self, *_args: object, **_kwargs: object) -> Handle:
+            return Handle()
+
+        def forward(self, value: Any) -> Any:
+            return value
+
+    model.layers[0].norm = SilentNorm()
+    with pytest.raises(RuntimeError, match="ran past"):
+        extraction._capture_sequences(
+            model,
+            test_adapter,
+            input_ids=((1, 2),),
+            token_positions=((0,),),
+            layers=(0,),
+        )
+    with pytest.raises(RuntimeError, match=r"captured layers \[1\], expected \[0, 1\]"):
+        extraction._capture_sequences(
+            model,
+            test_adapter,
+            input_ids=((1, 2),),
+            token_positions=((0,),),
+            layers=(0, 1),
+        )
+    model.layers[0].norm = original_norm
 
     group = tuple(item for item in dataset.examples if item.document_index == 0)
     singles = np.stack(
