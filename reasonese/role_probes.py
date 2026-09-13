@@ -11,8 +11,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import math
 import os
+import time
 import warnings
 import zipfile
 from dataclasses import asdict, dataclass, replace
@@ -40,6 +42,7 @@ PAIRED_NEUTRAL = "paired-neutral-role-wrappers"
 UNTOUCHED_CONVERSATIONS = "untouched-native-conversations"
 CONTENT_TOKENS_ONLY = "content-tokens-only"
 _ARTIFACT_FORMAT = "reasonese-activation-role-probe"
+logger = logging.getLogger(__name__)
 
 type Array = np.ndarray
 
@@ -654,6 +657,8 @@ def train_role_probe(dataset: ActivationDataset, config: ProbeTrainingConfig) ->
 
     candidates: list[tuple[float, ClassificationMetrics]] = []
     for regularization in config.lambda_grid:
+        started = time.monotonic()
+        logger.info("Fitting role probe candidate lambda=%g", regularization)
         classifier = _fit(
             dataset.activations[train_rows, layer_offset], train_labels, regularization, config
         )
@@ -661,22 +666,29 @@ def train_role_probe(dataset: ActivationDataset, config: ProbeTrainingConfig) ->
         probabilities = _predict_parameters(
             coefficients, intercepts, dataset.activations[validation_rows, layer_offset]
         )
-        candidates.append(
-            (
-                regularization,
-                _metrics(
-                    probabilities,
-                    validation_labels,
-                    dataset.provenance.roles,
-                    dataset.document_ids[validation_rows],
-                ),
-            )
+        metrics = _metrics(
+            probabilities,
+            validation_labels,
+            dataset.provenance.roles,
+            dataset.document_ids[validation_rows],
+        )
+        candidates.append((regularization, metrics))
+        logger.info(
+            "Finished role probe candidate lambda=%g iterations=%s dev_accuracy=%.6f "
+            "dev_nll=%.6f elapsed_seconds=%.3f",
+            regularization,
+            np.asarray(classifier.n_iter_).tolist(),
+            metrics.accuracy,
+            metrics.negative_log_likelihood,
+            time.monotonic() - started,
         )
     regularization, validation_metrics = max(
         candidates,
         key=lambda item: (item[1].accuracy, -item[1].negative_log_likelihood, item[0]),
     )
     fit_rows = np.concatenate((train_rows, validation_rows))
+    started = time.monotonic()
+    logger.info("Refitting selected role probe lambda=%g on train+development", regularization)
     classifier = _fit(
         dataset.activations[fit_rows, layer_offset],
         _labels(dataset, fit_rows),
@@ -684,6 +696,12 @@ def train_role_probe(dataset: ActivationDataset, config: ProbeTrainingConfig) ->
         config,
     )
     coefficients, intercepts = _parameters(classifier, len(dataset.provenance.roles))
+    logger.info(
+        "Finished selected role probe refit lambda=%g iterations=%s elapsed_seconds=%.3f",
+        regularization,
+        np.asarray(classifier.n_iter_).tolist(),
+        time.monotonic() - started,
+    )
     test_probabilities = _predict_parameters(
         coefficients, intercepts, dataset.activations[test_rows, layer_offset]
     )
