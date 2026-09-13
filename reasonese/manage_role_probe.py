@@ -75,6 +75,11 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _require_new_output(path: Path) -> None:
+    if path.exists():
+        raise FileExistsError(f"refusing to overwrite probe artifact: {path}")
+
+
 def _partition_document_ids(path: Path, split: str) -> set[str]:
     records = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(records, list):
@@ -154,6 +159,7 @@ def _validate_frozen_protocol(protocol: dict[str, Any], adapter_name: str) -> Pr
 
 
 def _train(args: argparse.Namespace) -> None:
+    _require_new_output(args.output)
     protocol = _json_object(args.protocol)
     dataset = load_activation_dataset(args.activations)
     config = _validate_frozen_protocol(protocol, args.adapter)
@@ -189,6 +195,7 @@ def _train(args: argparse.Namespace) -> None:
 
 
 def _qualify(args: argparse.Namespace) -> None:
+    _require_new_output(args.output)
     protocol = _json_object(args.protocol)
     probe = load_role_probe(args.probe)
     frozen_config = _validate_frozen_protocol(protocol, probe.provenance.native_template_adapter)
@@ -228,6 +235,7 @@ def _qualify(args: argparse.Namespace) -> None:
 
 
 def _extract_native(args: argparse.Namespace) -> None:
+    _require_new_output(args.output)
     adapter = NATIVE_ADAPTERS[args.adapter]
     frozen_config = _validate_frozen_protocol(_json_object(args.protocol), adapter.name)
     if args.layer != frozen_config.layer_index:
