@@ -257,7 +257,7 @@ def test_extract_native_wires_exact_checkpoint_and_runtime(
     manifest = {
         "adapter": NEMOTRON_ADAPTER.name,
         "model_id": NEMOTRON_ADAPTER.model_id,
-        "model_revision": NEMOTRON_ADAPTER.model_revision,
+        "revision": NEMOTRON_ADAPTER.model_revision,
         "max_layer": 26,
         "weights_sha256": "a" * 64,
         "weights_hash_kind": "test",
