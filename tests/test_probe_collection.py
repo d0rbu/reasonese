@@ -115,6 +115,7 @@ def test_failed_second_order_probe_excludes_every_rollout_before_provider_call(
         "enforced_scores": 4,
         "descriptive_scores": 0,
         "failed_scores": 1,
+        "masked_boundary_tokens": 0,
         "planned_comparisons": 1,
         "excluded_comparisons": 1,
         "planned_trials": len(build_trials(study)),

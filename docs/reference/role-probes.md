@@ -192,3 +192,45 @@ uv run reasonese-role-probe qualify \
   --protocol out/role-probe-research/protocol.json \
   --output out/role-probe-research/nemotron-qualified-probe.npz
 ```
+
+All three workflow stages refuse an existing output path before loading activations, fitting a
+classifier, or loading a model. A changed protocol or signal therefore requires a new artifact
+name and cannot silently replace earlier evidence.
+
+## Collection gate
+
+Collection accepts an explicit JSON bundle file through `--role-probes`. Paths are relative to the
+bundle file, and every requested assistant must have exactly one matching entry:
+
+```json
+{
+  "bundles": [
+    {
+      "assistant": "Nemotron 3.5 Lightning",
+      "adapter": "nemotron-3.5-lightning-native-v1",
+      "checkpoint": "prefix-nemotron",
+      "probe": "nemotron-qualified-probe.npz"
+    }
+  ]
+}
+```
+
+Before authoring or any other provider call, the collector loads the probe, requires all neutral
+and untouched-native gates to pass, validates the assistant/model/template/site/layer/dtype and the
+complete prefix-checkpoint file identity, and fails if any assistant lacks a bundle. Scoring renders
+both instruction spans in each of the two exact ordered contexts with thinking enabled and the three
+local function declarations. The OpenRouter web-search tool is injected server-side and has no
+reproducible local prompt representation; every report records this limitation.
+
+Each ordered context uses one prefix forward for both target spans. Assistants are processed one at
+a time and the prefix model is released before the next assistant is loaded. The separate readable
+`probe_qa_cache.json` key covers the probe artifact, model/runtime identity, adapter, render/tool
+configuration, full context token IDs, target positions and IDs, assistant, order, and position. It
+does not store instruction text or hidden reasoning.
+
+```bash
+uv run reasonese-collect-studies \
+  --suite out/pilot/studies.yaml \
+  --output out/pilot \
+  --role-probes out/role-probe-research/probe-bundles.json
+```

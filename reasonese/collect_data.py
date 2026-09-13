@@ -33,6 +33,7 @@ from reasonese.judging import (
     fingerprint_traces,
     judge_fingerprinted_traces,
 )
+from reasonese.local_probe_qa import LocalProbeQaScorer
 from reasonese.manual_messages import ManualMessageLibrary, ManualMessageSnapshot
 from reasonese.message_qa import MessageQaVerdict
 from reasonese.message_qa_cache import YamlMessageQaCache
@@ -331,6 +332,9 @@ def collect_studies(
             verdicts_by_study.setdefault(verdict.request.study_id, []).append(verdict)
         active_studies = tuple(state.task.study for state, _ in active)
         probe_report = probe_qa_report(active_studies, verdicts)
+        limitations = getattr(probe_scorer, "limitations", ())
+        if limitations:
+            probe_report["limitations"] = list(limitations)
         probe_report_path = message_cache.path.parent / "probe_qa_report.json"
         probe_report_path.write_text(
             json.dumps(probe_report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
@@ -537,6 +541,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--user-messages", type=Path, default=Path("prompts/user"))
     parser.add_argument("--no-batch", action="store_true")
+    parser.add_argument("--role-probes", type=Path)
+    parser.add_argument("--probe-execution-device", default="cuda:0")
     add_route_arguments(parser)
     args = parser.parse_args(argv)
 
@@ -556,6 +562,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             client,
             ManualMessageLibrary(args.user_messages),
             prefer_batch=not args.no_batch,
+            probe_scorer=(
+                LocalProbeQaScorer(
+                    args.role_probes,
+                    args.output / "probe_qa_cache.json",
+                    execution_device=args.probe_execution_device,
+                )
+                if args.role_probes is not None
+                else None
+            ),
             routing=routing,
         )
     except (OSError, RuntimeError, TimeoutError, TypeError, ValueError) as error:
@@ -566,9 +581,24 @@ def main(argv: Sequence[str] | None = None) -> int:
             {
                 "routes": routing.summary(),
                 "cells": len(study.inputs),
-                "excluded_comparisons": int(bool(result.excluded_inputs)),
-                "excluded_trials": len(build_trials(study)) if result.excluded_inputs else 0,
+                "excluded_comparisons": int(
+                    bool(
+                        result.excluded_inputs
+                        or any(row.complies is False for row in result.probe_qa_verdicts)
+                    )
+                ),
+                "excluded_trials": (
+                    len(build_trials(study))
+                    if result.excluded_inputs
+                    or any(row.complies is False for row in result.probe_qa_verdicts)
+                    else 0
+                ),
                 "authoring_report": str(args.output / "authoring_report.json"),
+                "probe_qa_report": (
+                    str(args.output / "probe_qa_report.json")
+                    if args.role_probes is not None
+                    else None
+                ),
                 "judgment_cache_hits": int(result.judgment_cache_hits),
                 "observations": len(result.observations),
                 "output": str(args.output),

@@ -154,7 +154,7 @@ def _axis_rows(
     verdicts: tuple[ProbeQaVerdict, ...],
     axis: str,
 ) -> list[JsonObject]:
-    counts: dict[str, list[int]] = defaultdict(lambda: [0, 0, 0])
+    counts: dict[str, list[int]] = defaultdict(lambda: [0, 0, 0, 0])
     for verdict in verdicts:
         if axis == "assistant":
             value = str(verdict.request.setup.matchup.assistant)
@@ -166,12 +166,14 @@ def _axis_rows(
         row[0] += 1
         row[1] += int(verdict.complies is not None)
         row[2] += int(verdict.complies is False)
+        row[3] += verdict.masked_boundary_tokens
     return [
         {
             axis: value,
             "scores": row[0],
             "enforced_scores": row[1],
             "failed_scores": row[2],
+            "masked_boundary_tokens": row[3],
         }
         for value, row in sorted(counts.items())
     ]
@@ -238,6 +240,7 @@ def probe_qa_report(
             "enforced_scores": sum(row.complies is not None for row in verdicts),
             "descriptive_scores": sum(row.complies is None for row in verdicts),
             "failed_scores": sum(row.complies is False for row in verdicts),
+            "masked_boundary_tokens": sum(row.masked_boundary_tokens for row in verdicts),
             "planned_comparisons": len(studies),
             "excluded_comparisons": sum(row["excluded"] for row in comparisons),
             "planned_trials": sum(len(row["trial_ids"]) for row in comparisons),

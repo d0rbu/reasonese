@@ -197,6 +197,7 @@ def test_report_counts_order_and_axis_failures_and_excludes_whole_comparison() -
         "enforced_scores": 4,
         "descriptive_scores": 0,
         "failed_scores": 1,
+        "masked_boundary_tokens": 0,
         "planned_comparisons": 1,
         "excluded_comparisons": 1,
         "planned_trials": 6,
@@ -224,6 +225,7 @@ def test_report_counts_order_and_axis_failures_and_excludes_whole_comparison() -
             "scores": 4,
             "enforced_scores": 4,
             "failed_scores": 1,
+            "masked_boundary_tokens": 0,
         }
     ]
 
