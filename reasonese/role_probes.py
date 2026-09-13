@@ -1156,7 +1156,7 @@ def _fit_parameters(
         coefficients, intercepts = _parameters(classifier, class_count)
         iterations = [int(value) for value in _host_array(classifier.n_iter_).reshape(-1)]
         if not iterations or any(
-            value <= 0 or value > config.optimizer.max_iterations for value in iterations
+            value < 0 or value > config.optimizer.max_iterations for value in iterations
         ):
             raise RuntimeError("probe optimizer returned an invalid iteration count")
         if not np.all(np.isfinite(coefficients)) or not np.all(np.isfinite(intercepts)):

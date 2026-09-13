@@ -492,11 +492,14 @@ def test_sklearn_probe_does_not_regularize_class_imbalance_intercept() -> None:
 
 
 @pytest.mark.parametrize(
-    ("solver_message", "raises"),
-    (("", False), ("L-BFGS: max iterations reached", True)),
+    ("solver_message", "expected_iterations", "raises"),
+    (("", 0, False), ("", 5_000, False), ("L-BFGS: max iterations reached", 5_000, True)),
 )
 def test_cuml_fit_uses_one_fp32_fortran_matrix_and_detects_solver_failure(
-    monkeypatch: pytest.MonkeyPatch, solver_message: str, raises: bool
+    monkeypatch: pytest.MonkeyPatch,
+    solver_message: str,
+    expected_iterations: int,
+    raises: bool,
 ) -> None:
     class Pool:
         def free_all_blocks(self) -> None:
@@ -516,7 +519,7 @@ def test_cuml_fit_uses_one_fp32_fortran_matrix_and_detects_solver_failure(
             self.classes_ = np.arange(3)
             self.coef_ = np.zeros((3, x.shape[1]), dtype=np.float32)
             self.intercept_ = np.zeros(3, dtype=np.float32)
-            self.n_iter_ = np.asarray([5_000])
+            self.n_iter_ = np.asarray([expected_iterations])
 
     pool = Pool()
     cupy = SimpleNamespace(
@@ -539,12 +542,12 @@ def test_cuml_fit_uses_one_fp32_fortran_matrix_and_detects_solver_failure(
         with pytest.raises(RuntimeError, match="reported a fitting failure"):
             _fit_parameters(np.ones((6, 2)), np.arange(6) % 3, 1.0, config, 3)
     else:
-        coefficients, intercepts, iterations = _fit_parameters(
+        coefficients, intercepts, fit_iterations = _fit_parameters(
             np.ones((6, 2)), np.arange(6) % 3, 1.0, config, 3
         )
         assert coefficients.shape == (3, 2)
         assert intercepts.shape == (3,)
-        assert iterations == [5_000]
+        assert fit_iterations == [expected_iterations]
 
 
 def test_optimizer_runtime_digest_and_numerical_contract_are_immutable() -> None:
