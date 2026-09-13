@@ -38,8 +38,10 @@ from reasonese.role_probe_extraction import (
 from reasonese.role_probes import (
     ProbeTrainingConfig,
     load_role_probe,
+    optimizer_config_from_runtime,
     qualify_role_probe,
     save_role_probe,
+    sklearn_optimizer_config,
     train_role_probe,
 )
 
@@ -139,6 +141,10 @@ def _protocol_training_config(
             neutral_filler_source_sha256, str
         ):
             raise ValueError("expanded probe protocol must bind target and filler sources")
+        optimizer_record = protocol.get("optimizer")
+        if not isinstance(optimizer_record, dict):
+            raise ValueError("expanded probe protocol must bind the optimizer runtime")
+        optimizer = optimizer_config_from_runtime(optimizer_record)
     elif documents == 60:
         if model.get("layer_index") != _ADAPTER_LEGACY_LAYER[adapter_name]:
             raise ValueError("diagnostic probe protocol does not match the pinned layer")
@@ -147,6 +153,7 @@ def _protocol_training_config(
         native_prompt_partitions_sha256 = None
         neutral_target_source_sha256 = None
         neutral_filler_source_sha256 = None
+        optimizer = sklearn_optimizer_config(max_iterations=2_000, tolerance=1e-4)
     else:
         raise ValueError("probe protocol must define an expanded search or 60-document diagnostic")
     try:
@@ -184,6 +191,7 @@ def _protocol_training_config(
         minimum_neutral_per_role_accuracy=minimum_neutral_per_role_accuracy,
         minimum_neutral_document_accuracy=minimum_neutral_document_accuracy,
         minimum_neutral_per_role_document_accuracy=minimum_neutral_per_role_document_accuracy,
+        optimizer=optimizer,
         expected_document_count=documents,
         maximum_content_tokens_per_document=maximum_content_tokens,
         protocol_sha256=protocol_sha256,
@@ -193,8 +201,6 @@ def _protocol_training_config(
         train_fraction=train_fraction,
         validation_fraction=validation_fraction,
         seed=seed,
-        max_iterations=2_000,
-        tolerance=1e-4,
     )
 
 

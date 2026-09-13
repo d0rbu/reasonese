@@ -14,7 +14,7 @@ import pytest
 import reasonese.manage_role_probe as cli
 from reasonese.native_probe_activations import save_native_activation_dataset
 from reasonese.role_probe_extraction import NEMOTRON_ADAPTER, ProbeRole
-from reasonese.role_probes import load_role_probe
+from reasonese.role_probes import load_role_probe, sklearn_optimizer_config
 from tests.test_role_probes import _dataset
 
 
@@ -52,6 +52,7 @@ def _protocol(native_prompt_partitions_sha256: str | None = None) -> dict[str, A
         protocol["native_prompt_partitions_sha256"] = native_prompt_partitions_sha256
         protocol["neutral_target_source_sha256"] = "c" * 64
         protocol["neutral_filler_source_sha256"] = "d" * 64
+        protocol["optimizer"] = json.loads(sklearn_optimizer_config().runtime_json)
     return protocol
 
 

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import json
+import os
 from dataclasses import replace
 from math import inf, nan
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -17,10 +20,12 @@ from reasonese.role_probes import (
     ClassificationMetrics,
     ProbeTrainingConfig,
     RoleProbe,
+    _fit_parameters,
     _parameters,
     _predict_parameters,
     activation_dataset_fingerprint,
     load_role_probe,
+    optimizer_config_from_runtime,
     project_role,
     qualify_role_probe,
     save_role_probe,
@@ -153,8 +158,53 @@ def _training_config(selected_layer: int = 7) -> ProbeTrainingConfig:
         train_fraction=0.7,
         validation_fraction=0.15,
         seed=19,
-        max_iterations=500,
+        optimizer=role_probes.sklearn_optimizer_config(max_iterations=500),
     )
+
+
+def _multinomial_objective(
+    coefficients: np.ndarray,
+    intercepts: np.ndarray,
+    activations: np.ndarray,
+    labels: np.ndarray,
+    regularization: float,
+) -> float:
+    probabilities = _predict_parameters(coefficients, intercepts, activations)
+    likelihoods = np.clip(probabilities[np.arange(len(labels)), labels], 1e-15, 1.0)
+    penalty = regularization * float(np.square(coefficients).sum()) / (2 * len(labels))
+    return float(-np.log(likelihoods).mean() + penalty)
+
+
+def _cuml_optimizer_config() -> role_probes.ProbeOptimizerConfig:
+    record = {
+        "backend": "cuml-qn",
+        "format_version": 1,
+        "implementation_sha256": {},
+        "matrix": {
+            "activation_dtype": "float32",
+            "array_order": "F",
+            "convert_dtype": False,
+            "labels_dtype": "int32",
+        },
+        "packages": {},
+        "python_version": "test",
+        "regularization_mapping": "C=1/lambda",
+        "solver": {
+            "class_weight": None,
+            "fit_intercept": True,
+            "lbfgs_memory": 5,
+            "linesearch_max_iter": 100,
+            "l1_ratio": None,
+            "max_iter": 5_000,
+            "output_type": "cupy",
+            "penalty": "l2",
+            "penalty_normalized": True,
+            "solver": "qn",
+            "tol": 1e-4,
+            "verbose": False,
+        },
+    }
+    return optimizer_config_from_runtime(record)
 
 
 def _qualify(
@@ -264,7 +314,7 @@ def test_training_selects_only_on_grouped_neutral_development_data() -> None:
     dataset = _dataset()
     bundle = train_role_probe(dataset, _training_config())
     assert bundle.selected_layer_index == 7
-    assert bundle.training.tolerance == 1e-4
+    assert bundle.training.optimizer.tolerance == 1e-4
     assert bundle.regularization_lambda in {0.01, 0.1}
     assert bundle.neutral_valid
     assert not bundle.qa_eligible
@@ -328,8 +378,8 @@ def test_training_enforces_preregistered_document_and_token_counts() -> None:
 
 @pytest.mark.parametrize("tolerance", [nan, inf, -inf])
 def test_training_rejects_nonfinite_optimizer_tolerance(tolerance: float) -> None:
-    with pytest.raises(ValueError, match="optimizer limits"):
-        replace(_training_config(), tolerance=tolerance)
+    with pytest.raises(ValueError, match="tolerance"):
+        replace(_training_config().optimizer, tolerance=tolerance)
 
 
 def test_training_config_requires_canonical_candidates_and_valid_split() -> None:
@@ -414,6 +464,147 @@ def test_portable_softmax_exactly_matches_sklearn_probabilities(class_count: int
     expected = classifier.predict_proba(x)
     actual = _predict_parameters(coefficients, intercepts, x)
     np.testing.assert_allclose(actual, expected, rtol=1e-14, atol=1e-15)
+
+
+def test_sklearn_regularization_mapping_preserves_duplicated_mean_loss_objective() -> None:
+    rng = np.random.default_rng(44)
+    x = rng.normal(size=(90, 4))
+    y = np.arange(90) % 3
+    config = _training_config()
+    first = _fit_parameters(x, y, 0.2, config, 3)
+    duplicated = _fit_parameters(np.tile(x, (2, 1)), np.tile(y, 2), 0.4, config, 3)
+    first_probabilities = _predict_parameters(first[0], first[1], x)
+    duplicated_probabilities = _predict_parameters(duplicated[0], duplicated[1], x)
+    np.testing.assert_allclose(first_probabilities, duplicated_probabilities, rtol=2e-6, atol=2e-7)
+    first_objective = _multinomial_objective(first[0], first[1], x, y, 0.2)
+    duplicated_objective = _multinomial_objective(
+        duplicated[0], duplicated[1], np.tile(x, (2, 1)), np.tile(y, 2), 0.4
+    )
+    assert first_objective == pytest.approx(duplicated_objective, rel=2e-8)
+
+
+def test_sklearn_probe_does_not_regularize_class_imbalance_intercept() -> None:
+    x = np.zeros((100, 2))
+    y = np.asarray([0] * 80 + [1] * 20)
+    coefficients, intercepts, _ = _fit_parameters(x, y, 1.0, _training_config(), 2)
+    probabilities = _predict_parameters(coefficients, intercepts, x[:1])[0]
+    np.testing.assert_allclose(probabilities, (0.8, 0.2), rtol=2e-4, atol=5e-5)
+
+
+@pytest.mark.parametrize(
+    ("solver_message", "raises"),
+    (("", False), ("L-BFGS: max iterations reached", True)),
+)
+def test_cuml_fit_uses_one_fp32_fortran_matrix_and_detects_solver_failure(
+    monkeypatch: pytest.MonkeyPatch, solver_message: str, raises: bool
+) -> None:
+    class Pool:
+        def free_all_blocks(self) -> None:
+            pass
+
+    class Classifier:
+        def __init__(self, **kwargs: object) -> None:
+            assert kwargs["penalty_normalized"] is True
+            assert kwargs["linesearch_max_iter"] == 100
+
+        def fit(self, x: np.ndarray, y: np.ndarray, **kwargs: object) -> None:
+            assert x.dtype == np.float32 and x.flags.f_contiguous
+            assert y.dtype == np.int32
+            assert kwargs == {"sample_weight": None, "convert_dtype": False}
+            if solver_message:
+                print(solver_message)
+            self.classes_ = np.arange(3)
+            self.coef_ = np.zeros((3, x.shape[1]), dtype=np.float32)
+            self.intercept_ = np.zeros(3, dtype=np.float32)
+            self.n_iter_ = np.asarray([5_000])
+
+    pool = Pool()
+    cupy = SimpleNamespace(
+        asarray=np.asarray,
+        cuda=SimpleNamespace(runtime=SimpleNamespace(memGetInfo=lambda: (8 * 1024**3, 0))),
+        get_default_memory_pool=lambda: pool,
+    )
+    original_import = role_probes.importlib.import_module
+
+    def import_module(name: str) -> object:
+        if name == "cupy":
+            return cupy
+        if name == "cuml.linear_model":
+            return SimpleNamespace(LogisticRegression=Classifier)
+        return original_import(name)
+
+    monkeypatch.setattr(role_probes.importlib, "import_module", import_module)
+    config = replace(_training_config(), optimizer=_cuml_optimizer_config())
+    if raises:
+        with pytest.raises(RuntimeError, match="reported a fitting failure"):
+            _fit_parameters(np.ones((6, 2)), np.arange(6) % 3, 1.0, config, 3)
+    else:
+        coefficients, intercepts, iterations = _fit_parameters(
+            np.ones((6, 2)), np.arange(6) % 3, 1.0, config, 3
+        )
+        assert coefficients.shape == (3, 2)
+        assert intercepts.shape == (3,)
+        assert iterations == [5_000]
+
+
+def test_optimizer_runtime_digest_and_numerical_contract_are_immutable() -> None:
+    optimizer = _cuml_optimizer_config()
+    with pytest.raises(ValueError, match="digest"):
+        replace(optimizer, runtime_sha256="0" * 64)
+    runtime = json.loads(optimizer.runtime_json)
+    runtime["matrix"]["array_order"] = "C"
+    with pytest.raises(ValueError, match="numerical settings"):
+        optimizer_config_from_runtime(runtime)
+
+
+def test_cuml_qn_matches_sklearn_reference_when_explicitly_enabled() -> None:
+    if os.environ.get("REASONESE_TEST_CUML") != "1":
+        pytest.skip("set REASONESE_TEST_CUML=1 in the pinned GPU fitter environment")
+    rng = np.random.default_rng(2606)
+    x = rng.normal(size=(600, 12)).astype(np.float32)
+    logits = x[:, :5] + rng.normal(scale=1.5, size=(600, 5))
+    y = np.argmax(logits, axis=1).astype(np.int64)
+    regularization = 0.1
+    sklearn_parameters = _fit_parameters(x, y, regularization, _training_config(), 5)
+    cuml_config = replace(
+        _training_config(), optimizer=role_probes.cuml_optimizer_config()
+    )
+    cuml_parameters = _fit_parameters(x, y, regularization, cuml_config, 5)
+    sklearn_probabilities = _predict_parameters(
+        sklearn_parameters[0], sklearn_parameters[1], x
+    )
+    cuml_probabilities = _predict_parameters(cuml_parameters[0], cuml_parameters[1], x)
+    np.testing.assert_allclose(cuml_probabilities, sklearn_probabilities, rtol=5e-4, atol=5e-4)
+    np.testing.assert_array_equal(
+        np.argmax(cuml_probabilities, axis=1), np.argmax(sklearn_probabilities, axis=1)
+    )
+    sklearn_objective = _multinomial_objective(
+        sklearn_parameters[0], sklearn_parameters[1], x, y, regularization
+    )
+    cuml_objective = _multinomial_objective(
+        cuml_parameters[0], cuml_parameters[1], x, y, regularization
+    )
+    assert cuml_objective == pytest.approx(sklearn_objective, rel=1e-5)
+    duplicated = _fit_parameters(
+        np.tile(x, (2, 1)), np.tile(y, 2), regularization * 2, cuml_config, 5
+    )
+    duplicated_probabilities = _predict_parameters(duplicated[0], duplicated[1], x)
+    np.testing.assert_allclose(
+        duplicated_probabilities, cuml_probabilities, rtol=5e-4, atol=5e-4
+    )
+    duplicated_objective = _multinomial_objective(
+        duplicated[0],
+        duplicated[1],
+        np.tile(x, (2, 1)),
+        np.tile(y, 2),
+        regularization * 2,
+    )
+    assert duplicated_objective == pytest.approx(cuml_objective, rel=1e-5)
+    zero_x = np.zeros((100, 2), dtype=np.float32)
+    imbalanced_y = np.asarray([0] * 80 + [1] * 20)
+    imbalance = _fit_parameters(zero_x, imbalanced_y, 1.0, cuml_config, 2)
+    imbalance_probabilities = _predict_parameters(imbalance[0], imbalance[1], zero_x[:1])[0]
+    np.testing.assert_allclose(imbalance_probabilities, (0.8, 0.2), rtol=5e-4, atol=5e-4)
 
 
 def test_qualification_recomputes_untouched_conversation_metrics() -> None:

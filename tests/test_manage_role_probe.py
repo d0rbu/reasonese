@@ -13,6 +13,7 @@ import pytest
 
 import reasonese.manage_role_probe as manage
 from reasonese.role_probe_extraction import NEMOTRON_ADAPTER, ProbeRole
+from reasonese.role_probes import sklearn_optimizer_config
 
 
 def _protocol() -> dict[str, Any]:
@@ -62,6 +63,7 @@ def _expanded_protocol() -> dict[str, Any]:
     protocol["native_prompt_partitions_sha256"] = "a" * 64
     protocol["neutral_target_source_sha256"] = "b" * 64
     protocol["neutral_filler_source_sha256"] = "c" * 64
+    protocol["optimizer"] = json.loads(sklearn_optimizer_config().runtime_json)
     protocol["models"] = {
         "nemotron": {
             "revision": NEMOTRON_ADAPTER.model_revision,
@@ -80,8 +82,8 @@ def test_frozen_protocol_accepts_both_pinned_adapters_and_rejects_drift() -> Non
         config = manage._validate_frozen_protocol(_protocol(), adapter.name)
         assert config.layer_indices == (manage._ADAPTER_LEGACY_LAYER[adapter.name],)
         assert config.minimum_neutral_accuracy == 0.9
-        assert config.max_iterations == 2_000
-        assert config.tolerance == 1e-4
+        assert config.optimizer.max_iterations == 2_000
+        assert config.optimizer.tolerance == 1e-4
 
         expanded = manage._validate_frozen_protocol(_expanded_protocol(), adapter.name)
         expected = (13, 20, 26) if adapter is NEMOTRON_ADAPTER else (15, 23, 30)

@@ -50,8 +50,9 @@ validation, and test sets. All five copies of one document therefore remain in o
 stricter than splitting role variants independently, which would leak the same underlying content
 across the holdout boundary.
 
-The qualification-scale neutral protocol uses 250 target documents with 1,024 retained content
-tokens per role copy. It preregisters three candidate layers for each model: 13, 20, and 26 for
+The qualification-scale neutral protocol uses 250 target documents with up to 1,024 retained
+content tokens per role copy; boundary-straddling tokens are masked, and exact retained counts are
+recorded. It preregisters three candidate layers for each model: 13, 20, and 26 for
 Nemotron; 15, 23, and 30 for Gemma. The earlier 60-document, single-layer protocol remains accepted
 only as a diagnostic run and cannot satisfy the expanded protocol's document or token counts.
 
@@ -80,11 +81,50 @@ Metrics include token accuracy and negative log likelihood, per-role recall,
 document-macro accuracy, per-role document-macro accuracy, and the full confusion matrix. The
 document metrics prevent a handful of long documents from hiding failures elsewhere.
 
-The fitted sklearn estimator is not serialized. Its coefficients and intercepts are converted to
-a uniform multinomial softmax representation. Binary sklearn coefficients receive an algebraically
-equivalent symmetric two-logit conversion, although production role probes use the five-role
-space. Tests compare portable softmax probabilities directly against sklearn for both binary and
-multiclass fits.
+The expanded protocol uses explicit cuML QN in FP32 with `penalty_normalized=True`, `C=1/lambda`,
+`max_iter=5000`, `linesearch_max_iter=100`, `lbfgs_memory=5`, and `tol=1e-4`. The protocol stores a
+canonical runtime record covering the solver arguments, package versions, CUDA device/runtime,
+matrix layout, and hashes of the fitted implementation files. Training refuses to run when the
+live runtime differs. The older diagnostic protocol uses explicit sklearn LBFGS in FP64 and records
+its runtime separately; results from the two numerical backends are not represented as bitwise
+equivalent.
+
+Keep the GPU fitter in an ignored isolated environment so the base and CPU test environments do
+not install RAPIDS. The supported pinned setup is:
+
+```bash
+uv venv out/role-probe-research/cuml-env-2606 --python 3.13.2
+uv pip install \
+  --python out/role-probe-research/cuml-env-2606/bin/python \
+  --extra-index-url https://pypi.nvidia.com \
+  --index-strategy unsafe-best-match \
+  -e . 'numpy==2.4.6' 'pytest>=9.0.0' 'scikit-learn>=1.8.0' \
+  'cuml-cu13==26.6.0' 'libcuml-cu13==26.6.0' 'cupy-cuda13x==14.2.0' \
+  'rmm-cu13==26.6.0' 'cuda-python==13.0.3' \
+  'cuda-toolkit[cublas,cufft,curand,cusolver,cusparse]==13.0.3.0'
+```
+
+Run the management command with that environment's Python. The command reconstructs the live
+runtime record and fails before fitting unless it exactly matches the record frozen in the
+protocol. GPU fitting first builds an FP32 Fortran-order host matrix and copies it to exactly one
+device matrix; it refuses to start without two GiB of free device headroom beyond that matrix.
+Probe artifacts created before optimizer provenance was added are rejected rather than silently
+interpreted as the current format.
+
+The explicit cross-backend numerical check is opt-in because it requires a CUDA device:
+
+```bash
+REASONESE_TEST_CUML=1 \
+  out/role-probe-research/cuml-env-2606/bin/python -m pytest \
+  -q tests/test_role_probes.py -k cuml_qn_matches_sklearn_reference --no-cov
+```
+
+The fitted estimator is not serialized. Its coefficients and intercepts are promoted to a uniform,
+portable multinomial softmax representation, so applying the trained probe does not require cuML.
+Binary sklearn coefficients receive an algebraically equivalent symmetric two-logit conversion,
+although production role probes use the five-role space. Tests compare portable probabilities
+directly against sklearn; the cuML feasibility check compares objectives, probabilities, and
+predictions within explicit numerical tolerances rather than comparing raw coefficients.
 
 ## Conversation qualification and scoring
 
@@ -169,12 +209,11 @@ local instrument must not be described as hosted-activation parity.
 The frozen workflow has separate training and qualification stages so a held-out neutral result
 can be saved without being mistaken for a QA-eligible probe:
 
-The multinomial probe uses scikit-learn L-BFGS with a 2,000-iteration limit and a `1e-4`
-stopping tolerance. The released role-confusion analysis leaves the tolerance at cuML's `1e-4`
-default; using `1e-6` here did not converge within 2,000 iterations on the 60-document Nemotron
-diagnostic dataset. Solver and tolerance are implementation details rather than requirements stated
-in the paper, and the exact training and joint-selection configuration is stored in the probe
-artifact.
+The 60-document diagnostic uses scikit-learn L-BFGS with a 2,000-iteration limit and `1e-4`
+tolerance. The expanded workflow uses the pinned cuML QN configuration above, matching the released
+analysis's backend and `1e-4` default tolerance while explicitly binding settings that its notebook
+left at defaults. Solver and tolerance are implementation details rather than requirements stated
+in the paper, so the full runtime and configuration are stored in the probe artifact.
 
 ```bash
 uv run reasonese-role-probe train \

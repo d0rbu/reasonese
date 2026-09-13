@@ -10,13 +10,18 @@ base documents disjoint across splits, and stores portable NumPy weights.
 from __future__ import annotations
 
 import hashlib
+import importlib
+import importlib.metadata
+import io
 import json
 import logging
 import math
 import os
+import platform
 import time
 import warnings
 import zipfile
+from contextlib import redirect_stdout
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any, cast
@@ -43,7 +48,7 @@ from reasonese.probe_statistics import (
 PAIRED_NEUTRAL = "paired-neutral-role-wrappers"
 UNTOUCHED_CONVERSATIONS = "untouched-native-conversations"
 CONTENT_TOKENS_ONLY = "content-tokens-only"
-_ARTIFACT_FORMAT = "reasonese-activation-role-probe"
+_ARTIFACT_FORMAT = "reasonese-activation-role-probe-v2"
 logger = logging.getLogger(__name__)
 
 type Array = np.ndarray
@@ -57,6 +62,14 @@ def _text(value: str, name: str) -> None:
 def _sha256(value: str, name: str) -> None:
     if len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
         raise ValueError(f"{name} must be a lowercase SHA-256 digest")
+
+
+def _path_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while chunk := handle.read(8 * 1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 @beartype
@@ -329,6 +342,316 @@ def split_documents(
     )
 
 
+def _canonical_json_text(value: object) -> str:
+    return json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False
+    )
+
+
+@beartype
+@dataclass(frozen=True, slots=True)
+class ProbeOptimizerConfig:
+    """Exact fitting backend, numerical settings, and auditable runtime identity."""
+
+    backend: str
+    solver: str
+    fit_dtype: str
+    max_iterations: int
+    tolerance: float
+    linesearch_max_iterations: int | None
+    lbfgs_memory: int | None
+    penalty_normalized: bool | None
+    runtime_json: str
+    runtime_sha256: str
+
+    def __post_init__(self) -> None:
+        if self.backend not in {"sklearn-lbfgs", "cuml-qn"}:
+            raise ValueError("unsupported probe optimizer backend")
+        expected = (
+            ("lbfgs", "float64", None, None, None)
+            if self.backend == "sklearn-lbfgs"
+            else ("qn", "float32", 100, 5, True)
+        )
+        actual = (
+            self.solver,
+            self.fit_dtype,
+            self.linesearch_max_iterations,
+            self.lbfgs_memory,
+            self.penalty_normalized,
+        )
+        if actual != expected:
+            raise ValueError("probe optimizer settings do not match the selected backend")
+        if type(self.max_iterations) is not int or self.max_iterations <= 0:
+            raise ValueError("optimizer max_iterations must be a positive integer")
+        if type(self.tolerance) not in {int, float} or (
+            self.tolerance <= 0 or not math.isfinite(self.tolerance)
+        ):
+            raise ValueError("optimizer tolerance must be finite and positive")
+        try:
+            runtime = json.loads(self.runtime_json)
+        except json.JSONDecodeError as error:
+            raise ValueError("optimizer runtime_json is invalid") from error
+        if not isinstance(runtime, dict) or self.runtime_json != _canonical_json_text(runtime):
+            raise ValueError("optimizer runtime_json must be a canonical JSON object")
+        _sha256(self.runtime_sha256, "optimizer runtime_sha256")
+        if hashlib.sha256(self.runtime_json.encode()).hexdigest() != self.runtime_sha256:
+            raise ValueError("optimizer runtime digest does not match its record")
+        expected_solver = (
+            {
+                "class_weight": None,
+                "fit_intercept": True,
+                "max_iter": self.max_iterations,
+                "penalty": "l2",
+                "solver": self.solver,
+                "tol": self.tolerance,
+            }
+            if self.backend == "sklearn-lbfgs"
+            else {
+                "class_weight": None,
+                "fit_intercept": True,
+                "lbfgs_memory": self.lbfgs_memory,
+                "linesearch_max_iter": self.linesearch_max_iterations,
+                "l1_ratio": None,
+                "max_iter": self.max_iterations,
+                "output_type": "cupy",
+                "penalty": "l2",
+                "penalty_normalized": self.penalty_normalized,
+                "solver": self.solver,
+                "tol": self.tolerance,
+                "verbose": False,
+            }
+        )
+        expected_matrix = {
+            "activation_dtype": self.fit_dtype,
+            "array_order": "F" if self.backend == "cuml-qn" else "C",
+            "convert_dtype": False if self.backend == "cuml-qn" else None,
+            "labels_dtype": "int32" if self.backend == "cuml-qn" else "int64",
+        }
+        if (
+            runtime.get("backend") != self.backend
+            or runtime.get("solver") != expected_solver
+            or runtime.get("matrix") != expected_matrix
+            or runtime.get("regularization_mapping") != "C=1/lambda"
+        ):
+            raise ValueError("optimizer runtime record does not match its numerical settings")
+
+
+def _optimizer_config(
+    record: dict[str, object],
+    *,
+    backend: str,
+    solver: str,
+    fit_dtype: str,
+    max_iterations: int,
+    tolerance: float,
+    linesearch_max_iterations: int | None,
+    lbfgs_memory: int | None,
+    penalty_normalized: bool | None,
+) -> ProbeOptimizerConfig:
+    runtime_json = _canonical_json_text(record)
+    return ProbeOptimizerConfig(
+        backend=backend,
+        solver=solver,
+        fit_dtype=fit_dtype,
+        max_iterations=max_iterations,
+        tolerance=tolerance,
+        linesearch_max_iterations=linesearch_max_iterations,
+        lbfgs_memory=lbfgs_memory,
+        penalty_normalized=penalty_normalized,
+        runtime_json=runtime_json,
+        runtime_sha256=hashlib.sha256(runtime_json.encode()).hexdigest(),
+    )
+
+
+@beartype
+def sklearn_optimizer_config(
+    *, max_iterations: int = 2_000, tolerance: float = 1e-4
+) -> ProbeOptimizerConfig:
+    """Identify the exact CPU diagnostic solver without loading GPU dependencies."""
+    module = importlib.import_module("sklearn.linear_model._logistic")
+    source = getattr(module, "__file__", None)
+    if not isinstance(source, str) or not Path(source).is_file():
+        raise ValueError("sklearn logistic-regression implementation is not hashable")
+    record: dict[str, object] = {
+        "backend": "sklearn-lbfgs",
+        "format_version": 1,
+        "implementation_sha256": {"sklearn_logistic_py": _path_sha256(Path(source))},
+        "matrix": {
+            "activation_dtype": "float64",
+            "array_order": "C",
+            "convert_dtype": None,
+            "labels_dtype": "int64",
+        },
+        "packages": {
+            "numpy": np.__version__,
+            "scikit-learn": importlib.metadata.version("scikit-learn"),
+            "scipy": importlib.metadata.version("scipy"),
+        },
+        "python_version": platform.python_version(),
+        "regularization_mapping": "C=1/lambda",
+        "solver": {
+            "class_weight": None,
+            "fit_intercept": True,
+            "max_iter": max_iterations,
+            "penalty": "l2",
+            "solver": "lbfgs",
+            "tol": tolerance,
+        },
+    }
+    return _optimizer_config(
+        record,
+        backend="sklearn-lbfgs",
+        solver="lbfgs",
+        fit_dtype="float64",
+        max_iterations=max_iterations,
+        tolerance=tolerance,
+        linesearch_max_iterations=None,
+        lbfgs_memory=None,
+        penalty_normalized=None,
+    )
+
+
+def _distribution_file(distribution: str, relative_path: str) -> Path:
+    path = Path(str(importlib.metadata.distribution(distribution).locate_file(relative_path)))
+    if not path.is_file():
+        raise ValueError(f"optimizer runtime file is missing: {relative_path}")
+    return path
+
+
+@beartype
+def cuml_optimizer_config(
+    *,
+    max_iterations: int = 5_000,
+    tolerance: float = 1e-4,
+    linesearch_max_iterations: int = 100,
+    lbfgs_memory: int = 5,
+) -> ProbeOptimizerConfig:
+    """Identify the exact explicit cuML QN runtime selected for expanded fitting."""
+    try:
+        cupy = importlib.import_module("cupy")
+        logistic = importlib.import_module("cuml.linear_model.logistic_regression")
+        qn = importlib.import_module("cuml.solvers.qn")
+    except ImportError as error:
+        raise RuntimeError(
+            "cuML role-probe fitting requires the pinned isolated GPU environment documented "
+            "in docs/reference/role-probes.md"
+        ) from error
+    logistic_path = getattr(logistic, "__file__", None)
+    qn_path = getattr(qn, "__file__", None)
+    if not isinstance(logistic_path, str) or not isinstance(qn_path, str):
+        raise ValueError("cuML optimizer implementation is not hashable")
+    device = int(cupy.cuda.runtime.getDevice())
+    properties = cupy.cuda.runtime.getDeviceProperties(device)
+    raw_name = properties["name"]
+    device_name = raw_name.decode() if isinstance(raw_name, bytes) else str(raw_name)
+    packages = {
+        name: importlib.metadata.version(name)
+        for name in (
+            "cuda-python",
+            "cuda-toolkit",
+            "cuml-cu13",
+            "cupy-cuda13x",
+            "libcuml-cu13",
+            "nvidia-cuda-nvrtc",
+            "nvidia-cuda-runtime",
+            "rmm-cu13",
+        )
+    }
+    packages["numpy"] = np.__version__
+    record: dict[str, object] = {
+        "backend": "cuml-qn",
+        "cuda": {
+            "compute_capability": f"{properties['major']}.{properties['minor']}",
+            "device_name": device_name,
+            "driver_version": int(cupy.cuda.runtime.driverGetVersion()),
+            "runtime_version": int(cupy.cuda.runtime.runtimeGetVersion()),
+        },
+        "format_version": 1,
+        "implementation_sha256": {
+            "cuml/linear_model/logistic_regression.py": _path_sha256(Path(logistic_path)),
+            "cuml/solvers/qn.abi3.so": _path_sha256(Path(qn_path)),
+            "libcuml/lib64/libcuml.so": _path_sha256(
+                _distribution_file("libcuml-cu13", "libcuml/lib64/libcuml.so")
+            ),
+        },
+        "matrix": {
+            "activation_dtype": "float32",
+            "array_order": "F",
+            "convert_dtype": False,
+            "labels_dtype": "int32",
+        },
+        "packages": packages,
+        "python_version": platform.python_version(),
+        "regularization_mapping": "C=1/lambda",
+        "solver": {
+            "class_weight": None,
+            "fit_intercept": True,
+            "lbfgs_memory": lbfgs_memory,
+            "linesearch_max_iter": linesearch_max_iterations,
+            "l1_ratio": None,
+            "max_iter": max_iterations,
+            "output_type": "cupy",
+            "penalty": "l2",
+            "penalty_normalized": True,
+            "solver": "qn",
+            "tol": tolerance,
+            "verbose": False,
+        },
+    }
+    return _optimizer_config(
+        record,
+        backend="cuml-qn",
+        solver="qn",
+        fit_dtype="float32",
+        max_iterations=max_iterations,
+        tolerance=tolerance,
+        linesearch_max_iterations=linesearch_max_iterations,
+        lbfgs_memory=lbfgs_memory,
+        penalty_normalized=True,
+    )
+
+
+@beartype
+def optimizer_config_from_runtime(record: dict[str, Any]) -> ProbeOptimizerConfig:
+    """Build a validated optimizer config from one frozen protocol runtime record."""
+    try:
+        backend = record["backend"]
+        solver = record["solver"]
+        matrix = record["matrix"]
+        assert isinstance(solver, dict) and isinstance(matrix, dict)
+        return _optimizer_config(
+            record,
+            backend=backend,
+            solver=solver["solver"],
+            fit_dtype=matrix["activation_dtype"],
+            max_iterations=solver["max_iter"],
+            tolerance=solver["tol"],
+            linesearch_max_iterations=solver.get("linesearch_max_iter"),
+            lbfgs_memory=solver.get("lbfgs_memory"),
+            penalty_normalized=solver.get("penalty_normalized"),
+        )
+    except (AssertionError, KeyError, TypeError) as error:
+        raise ValueError("invalid optimizer runtime record") from error
+
+
+def _validate_optimizer_runtime(config: ProbeOptimizerConfig) -> None:
+    if config.backend == "sklearn-lbfgs":
+        actual = sklearn_optimizer_config(
+            max_iterations=config.max_iterations, tolerance=config.tolerance
+        )
+    else:
+        assert config.linesearch_max_iterations is not None
+        assert config.lbfgs_memory is not None
+        actual = cuml_optimizer_config(
+            max_iterations=config.max_iterations,
+            tolerance=config.tolerance,
+            linesearch_max_iterations=config.linesearch_max_iterations,
+            lbfgs_memory=config.lbfgs_memory,
+        )
+    if actual.runtime_sha256 != config.runtime_sha256:
+        raise ValueError("live optimizer runtime does not match the frozen training protocol")
+
+
 @beartype
 @dataclass(frozen=True, slots=True)
 class ProbeTrainingConfig:
@@ -339,6 +662,7 @@ class ProbeTrainingConfig:
     minimum_neutral_per_role_accuracy: float
     minimum_neutral_document_accuracy: float
     minimum_neutral_per_role_document_accuracy: float
+    optimizer: ProbeOptimizerConfig
     expected_document_count: int | None = None
     maximum_content_tokens_per_document: int | None = None
     protocol_sha256: str | None = None
@@ -349,8 +673,6 @@ class ProbeTrainingConfig:
     train_fraction: float = 0.8
     validation_fraction: float = 0.1
     seed: int = 0
-    max_iterations: int = 2_000
-    tolerance: float = 1e-4
 
     def __post_init__(self) -> None:
         if (
@@ -404,13 +726,6 @@ class ProbeTrainingConfig:
             raise ValueError("training split fractions must be finite and positive")
         if type(self.seed) is not int:
             raise ValueError("training seed must be an integer")
-        if (
-            type(self.max_iterations) is not int
-            or self.max_iterations <= 0
-            or self.tolerance <= 0
-            or not math.isfinite(self.tolerance)
-        ):
-            raise ValueError("optimizer limits must be positive")
 
 
 @beartype
@@ -731,34 +1046,127 @@ def _metrics(
     )
 
 
-def _fit(
-    x: Array, y: Array, regularization: float, config: ProbeTrainingConfig
-) -> LogisticRegression:
-    classifier = LogisticRegression(
+def _fit(x: Array, y: Array, regularization: float, config: ProbeTrainingConfig) -> Any:
+    optimizer = config.optimizer
+    if optimizer.backend == "sklearn-lbfgs":
+        classifier = LogisticRegression(
+            C=1 / regularization,
+            penalty="l2",
+            solver="lbfgs",
+            fit_intercept=True,
+            class_weight=None,
+            max_iter=optimizer.max_iterations,
+            tol=optimizer.tolerance,
+        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", ConvergenceWarning)
+            try:
+                classifier.fit(
+                    np.asarray(x, dtype=np.float64, order="C"),
+                    np.asarray(y, dtype=np.int64),
+                )
+            except ConvergenceWarning as error:
+                raise RuntimeError(
+                    f"probe failed to converge for lambda={regularization:g}"
+                ) from error
+        return classifier
+
+    cupy = importlib.import_module("cupy")
+    cuml_linear_model = importlib.import_module("cuml.linear_model")
+    assert optimizer.linesearch_max_iterations is not None
+    assert optimizer.lbfgs_memory is not None
+    host_x = np.asfortranarray(x, dtype=np.float32)
+    if not host_x.flags.f_contiguous:
+        raise RuntimeError("cuML probe matrix must be a single Fortran-order allocation")
+    cupy.get_default_memory_pool().free_all_blocks()
+    free_bytes, _ = cupy.cuda.runtime.memGetInfo()
+    required_bytes = host_x.nbytes + 2 * 1024**3
+    if free_bytes < required_bytes:
+        raise MemoryError(
+            "cuML probe fit lacks device headroom for one Fortran-order activation matrix"
+        )
+    device_x = cupy.asarray(host_x, order="F")
+    device_y = cupy.asarray(np.asarray(y, dtype=np.int32))
+    if not device_x.flags.f_contiguous or device_x.dtype.name != "float32":
+        raise RuntimeError("cuML probe matrix lost its FP32 Fortran-order contract")
+    if device_y.dtype.name != "int32":
+        raise RuntimeError("cuML probe labels lost their int32 contract")
+    classifier = cuml_linear_model.LogisticRegression(
+        penalty="l2",
+        tol=optimizer.tolerance,
         C=1 / regularization,
-        solver="lbfgs",
         fit_intercept=True,
-        max_iter=config.max_iterations,
-        tol=config.tolerance,
+        class_weight=None,
+        max_iter=optimizer.max_iterations,
+        linesearch_max_iter=optimizer.linesearch_max_iterations,
+        l1_ratio=None,
+        solver="qn",
+        lbfgs_memory=optimizer.lbfgs_memory,
+        penalty_normalized=True,
+        verbose=False,
+        output_type="cupy",
     )
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", ConvergenceWarning)
-        try:
-            classifier.fit(np.asarray(x, dtype=np.float64), y)
-        except ConvergenceWarning as error:
-            raise RuntimeError(f"probe failed to converge for lambda={regularization:g}") from error
+    solver_output = io.StringIO()
+    try:
+        with redirect_stdout(solver_output):
+            classifier.fit(device_x, device_y, sample_weight=None, convert_dtype=False)
+    finally:
+        output = solver_output.getvalue()
+        if output:
+            logger.info("cuML QN output for lambda=%g:\n%s", regularization, output.rstrip())
+    failure_markers = (
+        "l-bfgs line search failed (code ",
+        "l-bfgs error fx=",
+        "l-bfgs stopped, because the line search failed to advance",
+        "l-bfgs: max iterations reached",
+        "maximum iterations reached before solver is converged",
+    )
+    lowered = output.lower()
+    if any(marker in lowered for marker in failure_markers):
+        raise RuntimeError(f"cuML QN reported a fitting failure for lambda={regularization:g}")
     return classifier
 
 
-def _parameters(classifier: LogisticRegression, class_count: int) -> tuple[Array, Array]:
-    if not np.array_equal(classifier.classes_, np.arange(class_count)):
+def _host_array(value: Any) -> Array:
+    getter = getattr(value, "get", None)
+    return np.asarray(getter() if callable(getter) else value)
+
+
+def _parameters(classifier: Any, class_count: int) -> tuple[Array, Array]:
+    if not np.array_equal(_host_array(classifier.classes_), np.arange(class_count)):
         raise ValueError("classifier class order does not match role order")
-    coefficients = np.asarray(classifier.coef_, dtype=np.float64)
-    intercepts = np.asarray(classifier.intercept_, dtype=np.float64)
+    coefficients = np.asarray(_host_array(classifier.coef_), dtype=np.float64)
+    intercepts = np.asarray(_host_array(classifier.intercept_), dtype=np.float64)
     if class_count == 2:
         coefficients = np.concatenate((-coefficients / 2, coefficients / 2))
         intercepts = np.concatenate((-intercepts / 2, intercepts / 2))
     return coefficients, intercepts
+
+
+def _fit_parameters(
+    x: Array,
+    y: Array,
+    regularization: float,
+    config: ProbeTrainingConfig,
+    class_count: int,
+) -> tuple[Array, Array, list[int]]:
+    classifier: Any | None = None
+    try:
+        classifier = _fit(x, y, regularization, config)
+        coefficients, intercepts = _parameters(classifier, class_count)
+        iterations = [int(value) for value in _host_array(classifier.n_iter_).reshape(-1)]
+        if not iterations or any(
+            value <= 0 or value > config.optimizer.max_iterations for value in iterations
+        ):
+            raise RuntimeError("probe optimizer returned an invalid iteration count")
+        if not np.all(np.isfinite(coefficients)) or not np.all(np.isfinite(intercepts)):
+            raise RuntimeError("probe optimizer returned non-finite parameters")
+        return coefficients, intercepts, iterations
+    finally:
+        del classifier
+        if config.optimizer.backend == "cuml-qn":
+            cupy = importlib.import_module("cupy")
+            cupy.get_default_memory_pool().free_all_blocks()
 
 
 @beartype
@@ -766,6 +1174,7 @@ def train_role_probe(dataset: ActivationDataset, config: ProbeTrainingConfig) ->
     """Select layer and L2 strength on grouped neutral dev data and test once."""
     if dataset.provenance.dataset_kind != PAIRED_NEUTRAL:
         raise ValueError("training requires paired neutral-role activations")
+    _validate_optimizer_runtime(config.optimizer)
     if any(layer not in dataset.provenance.layer_indices for layer in config.layer_indices):
         raise ValueError("configured layer is absent from activation export")
     documents = tuple(str(value) for value in np.unique(dataset.document_ids))
@@ -803,13 +1212,18 @@ def train_role_probe(dataset: ActivationDataset, config: ProbeTrainingConfig) ->
             logger.info(
                 "Fitting role probe candidate layer=%d lambda=%g", layer_index, regularization
             )
-            classifier = _fit(
-                dataset.activations[train_rows, layer_offset], train_labels, regularization, config
+            coefficients, intercepts, iterations = _fit_parameters(
+                dataset.activations[train_rows, layer_offset],
+                train_labels,
+                regularization,
+                config,
+                len(dataset.provenance.roles),
             )
-            coefficients, intercepts = _parameters(classifier, len(dataset.provenance.roles))
             probabilities = _predict_parameters(
                 coefficients, intercepts, dataset.activations[validation_rows, layer_offset]
             )
+            if not np.all(np.isfinite(probabilities)):
+                raise RuntimeError("probe candidate produced non-finite development probabilities")
             metrics = _metrics(
                 probabilities,
                 validation_labels,
@@ -822,7 +1236,7 @@ def train_role_probe(dataset: ActivationDataset, config: ProbeTrainingConfig) ->
                 "dev_accuracy=%.6f dev_nll=%.6f elapsed_seconds=%.3f",
                 layer_index,
                 regularization,
-                np.asarray(classifier.n_iter_).tolist(),
+                iterations,
                 metrics.accuracy,
                 metrics.negative_log_likelihood,
                 time.monotonic() - started,
@@ -847,23 +1261,25 @@ def train_role_probe(dataset: ActivationDataset, config: ProbeTrainingConfig) ->
         layer_index,
         regularization,
     )
-    classifier = _fit(
+    coefficients, intercepts, iterations = _fit_parameters(
         dataset.activations[fit_rows, layer_offset],
         _labels(dataset, fit_rows),
         regularization,
         config,
+        len(dataset.provenance.roles),
     )
-    coefficients, intercepts = _parameters(classifier, len(dataset.provenance.roles))
     logger.info(
         "Finished selected role probe refit layer=%d lambda=%g iterations=%s elapsed_seconds=%.3f",
         layer_index,
         regularization,
-        np.asarray(classifier.n_iter_).tolist(),
+        iterations,
         time.monotonic() - started,
     )
     test_probabilities = _predict_parameters(
         coefficients, intercepts, dataset.activations[test_rows, layer_offset]
     )
+    if not np.all(np.isfinite(test_probabilities)):
+        raise RuntimeError("probe produced non-finite held-out probabilities")
     return RoleProbe(
         provenance=dataset.provenance,
         training=config,
@@ -1209,6 +1625,10 @@ def _probe_from(metadata: dict[str, Any], coefficients: Array, intercepts: Array
                 bootstrap_auc=PairedBootstrapAuc(**bootstrap),
             ),
         )
+    optimizer = training.get("optimizer")
+    if not isinstance(optimizer, dict):
+        raise ValueError("probe artifact lacks optimizer provenance")
+    training["optimizer"] = ProbeOptimizerConfig(**optimizer)
     return RoleProbe(
         provenance=ActivationProvenance(**provenance),
         training=ProbeTrainingConfig(**training),
