@@ -115,102 +115,96 @@ class ModelScheduler:
         if not queues:
             return
 
-        active = dict.fromkeys(queues, 0)
-        failed: dict[str, Exception] = {}
-        failure: Exception | None = None
+        exhausted: dict[str, Exception] = {}
+        fatal_error: Exception | None = None
 
         def stop_admission(error: Exception) -> None:
-            nonlocal failure
-            if failure is None:
-                failure = error
+            nonlocal fatal_error
+            if fatal_error is None:
+                fatal_error = error
             for queue in queues.values():
                 queue.clear()
 
-        pending: dict[Future[Result], tuple[_Work[Result], int]] = {}
-        processing: dict[Future[ScheduledRequest[Result] | None], _Work[Result]] = {}
+        # Each admitted request has one future, retained through response processing.
+        # An integer is its HTTP generation; None marks the callback stage.
+        pending: dict[
+            Future[Result] | Future[ScheduledRequest[Result] | None],
+            tuple[_Work[Result], int | None],
+        ] = {}
+
+        def has_capacity(model: str) -> bool:
+            active = sum(work.request.model == model for work, _ in pending.values())
+            return active < int(self.limiters[model].window)
+
         worker_count = sum(min(self.max_concurrency, len(queue)) for queue in queues.values())
         with ThreadPoolExecutor(max_workers=worker_count) as executor:
-            while pending or processing or any(queues.values()):
+            while pending or any(queues.values()):
                 done = [future for future in pending if future.done()]
-                processed = [future for future in processing if future.done()]
-                if done or processed:
-                    responses: list[tuple[_Work[Result], int, Result]] = []
-                    # Apply every observed 429 before crediting successes or admitting work.
-                    for future in done:
-                        work, generation = pending.pop(future)
-                        model = work.request.model
-                        limiter = self.limiters[model]
-                        try:
-                            result = future.result()
-                        except Exception as error:
-                            active[model] -= 1
-                            response = (
-                                error.response if isinstance(error, requests.HTTPError) else None
-                            )
-                            if response is None or response.status_code != 429:
-                                stop_admission(error)
-                                continue
-                            limiter.limited(
-                                self.monotonic(),
-                                retry_after_seconds(response.headers.get("Retry-After")),
-                            )
-                            _LOGGER.warning(
-                                "HTTP 429 for %s: concurrency=%d, interval=%.2fs, cooldown=%.2fs",
-                                model,
-                                int(limiter.window),
-                                limiter.interval,
-                                max(0.0, limiter.ready_at - self.monotonic()),
-                            )
-                            if work.retries >= self.rate_limit_retries:
-                                failed.setdefault(model, error)
-                                queues[model].clear()
-                            elif model not in failed and failure is None:
-                                queues[model].appendleft(_Work(work.request, work.retries + 1))
-                        else:
-                            responses.append((work, generation, result))
-                    for work, generation, result in responses:
-                        self.limiters[work.request.model].succeeded(generation)
-                        processing[executor.submit(work.request.receive, result)] = work
-                    for future in processed:
-                        work = processing.pop(future)
-                        model = work.request.model
-                        active[model] -= 1
-                        # Callback failures are not failed HTTP attempts and must never retry.
-                        try:
-                            continuation = future.result()
-                        except Exception as error:
+                # Apply every observed HTTP error before crediting successes or callbacks.
+                done.sort(
+                    key=lambda future: pending[future][1] is None
+                    or (not future.cancelled() and future.exception() is None)
+                )
+                for future in done:
+                    work, generation = pending.pop(future)
+                    model = work.request.model
+                    limiter = self.limiters[model]
+                    try:
+                        result = future.result()
+                    except Exception as error:
+                        # A callback error must never retry its successful HTTP request.
+                        response = (
+                            error.response
+                            if generation is not None and isinstance(error, requests.HTTPError)
+                            else None
+                        )
+                        if response is None or response.status_code != 429:
                             stop_admission(error)
                             continue
-                        if continuation is not None:
-                            if not isinstance(continuation, ScheduledRequest):
-                                stop_admission(
-                                    TypeError("a callback must return a request or None")
-                                )
-                            elif continuation.model != model:
+                        limiter.limited(
+                            self.monotonic(),
+                            retry_after_seconds(response.headers.get("Retry-After")),
+                        )
+                        _LOGGER.warning(
+                            "HTTP 429 for %s: concurrency=%d, interval=%.2fs, cooldown=%.2fs",
+                            model,
+                            int(limiter.window),
+                            limiter.interval,
+                            max(0.0, limiter.ready_at - self.monotonic()),
+                        )
+                        if work.retries >= self.rate_limit_retries:
+                            exhausted.setdefault(model, error)
+                            queues[model].clear()
+                        elif model not in exhausted and fatal_error is None:
+                            queues[model].appendleft(_Work(work.request, work.retries + 1))
+                    else:
+                        if generation is not None:
+                            limiter.succeeded(generation)
+                            pending[executor.submit(work.request.receive, cast(Result, result))] = (
+                                work, None
+                            )
+                        elif result is not None:
+                            if not isinstance(result, ScheduledRequest):
+                                stop_admission(TypeError("a callback must return a request or None"))
+                            elif result.model != model:
                                 stop_admission(ValueError("a continuation must retain its model"))
-                            elif model not in failed and failure is None:
-                                queues[model].appendleft(_Work(continuation))
+                            elif model not in exhausted and fatal_error is None:
+                                queues[model].appendleft(_Work(result))
+                if done:
                     # Futures may have finished while responses were being processed.
                     continue
 
                 for model, queue in queues.items():
                     limiter = self.limiters[model]
-                    while queue and active[model] < int(limiter.window):
-                        feedback = (
-                            *(
-                                (future, work.request.model)
-                                for future, (work, _) in pending.items()
-                            ),
-                            *((future, work.request.model) for future, work in processing.items()),
-                        )
+                    while queue and has_capacity(model):
                         if any(
                             future.done()
                             and (
-                                owner == model
+                                work.request.model == model
                                 or future.cancelled()
                                 or future.exception() is not None
                             )
-                            for future, owner in feedback
+                            for future, (work, _) in pending.items()
                         ):
                             break
                         now = self.monotonic()
@@ -218,27 +212,25 @@ class ModelScheduler:
                             break
                         work = queue.popleft()
                         pending[executor.submit(work.request.send)] = (work, limiter.generation)
-                        active[model] += 1
                         limiter.ready_at = now + limiter.interval
 
                 delays = [
                     max(0.0, self.limiters[model].ready_at - self.monotonic())
                     for model, queue in queues.items()
-                    if queue and active[model] < int(self.limiters[model].window)
+                    if queue and has_capacity(model)
                 ]
                 # Chunk waits, not cooldown deadlines: huge valid headers must not overflow
                 # platform sleep/condition timeouts or cause an early retry.
                 timeout = min(60.0, *delays) if delays else None
-                futures = (*pending, *processing)
-                if futures:
+                if pending:
                     wait(
-                        cast(tuple[Future[object], ...], futures),
+                        cast(Iterable[Future[object]], pending),
                         timeout=timeout,
                         return_when=FIRST_COMPLETED,
                     )
                 else:
                     self.sleep(min(60.0, *delays))
-        if failure is not None:
-            raise failure
-        if failed:
-            raise next(iter(failed.values()))
+        if fatal_error is not None:
+            raise fatal_error
+        if exhausted:
+            raise next(iter(exhausted.values()))

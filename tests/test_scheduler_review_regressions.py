@@ -14,24 +14,20 @@ import requests
 
 import reasonese.scheduling as scheduling
 from reasonese.scheduling import ModelLimiter, ModelScheduler, ScheduledRequest
+from tests.test_scheduling import Clock, http_error
 
 
 def _limited() -> requests.HTTPError:
-    response = requests.Response()
-    response.status_code = 429
-    response.headers["Retry-After"] = "60"
-    return requests.HTTPError("HTTP 429", response=response)
+    return http_error(retry_after="60")
 
 
-class _Clock:
-    def __init__(self) -> None:
-        self.now = 0.0
-
-    def monotonic(self) -> float:
-        return self.now
-
-    def sleep(self, seconds: float) -> None:
-        self.now += seconds
+class _ImmediateExecutor(ThreadPoolExecutor):
+    def submit(self, fn: Any, /, *args: Any, **kwargs: Any) -> Future[Any]:
+        future = super().submit(fn, *args, **kwargs)
+        # Force completion before submit returns, leaving errors for the scheduler.
+        finished, _ = wait((future,), timeout=2)
+        assert future in finished
+        return future
 
 
 @pytest.mark.parametrize("timezone", ["UTC-9", "UTC+6"])
@@ -148,18 +144,11 @@ def test_immediate_responses_do_not_starve_another_ready_model(
 ) -> None:
     starts: list[str] = []
 
-    class ImmediateExecutor(ThreadPoolExecutor):
-        def submit(self, fn: Any, /, *args: Any, **kwargs: Any) -> Future[Any]:
-            future = super().submit(fn, *args, **kwargs)
-            # Force the valid interleaving where workers finish before submit returns.
-            future.result(timeout=2)
-            return future
-
     def send(model: str) -> str:
         starts.append(model)
         return model
 
-    monkeypatch.setattr(scheduling, "ThreadPoolExecutor", ImmediateExecutor)
+    monkeypatch.setattr(scheduling, "ThreadPoolExecutor", _ImmediateExecutor)
     ModelScheduler(1).run(
         (
             *(ScheduledRequest("first", lambda: send("first"), lambda _: None) for _ in range(8)),
@@ -173,7 +162,7 @@ def test_immediate_responses_do_not_starve_another_ready_model(
 
 @pytest.mark.parametrize("separate_runs", [False, True])
 def test_reusing_request_spec_preserves_independent_retry_budgets(separate_runs: bool) -> None:
-    clock = _Clock()
+    clock = Clock()
     attempts: list[int] = []
     received: list[str] = []
 
@@ -265,13 +254,6 @@ def test_already_completed_fatal_error_prevents_other_models_first_admission(
     attempts: list[str] = []
     error = ValueError("fatal response")
 
-    class ImmediateExecutor(ThreadPoolExecutor):
-        def submit(self, fn: Any, /, *args: Any, **kwargs: Any) -> Future[Any]:
-            future = super().submit(fn, *args, **kwargs)
-            finished, _ = wait((future,), timeout=2)
-            assert future in finished
-            return future
-
     def fatal() -> str:
         attempts.append("fatal")
         raise error
@@ -280,7 +262,7 @@ def test_already_completed_fatal_error_prevents_other_models_first_admission(
         attempts.append("fresh")
         return "must not be submitted"
 
-    monkeypatch.setattr(scheduling, "ThreadPoolExecutor", ImmediateExecutor)
+    monkeypatch.setattr(scheduling, "ThreadPoolExecutor", _ImmediateExecutor)
     with pytest.raises(ValueError) as raised:
         ModelScheduler(1).run(
             (

@@ -375,29 +375,12 @@ class OpenRouterClient:
         except Exception as error:
             failure = error
 
-        if pending:
-            indexes = sorted(pending)
-
-            def collect_completed_batch(index: int, responses: tuple[JsonObject, ...]) -> None:
-                callback_failure: Exception | None = None
-                for body_index, response in enumerate(responses):
-                    try:
-                        collect_sync(indexes[index], body_index, response)
-                    except Exception as error:
-                        if callback_failure is None:
-                            callback_failure = error
-                if callback_failure is not None:
-                    raise callback_failure
-
-            try:
-                self._wait_for_batches(
-                    tuple(pending[index] for index in indexes),
-                    on_completed=collect_completed_batch,
-                )
-            except Exception as error:
-                if failure is not None:
-                    raise failure from error
-                raise
+        try:
+            self._wait_for_batches(pending, on_response=collect_sync)
+        except Exception as error:
+            if failure is not None:
+                raise failure from error
+            raise
 
         if failure is not None:
             raise failure
@@ -429,18 +412,23 @@ class OpenRouterClient:
 
     def _wait_for_batches(
         self,
-        jobs: tuple[_PendingBatch, ...],
+        jobs: dict[int, _PendingBatch],
         *,
-        on_completed: Callable[[int, tuple[JsonObject, ...]], None],
+        on_response: Callable[[int, int, JsonObject], None],
     ) -> None:
         failure: Exception | None = None
-        pending = list(enumerate(jobs))
+        pending = sorted(jobs.items())
         while pending:
             next_pending: list[tuple[int, _PendingBatch]] = []
             for index, job in pending:
                 try:
                     if job.batch.get("status") in _TERMINAL_BATCH_STATUSES:
-                        on_completed(index, self._batch_results(job))
+                        for body_index, response in enumerate(self._batch_results(job)):
+                            try:
+                                on_response(index, body_index, response)
+                            except Exception as error:
+                                if failure is None:
+                                    failure = error
                     elif self.monotonic() >= job.deadline:
                         raise TimeoutError(
                             f"OpenRouter batch {job.batch_id} did not finish before timeout"

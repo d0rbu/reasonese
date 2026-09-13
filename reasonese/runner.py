@@ -119,7 +119,7 @@ def materialize_specs(
         else manual_messages
     )
     materialized = {message.spec: message for message in cache.load()}
-    new_messages: list[GeneratedMessage] = []
+    new_messages: dict[PromptSpec, GeneratedMessage] = {}
     message_lock = Lock()
 
     user_specs = tuple(dict.fromkeys(spec for spec in specs if spec.author is Author.USER))
@@ -127,7 +127,7 @@ def materialize_specs(
         message = GeneratedMessage(spec, manual_snapshot.message_for(spec), None)
         if materialized.get(spec) != message:
             materialized[spec] = message
-            new_messages.append(message)
+            new_messages[spec] = message
 
     missing = tuple(dict.fromkeys(spec for spec in specs if spec not in materialized))
 
@@ -164,8 +164,7 @@ def materialize_specs(
             group_provenances[group_index],
         )
         with message_lock:
-            materialized[spec] = message
-            new_messages.append(message)
+            new_messages[spec] = message
 
     try:
         client.complete_many_grouped(
@@ -175,14 +174,14 @@ def materialize_specs(
         )
     finally:
         if new_messages:
-            cache.put_many(tuple(new_messages))
-    new_specs = {message.spec for message in new_messages}
+            cache.put_many(tuple(new_messages.values()))
+    materialized.update(new_messages)
     for spec in dict.fromkeys(specs):
         message = materialized[spec]
         routing.record(
             "author",
             spec.author,
-            "manual" if spec.author is Author.USER else "new" if spec in new_specs else "cache",
+            "manual" if spec.author is Author.USER else "new" if spec in new_messages else "cache",
             message.provenance,
             message.response,
         )
@@ -232,7 +231,6 @@ def run_assistant_groups(
     available_runtimes: list[ToolRuntime] = []
     runtime_stack = ExitStack()
     runtime_lock = Lock()
-    completion_lock = Lock()
 
     def runtime_for(key: tuple[int, int]) -> ToolRuntime:
         with runtime_lock:
@@ -248,12 +246,6 @@ def run_assistant_groups(
                 runtime = runtime_stack.enter_context(ToolRuntime(readme_contents))
             runtimes[key] = runtime
             return runtime
-
-    def release_runtime(key: tuple[int, int]) -> None:
-        with runtime_lock:
-            runtime = runtimes.pop(key, None)
-            if runtime is not None:
-                available_runtimes.append(runtime)
 
     def request_for(key: tuple[int, int]) -> ScheduledRequest[JsonObject]:
         group_index, _ = key
@@ -292,9 +284,11 @@ def run_assistant_groups(
                 tuple(steps[key]),
                 RouteProvenance(groups[group_index].route.model_id, CompletionTransport.SYNC),
             )
-            with completion_lock:
+            with runtime_lock:
                 completed[key] = trace
-            release_runtime(key)
+                runtime = runtimes.pop(key, None)
+                if runtime is not None:
+                    available_runtimes.append(runtime)
             if on_trace is not None:
                 on_trace(group_index, setup_index, trace)
             return None

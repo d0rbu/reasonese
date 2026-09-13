@@ -282,29 +282,23 @@ def collect_studies(
             # The scheduler joins its workers before returning or raising. Preserve
             # completed trials in one transaction per cache even when a peer fails.
             cache_writes: dict[SqliteStudyCache, list[tuple[TrialId, ConversationTrace]]] = {}
-            for group_index, (_, work) in enumerate(ordered_work):
-                completed_work = tuple(
-                    (state, trial, completed_traces[(group_index, setup_index)])
-                    for setup_index, (state, trial, _) in enumerate(work)
-                    if (group_index, setup_index) in completed_traces
+            completed_keys = sorted(completed_traces)
+            fingerprinted_traces = fingerprint_traces(
+                tuple(completed_traces[key] for key in completed_keys)
+            )
+            for (group_index, setup_index), trace in zip(
+                completed_keys, fingerprinted_traces, strict=True
+            ):
+                state, trial, _ = ordered_work[group_index][1][setup_index]
+                state.traces[str(trial.trial_id)] = trace
+                routing.record(
+                    "assistant",
+                    trial.matchup.assistant,
+                    "new",
+                    trace.trace.provenance,
+                    trace.trace.response,
                 )
-                fingerprinted_traces = fingerprint_traces(
-                    tuple(trace for _, _, trace in completed_work)
-                )
-                for (state, trial, _), trace in zip(
-                    completed_work, fingerprinted_traces, strict=True
-                ):
-                    state.traces[str(trial.trial_id)] = trace
-                    routing.record(
-                        "assistant",
-                        trial.matchup.assistant,
-                        "new",
-                        trace.trace.provenance,
-                        trace.trace.response,
-                    )
-                    cache_writes.setdefault(state.cache, []).append(
-                        (trial.trial_id, trace.trace)
-                    )
+                cache_writes.setdefault(state.cache, []).append((trial.trial_id, trace.trace))
             for cache, records in cache_writes.items():
                 cache.put_traces(tuple(records))
 

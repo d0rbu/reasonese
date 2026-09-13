@@ -34,8 +34,9 @@ matchup -> authored messages -> independent message QA -> conversation -> assist
   Batch API.
 - `reasonese.scheduling` owns a separate adaptive concurrency window, start interval, and
   cooldown per requested model slug. HTTP attempts and response callbacks run in bounded thread
-  workers; retries wait in model queues. Both network calls and local tool processing count
-  against their model's capacity. Completed error feedback is applied before admitting more
+  workers; retries wait in model queues. One tracked future represents each active request,
+  including local tool processing; model capacity is derived from these futures. HTTP error
+  feedback is applied before crediting successes or admitting more
   work. Immutable requests receive a fresh retry budget each time they are queued, and limits
   persist across stages on one client.
 - `reasonese.conversation` builds authoring requests and channel-specific chat messages.
