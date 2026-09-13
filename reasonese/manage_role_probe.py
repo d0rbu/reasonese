@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import logging
+import math
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -50,7 +51,7 @@ _ADAPTER_PROTOCOL_KEYS = {
     NEMOTRON_ADAPTER.name: "nemotron",
     GEMMA_ADAPTER.name: "gemma",
 }
-_ADAPTER_PROTOCOL_LAYERS = {
+_ADAPTER_LEGACY_LAYER = {
     NEMOTRON_ADAPTER.name: 26,
     GEMMA_ADAPTER.name: 30,
 }
@@ -94,7 +95,9 @@ def _partition_document_ids(path: Path, split: str) -> set[str]:
         raise ValueError("invalid native prompt partition record") from error
 
 
-def _protocol_training_config(protocol: dict[str, Any], adapter_name: str) -> ProbeTrainingConfig:
+def _protocol_training_config(
+    protocol: dict[str, Any], adapter_name: str, *, protocol_sha256: str | None = None
+) -> ProbeTrainingConfig:
     try:
         model = protocol["models"][_ADAPTER_PROTOCOL_KEYS[adapter_name]]
         split = protocol["neutral_split"]
@@ -103,45 +106,93 @@ def _protocol_training_config(protocol: dict[str, Any], adapter_name: str) -> Pr
         precision = protocol["stored_activation_dtype"]
     except (KeyError, TypeError) as error:
         raise ValueError("probe protocol lacks required training fields") from error
-    if (
-        not isinstance(model, dict)
-        or not isinstance(split, dict)
-        or not isinstance(gates, dict)
-        or documents != 60
-        or precision != _FROZEN_ACTIVATION_DTYPE
-    ):
-        raise ValueError("probe protocol must retain the frozen 60-document float32 design")
+    if not isinstance(model, dict) or not isinstance(split, dict) or not isinstance(gates, dict):
+        raise ValueError("probe protocol contains invalid training fields")
+    if precision != _FROZEN_ACTIVATION_DTYPE:
+        raise ValueError("probe protocol must retain float32 activation storage")
     adapter = NATIVE_ADAPTERS[adapter_name]
-    if (
-        model.get("revision") != adapter.model_revision
-        or model.get("layer_index") != _ADAPTER_PROTOCOL_LAYERS[adapter_name]
-    ):
+    if model.get("revision") != adapter.model_revision:
         raise ValueError("probe protocol does not match the pinned native adapter")
-    if split != {"train": 0.6, "development": 0.2, "test": 0.2, "seed": 0}:
-        raise ValueError("probe protocol does not match the frozen neutral split")
-    if gates != {
-        "token_accuracy": 0.9,
-        "per_role_token_accuracy": 0.85,
-        "document_macro_token_accuracy": 0.9,
-        "per_role_document_macro_token_accuracy": 0.85,
-    }:
-        raise ValueError("probe protocol does not match the frozen neutral gates")
+    layers = model.get("candidate_layers")
+    if layers is not None:
+        content_tokens = protocol.get("neutral_max_content_tokens")
+        if (
+            not isinstance(documents, int)
+            or documents < 3
+            or not isinstance(content_tokens, int)
+            or content_tokens <= 1
+            or not isinstance(layers, list)
+            or len(layers) < 2
+            or any(not isinstance(layer, int) or layer < 0 for layer in layers)
+            or len(set(layers)) != len(layers)
+        ):
+            raise ValueError("expanded probe protocol contains an invalid document or layer search")
+        layer_indices = tuple(layers)
+        maximum_content_tokens = content_tokens
+        native_prompt_partitions_sha256 = protocol.get("native_prompt_partitions_sha256")
+        if not isinstance(native_prompt_partitions_sha256, str):
+            raise ValueError("expanded probe protocol must bind native prompt partitions")
+    elif documents == 60:
+        if model.get("layer_index") != _ADAPTER_LEGACY_LAYER[adapter_name]:
+            raise ValueError("diagnostic probe protocol does not match the pinned layer")
+        layer_indices = (_ADAPTER_LEGACY_LAYER[adapter_name],)
+        maximum_content_tokens = None
+        native_prompt_partitions_sha256 = None
+    else:
+        raise ValueError("probe protocol must define an expanded search or 60-document diagnostic")
+    try:
+        train_fraction = split["train"]
+        validation_fraction = split["development"]
+        seed = split["seed"]
+        minimum_neutral_accuracy = gates["token_accuracy"]
+        minimum_neutral_per_role_accuracy = gates["per_role_token_accuracy"]
+        minimum_neutral_document_accuracy = gates["document_macro_token_accuracy"]
+        minimum_neutral_per_role_document_accuracy = gates["per_role_document_macro_token_accuracy"]
+    except KeyError as error:
+        raise ValueError("probe protocol lacks neutral split or gate values") from error
+    numeric_values = (
+        train_fraction,
+        validation_fraction,
+        split.get("test"),
+        minimum_neutral_accuracy,
+        minimum_neutral_per_role_accuracy,
+        minimum_neutral_document_accuracy,
+        minimum_neutral_per_role_document_accuracy,
+    )
+    if any(not isinstance(value, int | float) for value in numeric_values) or not isinstance(
+        seed, int
+    ):
+        raise ValueError("probe protocol split and gate values must be numeric")
+    if not isinstance(split.get("test"), int | float) or not math.isclose(
+        split["test"], 1 - train_fraction - validation_fraction, abs_tol=1e-12
+    ):
+        raise ValueError("probe protocol test fraction does not match train and development")
+    if protocol_sha256 is None:
+        protocol_sha256 = hashlib.sha256(
+            json.dumps(protocol, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
     return ProbeTrainingConfig(
-        layer_index=model["layer_index"],
-        minimum_neutral_accuracy=gates["token_accuracy"],
-        minimum_neutral_per_role_accuracy=gates["per_role_token_accuracy"],
-        minimum_neutral_document_accuracy=gates["document_macro_token_accuracy"],
-        minimum_neutral_per_role_document_accuracy=gates["per_role_document_macro_token_accuracy"],
-        train_fraction=split["train"],
-        validation_fraction=split["development"],
-        seed=split["seed"],
+        layer_indices=layer_indices,
+        minimum_neutral_accuracy=minimum_neutral_accuracy,
+        minimum_neutral_per_role_accuracy=minimum_neutral_per_role_accuracy,
+        minimum_neutral_document_accuracy=minimum_neutral_document_accuracy,
+        minimum_neutral_per_role_document_accuracy=minimum_neutral_per_role_document_accuracy,
+        expected_document_count=documents,
+        maximum_content_tokens_per_document=maximum_content_tokens,
+        protocol_sha256=protocol_sha256,
+        native_prompt_partitions_sha256=native_prompt_partitions_sha256,
+        train_fraction=train_fraction,
+        validation_fraction=validation_fraction,
+        seed=seed,
         max_iterations=2_000,
         tolerance=1e-4,
     )
 
 
-def _validate_frozen_protocol(protocol: dict[str, Any], adapter_name: str) -> ProbeTrainingConfig:
-    config = _protocol_training_config(protocol, adapter_name)
+def _validate_frozen_protocol(
+    protocol: dict[str, Any], adapter_name: str, *, protocol_sha256: str | None = None
+) -> ProbeTrainingConfig:
+    config = _protocol_training_config(protocol, adapter_name, protocol_sha256=protocol_sha256)
     if set(protocol.get("roles", ())) != {str(role) for role in ProbeRole}:
         raise ValueError("probe protocol does not contain the five frozen native roles")
     if protocol.get("native_dialogues_per_model") != 24 or protocol.get("native_split") != {
@@ -164,11 +215,15 @@ def _train(args: argparse.Namespace) -> None:
     _require_new_output(args.output)
     protocol = _json_object(args.protocol)
     dataset = load_activation_dataset(args.activations)
-    config = _validate_frozen_protocol(protocol, args.adapter)
-    if len(set(dataset.document_ids.tolist())) != 60:
-        raise ValueError("probe training requires the frozen 60 neutral documents")
+    config = _validate_frozen_protocol(
+        protocol, args.adapter, protocol_sha256=_sha256(args.protocol)
+    )
+    if len(set(dataset.document_ids.tolist())) != config.expected_document_count:
+        raise ValueError("neutral activation document count does not match the frozen protocol")
     if dataset.provenance.activation_dtype != "float32":
         raise ValueError("probe training requires float32 activation storage")
+    if dataset.provenance.layer_indices != config.layer_indices:
+        raise ValueError("neutral activation layers do not match the frozen protocol")
     adapter = NATIVE_ADAPTERS[args.adapter]
     if (
         dataset.provenance.native_template_adapter != adapter.name
@@ -184,6 +239,7 @@ def _train(args: argparse.Namespace) -> None:
                 "output": str(args.output),
                 "neutral_valid": probe.neutral_valid,
                 "qa_eligible": probe.qa_eligible,
+                "selected_layer": probe.selected_layer_index,
                 "selected_lambda": probe.regularization_lambda,
                 "split": {
                     "train": len(probe.split.train),
@@ -200,11 +256,19 @@ def _qualify(args: argparse.Namespace) -> None:
     _require_new_output(args.output)
     protocol = _json_object(args.protocol)
     probe = load_role_probe(args.probe)
-    frozen_config = _validate_frozen_protocol(protocol, probe.provenance.native_template_adapter)
+    frozen_config = _validate_frozen_protocol(
+        protocol,
+        probe.provenance.native_template_adapter,
+        protocol_sha256=_sha256(args.protocol),
+    )
     if probe.training != frozen_config:
         raise ValueError("probe training configuration does not match the frozen protocol")
     if probe.qualification is not None:
         raise ValueError("input probe is already qualified")
+    if frozen_config.native_prompt_partitions_sha256 is None:
+        raise ValueError("diagnostic probes cannot be qualified for QA")
+    if _sha256(args.prompt_partitions) != frozen_config.native_prompt_partitions_sha256:
+        raise ValueError("native prompt partitions do not match the frozen protocol")
     calibration = load_native_activation_dataset(args.calibration)
     test = load_native_activation_dataset(args.test)
     if set(calibration.document_ids.tolist()) != _partition_document_ids(
@@ -245,16 +309,17 @@ def _qualify(args: argparse.Namespace) -> None:
 def _extract_native(args: argparse.Namespace) -> None:
     _require_new_output(args.output)
     adapter = NATIVE_ADAPTERS[args.adapter]
-    frozen_config = _validate_frozen_protocol(_json_object(args.protocol), adapter.name)
-    if args.layer != frozen_config.layer_index:
-        raise ValueError("native extraction layer does not match the frozen protocol")
+    frozen_config = _validate_frozen_protocol(
+        _json_object(args.protocol), adapter.name, protocol_sha256=_sha256(args.protocol)
+    )
+    layers = frozen_config.layer_indices
     assistant = _ADAPTER_ASSISTANTS[adapter.name]
     checkpoint_manifest = _json_object(args.checkpoint / "prefix-checkpoint-manifest.json")
     for key, expected in {
         "adapter": adapter.name,
         "model_id": adapter.model_id,
         "revision": adapter.model_revision,
-        "max_layer": args.layer,
+        "max_layer": max(layers),
     }.items():
         if checkpoint_manifest.get(key) != expected:
             raise ValueError(f"prefix checkpoint {key} does not match the requested extraction")
@@ -271,7 +336,7 @@ def _extract_native(args: argparse.Namespace) -> None:
     model = load_prefix_model(
         args.checkpoint,
         adapter,
-        max_layer=args.layer,
+        max_layer=max(layers),
         execution_device=args.execution_device,
     )
     runtime_sha256, runtime = model_runtime_identity(model, adapter, checkpoint=args.checkpoint)
@@ -286,7 +351,7 @@ def _extract_native(args: argparse.Namespace) -> None:
         tokenizer,
         adapter,
         dialogues,
-        layers=(args.layer,),
+        layers=layers,
         identity=ExtractionIdentity(
             weights_sha256=checkpoint_manifest["weights_sha256"],
             weights_hash_kind=checkpoint_manifest["weights_hash_kind"],
@@ -334,7 +399,6 @@ def build_parser() -> argparse.ArgumentParser:
     extract.add_argument("--prompt-partitions", type=Path, required=True)
     extract.add_argument("--protocol", type=Path, required=True)
     extract.add_argument("--split", choices=("calibration", "test"), required=True)
-    extract.add_argument("--layer", type=int, required=True)
     extract.add_argument("--output", type=Path, required=True)
     extract.add_argument("--execution-device", default="cuda:0")
     extract.set_defaults(run=_extract_native)

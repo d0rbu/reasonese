@@ -289,7 +289,7 @@ class LocalProbeQaScorer:
                 "adapter": bundle.adapter.name,
                 "model_id": bundle.adapter.model_id,
                 "revision": bundle.adapter.model_revision,
-                "max_layer": probe.training.layer_index,
+                "max_layer": max(probe.training.layer_indices),
                 "weights_sha256": probe.provenance.weights_sha256,
                 "weights_hash_kind": probe.provenance.weights_hash_kind,
             }
@@ -307,7 +307,7 @@ class LocalProbeQaScorer:
             model = load_prefix_model(
                 prepared.bundle.checkpoint,
                 prepared.bundle.adapter,
-                max_layer=prepared.probe.training.layer_index,
+                max_layer=max(prepared.probe.training.layer_indices),
                 execution_device=self.execution_device,
             )
         except BaseException:
@@ -432,7 +432,7 @@ class LocalProbeQaScorer:
                     prepared.bundle.adapter,
                     input_ids=contexts[0].input_ids,
                     token_positions=positions,
-                    layers=(prepared.probe.training.layer_index,),
+                    layers=(prepared.probe.selected_layer_index,),
                 )
                 if (
                     captured.ndim != 3
@@ -449,7 +449,7 @@ class LocalProbeQaScorer:
                         prepared.probe,
                         activations,
                         provenance=prepared.probe.provenance,
-                        layer_index=prepared.probe.training.layer_index,
+                        layer_index=prepared.probe.selected_layer_index,
                     )
                     complies, issue = _decision(
                         request, prepared.probe, projection.mean_reasoning_probability

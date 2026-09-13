@@ -10,9 +10,11 @@ import numpy as np
 import pytest
 from sklearn.linear_model import LogisticRegression
 
+import reasonese.role_probes as role_probes
 from reasonese.role_probes import (
     ActivationDataset,
     ActivationProvenance,
+    ClassificationMetrics,
     ProbeTrainingConfig,
     RoleProbe,
     _parameters,
@@ -142,7 +144,7 @@ def _dataset(
 
 def _training_config(selected_layer: int = 7) -> ProbeTrainingConfig:
     return ProbeTrainingConfig(
-        layer_index=selected_layer,
+        layer_indices=(selected_layer,),
         minimum_neutral_accuracy=0.95,
         minimum_neutral_per_role_accuracy=0.95,
         minimum_neutral_document_accuracy=0.95,
@@ -261,7 +263,7 @@ def test_document_split_is_stable_complete_and_group_disjoint() -> None:
 def test_training_selects_only_on_grouped_neutral_development_data() -> None:
     dataset = _dataset()
     bundle = train_role_probe(dataset, _training_config())
-    assert bundle.training.layer_index == 7
+    assert bundle.selected_layer_index == 7
     assert bundle.training.tolerance == 1e-4
     assert bundle.regularization_lambda in {0.01, 0.1}
     assert bundle.neutral_valid
@@ -273,6 +275,55 @@ def test_training_selects_only_on_grouped_neutral_development_data() -> None:
     for split_ids in (bundle.split.train, bundle.split.validation, bundle.split.test):
         rows = np.isin(dataset.document_ids, split_ids)
         assert set(dataset.roles[rows]) == set(_ROLES)
+
+
+def test_training_jointly_selects_layer_and_lambda_without_reading_test_candidates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dataset = _dataset(layers=(3, 7))
+    config = replace(_training_config(), layer_indices=(3, 7))
+    metric_documents: list[tuple[str, ...]] = []
+    original_metrics = role_probes._metrics
+
+    def recording_metrics(
+        probabilities: np.ndarray,
+        labels: np.ndarray,
+        roles: tuple[str, ...],
+        documents: np.ndarray,
+        evaluated_roles: tuple[str, ...] | None = None,
+    ) -> ClassificationMetrics:
+        metric_documents.append(tuple(sorted(set(documents.tolist()))))
+        return original_metrics(probabilities, labels, roles, documents, evaluated_roles)
+
+    monkeypatch.setattr(role_probes, "_metrics", recording_metrics)
+    bundle = train_role_probe(dataset, config)
+
+    assert bundle.selected_layer_index == 7
+    assert len(bundle.development_candidates) == 4
+    assert {
+        (candidate.layer_index, candidate.regularization_lambda)
+        for candidate in bundle.development_candidates
+    } == {(3, 0.01), (3, 0.1), (7, 0.01), (7, 0.1)}
+    assert all(documents == metric_documents[0] for documents in metric_documents[:-1])
+    assert set(metric_documents[0]) == set(bundle.split.validation)
+    assert set(metric_documents[-1]) == set(bundle.split.test)
+    assert len(metric_documents) == len(bundle.development_candidates) + 1
+
+
+def test_training_enforces_preregistered_document_and_token_counts() -> None:
+    dataset = _dataset()
+    with pytest.raises(ValueError, match="document count"):
+        train_role_probe(dataset, replace(_training_config(), expected_document_count=21))
+    boundary_masked = train_role_probe(
+        dataset,
+        replace(_training_config(), maximum_content_tokens_per_document=5),
+    )
+    assert boundary_masked.neutral_valid
+    with pytest.raises(ValueError, match="content-token count"):
+        train_role_probe(
+            dataset,
+            replace(_training_config(), maximum_content_tokens_per_document=6),
+        )
 
 
 @pytest.mark.parametrize("tolerance", [nan, inf, -inf])
@@ -298,7 +349,7 @@ def test_multinomial_training_preserves_explicit_role_order() -> None:
         bundle,
         np.asarray([[3.0, 0.0, 0.0, 0.0, 0.0]], dtype=np.float32),
         provenance=bundle.provenance,
-        layer_index=bundle.training.layer_index,
+        layer_index=bundle.selected_layer_index,
         require_qa_eligible=False,
     )
     assert full_projection.mean_reasoning_probability > 0.99
@@ -378,7 +429,7 @@ def test_qualification_recomputes_untouched_conversation_metrics() -> None:
         qualified,
         np.asarray([[4.0, 0.0, 0.0, 0.0, 0.1]], dtype=np.float32),
         provenance=qualified.provenance,
-        layer_index=qualified.training.layer_index,
+        layer_index=qualified.selected_layer_index,
     )
     assert projection.predicted_role == "reasoning"
     assert np.allclose(projection.token_probabilities.sum(axis=1), 1.0, atol=1e-12)
@@ -493,7 +544,7 @@ def test_failed_empirical_threshold_keeps_probe_out_of_qa() -> None:
             failed,
             flipped[:2, 1, :],
             provenance=failed.provenance,
-            layer_index=failed.training.layer_index,
+            layer_index=failed.selected_layer_index,
         )
 
 
@@ -559,13 +610,13 @@ def test_artifact_round_trip_preserves_exact_numpy_scoring(tmp_path: Path) -> No
         bundle,
         activations,
         provenance=bundle.provenance,
-        layer_index=bundle.training.layer_index,
+        layer_index=bundle.selected_layer_index,
     )
     actual = project_role(
         loaded,
         activations,
         provenance=loaded.provenance,
-        layer_index=loaded.training.layer_index,
+        layer_index=loaded.selected_layer_index,
     )
     assert actual.roles == expected.roles
     assert actual.predicted_role == expected.predicted_role
@@ -573,6 +624,8 @@ def test_artifact_round_trip_preserves_exact_numpy_scoring(tmp_path: Path) -> No
     assert actual.mean_probabilities == expected.mean_probabilities
     assert loaded.provenance.weights_hash_kind == "hf_lfs_manifest_sha256"
     assert loaded.split.fingerprint == bundle.split.fingerprint
+    assert loaded.selected_layer_index == bundle.selected_layer_index
+    assert loaded.development_candidates == bundle.development_candidates
 
 
 def test_artifact_fingerprint_uses_the_exact_stored_parameter_dtype(tmp_path: Path) -> None:
@@ -636,14 +689,14 @@ def test_projection_shape_finiteness_and_qualification_are_enforced() -> None:
             bundle,
             np.zeros((2, 5), dtype=np.float32),
             provenance=bundle.provenance,
-            layer_index=bundle.training.layer_index,
+            layer_index=bundle.selected_layer_index,
         )
     with pytest.raises(ValueError, match="shape"):
         project_role(
             bundle,
             np.zeros((2, 4), dtype=np.float32),
             provenance=bundle.provenance,
-            layer_index=bundle.training.layer_index,
+            layer_index=bundle.selected_layer_index,
             require_qa_eligible=False,
         )
     nonfinite = np.zeros((2, 5), dtype=np.float32)
@@ -653,7 +706,7 @@ def test_projection_shape_finiteness_and_qualification_are_enforced() -> None:
             bundle,
             nonfinite,
             provenance=bundle.provenance,
-            layer_index=bundle.training.layer_index,
+            layer_index=bundle.selected_layer_index,
             require_qa_eligible=False,
         )
     mismatched = replace(bundle.provenance, model_dtype="float16")
@@ -662,7 +715,7 @@ def test_projection_shape_finiteness_and_qualification_are_enforced() -> None:
             bundle,
             np.zeros((2, 5), dtype=np.float32),
             provenance=mismatched,
-            layer_index=bundle.training.layer_index,
+            layer_index=bundle.selected_layer_index,
             require_qa_eligible=False,
         )
     with pytest.raises(ValueError, match="trained probe layer"):
@@ -678,7 +731,7 @@ def test_projection_shape_finiteness_and_qualification_are_enforced() -> None:
             bundle,
             np.zeros((2, 5), dtype=np.float16),
             provenance=bundle.provenance,
-            layer_index=bundle.training.layer_index,
+            layer_index=bundle.selected_layer_index,
             require_qa_eligible=False,
         )
 
@@ -694,3 +747,34 @@ def test_probe_rejects_metrics_that_do_not_match_its_role_space() -> None:
     )
     with pytest.raises(ValueError, match="metrics do not match probe roles"):
         replace(bundle, validation_metrics=swapped)
+
+    with pytest.raises(ValueError, match="complete candidate grid"):
+        replace(bundle, development_candidates=tuple(reversed(bundle.development_candidates)))
+
+    malformed_candidate = replace(
+        bundle.development_candidates[0],
+        metrics=replace(bundle.development_candidates[0].metrics, document_count=999),
+    )
+    with pytest.raises(ValueError, match="development split"):
+        replace(
+            bundle,
+            development_candidates=(malformed_candidate,) + bundle.development_candidates[1:],
+        )
+
+    malformed_roles = replace(
+        bundle.development_candidates[0],
+        metrics=replace(
+            bundle.development_candidates[0].metrics,
+            per_role_accuracy=tuple(
+                reversed(bundle.development_candidates[0].metrics.per_role_accuracy)
+            ),
+            per_role_document_accuracy=tuple(
+                reversed(bundle.development_candidates[0].metrics.per_role_document_accuracy)
+            ),
+        ),
+    )
+    with pytest.raises(ValueError, match="candidate metrics do not match probe roles"):
+        replace(
+            bundle,
+            development_candidates=(malformed_roles,) + bundle.development_candidates[1:],
+        )

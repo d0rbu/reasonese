@@ -18,8 +18,8 @@ from reasonese.role_probes import load_role_probe
 from tests.test_role_probes import _dataset
 
 
-def _protocol() -> dict[str, Any]:
-    return {
+def _protocol(native_prompt_partitions_sha256: str | None = None) -> dict[str, Any]:
+    protocol: dict[str, Any] = {
         "models": {"nemotron": {"revision": NEMOTRON_ADAPTER.model_revision, "layer_index": 26}},
         "neutral_split": {"train": 0.6, "development": 0.2, "test": 0.2, "seed": 0},
         "neutral_gate": {
@@ -41,10 +41,24 @@ def _protocol() -> dict[str, Any]:
             "auc_bootstrap_lower_95_bound_must_exceed": 0.5,
         },
     }
+    if native_prompt_partitions_sha256 is not None:
+        protocol["models"] = {
+            "nemotron": {
+                "revision": NEMOTRON_ADAPTER.model_revision,
+                "candidate_layers": [3, 26],
+            }
+        }
+        protocol["neutral_max_content_tokens"] = 5
+        protocol["native_prompt_partitions_sha256"] = native_prompt_partitions_sha256
+    return protocol
 
 
 def _neutral():
-    data = _dataset(document_count=60, roles=tuple(str(role) for role in ProbeRole), layers=(26,))
+    data = _dataset(
+        document_count=60,
+        roles=tuple(str(role) for role in ProbeRole),
+        layers=(3, 26),
+    )
     return replace(
         data,
         provenance=replace(
@@ -62,8 +76,25 @@ def test_cli_trains_then_qualifies_without_learning_from_native_test(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     neutral = _neutral()
+    partitions = [
+        {
+            "index": index,
+            "source_id": f"{split}-{split_index:03d}",
+            "split": split,
+            "normalized_prompt_sha256": hashlib.sha256(
+                f"{split}-{split_index}".encode()
+            ).hexdigest(),
+        }
+        for index, (split, split_index) in enumerate(
+            (split, split_index) for split in ("calibration", "test") for split_index in range(12)
+        )
+    ]
+    partition_path = tmp_path / "partitions.json"
+    partition_path.write_text(json.dumps(partitions))
     protocol = tmp_path / "protocol.json"
-    protocol.write_text(json.dumps(_protocol()))
+    protocol.write_text(
+        json.dumps(_protocol(hashlib.sha256(partition_path.read_bytes()).hexdigest()))
+    )
     monkeypatch.setattr(cli, "load_activation_dataset", lambda _: neutral)
     unqualified = tmp_path / "neutral.npz"
     cli.main(
@@ -83,12 +114,11 @@ def test_cli_trains_then_qualifies_without_learning_from_native_test(
     assert report["split"] == {"train": 36, "validation": 12, "test": 12}
     assert report["neutral_valid"] and not report["qa_eligible"]
     trained = load_role_probe(unqualified)
-    partitions = []
     for split, offset in (("calibration", 5000), ("test", 10000)):
         native = _dataset(
             kind="untouched-native-conversations",
             document_count=12,
-            layers=(26,),
+            layers=(3, 26),
             document_prefix=split,
             content_token_offset=offset,
         )
@@ -108,19 +138,6 @@ def test_cli_trains_then_qualifies_without_learning_from_native_test(
             ),
         )
         save_native_activation_dataset(native, tmp_path / split)
-        for index, document_id in enumerate(sorted(set(native.document_ids.tolist()))):
-            partitions.append(
-                {
-                    "index": len(partitions),
-                    "source_id": document_id,
-                    "split": split,
-                    "normalized_prompt_sha256": hashlib.sha256(
-                        f"{split}-{index}".encode()
-                    ).hexdigest(),
-                }
-            )
-    partition_path = tmp_path / "partitions.json"
-    partition_path.write_text(json.dumps(partitions))
     qualified_path = tmp_path / "qualified.npz"
     args = [
         "qualify",
@@ -155,13 +172,14 @@ def test_cli_trains_then_qualifies_without_learning_from_native_test(
     with pytest.raises(ValueError, match="already qualified"):
         cli.main(args)
     args[2] = str(unqualified)
-    partitions[0]["source_id"] = "substituted-conversation"
-    partition_path.write_text(json.dumps(partitions))
-    with pytest.raises(ValueError, match="do not match the prompt partitions"):
+    changed_partitions = [dict(record) for record in partitions]
+    changed_partitions[0]["source_id"] = "substituted-conversation"
+    partition_path.write_text(json.dumps(changed_partitions))
+    with pytest.raises(ValueError, match="native prompt partitions"):
         cli.main(args)
 
 
-def test_extract_native_checks_protocol_layer_and_committed_manifest_revision(
+def test_extract_native_checks_protocol_layers_and_committed_manifest_revision(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -193,8 +211,6 @@ def test_extract_native_checks_protocol_layer_and_committed_manifest_revision(
         str(protocol),
         "--split",
         "calibration",
-        "--layer",
-        "26",
         "--output",
         str(tmp_path / "out"),
     ]
@@ -208,6 +224,8 @@ def test_extract_native_checks_protocol_layer_and_committed_manifest_revision(
     monkeypatch.setattr(cli, "validate_prefix_checkpoint_identity", validated_manifest)
     with pytest.raises(ReachedWeightValidation):
         cli.main(args)
-    args[args.index("--layer") + 1] = "25"
-    with pytest.raises(ValueError, match="frozen protocol"):
+    changed = _protocol()
+    changed["models"]["nemotron"]["layer_index"] = 25
+    protocol.write_text(json.dumps(changed))
+    with pytest.raises(ValueError, match="pinned layer"):
         cli.main(args)

@@ -57,7 +57,11 @@ def _scorer_files(tmp_path: Path) -> tuple[Path, Path, str]:
     probe = replace(
         probe,
         provenance=provenance,
-        training=replace(probe.training, layer_index=26),
+        training=replace(probe.training, layer_indices=(26,)),
+        selected_layer_index=26,
+        development_candidates=tuple(
+            replace(candidate, layer_index=26) for candidate in probe.development_candidates
+        ),
     )
     probe_path = tmp_path / "probe.npz"
     save_role_probe(probe, probe_path)

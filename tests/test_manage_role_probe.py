@@ -55,20 +55,44 @@ def _write_protocol(tmp_path: Path) -> Path:
     return path
 
 
+def _expanded_protocol() -> dict[str, Any]:
+    protocol = _protocol()
+    protocol["neutral_validation_documents"] = 250
+    protocol["neutral_max_content_tokens"] = 1_024
+    protocol["native_prompt_partitions_sha256"] = "a" * 64
+    protocol["models"] = {
+        "nemotron": {
+            "revision": NEMOTRON_ADAPTER.model_revision,
+            "candidate_layers": [13, 20, 26],
+        },
+        "gemma": {
+            "revision": manage.GEMMA_ADAPTER.model_revision,
+            "candidate_layers": [15, 23, 30],
+        },
+    }
+    return protocol
+
+
 def test_frozen_protocol_accepts_both_pinned_adapters_and_rejects_drift() -> None:
     for adapter in (NEMOTRON_ADAPTER, manage.GEMMA_ADAPTER):
         config = manage._validate_frozen_protocol(_protocol(), adapter.name)
-        assert config.layer_index == manage._ADAPTER_PROTOCOL_LAYERS[adapter.name]
+        assert config.layer_indices == (manage._ADAPTER_LEGACY_LAYER[adapter.name],)
         assert config.minimum_neutral_accuracy == 0.9
         assert config.max_iterations == 2_000
         assert config.tolerance == 1e-4
 
+        expanded = manage._validate_frozen_protocol(_expanded_protocol(), adapter.name)
+        expected = (13, 20, 26) if adapter is NEMOTRON_ADAPTER else (15, 23, 30)
+        assert expanded.layer_indices == expected
+        assert expanded.expected_document_count == 250
+        assert expanded.maximum_content_tokens_per_document == 1_024
+
     mutations = (
         ({}, "required training fields"),
-        ({**_protocol(), "neutral_validation_documents": 59}, "60-document"),
-        ({**_protocol(), "stored_activation_dtype": "float16"}, "60-document"),
-        ({**_protocol(), "neutral_split": {"train": 1.0}}, "neutral split"),
-        ({**_protocol(), "neutral_gate": {}}, "neutral gates"),
+        ({**_protocol(), "neutral_validation_documents": 59}, "expanded search or 60-document"),
+        ({**_protocol(), "stored_activation_dtype": "float16"}, "float32"),
+        ({**_protocol(), "neutral_split": {"train": 1.0}}, "lacks neutral split"),
+        ({**_protocol(), "neutral_gate": {}}, "lacks neutral split or gate"),
         ({**_protocol(), "roles": ["reasoning", "assistant"]}, "five frozen native roles"),
         ({**_protocol(), "native_dialogues_per_model": 23}, "12/12 native split"),
         ({**_protocol(), "native_split": {"calibration": 24}}, "12/12 native split"),
@@ -81,6 +105,11 @@ def test_frozen_protocol_accepts_both_pinned_adapters_and_rejects_drift() -> Non
     changed_model["models"]["nemotron"]["revision"] = "changed"
     with pytest.raises(ValueError, match="pinned native adapter"):
         manage._validate_frozen_protocol(changed_model, NEMOTRON_ADAPTER.name)
+    changed_layers = _expanded_protocol()
+    changed_layers["models"]["nemotron"]["candidate_layers"] = [13, 26]
+    changed_config = manage._validate_frozen_protocol(changed_layers, NEMOTRON_ADAPTER.name)
+    assert changed_config.layer_indices == (13, 26)
+    assert changed_config.protocol_sha256 != expanded.protocol_sha256
 
 
 def test_json_partition_and_parser_boundaries(tmp_path: Path) -> None:
@@ -138,6 +167,7 @@ def test_train_wires_frozen_dataset_and_reports(
         document_ids=np.asarray([f"doc-{index}" for index in range(60)]),
         provenance=SimpleNamespace(
             activation_dtype="float32",
+            layer_indices=(26,),
             native_template_adapter=NEMOTRON_ADAPTER.name,
             model_id=NEMOTRON_ADAPTER.model_id,
             model_revision=NEMOTRON_ADAPTER.model_revision,
@@ -149,6 +179,7 @@ def test_train_wires_frozen_dataset_and_reports(
     probe = SimpleNamespace(
         neutral_valid=True,
         qa_eligible=False,
+        selected_layer_index=26,
         regularization_lambda=0.25,
         split=split,
     )
@@ -171,7 +202,7 @@ def test_train_wires_frozen_dataset_and_reports(
     assert saved == {"probe": probe, "path": args.output}
 
     dataset.document_ids = np.asarray(["one"])
-    with pytest.raises(ValueError, match="60 neutral documents"):
+    with pytest.raises(ValueError, match="document count"):
         manage._train(args)
     dataset.document_ids = np.asarray([f"doc-{index}" for index in range(60)])
     dataset.provenance.activation_dtype = "float16"
@@ -186,14 +217,6 @@ def test_train_wires_frozen_dataset_and_reports(
 def test_qualify_binds_partitions_and_reports(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    config = manage._validate_frozen_protocol(_protocol(), NEMOTRON_ADAPTER.name)
-    probe = SimpleNamespace(
-        provenance=SimpleNamespace(native_template_adapter=NEMOTRON_ADAPTER.name),
-        training=config,
-        qualification=None,
-    )
-    calibration = SimpleNamespace(document_ids=np.asarray(["cal-a"]))
-    test = SimpleNamespace(document_ids=np.asarray(["test-a"]))
     partitions = tmp_path / "partitions.json"
     partitions.write_text(
         json.dumps(
@@ -204,6 +227,22 @@ def test_qualify_binds_partitions_and_reports(
         ),
         encoding="utf-8",
     )
+    protocol = _expanded_protocol()
+    protocol["native_prompt_partitions_sha256"] = manage._sha256(partitions)
+    protocol_path = tmp_path / "expanded-protocol.json"
+    protocol_path.write_text(json.dumps(protocol), encoding="utf-8")
+    config = manage._validate_frozen_protocol(
+        protocol,
+        NEMOTRON_ADAPTER.name,
+        protocol_sha256=manage._sha256(protocol_path),
+    )
+    probe = SimpleNamespace(
+        provenance=SimpleNamespace(native_template_adapter=NEMOTRON_ADAPTER.name),
+        training=config,
+        qualification=None,
+    )
+    calibration = SimpleNamespace(document_ids=np.asarray(["cal-a"]))
+    test = SimpleNamespace(document_ids=np.asarray(["test-a"]))
     qualification = SimpleNamespace(
         threshold_reasoning_sensitivity=0.9,
         threshold_final_specificity=1.0,
@@ -226,7 +265,7 @@ def test_qualify_binds_partitions_and_reports(
         manage, "save_role_probe", lambda value, path: saved.update(value=value, path=path)
     )
     args = argparse.Namespace(
-        protocol=_write_protocol(tmp_path),
+        protocol=protocol_path,
         probe=tmp_path / "probe",
         calibration=tmp_path / "calibration",
         test=tmp_path / "test",
@@ -251,6 +290,16 @@ def test_qualify_binds_partitions_and_reports(
     with pytest.raises(ValueError, match="prompt partitions"):
         manage._qualify(args)
 
+    diagnostic_path = _write_protocol(tmp_path)
+    probe.training = manage._validate_frozen_protocol(
+        _protocol(),
+        NEMOTRON_ADAPTER.name,
+        protocol_sha256=manage._sha256(diagnostic_path),
+    )
+    args.protocol = diagnostic_path
+    with pytest.raises(ValueError, match="diagnostic probes cannot be qualified"):
+        manage._qualify(args)
+
 
 def test_extract_native_wires_exact_checkpoint_and_runtime(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -269,7 +318,8 @@ def test_extract_native_wires_exact_checkpoint_and_runtime(
     (checkpoint / "prefix-checkpoint-manifest.json").write_text(
         json.dumps(manifest), encoding="utf-8"
     )
-    protocol = _write_protocol(tmp_path)
+    protocol = tmp_path / "expanded-protocol.json"
+    protocol.write_text(json.dumps(_expanded_protocol()), encoding="utf-8")
     partitions = tmp_path / "partitions.json"
     partitions.write_text("[]", encoding="utf-8")
     dialogue_dir = tmp_path / "dialogues"
@@ -306,7 +356,6 @@ def test_extract_native_wires_exact_checkpoint_and_runtime(
     args = argparse.Namespace(
         adapter=NEMOTRON_ADAPTER.name,
         protocol=protocol,
-        layer=26,
         checkpoint=checkpoint,
         execution_device="cuda:0",
         dialogue_dir=dialogue_dir,
@@ -318,14 +367,10 @@ def test_extract_native_wires_exact_checkpoint_and_runtime(
     manage._extract_native(args)
     assert capsys.readouterr().out.strip() == str(args.output)
     assert calls["args"][:4] == (model, tokenizer, NEMOTRON_ADAPTER, dialogues)
-    assert calls["kwargs"]["layers"] == (26,)
+    assert calls["kwargs"]["layers"] == (13, 20, 26)
     assert calls["kwargs"]["identity"].runtime_sha256 == runtime_sha256
     assert calls["saved"] == (dataset, args.output)
 
-    args.layer = 25
-    with pytest.raises(ValueError, match="frozen protocol"):
-        manage._extract_native(args)
-    args.layer = 26
     manifest["model_id"] = "wrong"
     (checkpoint / "prefix-checkpoint-manifest.json").write_text(
         json.dumps(manifest), encoding="utf-8"

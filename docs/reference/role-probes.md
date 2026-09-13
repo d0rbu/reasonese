@@ -50,6 +50,11 @@ validation, and test sets. All five copies of one document therefore remain in o
 stricter than splitting role variants independently, which would leak the same underlying content
 across the holdout boundary.
 
+The qualification-scale neutral protocol uses 250 target documents with 1,024 retained content
+tokens per role copy. It preregisters three candidate layers for each model: 13, 20, and 26 for
+Nemotron; 15, 23, and 30 for Gemma. The earlier 60-document, single-layer protocol remains accepted
+only as a diagnostic run and cannot satisfy the expanded protocol's document or token counts.
+
 The provenance includes exact model and tokenizer revisions, a digest of the resolved weight
 manifest, the native template digest, model and stored-activation dtypes, the model-specific
 activation site, a runtime digest covering the software and kernel path, the neutral corpus
@@ -61,13 +66,15 @@ trained layer and stored dtype instead of accepting an unidentified two-dimensio
 
 The classifier is L2-regularized multinomial logistic regression. Its class space contains all
 five roles, avoiding a forced reasoning-versus-final decision for text that the model represents
-as user, system, or tool content. Regularization is selected on the grouped neutral validation
-split using the configured Appendix-G lambda grid. Accuracy is primary, negative log likelihood
-breaks ties, and the larger penalty is the final deterministic tie-break. The selected model is
-refit on train plus validation documents, then evaluated once on held-out neutral documents.
+as user, system, or tool content. Layer and regularization are selected jointly on the grouped
+neutral validation split using the preregistered layers and Appendix-G lambda grid. Accuracy is
+primary, negative log likelihood breaks ties, followed by the larger penalty and then the
+shallower layer. The selected pair alone is refit on train plus validation documents and evaluated
+once on held-out neutral documents. The artifact retains every candidate's development metrics,
+the selected pair, and the exact training configuration; its fingerprint covers all of them. The
+test set and real conversations never select a layer or penalty.
 
-The layer is preregistered in `ProbeTrainingConfig`; the test set and real conversations do not
-select it. Metrics include token accuracy and negative log likelihood, per-role recall,
+Metrics include token accuracy and negative log likelihood, per-role recall,
 document-macro accuracy, per-role document-macro accuracy, and the full confusion matrix. The
 document metrics prevent a handful of long documents from hiding failures elsewhere.
 
@@ -163,8 +170,9 @@ can be saved without being mistaken for a QA-eligible probe:
 The multinomial probe uses scikit-learn L-BFGS with a 2,000-iteration limit and a `1e-4`
 stopping tolerance. The released role-confusion analysis leaves the tolerance at cuML's `1e-4`
 default; using `1e-6` here did not converge within 2,000 iterations on the 60-document Nemotron
-dataset. Solver and tolerance are implementation details rather than requirements stated in the
-paper, and the exact training configuration is stored in the probe artifact.
+diagnostic dataset. Solver and tolerance are implementation details rather than requirements stated
+in the paper, and the exact training and joint-selection configuration is stored in the probe
+artifact.
 
 ```bash
 uv run reasonese-role-probe train \
@@ -177,7 +185,8 @@ uv run reasonese-role-probe train \
 `extract-native` replays exactly one of the 12-conversation frozen partitions. It reads all raw
 dialogue files but selects only records assigned to the requested partition, verifies the original
 request fields, and stores content-token activations without copying prompt, reasoning, or final
-text into the activation artifact. It requires the exact prefix checkpoint and pinned layer:
+text into the activation artifact. It requires the exact prefix checkpoint and captures every
+candidate layer named by the frozen protocol:
 
 ```bash
 uv run reasonese-role-probe extract-native \
@@ -188,7 +197,6 @@ uv run reasonese-role-probe extract-native \
   --prompt-partitions out/role-probe-research/native-prompt-partitions.json \
   --protocol out/role-probe-research/protocol.json \
   --split calibration \
-  --layer 26 \
   --output out/role-probe-research/nemotron-native-calibration
 ```
 

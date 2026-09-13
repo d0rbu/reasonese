@@ -332,13 +332,17 @@ def split_documents(
 @beartype
 @dataclass(frozen=True, slots=True)
 class ProbeTrainingConfig:
-    """Preregistered layer, split, search grid, and neutral acceptance gates."""
+    """Preregistered layers, split, search grid, and neutral acceptance gates."""
 
-    layer_index: int
+    layer_indices: tuple[int, ...]
     minimum_neutral_accuracy: float
     minimum_neutral_per_role_accuracy: float
     minimum_neutral_document_accuracy: float
     minimum_neutral_per_role_document_accuracy: float
+    expected_document_count: int | None = None
+    maximum_content_tokens_per_document: int | None = None
+    protocol_sha256: str | None = None
+    native_prompt_partitions_sha256: str | None = None
     lambda_grid: tuple[float, ...] = (1e-4, 1e-3, 1e-2, 1e-1, 1.0, 1e1, 1e2, 1e3)
     train_fraction: float = 0.8
     validation_fraction: float = 0.1
@@ -347,8 +351,23 @@ class ProbeTrainingConfig:
     tolerance: float = 1e-4
 
     def __post_init__(self) -> None:
-        if self.layer_index < 0:
-            raise ValueError("layer_index must be non-negative")
+        if (
+            not self.layer_indices
+            or min(self.layer_indices) < 0
+            or len(set(self.layer_indices)) != len(self.layer_indices)
+        ):
+            raise ValueError("layer_indices must contain distinct non-negative layers")
+        if self.expected_document_count is not None and self.expected_document_count < 3:
+            raise ValueError("expected_document_count must be at least three")
+        if (
+            self.maximum_content_tokens_per_document is not None
+            and self.maximum_content_tokens_per_document <= 1
+        ):
+            raise ValueError("maximum_content_tokens_per_document must exceed one")
+        for name in ("protocol_sha256", "native_prompt_partitions_sha256"):
+            value = cast(str | None, getattr(self, name))
+            if value is not None:
+                _sha256(value, name)
         gates = (
             self.minimum_neutral_accuracy,
             self.minimum_neutral_per_role_accuracy,
@@ -410,6 +429,22 @@ class ClassificationMetrics:
     @property
     def minimum_role_document_accuracy(self) -> float:
         return min(value for _, value in self.per_role_document_accuracy)
+
+
+@beartype
+@dataclass(frozen=True, slots=True)
+class ProbeCandidateMetrics:
+    """Development-only evidence for one layer and regularization candidate."""
+
+    layer_index: int
+    regularization_lambda: float
+    metrics: ClassificationMetrics
+
+    def __post_init__(self) -> None:
+        if self.layer_index < 0:
+            raise ValueError("candidate layer_index must be non-negative")
+        if self.regularization_lambda <= 0 or not math.isfinite(self.regularization_lambda):
+            raise ValueError("candidate regularization_lambda must be finite and positive")
 
 
 @beartype
@@ -478,12 +513,14 @@ class NativeProbeQualification:
 @beartype
 @dataclass(frozen=True, slots=True)
 class RoleProbe:
-    """One predeclared layer's portable role classifier and evidence."""
+    """One development-selected layer's portable role classifier and evidence."""
 
     provenance: ActivationProvenance
     training: ProbeTrainingConfig
     split: DocumentSplit
+    selected_layer_index: int
     regularization_lambda: float
+    development_candidates: tuple[ProbeCandidateMetrics, ...]
     neutral_content_signatures: tuple[str, ...]
     coefficients: Array
     intercepts: Array
@@ -503,10 +540,23 @@ class RoleProbe:
             np.asarray(self.intercepts).dtype, np.floating
         ):
             raise TypeError("probe parameters must use floating dtypes")
-        if self.training.layer_index not in self.provenance.layer_indices:
-            raise ValueError("trained layer is absent from activation provenance")
+        if any(layer not in self.provenance.layer_indices for layer in self.training.layer_indices):
+            raise ValueError("candidate layer is absent from activation provenance")
+        if self.selected_layer_index not in self.training.layer_indices:
+            raise ValueError("selected layer is absent from the preregistered candidates")
         if self.regularization_lambda <= 0 or not math.isfinite(self.regularization_lambda):
             raise ValueError("regularization_lambda must be finite and positive")
+        expected_candidates = tuple(
+            (layer, regularization)
+            for layer in self.training.layer_indices
+            for regularization in self.training.lambda_grid
+        )
+        observed_candidates = tuple(
+            (candidate.layer_index, candidate.regularization_lambda)
+            for candidate in self.development_candidates
+        )
+        if observed_candidates != expected_candidates:
+            raise ValueError("development evidence must follow the complete candidate grid")
         expected_documents = len(self.split.train + self.split.validation + self.split.test)
         if (
             len(self.neutral_content_signatures) != expected_documents
@@ -529,6 +579,27 @@ class RoleProbe:
                 raise ValueError(f"{name} metrics do not match probe roles")
             if len(metrics.confusion_matrix) != len(expected_roles):
                 raise ValueError(f"{name} confusion matrix does not match probe roles")
+        for candidate in self.development_candidates:
+            metrics = candidate.metrics
+            if (
+                tuple(role for role, _ in metrics.per_role_accuracy) != expected_roles
+                or tuple(role for role, _ in metrics.per_role_document_accuracy) != expected_roles
+                or len(metrics.confusion_matrix) != len(expected_roles)
+            ):
+                raise ValueError("candidate metrics do not match probe roles")
+            if metrics.document_count != len(self.split.validation):
+                raise ValueError("candidate metrics do not match the development split")
+        selected = next(
+            (
+                candidate
+                for candidate in self.development_candidates
+                if candidate.layer_index == self.selected_layer_index
+                and candidate.regularization_lambda == self.regularization_lambda
+            ),
+            None,
+        )
+        if selected is None or selected.metrics != self.validation_metrics:
+            raise ValueError("selected candidate must match the stored validation metrics")
         if self.qualification is not None:
             measured = ("reasoning", "assistant")
             metrics = self.qualification.test_metrics
@@ -665,15 +736,28 @@ def _parameters(classifier: LogisticRegression, class_count: int) -> tuple[Array
 
 @beartype
 def train_role_probe(dataset: ActivationDataset, config: ProbeTrainingConfig) -> RoleProbe:
-    """Select L2 strength on grouped neutral dev data and test once."""
+    """Select layer and L2 strength on grouped neutral dev data and test once."""
     if dataset.provenance.dataset_kind != PAIRED_NEUTRAL:
         raise ValueError("training requires paired neutral-role activations")
-    try:
-        layer_offset = dataset.provenance.layer_indices.index(config.layer_index)
-    except ValueError as error:
-        raise ValueError("configured layer is absent from activation export") from error
+    if any(layer not in dataset.provenance.layer_indices for layer in config.layer_indices):
+        raise ValueError("configured layer is absent from activation export")
+    documents = tuple(str(value) for value in np.unique(dataset.document_ids))
+    if (
+        config.expected_document_count is not None
+        and len(documents) != config.expected_document_count
+    ):
+        raise ValueError("neutral document count does not match the training protocol")
+    if config.maximum_content_tokens_per_document is not None:
+        allowed_counts = {
+            config.maximum_content_tokens_per_document - 1,
+            config.maximum_content_tokens_per_document,
+        }
+        for document in documents:
+            role_rows = _rows(dataset, document, dataset.provenance.roles[0])
+            if len(role_rows) not in allowed_counts:
+                raise ValueError("neutral content-token count does not match the training protocol")
     split = split_documents(
-        tuple(str(value) for value in np.unique(dataset.document_ids)),
+        documents,
         seed=config.seed,
         train_fraction=config.train_fraction,
         validation_fraction=config.validation_fraction,
@@ -684,40 +768,58 @@ def train_role_probe(dataset: ActivationDataset, config: ProbeTrainingConfig) ->
     train_labels = _labels(dataset, train_rows)
     validation_labels = _labels(dataset, validation_rows)
 
-    candidates: list[tuple[float, ClassificationMetrics]] = []
-    for regularization in config.lambda_grid:
-        started = time.monotonic()
-        logger.info("Fitting role probe candidate lambda=%g", regularization)
-        classifier = _fit(
-            dataset.activations[train_rows, layer_offset], train_labels, regularization, config
-        )
-        coefficients, intercepts = _parameters(classifier, len(dataset.provenance.roles))
-        probabilities = _predict_parameters(
-            coefficients, intercepts, dataset.activations[validation_rows, layer_offset]
-        )
-        metrics = _metrics(
-            probabilities,
-            validation_labels,
-            dataset.provenance.roles,
-            dataset.document_ids[validation_rows],
-        )
-        candidates.append((regularization, metrics))
-        logger.info(
-            "Finished role probe candidate lambda=%g iterations=%s dev_accuracy=%.6f "
-            "dev_nll=%.6f elapsed_seconds=%.3f",
-            regularization,
-            np.asarray(classifier.n_iter_).tolist(),
-            metrics.accuracy,
-            metrics.negative_log_likelihood,
-            time.monotonic() - started,
-        )
-    regularization, validation_metrics = max(
+    candidates: list[ProbeCandidateMetrics] = []
+    for layer_index in config.layer_indices:
+        layer_offset = dataset.provenance.layer_indices.index(layer_index)
+        for regularization in config.lambda_grid:
+            started = time.monotonic()
+            logger.info(
+                "Fitting role probe candidate layer=%d lambda=%g", layer_index, regularization
+            )
+            classifier = _fit(
+                dataset.activations[train_rows, layer_offset], train_labels, regularization, config
+            )
+            coefficients, intercepts = _parameters(classifier, len(dataset.provenance.roles))
+            probabilities = _predict_parameters(
+                coefficients, intercepts, dataset.activations[validation_rows, layer_offset]
+            )
+            metrics = _metrics(
+                probabilities,
+                validation_labels,
+                dataset.provenance.roles,
+                dataset.document_ids[validation_rows],
+            )
+            candidates.append(ProbeCandidateMetrics(layer_index, regularization, metrics))
+            logger.info(
+                "Finished role probe candidate layer=%d lambda=%g iterations=%s "
+                "dev_accuracy=%.6f dev_nll=%.6f elapsed_seconds=%.3f",
+                layer_index,
+                regularization,
+                np.asarray(classifier.n_iter_).tolist(),
+                metrics.accuracy,
+                metrics.negative_log_likelihood,
+                time.monotonic() - started,
+            )
+    selected = max(
         candidates,
-        key=lambda item: (item[1].accuracy, -item[1].negative_log_likelihood, item[0]),
+        key=lambda candidate: (
+            candidate.metrics.accuracy,
+            -candidate.metrics.negative_log_likelihood,
+            candidate.regularization_lambda,
+            -candidate.layer_index,
+        ),
     )
+    layer_index = selected.layer_index
+    regularization = selected.regularization_lambda
+    validation_metrics = selected.metrics
+    layer_offset = dataset.provenance.layer_indices.index(layer_index)
     fit_rows = np.concatenate((train_rows, validation_rows))
     started = time.monotonic()
-    logger.info("Refitting selected role probe lambda=%g on train+development", regularization)
+    logger.info(
+        "Refitting selected role probe layer=%d lambda=%g on train+development",
+        layer_index,
+        regularization,
+    )
     classifier = _fit(
         dataset.activations[fit_rows, layer_offset],
         _labels(dataset, fit_rows),
@@ -726,7 +828,8 @@ def train_role_probe(dataset: ActivationDataset, config: ProbeTrainingConfig) ->
     )
     coefficients, intercepts = _parameters(classifier, len(dataset.provenance.roles))
     logger.info(
-        "Finished selected role probe refit lambda=%g iterations=%s elapsed_seconds=%.3f",
+        "Finished selected role probe refit layer=%d lambda=%g iterations=%s elapsed_seconds=%.3f",
+        layer_index,
         regularization,
         np.asarray(classifier.n_iter_).tolist(),
         time.monotonic() - started,
@@ -738,7 +841,9 @@ def train_role_probe(dataset: ActivationDataset, config: ProbeTrainingConfig) ->
         provenance=dataset.provenance,
         training=config,
         split=split,
+        selected_layer_index=layer_index,
         regularization_lambda=regularization,
+        development_candidates=tuple(candidates),
         neutral_content_signatures=_neutral_content_signatures(dataset),
         coefficients=coefficients,
         intercepts=intercepts,
@@ -805,7 +910,7 @@ def _paired_segment_scores(
     dataset: ActivationDataset,
     split: str,
 ) -> PairedSegmentScores:
-    layer_offset = dataset.provenance.layer_indices.index(probe.training.layer_index)
+    layer_offset = dataset.provenance.layer_indices.index(probe.selected_layer_index)
     probabilities = _predict(probe, dataset.activations[:, layer_offset])
     reasoning_index = probe.provenance.roles.index("reasoning")
     conversation_ids = tuple(str(value) for value in np.unique(dataset.document_ids))
@@ -888,7 +993,7 @@ def qualify_role_probe(
     test_scores = _paired_segment_scores(probe, test_conversations, TEST_SPLIT)
     if calibration_scores.conversation_count != EXPECTED_CONVERSATIONS:
         raise ValueError(f"native calibration requires {EXPECTED_CONVERSATIONS} conversations")
-    layer_offset = test_conversations.provenance.layer_indices.index(probe.training.layer_index)
+    layer_offset = test_conversations.provenance.layer_indices.index(probe.selected_layer_index)
     rows = np.arange(len(test_conversations.roles))
     test_metrics = _metrics(
         _predict(probe, test_conversations.activations[:, layer_offset]),
@@ -940,7 +1045,7 @@ def project_role(
     """Project content-token activations from the probe's selected layer."""
     if not _same_pipeline(probe.provenance, provenance):
         raise ValueError("projection activations do not match the probe's exact model pipeline")
-    if layer_index != probe.training.layer_index:
+    if layer_index != probe.selected_layer_index:
         raise ValueError("projection layer does not match the trained probe layer")
     if require_qa_eligible and not probe.qa_eligible:
         raise ValueError("probe lacks passing neutral and conversation validation")
@@ -1031,7 +1136,16 @@ def _probe_from(metadata: dict[str, Any], coefficients: Array, intercepts: Array
     provenance["layer_indices"] = tuple(provenance["layer_indices"])
     provenance["roles"] = tuple(provenance["roles"])
     training = dict(metadata["training"])
+    training["layer_indices"] = tuple(training["layer_indices"])
     training["lambda_grid"] = tuple(training["lambda_grid"])
+    development_candidates = tuple(
+        ProbeCandidateMetrics(
+            layer_index=candidate["layer_index"],
+            regularization_lambda=candidate["regularization_lambda"],
+            metrics=_metrics_from(candidate["metrics"]),
+        )
+        for candidate in metadata["development_candidates"]
+    )
     neutral_content_signatures = tuple(metadata["neutral_content_signatures"])
     split = {name: tuple(value) for name, value in metadata["split"].items()}
     qualification = metadata["qualification"]
@@ -1072,7 +1186,9 @@ def _probe_from(metadata: dict[str, Any], coefficients: Array, intercepts: Array
         provenance=ActivationProvenance(**provenance),
         training=ProbeTrainingConfig(**training),
         split=DocumentSplit(**split),
+        selected_layer_index=metadata["selected_layer_index"],
         regularization_lambda=metadata["regularization_lambda"],
+        development_candidates=development_candidates,
         neutral_content_signatures=neutral_content_signatures,
         coefficients=coefficients,
         intercepts=intercepts,
