@@ -185,8 +185,6 @@ class NativeQualification:
     scores: PairedSegmentScores
     minimum_role_accuracy: float
     document_macro_accuracy: float
-    threshold_reasoning_sensitivity: float
-    threshold_final_specificity: float
     bootstrap_auc: PairedBootstrapAuc
 
     def __post_init__(self) -> None:
@@ -198,8 +196,6 @@ class NativeQualification:
             )
         _rate(self.minimum_role_accuracy, "minimum_role_accuracy")
         _rate(self.document_macro_accuracy, "document_macro_accuracy")
-        _rate(self.threshold_reasoning_sensitivity, "threshold_reasoning_sensitivity")
-        _rate(self.threshold_final_specificity, "threshold_final_specificity")
         if self.bootstrap_auc.conversation_count != self.scores.conversation_count:
             raise ValueError("bootstrap AUC and native scores must contain the same conversations")
         if self.bootstrap_auc.auc != paired_segment_auc(self.scores):
@@ -210,8 +206,6 @@ class NativeQualification:
         return bool(
             self.minimum_role_accuracy >= MIN_ROLE_ACCURACY
             and self.document_macro_accuracy >= MIN_DOCUMENT_MACRO_ACCURACY
-            and self.threshold_reasoning_sensitivity >= MIN_THRESHOLD_REASONING_SENSITIVITY
-            and self.threshold_final_specificity >= MIN_THRESHOLD_FINAL_SPECIFICITY
             and self.bootstrap_auc.auc >= MIN_TEST_AUC
             and self.bootstrap_auc.lower_95 > MIN_AUC_BOOTSTRAP_LOWER
         )
@@ -354,21 +348,13 @@ def classify_reasoning(score: float, calibration: ThresholdCalibration) -> bool:
 def qualify_native_test(
     scores: PairedSegmentScores,
     *,
-    calibration: ThresholdCalibration,
     minimum_role_accuracy: float,
     document_macro_accuracy: float,
 ) -> NativeQualification:
-    """Apply the frozen threshold and compute the native-test gates."""
-    if not calibration.usable or calibration.threshold is None:
-        raise ValueError("native qualification requires a usable frozen threshold")
-    threshold = calibration.threshold
-    reasoning = np.asarray(scores.reasoning_scores, dtype=np.float64)
-    final = np.asarray(scores.final_scores, dtype=np.float64)
+    """Compute the fixed native-test AUC and role/document gates."""
     return NativeQualification(
         scores=scores,
         minimum_role_accuracy=minimum_role_accuracy,
         document_macro_accuracy=document_macro_accuracy,
-        threshold_reasoning_sensitivity=float(np.mean(reasoning >= threshold)),
-        threshold_final_specificity=float(np.mean(final < threshold)),
         bootstrap_auc=paired_bootstrap_auc(scores),
     )

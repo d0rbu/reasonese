@@ -229,10 +229,10 @@ def _qualify(args: argparse.Namespace) -> None:
                 "native_test_auc": qualified.qualification.test.bootstrap_auc.auc,
                 "native_test_auc_lower_95": qualified.qualification.test.bootstrap_auc.lower_95,
                 "native_test_threshold_reasoning_sensitivity": (
-                    qualified.qualification.test.threshold_reasoning_sensitivity
+                    qualified.qualification.threshold_reasoning_sensitivity
                 ),
                 "native_test_threshold_final_specificity": (
-                    qualified.qualification.test.threshold_final_specificity
+                    qualified.qualification.threshold_final_specificity
                 ),
             },
             sort_keys=True,

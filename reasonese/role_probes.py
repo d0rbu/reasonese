@@ -29,6 +29,8 @@ from sklearn.linear_model import LogisticRegression
 from reasonese.probe_statistics import (
     CALIBRATION_SPLIT,
     EXPECTED_CONVERSATIONS,
+    MIN_THRESHOLD_FINAL_SPECIFICITY,
+    MIN_THRESHOLD_REASONING_SENSITIVITY,
     TEST_SPLIT,
     NativeQualification,
     PairedBootstrapAuc,
@@ -442,8 +444,31 @@ class NativeProbeQualification:
             raise ValueError("native document gate does not match the test metrics")
 
     @property
+    def threshold_reasoning_sensitivity(self) -> float | None:
+        threshold = self.calibration.threshold
+        if threshold is None:
+            return None
+        return float(np.mean(np.asarray(self.test.scores.reasoning_scores) >= threshold))
+
+    @property
+    def threshold_final_specificity(self) -> float | None:
+        threshold = self.calibration.threshold
+        if threshold is None:
+            return None
+        return float(np.mean(np.asarray(self.test.scores.final_scores) < threshold))
+
+    @property
     def passed(self) -> bool:
-        return self.calibration.usable and self.test.passed
+        sensitivity = self.threshold_reasoning_sensitivity
+        specificity = self.threshold_final_specificity
+        return bool(
+            self.calibration.usable
+            and self.test.passed
+            and sensitivity is not None
+            and sensitivity >= MIN_THRESHOLD_REASONING_SENSITIVITY
+            and specificity is not None
+            and specificity >= MIN_THRESHOLD_FINAL_SPECIFICITY
+        )
 
 
 @beartype
@@ -880,7 +905,6 @@ def qualify_role_probe(
         test_metrics=test_metrics,
         test=qualify_native_test(
             test_scores,
-            calibration=calibration,
             minimum_role_accuracy=test_metrics.minimum_role_accuracy,
             document_macro_accuracy=test_metrics.document_accuracy,
         ),
@@ -1037,8 +1061,6 @@ def _probe_from(metadata: dict[str, Any], coefficients: Array, intercepts: Array
                 ),
                 minimum_role_accuracy=test["minimum_role_accuracy"],
                 document_macro_accuracy=test["document_macro_accuracy"],
-                threshold_reasoning_sensitivity=test["threshold_reasoning_sensitivity"],
-                threshold_final_specificity=test["threshold_final_specificity"],
                 bootstrap_auc=PairedBootstrapAuc(**bootstrap),
             ),
         )

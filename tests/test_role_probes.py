@@ -351,7 +351,20 @@ def test_qualification_recomputes_untouched_conversation_metrics() -> None:
     assert qualified.qualification.test_metrics.document_accuracy == 1.0
     assert qualified.qualification.test.bootstrap_auc.auc == 1.0
     assert qualified.qualification.calibration.usable
+    assert qualified.qualification.threshold_reasoning_sensitivity == 1.0
+    assert qualified.qualification.threshold_final_specificity == 1.0
     assert qualified.qa_eligible
+
+    test_scores = qualified.qualification.test.scores
+    changed_threshold = replace(
+        qualified.qualification.calibration,
+        threshold=np.nextafter(max(test_scores.reasoning_scores), np.inf),
+    )
+    changed_qualification = replace(qualified.qualification, calibration=changed_threshold)
+    assert changed_qualification.test.passed
+    assert changed_qualification.threshold_reasoning_sensitivity == 0.0
+    assert changed_qualification.threshold_final_specificity == 1.0
+    assert not changed_qualification.passed
 
     projection = project_role(
         qualified,
