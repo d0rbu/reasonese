@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from math import inf, nan
 from pathlib import Path
 
 import numpy as np
@@ -274,6 +275,12 @@ def test_training_selects_only_on_grouped_neutral_development_data() -> None:
         assert set(dataset.roles[rows]) == set(_ROLES)
 
 
+@pytest.mark.parametrize("tolerance", [nan, inf, -inf])
+def test_training_rejects_nonfinite_optimizer_tolerance(tolerance: float) -> None:
+    with pytest.raises(ValueError, match="optimizer limits"):
+        replace(_training_config(), tolerance=tolerance)
+
+
 def test_multinomial_training_preserves_explicit_role_order() -> None:
     roles = ("reasoning", "assistant", "tool")
     bundle = train_role_probe(
@@ -501,6 +508,28 @@ def test_qualification_rejects_metrics_inconsistent_with_native_gates() -> None:
         replace(qualified.qualification, test_metrics=metrics)
 
 
+def test_qualification_metrics_must_keep_exact_role_order_and_confusion_shape() -> None:
+    qualified = _qualify(train_role_probe(_dataset(), _training_config()))
+    assert qualified.qualification is not None
+    metrics = qualified.qualification.test_metrics
+    with pytest.raises(ValueError, match="per-role metrics must be non-empty and aligned"):
+        replace(
+            metrics,
+            per_role_document_accuracy=tuple(reversed(metrics.per_role_document_accuracy)),
+        )
+    with pytest.raises(ValueError, match="conversation confusion matrix"):
+        replace(
+            qualified,
+            qualification=replace(
+                qualified.qualification,
+                test_metrics=replace(
+                    metrics,
+                    confusion_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)),
+                ),
+            ),
+        )
+
+
 def test_artifact_round_trip_preserves_exact_numpy_scoring(tmp_path: Path) -> None:
     bundle = qualify_role_probe(
         train_role_probe(_dataset(), _training_config()),
@@ -659,6 +688,9 @@ def test_probe_rejects_metrics_that_do_not_match_its_role_space() -> None:
     swapped = replace(
         bundle.validation_metrics,
         per_role_accuracy=tuple(reversed(bundle.validation_metrics.per_role_accuracy)),
+        per_role_document_accuracy=tuple(
+            reversed(bundle.validation_metrics.per_role_document_accuracy)
+        ),
     )
     with pytest.raises(ValueError, match="metrics do not match probe roles"):
         replace(bundle, validation_metrics=swapped)

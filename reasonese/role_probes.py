@@ -363,7 +363,7 @@ class ProbeTrainingConfig:
             raise ValueError("lambda_grid must contain distinct finite positive values")
         if len(set(self.lambda_grid)) != len(self.lambda_grid):
             raise ValueError("lambda_grid must not contain duplicates")
-        if self.max_iterations <= 0 or self.tolerance <= 0:
+        if self.max_iterations <= 0 or self.tolerance <= 0 or not math.isfinite(self.tolerance):
             raise ValueError("optimizer limits must be positive")
 
 
@@ -391,8 +391,12 @@ class ClassificationMetrics:
             raise ValueError("classification counts must be positive")
         if self.negative_log_likelihood < 0 or not math.isfinite(self.negative_log_likelihood):
             raise ValueError("negative_log_likelihood must be finite and non-negative")
-        if not self.per_role_accuracy or len(self.per_role_accuracy) != len(
-            self.per_role_document_accuracy
+        accuracy_roles = tuple(role for role, _ in self.per_role_accuracy)
+        document_roles = tuple(role for role, _ in self.per_role_document_accuracy)
+        if (
+            not self.per_role_accuracy
+            or accuracy_roles != document_roles
+            or len(set(accuracy_roles)) != len(accuracy_roles)
         ):
             raise ValueError("per-role metrics must be non-empty and aligned")
         size = len(self.confusion_matrix)
