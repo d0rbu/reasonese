@@ -119,6 +119,25 @@ Manual review of the first word-count traces found that installed `awk` was unav
 inside the sandbox: `/usr/bin/awk` resolves through `/etc/alternatives`, which was not mounted.
 The runtime now mounts that directory read-only when present. A regression test reproduced
 the failure before the fix, and both exact saved failing tool calls succeeded after the fix.
-The affected word-count traces and any associated judgments must be archived and explicitly
-invalidated before recollection; their original tool errors are environment defects and must
-not be presented as clean measurements of model behavior. Unaffected trial caches remain reusable.
+Both affected word-count traces, their judgments, and derived observations were archived and
+invalidated, then recollected with the corrected runtime. Their original tool errors are
+environment defects and are not presented as clean measurements of model behavior. Six
+unaffected smoke trials were reused. The corrected smoke passed an offline replay requiring
+eight distinct cached trials, eight matching judgment fingerprints, sixteen observations,
+and membership in the full pilot suite.
+
+The run-scoped launcher permits up to eight author regenerations after the earlier two-regeneration
+allowance exhausted on the Bash rewrite. Every rejected version is archived; acceptance still
+requires the unchanged QA criteria. This conditions authored messages on QA acceptance and is
+recorded as an operational retry allowance, not a claim of perfect authoring reliability.
+
+Thirty-eight missing pilot author-cache entries were reused from original-prompt calibration.
+Full author-request and QA-request equality was checked for each entry, including model route,
+messages, generation settings, and verdict schema. All verdicts were retained (26 passing,
+12 failing), and no existing pilot entry was overwritten. This reuse does not select passing
+outputs from alternative prompt revisions; failed entries still require regeneration.
+
+CI installs Bubblewrap and `mawk` and enables the user namespaces needed by Bubblewrap on the
+disposable Ubuntu runner. All 643 tests then passed with no skips and 98.52% coverage. The
+runtime's read-only mounts and network isolation remain enabled. These checks validate code
+and cache behavior, not future model compliance or provider availability.
