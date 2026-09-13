@@ -337,7 +337,7 @@ def test_duplicate_model_groups_share_capacity_and_preserve_identity() -> None:
             started.put((slug, index))
             try:
                 assert gates[index].wait(5), f"request {index} was never released"
-                return {"index": index, "model": slug}
+                return {"index": index, "model": slug, "choices": [{"message": {"content": "answer"}}]}
             finally:
                 with lock:
                     active[slug] -= 1
@@ -373,7 +373,7 @@ def test_duplicate_model_groups_share_capacity_and_preserve_identity() -> None:
     assert peaks == {str(model): 2, str(other_model): 1}
     assert active == {str(model): 0, str(other_model): 0}
     assert responses == (
-        tuple({"index": i, "model": str(model)} for i in range(4)),
-        tuple({"index": i, "model": str(model)} for i in range(4, 8)),
-        ({"index": 8, "model": str(other_model)},),
+        tuple({"index": i, "model": str(model), "choices": [{"message": {"content": "answer"}}]} for i in range(4)),
+        tuple({"index": i, "model": str(model), "choices": [{"message": {"content": "answer"}}]} for i in range(4, 8)),
+        ({"index": 8, "model": str(other_model), "choices": [{"message": {"content": "answer"}}]},),
     )

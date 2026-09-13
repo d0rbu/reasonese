@@ -99,13 +99,28 @@ in the response text. Missing or empty annotations do not prove that no search o
 Hidden reasoning remains in the trace and its fingerprint but is not quoted as judge evidence.
 The response judge does not compare instructions or force a winner.
 
-An assistant response without local tool calls must contain nonblank final text. Missing,
-null, or blank final text is an execution error, logged with `logger.exception` and retried
-on the same model route with the same conversation. Up to two extra attempts are allowed per
-conversation, without replaying completed local tools or appending the empty response.
-Server-side searches may execute again on a retry. Exhaustion raises the error; empty answers
-are not cached or scored as noncompletion.
-Tool-call responses may legitimately have null content. Authoring and judge parsing stay strict.
+The shared completion path validates top-level and choice-level provider errors and error
+finish reasons before delivering text or executing local tools, even for HTTP 200 responses.
+Missing, null, or blank final text is also a provider failure. Actual tool-call responses may
+legitimately have null content. This validation covers authoring and assistant execution;
+strict text consumers also reject embedded errors in cached responses.
+
+Synchronous completion failures log their exceptions and retry the identical request on the
+same route. Empty/error responses, HTTP 408/5xx, connection failures, and timeouts allow at
+most two retries per author request or assistant conversation (including tool continuations),
+with 1-second then 2-second delays or a longer supplied Retry-After. Provider-failure and HTTP
+429 budgets are independent: each provider retry or tool continuation gets a fresh 429 budget,
+while the provider-failure counter is retained across the conversation.
+Embedded 429s use the same adaptive limiter and cooldown as HTTP 429s. Explicit permanent
+provider errors such as 400/401/403 are not retried. Failed responses never reach local tools
+or response judgments. Already executed local tools are preserved, while server-side searches
+may execute again on a retry. Consumer/callback errors do not retry a successful HTTP request.
+
+Completed batch items are individually validated, with failures logged and raised after
+successful items and other submitted batches have been processed. Authoring retains successful
+responses through its existing partial-result cache path. Batch item failures and ambiguous
+batch-submission failures are not automatically resubmitted; this avoids duplicating paid jobs.
+The existing 429 retry policy still applies to rejected batch submissions.
 
 The collection flow is:
 

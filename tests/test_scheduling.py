@@ -236,7 +236,7 @@ def test_real_transport_reports_429_to_client_and_retries_exact_body(
         response = requests.Response()
         response.status_code = 429 if len(calls) == 1 else 200
         response.headers["Retry-After"] = "3600"
-        response._content = b'{"answer": "done"}'
+        response._content = b'{"choices":[{"message":{"content":"done"}}]}'
         return response
 
     monkeypatch.setattr(requests.Session, "post", post)
@@ -244,7 +244,7 @@ def test_real_transport_reports_429_to_client_and_retries_exact_body(
         RequestsTransport("test-key"), sleep=clock.sleep, monotonic=clock.monotonic
     )
     model = OpenRouterModelId.parse("google/gemma-4-31b-it:free")
-    assert client.complete(model, {"messages": []}) == {"answer": "done"}
+    assert client.complete(model, {"messages": []}) == {"choices": [{"message": {"content": "done"}}]}
     assert sum(clock.sleeps) == 3600
     assert max(clock.sleeps) <= 60
     assert calls == [{"messages": [], "model": str(model)}] * 2
@@ -262,7 +262,7 @@ def test_grouped_authoring_keeps_healthy_model_moving_during_429() -> None:
                 events.append(model)
                 if model == "example/limited:free" and events.count(model) == 1:
                     raise http_error(retry_after="60")
-                return {"content": body["index"]}
+                return {"choices": [{"message": {"content": str(body["index"])}}]}
 
         def get_json(self, path: str) -> JsonObject:
             raise AssertionError(path)
@@ -278,7 +278,7 @@ def test_grouped_authoring_keeps_healthy_model_moving_during_429() -> None:
         for model in models
     )
     responses = client.complete_many_grouped(groups, prefer_batch=False)
-    assert responses == (tuple({"content": i} for i in range(5)),) * 2
+    assert responses == (tuple({"choices": [{"message": {"content": str(i)}}]} for i in range(5)),) * 2
     assert events[1:6] == [models[1]] * 5
     assert client.scheduler.limiters[models[0]].generation == 1
     assert client.scheduler.limiters[models[1]].generation == 0
@@ -347,7 +347,7 @@ def test_batch_submission_429_does_not_hold_synchronous_model() -> None:
         def post_json(self, path: str, body: JsonObject) -> JsonObject:
             if path == "/api/v1/chat/completions":
                 healthy_finished.set()
-                return {"content": "sync"}
+                return {"choices": [{"message": {"content": "sync"}}]}
             submitted.append(body)
             if len(submitted) == 1:
                 raise http_error()
@@ -358,7 +358,7 @@ def test_batch_submission_429_does_not_hold_synchronous_model() -> None:
                 "results": [
                     {
                         "custom_id": "request-0",
-                        "response": {"status_code": 200, "body": {"content": "batch"}},
+                        "response": {"status_code": 200, "body": {"choices": [{"message": {"content": "batch"}}]}},
                     }
                 ],
             }
@@ -382,7 +382,7 @@ def test_batch_submission_429_does_not_hold_synchronous_model() -> None:
         ),
         prefer_batch=True,
     )
-    assert responses == (({"content": "batch"},), ({"content": "sync"},))
+    assert responses == (({"choices": [{"message": {"content": "batch"}}]},), ({"choices": [{"message": {"content": "sync"}}]},))
     assert submitted[0] == submitted[1]
 
 

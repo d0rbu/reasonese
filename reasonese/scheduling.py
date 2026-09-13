@@ -19,6 +19,15 @@ from beartype import beartype
 _LOGGER = logging.getLogger(__name__)
 
 
+class ProviderRequestError(ValueError):
+    """A provider completion failed; its status determines whether retrying is appropriate."""
+
+    def __init__(self, message: str, status_code: int | None = None, retry_after: str | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.retry_after = retry_after
+
+
 def retry_after_seconds(value: str | None) -> float:
     """Read delta seconds or an HTTP date without shortening a provider cooldown."""
     if value is None:
@@ -78,6 +87,7 @@ class ScheduledRequest[Result]:
 class _Work[Result]:
     request: ScheduledRequest[Result]
     retries: int = 0
+    provider_retries: int = 0
 
 
 @beartype
@@ -152,18 +162,36 @@ class ModelScheduler:
                     try:
                         result = future.result()
                     except Exception as error:
-                        # A callback error must never retry its successful HTTP request.
-                        response = (
-                            error.response
-                            if generation is not None and isinstance(error, requests.HTTPError)
-                            else None
+                        # Validation belongs to send; callback failures never replay a request.
+                        response = error.response if isinstance(error, requests.HTTPError) else None
+                        provider_error = error if isinstance(error, ProviderRequestError) else None
+                        status = provider_error.status_code if provider_error is not None else (
+                            response.status_code if response is not None else None
                         )
-                        if response is None or response.status_code != 429:
+                        retry_after = provider_error.retry_after if provider_error is not None else (
+                            response.headers.get("Retry-After") if response is not None else None
+                        )
+                        if generation is not None and provider_error is not None:
+                            _LOGGER.exception("Provider completion failed for %s (attempt %d/3)", model, work.provider_retries + 1)
+                        transient = provider_error is not None and (
+                            status is None or status == 408 or 500 <= status < 600
+                        )
+                        if generation is not None and transient:
+                            if work.provider_retries >= 2:
+                                stop_admission(error)
+                            elif fatal_error is None and model not in exhausted:
+                                limiter.ready_at = max(
+                                    limiter.ready_at,
+                                    self.monotonic() + max(2.0**work.provider_retries, retry_after_seconds(retry_after)),
+                                )
+                                queues[model].appendleft(_Work(work.request, provider_retries=work.provider_retries + 1))
+                            continue
+                        if generation is None or status != 429:
                             stop_admission(error)
                             continue
                         limiter.limited(
                             self.monotonic(),
-                            retry_after_seconds(response.headers.get("Retry-After")),
+                            retry_after_seconds(retry_after),
                         )
                         _LOGGER.warning(
                             "HTTP 429 for %s: concurrency=%d, interval=%.2fs, cooldown=%.2fs",
@@ -176,7 +204,7 @@ class ModelScheduler:
                             exhausted.setdefault(model, error)
                             queues[model].clear()
                         elif model not in exhausted and fatal_error is None:
-                            queues[model].appendleft(_Work(work.request, work.retries + 1))
+                            queues[model].appendleft(_Work(work.request, work.retries + 1, work.provider_retries))
                     else:
                         if generation is not None:
                             limiter.succeeded(generation)
@@ -189,7 +217,7 @@ class ModelScheduler:
                             elif result.model != model:
                                 stop_admission(ValueError("a continuation must retain its model"))
                             elif model not in exhausted and fatal_error is None:
-                                queues[model].appendleft(_Work(result))
+                                queues[model].appendleft(_Work(result, provider_retries=work.provider_retries))
                 if done:
                     # Futures may have finished while responses were being processed.
                     continue

@@ -688,10 +688,10 @@ def test_empty_final_answer_logs_and_retries_same_request(
     assert result[0][0].response == _chat("answer")
     assert result[0][0].tool_steps == ()
     assert transport.post_calls[0] == transport.post_calls[1]
-    records = [record for record in caplog.records if record.name == "reasonese.runner"]
+    records = [record for record in caplog.records if record.name == "reasonese.scheduling"]
     assert len(records) == 1
     assert records[0].exc_info is not None
-    assert "empty-response" in records[0].getMessage()
+    assert "empty-response" in str(records[0].exc_info[1])
 
 
 def test_empty_retry_preserves_tools_and_successful_trace_exactly() -> None:
@@ -711,7 +711,7 @@ def test_empty_retry_exhaustion_is_not_cached_or_scored(
 ) -> None:
     setup = _setup_with_user_content("Read README.")
     cache = YamlTraceCache(tmp_path / "traces.yaml")
-    transport = FakeTransport([_qa_batch(2), _chat(""), _tool_chat(), _chat(""), _chat("")])
+    transport = FakeTransport([_qa_batch(2), _tool_chat(), _chat(""), _chat(""), _chat("")])
     with pytest.raises(ValueError, match="assistant content is empty"):
         run_matchup(setup.matchup, OpenRouterClient(transport),
                     YamlMessageCache(tmp_path / "messages.yaml"), cache,
@@ -1057,3 +1057,20 @@ def test_malformed_assistant_content_does_not_retry(content: object) -> None:
     with pytest.raises(ValueError):
         run_assistant_groups((AssistantRunGroup(route, (setup,)),), OpenRouterClient(transport))
     assert len(transport.post_calls) == 1
+
+
+def test_error_response_tool_calls_are_never_executed(monkeypatch: pytest.MonkeyPatch) -> None:
+    setup = _setup_with_user_content("Read README.")
+    response = _tool_chat()
+    response["choices"][0]["error"] = {
+        "code": 504, "message": "Server tool request failed", "metadata": {"error_type": "timeout"}
+    }
+    def unexpected_runtime(self: object) -> None:
+        raise AssertionError("failed provider response executed local tools")
+    monkeypatch.setattr("reasonese.runner.ToolRuntime.__enter__", unexpected_runtime)
+    transport = FakeTransport([response, _chat("answer")])
+    route = ModelRoute(OpenRouterModelId.parse("example/model:free"), None)
+    traces = run_assistant_groups((AssistantRunGroup(route, (setup,)),), OpenRouterClient(transport))
+    assert traces[0][0].tool_steps == ()
+    assert traces[0][0].response == _chat("answer")
+    assert transport.post_calls[0] == transport.post_calls[1]
