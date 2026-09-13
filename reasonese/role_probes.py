@@ -793,6 +793,30 @@ class ProbeCandidateMetrics:
             raise ValueError("candidate regularization_lambda must be finite and positive")
 
 
+class ProbeConvergenceError(RuntimeError):
+    """A recognized optimizer convergence failure for one candidate fit."""
+
+
+@beartype
+@dataclass(frozen=True, slots=True)
+class ProbeCandidateFailure:
+    """Development-grid coordinate excluded after a recognized convergence failure."""
+
+    layer_index: int
+    regularization_lambda: float
+    error_type: str
+    message: str
+
+    def __post_init__(self) -> None:
+        if type(self.layer_index) is not int or self.layer_index < 0:
+            raise ValueError("failed candidate layer_index must be a non-negative integer")
+        if self.regularization_lambda <= 0 or not math.isfinite(self.regularization_lambda):
+            raise ValueError("failed candidate regularization_lambda must be finite and positive")
+        if self.error_type != ProbeConvergenceError.__name__:
+            raise ValueError("failed candidate must record ProbeConvergenceError")
+        _text(self.message, "failed candidate message")
+
+
 @beartype
 @dataclass(frozen=True, slots=True)
 class NativeProbeQualification:
@@ -875,6 +899,7 @@ class RoleProbe:
     validation_metrics: ClassificationMetrics
     neutral_test_metrics: ClassificationMetrics
     qualification: NativeProbeQualification | None = None
+    failed_candidates: tuple[ProbeCandidateFailure, ...] = ()
 
     def __post_init__(self) -> None:
         expected = (len(self.provenance.roles), self.provenance.hidden_size)
@@ -899,12 +924,31 @@ class RoleProbe:
             for layer in self.training.layer_indices
             for regularization in self.training.lambda_grid
         )
-        observed_candidates = tuple(
+        successful_coordinates = tuple(
             (candidate.layer_index, candidate.regularization_lambda)
             for candidate in self.development_candidates
         )
-        if observed_candidates != expected_candidates:
-            raise ValueError("development evidence must follow the complete candidate grid")
+        failed_coordinates = tuple(
+            (candidate.layer_index, candidate.regularization_lambda)
+            for candidate in self.failed_candidates
+        )
+        observed_coordinates = successful_coordinates + failed_coordinates
+        if len(observed_coordinates) != len(expected_candidates) or set(
+            observed_coordinates
+        ) != set(expected_candidates):
+            raise ValueError("candidate evidence must cover the complete grid exactly once")
+        if not successful_coordinates:
+            raise ValueError("candidate evidence must contain at least one successful fit")
+        successful_set = set(successful_coordinates)
+        failed_set = set(failed_coordinates)
+        if successful_coordinates != tuple(
+            coordinate for coordinate in expected_candidates if coordinate in successful_set
+        ):
+            raise ValueError("successful candidate evidence must follow grid order")
+        if failed_coordinates != tuple(
+            coordinate for coordinate in expected_candidates if coordinate in failed_set
+        ):
+            raise ValueError("failed candidate evidence must follow grid order")
         expected_documents = len(self.split.train + self.split.validation + self.split.test)
         if (
             len(self.neutral_content_signatures) != expected_documents
@@ -1072,8 +1116,9 @@ def _fit(x: Array, y: Array, regularization: float, config: ProbeTrainingConfig)
                     np.asarray(y, dtype=np.int64),
                 )
             except ConvergenceWarning as error:
-                raise RuntimeError(
-                    f"probe failed to converge for lambda={regularization:g}"
+                warning = " ".join(str(error).split())
+                raise ProbeConvergenceError(
+                    f"sklearn LBFGS failed to converge for lambda={regularization:g}: {warning}"
                 ) from error
         return classifier
 
@@ -1135,9 +1180,19 @@ def _fit(x: Array, y: Array, regularization: float, config: ProbeTrainingConfig)
         "l-bfgs: max iterations reached",
         "maximum iterations reached before solver is converged",
     )
-    lowered = output.lower()
-    if any(marker in lowered for marker in failure_markers):
-        raise RuntimeError(f"cuML QN reported a fitting failure for lambda={regularization:g}")
+    matched_failure = next(
+        (
+            line.strip()
+            for line in output.splitlines()
+            if any(marker in line.lower() for marker in failure_markers)
+        ),
+        None,
+    )
+    if matched_failure is not None:
+        raise ProbeConvergenceError(
+            f"cuML QN reported a fitting failure for lambda={regularization:g}: "
+            f"{matched_failure}"
+        )
     return classifier
 
 
@@ -1237,6 +1292,7 @@ def train_role_probe(dataset: ActivationDataset, config: ProbeTrainingConfig) ->
     fit_order = "F" if config.optimizer.backend == "cuml-qn" else "C"
 
     candidates: list[ProbeCandidateMetrics] = []
+    failed_candidates: list[ProbeCandidateFailure] = []
     for layer_index in config.layer_indices:
         layer_offset = dataset.provenance.layer_indices.index(layer_index)
         train_matrix = _materialize_activation_matrix(
@@ -1250,13 +1306,29 @@ def train_role_probe(dataset: ActivationDataset, config: ProbeTrainingConfig) ->
             logger.info(
                 "Fitting role probe candidate layer=%d lambda=%g", layer_index, regularization
             )
-            coefficients, intercepts, iterations = _fit_parameters(
-                train_matrix,
-                train_labels,
-                regularization,
-                config,
-                len(dataset.provenance.roles),
-            )
+            try:
+                coefficients, intercepts, iterations = _fit_parameters(
+                    train_matrix,
+                    train_labels,
+                    regularization,
+                    config,
+                    len(dataset.provenance.roles),
+                )
+            except ProbeConvergenceError as error:
+                logger.exception(
+                    "Excluding role probe candidate layer=%d lambda=%g after convergence failure",
+                    layer_index,
+                    regularization,
+                )
+                failed_candidates.append(
+                    ProbeCandidateFailure(
+                        layer_index,
+                        regularization,
+                        type(error).__name__,
+                        str(error),
+                    )
+                )
+                continue
             probabilities = _predict_parameters(
                 coefficients, intercepts, validation_matrix
             )
@@ -1280,6 +1352,8 @@ def train_role_probe(dataset: ActivationDataset, config: ProbeTrainingConfig) ->
                 time.monotonic() - started,
             )
         del train_matrix, validation_matrix
+    if not candidates:
+        raise RuntimeError("all role probe candidates failed to converge")
     selected = max(
         candidates,
         key=lambda candidate: (
@@ -1340,6 +1414,7 @@ def train_role_probe(dataset: ActivationDataset, config: ProbeTrainingConfig) ->
             dataset.provenance.roles,
             dataset.document_ids[test_rows],
         ),
+        failed_candidates=tuple(failed_candidates),
     )
 
 
@@ -1632,6 +1707,10 @@ def _probe_from(metadata: dict[str, Any], coefficients: Array, intercepts: Array
         )
         for candidate in metadata["development_candidates"]
     )
+    failed_candidates = tuple(
+        ProbeCandidateFailure(**candidate)
+        for candidate in metadata.get("failed_candidates", ())
+    )
     neutral_content_signatures = tuple(metadata["neutral_content_signatures"])
     split = {name: tuple(value) for name, value in metadata["split"].items()}
     qualification = metadata["qualification"]
@@ -1684,6 +1763,7 @@ def _probe_from(metadata: dict[str, Any], coefficients: Array, intercepts: Array
         intercepts=intercepts,
         validation_metrics=_metrics_from(metadata["validation_metrics"]),
         neutral_test_metrics=_metrics_from(metadata["neutral_test_metrics"]),
+        failed_candidates=failed_candidates,
         qualification=parsed_qualification,
     )
 

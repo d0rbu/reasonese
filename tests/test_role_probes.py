@@ -400,6 +400,7 @@ def test_training_jointly_selects_layer_and_lambda_without_reading_test_candidat
 
     assert bundle.selected_layer_index == 7
     assert len(bundle.development_candidates) == 4
+    assert bundle.failed_candidates == ()
     assert {
         (candidate.layer_index, candidate.regularization_lambda)
         for candidate in bundle.development_candidates
@@ -422,6 +423,119 @@ def test_training_jointly_selects_layer_and_lambda_without_reading_test_candidat
     ]
     assert fit_matrix_ids[0] == fit_matrix_ids[1]
     assert fit_matrix_ids[2] == fit_matrix_ids[3]
+
+
+def test_candidate_grid_records_only_explicit_convergence_failures(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    dataset = _dataset(layers=(3, 7))
+    config = replace(_training_config(), layer_indices=(3, 7))
+    original_fit = role_probes._fit_parameters
+    calls = 0
+
+    def controlled_fit(
+        x: np.ndarray,
+        y: np.ndarray,
+        regularization: float,
+        training: ProbeTrainingConfig,
+        class_count: int,
+    ) -> tuple[np.ndarray, np.ndarray, list[int]]:
+        nonlocal calls
+        calls += 1
+        if calls in {1, 4}:
+            raise role_probes.ProbeConvergenceError(f"recognized failure {calls}")
+        return original_fit(x, y, regularization, training, class_count)
+
+    monkeypatch.setattr(role_probes, "_fit_parameters", controlled_fit)
+    bundle = train_role_probe(dataset, config)
+    assert calls == 5
+    assert tuple(
+        (candidate.layer_index, candidate.regularization_lambda)
+        for candidate in bundle.development_candidates
+    ) == ((3, 0.1), (7, 0.01))
+    assert tuple(
+        (failure.layer_index, failure.regularization_lambda, failure.error_type)
+        for failure in bundle.failed_candidates
+    ) == (
+        (3, 0.01, "ProbeConvergenceError"),
+        (7, 0.1, "ProbeConvergenceError"),
+    )
+
+    path = tmp_path / "probe-with-failed-candidates.npz"
+    save_role_probe(bundle, path)
+    loaded = load_role_probe(path)
+    assert loaded.failed_candidates == bundle.failed_candidates
+    qualified = _qualify(loaded)
+    assert qualified.qa_eligible
+    assert qualified.failed_candidates == bundle.failed_candidates
+
+    with pytest.raises(ValueError, match="complete grid exactly once"):
+        replace(bundle, failed_candidates=bundle.failed_candidates[:1])
+    with pytest.raises(ValueError, match="complete grid exactly once"):
+        replace(
+            bundle,
+            failed_candidates=(bundle.failed_candidates[0],) + bundle.failed_candidates,
+        )
+    with pytest.raises(ValueError, match="failed candidate evidence must follow grid order"):
+        replace(bundle, failed_candidates=tuple(reversed(bundle.failed_candidates)))
+
+
+def test_all_candidate_convergence_failures_are_fatal_and_logged(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    calls = 0
+
+    def fail(*args: object, **kwargs: object) -> None:
+        nonlocal calls
+        calls += 1
+        raise role_probes.ProbeConvergenceError("recognized convergence failure")
+
+    monkeypatch.setattr(role_probes, "_fit_parameters", fail)
+    with caplog.at_level("ERROR"), pytest.raises(RuntimeError, match="all role probe candidates"):
+        train_role_probe(_dataset(layers=(3, 7)), replace(_training_config(), layer_indices=(3, 7)))
+    assert calls == 4
+    assert sum(message.startswith("Excluding role probe candidate") for message in caplog.messages) == 4
+
+
+def test_selected_refit_convergence_failure_remains_fatal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_fit = role_probes._fit_parameters
+    calls = 0
+
+    def fail_refit(
+        x: np.ndarray,
+        y: np.ndarray,
+        regularization: float,
+        training: ProbeTrainingConfig,
+        class_count: int,
+    ) -> tuple[np.ndarray, np.ndarray, list[int]]:
+        nonlocal calls
+        calls += 1
+        if calls == 5:
+            raise role_probes.ProbeConvergenceError("selected refit failed")
+        return original_fit(x, y, regularization, training, class_count)
+
+    monkeypatch.setattr(role_probes, "_fit_parameters", fail_refit)
+    with pytest.raises(role_probes.ProbeConvergenceError, match="selected refit failed"):
+        train_role_probe(_dataset(layers=(3, 7)), replace(_training_config(), layer_indices=(3, 7)))
+    assert calls == 5
+
+
+def test_unexpected_candidate_runtime_error_aborts_grid(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+
+    def fail(*args: object, **kwargs: object) -> None:
+        nonlocal calls
+        calls += 1
+        raise RuntimeError("unexpected CUDA failure")
+
+    monkeypatch.setattr(role_probes, "_fit_parameters", fail)
+    with pytest.raises(RuntimeError, match="unexpected CUDA failure"):
+        train_role_probe(_dataset(layers=(3, 7)), replace(_training_config(), layer_indices=(3, 7)))
+    assert calls == 1
 
 
 def test_training_enforces_preregistered_document_and_token_counts() -> None:
@@ -555,6 +669,21 @@ def test_sklearn_probe_does_not_regularize_class_imbalance_intercept() -> None:
     np.testing.assert_allclose(probabilities, (0.8, 0.2), rtol=2e-4, atol=5e-5)
 
 
+def test_sklearn_convergence_warning_is_an_explicit_candidate_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Classifier:
+        def fit(self, *args: object, **kwargs: object) -> None:
+            raise role_probes.ConvergenceWarning("solver did not converge\nwithin tolerance")
+
+    monkeypatch.setattr(role_probes, "LogisticRegression", lambda **kwargs: Classifier())
+    with pytest.raises(
+        role_probes.ProbeConvergenceError,
+        match="solver did not converge within tolerance",
+    ):
+        _fit_parameters(np.ones((4, 2)), np.arange(4) % 2, 0.1, _training_config(), 2)
+
+
 @pytest.mark.parametrize(
     (
         "solver_message",
@@ -573,7 +702,7 @@ def test_sklearn_probe_does_not_regularize_class_imbalance_intercept() -> None:
             8 * 1024**3,
             False,
             False,
-            "reported a fitting failure",
+            "reported a fitting failure.*L-BFGS: max iterations reached",
         ),
         ("", 5_001, 8 * 1024**3, False, False, "invalid iteration count"),
         ("", 10, 8 * 1024**3, True, False, "non-finite parameters"),
@@ -674,7 +803,10 @@ def test_cuml_fit_enforces_layout_memory_solver_and_result_boundaries(
         _training_config(), optimizer=_cuml_optimizer_config(tolerance=1e-3)
     )
     if error is not None:
-        with pytest.raises((RuntimeError, MemoryError), match=error):
+        expected_error = (
+            role_probes.ProbeConvergenceError if solver_message else (RuntimeError, MemoryError)
+        )
+        with pytest.raises(expected_error, match=error):
             _fit_parameters(fit_x, np.arange(6) % 3, 1.0, config, 3)
     else:
         coefficients, intercepts, fit_iterations = _fit_parameters(
@@ -1068,6 +1200,29 @@ def test_artifact_round_trip_preserves_exact_numpy_scoring(tmp_path: Path) -> No
     assert loaded.split.fingerprint == bundle.split.fingerprint
     assert loaded.selected_layer_index == bundle.selected_layer_index
     assert loaded.development_candidates == bundle.development_candidates
+    assert loaded.failed_candidates == ()
+
+
+def test_existing_all_success_artifact_loads_with_no_failed_candidates(tmp_path: Path) -> None:
+    path = tmp_path / "pre-failure-evidence-probe.npz"
+    save_role_probe(train_role_probe(_dataset(), _training_config()), path)
+    with np.load(path, allow_pickle=False) as archive:
+        envelope = json.loads(np.asarray(archive["metadata"]).tobytes().decode())
+        coefficients = archive["coefficients"].copy()
+        intercepts = archive["intercepts"].copy()
+    metadata = envelope["probe"]
+    assert metadata.pop("failed_candidates") == []
+    envelope["fingerprint"] = role_probes._artifact_fingerprint(
+        metadata, coefficients, intercepts
+    )
+    with path.open("wb") as handle:
+        np.savez_compressed(
+            handle,
+            metadata=np.frombuffer(role_probes._json(envelope), dtype=np.uint8),
+            coefficients=coefficients,
+            intercepts=intercepts,
+        )
+    assert load_role_probe(path).failed_candidates == ()
 
 
 def test_artifact_rejects_mismatched_native_test_document_count(tmp_path: Path) -> None:
@@ -1214,7 +1369,7 @@ def test_probe_rejects_metrics_that_do_not_match_its_role_space() -> None:
     with pytest.raises(ValueError, match="metrics do not match probe roles"):
         replace(bundle, validation_metrics=swapped)
 
-    with pytest.raises(ValueError, match="complete candidate grid"):
+    with pytest.raises(ValueError, match="successful candidate evidence must follow grid order"):
         replace(bundle, development_candidates=tuple(reversed(bundle.development_candidates)))
 
     malformed_candidate = replace(

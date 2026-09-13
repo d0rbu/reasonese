@@ -98,6 +98,19 @@ that its gradient infinity norm (`0.0000994677`) was below the cuML convergence 
 (`0.0001122102`). This train-only numerical check changed no layer, lambda, split, or acceptance
 gate.
 
+Candidate-failure handling was amended post hoc during the development stage, rather than being
+part of the original preregistration. Sixteen development candidates at layers 13 and 20 had
+finished when the layer-26, lambda-`1e-4` fit emitted an explicit cuML line-search failure; no
+selected refit, held-out neutral test, or native calibration/test score had been computed. The
+amended protocol records `candidate_failure_policy` as `exclude explicit convergence failures`.
+During the development grid only, a recognized sklearn convergence warning or one of the pinned
+cuML convergence-failure messages excludes that coordinate from selection. The artifact records
+the coordinate, exception type, and matched message, while successful candidates retain their
+ordinary development metrics. Every configured coordinate must appear exactly once across those
+two sets. Unexpected runtime, CUDA, memory, dtype, parameter, and provenance failures still abort;
+all candidates failing is fatal; and a convergence failure while refitting the selected candidate
+on train plus development is fatal. Failed parameters are never scored.
+
 Keep the GPU fitter in an ignored isolated environment so the base and CPU test environments do
 not install RAPIDS. The supported pinned setup is:
 

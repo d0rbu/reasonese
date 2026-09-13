@@ -68,6 +68,7 @@ def _expanded_protocol() -> dict[str, Any]:
     protocol["native_prompt_partitions_sha256"] = "a" * 64
     protocol["neutral_target_source_sha256"] = "b" * 64
     protocol["neutral_filler_source_sha256"] = "c" * 64
+    protocol["candidate_failure_policy"] = manage._CANDIDATE_FAILURE_POLICY
     protocol["optimizer"] = json.loads(sklearn_optimizer_config().runtime_json)
     protocol["models"] = {
         "nemotron": {
@@ -171,6 +172,14 @@ def test_protocol_rejects_invalid_training_bindings() -> None:
     del missing_optimizer["optimizer"]
     with pytest.raises(ValueError, match="bind the optimizer runtime"):
         manage._validate_frozen_protocol(missing_optimizer, NEMOTRON_ADAPTER.name)
+    missing_failure_policy = _expanded_protocol()
+    del missing_failure_policy["candidate_failure_policy"]
+    with pytest.raises(ValueError, match="candidate failure policy"):
+        manage._validate_frozen_protocol(missing_failure_policy, NEMOTRON_ADAPTER.name)
+    wrong_failure_policy = _expanded_protocol()
+    wrong_failure_policy["candidate_failure_policy"] = "exclude all runtime failures"
+    with pytest.raises(ValueError, match="candidate failure policy"):
+        manage._validate_frozen_protocol(wrong_failure_policy, NEMOTRON_ADAPTER.name)
     mismatched_test_fraction = _protocol()
     mismatched_test_fraction["neutral_split"] = {
         "train": 0.6,
@@ -251,6 +260,8 @@ def test_train_wires_frozen_dataset_and_reports(
         qa_eligible=False,
         selected_layer_index=26,
         regularization_lambda=0.25,
+        development_candidates=(object(), object()),
+        failed_candidates=(object(),),
         split=split,
     )
     saved: dict[str, Any] = {}
@@ -268,6 +279,8 @@ def test_train_wires_frozen_dataset_and_reports(
     manage._train(args)
     report = json.loads(capsys.readouterr().out)
     assert report["neutral_valid"] is True
+    assert report["successful_candidates"] == 2
+    assert report["failed_candidates"] == 1
     assert report["split"] == {"train": 36, "validation": 12, "test": 12}
     assert saved == {"probe": probe, "path": args.output}
 

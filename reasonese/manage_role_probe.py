@@ -61,6 +61,7 @@ _ADAPTER_LEGACY_LAYER = {
     GEMMA_ADAPTER.name: 30,
 }
 _FROZEN_ACTIVATION_DTYPE = "float32 (exact promotion of BF16 hook outputs; avoid FP16 range loss)"
+_CANDIDATE_FAILURE_POLICY = "exclude explicit convergence failures"
 
 
 def _json_object(path: Path) -> dict[str, Any]:
@@ -142,6 +143,8 @@ def _protocol_training_config(
             != FROZEN_NEUTRAL_FILLER_LENGTH_DISTRIBUTION
         ):
             raise ValueError("expanded probe protocol contains an invalid neutral construction")
+        if protocol.get("candidate_failure_policy") != _CANDIDATE_FAILURE_POLICY:
+            raise ValueError("expanded probe protocol must bind the candidate failure policy")
         layer_indices = tuple(layers)
         maximum_content_tokens = content_tokens
         native_prompt_partitions_sha256 = protocol.get("native_prompt_partitions_sha256")
@@ -275,6 +278,8 @@ def _train(args: argparse.Namespace) -> None:
                 "output": str(args.output),
                 "neutral_valid": probe.neutral_valid,
                 "qa_eligible": probe.qa_eligible,
+                "successful_candidates": len(probe.development_candidates),
+                "failed_candidates": len(probe.failed_candidates),
                 "selected_layer": probe.selected_layer_index,
                 "selected_lambda": probe.regularization_lambda,
                 "split": {
