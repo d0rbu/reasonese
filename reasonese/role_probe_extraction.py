@@ -36,6 +36,16 @@ from reasonese.role_probes import (
 
 EXTRACTION_PROTOCOL = "role-confusion-appendix-g-reasoning-assistant-v1"
 PREFIX_WEIGHTS_HASH_KIND = "sha256-filtered-index-and-shard-files-v1"
+NEMOTRON_KERNEL_REVISIONS: Mapping[str, tuple[str, str]] = {
+    "causal-conv1d": (
+        "kernels-community/causal-conv1d",
+        "19d5632c27565e020a0aa0169bc7ad44a2c7080b",
+    ),
+    "mamba-ssm": (
+        "kernels-community/mamba-ssm",
+        "a39ff24c08103278583f168091409653ada4c292",
+    ),
+}
 
 
 class ProbeRole(StrEnum):
@@ -374,6 +384,34 @@ def _expert_index(checkpoint_key: str) -> int:
     return int(match.group(1))
 
 
+def _pin_nemotron_kernel_revisions() -> None:
+    """Replace moving kernel version aliases with exact, audited snapshot revisions."""
+    try:
+        from huggingface_hub.constants import HF_HUB_CACHE
+        from kernels import get_local_kernel
+        from transformers.integrations.hub_kernels import (
+            _HUB_KERNEL_MAPPING,
+            _KERNEL_MODULE_MAPPING,
+        )
+    except ImportError as error:  # pragma: no cover - exercised by minimal installations
+        raise RuntimeError("Nemotron kernel pinning requires the 'probes' extra") from error
+    for name, (repository, revision) in NEMOTRON_KERNEL_REVISIONS.items():
+        loaded = _KERNEL_MODULE_MAPPING.get(name)
+        if loaded is not None:
+            source = getattr(loaded, "__file__", "")
+            if f"/snapshots/{revision}/" not in source:
+                raise ValueError(f"already-loaded {name} kernel does not match pinned revision")
+        _HUB_KERNEL_MAPPING[name] = {"repo_id": repository, "revision": revision}
+        snapshot = (
+            Path(HF_HUB_CACHE)
+            / f"kernels--{repository.replace('/', '--')}"
+            / "snapshots"
+            / revision
+        )
+        if loaded is None and snapshot.is_dir():
+            _KERNEL_MODULE_MAPPING[name] = get_local_kernel(snapshot)
+
+
 @beartype
 def load_prefix_model(
     checkpoint: Path,
@@ -393,6 +431,9 @@ def load_prefix_model(
         from transformers import AutoConfig, AutoModel
     except ImportError as error:  # pragma: no cover - exercised by minimal installations
         raise RuntimeError("prefix model loading requires the 'probes' extra") from error
+
+    if adapter.name == NEMOTRON_ADAPTER.name:
+        _pin_nemotron_kernel_revisions()
 
     config = AutoConfig.from_pretrained(checkpoint, local_files_only=True)
     architectures = tuple(getattr(config, "architectures", ()) or ())
@@ -1204,6 +1245,20 @@ def _nemotron_runtime(model: object) -> dict[str, Any]:
     config = cast(Any, model).config
     configured = bool(getattr(config, "use_mamba_kernels", False))
     selected = configured and fast_path and _input_device(model).type == "cuda"
+    kernel_roots = {
+        record["module"].split(".", 1)[0] for record in kernels.values() if record is not None
+    }
+    binaries = {}
+    for name, loaded_module in sys.modules.items():
+        source = getattr(loaded_module, "__file__", None)
+        if (
+            any(name == root or name.startswith(f"{root}.") for root in kernel_roots)
+            and isinstance(source, str)
+            and source.endswith(".so")
+        ):
+            binaries[name] = _file_sha256(Path(source))
+    if selected and not binaries:
+        raise ValueError("selected Nemotron fast path has no hashable compiled kernel binary")
     return {
         "configured_use_mamba_kernels": configured,
         "chunk_size": int(config.chunk_size),
@@ -1212,6 +1267,7 @@ def _nemotron_runtime(model: object) -> dict[str, Any]:
         "kernels_distribution_version": _distribution_version("kernels"),
         "einops_distribution_version": _distribution_version("einops"),
         "callables": kernels,
+        "compiled_binaries_sha256": binaries,
     }
 
 
@@ -1600,7 +1656,7 @@ def extract_role_activations(
     layers: tuple[int, ...],
     identity: ExtractionIdentity,
     output: Path,
-    activation_dtype: str = "float16",
+    activation_dtype: str = "float32",
     model_load_seconds: float | None = None,
     batch_size: int | None = None,
 ) -> Path:

@@ -7,6 +7,7 @@ import json
 from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
+from types import ModuleType
 from typing import Any, cast
 
 import numpy as np
@@ -282,7 +283,7 @@ def test_extraction_cli_wires_prefix_and_provenance(
     )
     assert identity["layers"] == (0, 2)
     assert identity["batch_size"] is None
-    assert identity["activation_dtype"] == "float16"
+    assert identity["activation_dtype"] == "float32"
     assert isinstance(identity["identity"], ExtractionIdentity)
     assert identity["identity"].runtime_sha256 == runtime_sha256
     assert capsys.readouterr().out.strip() == str(output)
@@ -358,6 +359,38 @@ def test_prefix_checkpoint_identity_is_recomputed(tmp_path: Path) -> None:
     (tmp_path / "one.safetensors").write_bytes(b"changed")
     with pytest.raises(ValueError, match="weight identity"):
         validate_prefix_checkpoint_identity(tmp_path, manifest)
+
+
+def test_nemotron_kernel_revisions_load_exact_offline_snapshots(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import kernels
+    from huggingface_hub import constants
+    from transformers.integrations import hub_kernels
+
+    module_mapping: dict[str, ModuleType | None] = {}
+    hub_mapping: dict[str, dict[str, str]] = {}
+    monkeypatch.setattr(constants, "HF_HUB_CACHE", str(tmp_path))
+    monkeypatch.setattr(hub_kernels, "_KERNEL_MODULE_MAPPING", module_mapping)
+    monkeypatch.setattr(hub_kernels, "_HUB_KERNEL_MAPPING", hub_mapping)
+
+    def fake_local_kernel(snapshot: Path) -> ModuleType:
+        module = ModuleType(snapshot.parent.parent.parent.name)
+        module.__file__ = str(snapshot / "build" / "test" / "__init__.py")
+        return module
+
+    monkeypatch.setattr(kernels, "get_local_kernel", fake_local_kernel)
+    for repository, revision in extraction.NEMOTRON_KERNEL_REVISIONS.values():
+        (tmp_path / f"kernels--{repository.replace('/', '--')}" / "snapshots" / revision).mkdir(
+            parents=True
+        )
+    extraction._pin_nemotron_kernel_revisions()
+    assert set(module_mapping) == set(extraction.NEMOTRON_KERNEL_REVISIONS)
+    for name, (repository, revision) in extraction.NEMOTRON_KERNEL_REVISIONS.items():
+        assert hub_mapping[name] == {"repo_id": repository, "revision": revision}
+        loaded = module_mapping[name]
+        assert loaded is not None
+        assert f"/snapshots/{revision}/" in str(loaded.__file__)
 
 
 def test_loaded_native_prefix_exactly_matches_full_model(tmp_path: Path) -> None:

@@ -121,9 +121,10 @@ uv run reasonese-extract-role-activations \
   --checkpoint out/role-probe-research/prefix-nemotron \
   --corpus out/role-probe-research/smoke-corpus.jsonl \
   --output out/role-probe-research/smoke-nemotron-activations \
-  --layers 8,17,26 \
+  --layers 26 \
   --documents 16 \
-  --filler-documents 16
+  --filler-documents 16 \
+  --activation-dtype float32
 ```
 
 The checkpoint directory must contain the pinned config, tokenizer, filtered safetensors index

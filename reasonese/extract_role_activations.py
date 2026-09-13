@@ -61,7 +61,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         help="sequence microbatch (default: 2 for Nemotron, 5 for Gemma)",
     )
-    parser.add_argument("--activation-dtype", choices=("float16", "float32"), default="float16")
+    parser.add_argument("--activation-dtype", choices=("float16", "float32"), default="float32")
     return parser
 
 
