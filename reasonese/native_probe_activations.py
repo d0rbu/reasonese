@@ -379,6 +379,13 @@ def save_native_activation_dataset(dataset: ActivationDataset, output: Path) -> 
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = Path(tempfile.mkdtemp(prefix=f".{output.name}.", dir=output.parent))
     try:
+
+        def int32(values: np.ndarray, name: str) -> np.ndarray:
+            limits = np.iinfo(np.int32)
+            if np.any(values < limits.min) or np.any(values > limits.max):
+                raise ValueError(f"{name} cannot be represented as int32")
+            return np.asarray(values, dtype=np.int32)
+
         documents = tuple(str(value) for value in np.unique(dataset.document_ids))
         document_index = {document: index for index, document in enumerate(documents)}
         arrays = {
@@ -390,9 +397,9 @@ def save_native_activation_dataset(dataset: ActivationDataset, output: Path) -> 
                 [dataset.provenance.roles.index(str(value)) for value in dataset.roles],
                 dtype=np.uint8,
             ),
-            "content_token_index.npy": dataset.content_token_index,
-            "content_token_id.npy": dataset.content_token_id,
-            "sequence_token_index.npy": dataset.sequence_token_index,
+            "content_token_index.npy": int32(dataset.content_token_index, "content_token_index"),
+            "content_token_id.npy": int32(dataset.content_token_id, "content_token_id"),
+            "sequence_token_index.npy": int32(dataset.sequence_token_index, "sequence_token_index"),
         }
         for name, values in arrays.items():
             np.save(temporary / name, values, allow_pickle=False)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -219,6 +220,33 @@ def test_native_extraction_replays_both_segments_and_round_trips(
     save_native_activation_dataset(dataset, output)
     loaded = load_native_activation_dataset(output)
     assert activation_dataset_fingerprint(loaded) == activation_dataset_fingerprint(dataset)
+
+
+def test_native_writer_canonicalizes_valid_integer_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tokenizer, adapter = _tokenizer_and_adapter()
+    monkeypatch.setattr(
+        native_module,
+        "capture_token_activations",
+        lambda model, adapter, *, input_ids, token_positions, layers: np.zeros(
+            (len(token_positions), len(layers), 5), dtype=np.float32
+        ),
+    )
+    dataset = extract_native_activations(
+        object(), tokenizer, adapter, _dialogues(), layers=(7,), identity=_identity()
+    )
+    dataset = replace(
+        dataset,
+        content_token_index=dataset.content_token_index.astype(np.int64),
+        content_token_id=dataset.content_token_id.astype(np.int64),
+        sequence_token_index=dataset.sequence_token_index.astype(np.int64),
+    )
+    output = tmp_path / "native-activations"
+    save_native_activation_dataset(dataset, output)
+    loaded = load_native_activation_dataset(output)
+    assert loaded.content_token_id.dtype == np.int32
+    assert np.array_equal(loaded.content_token_id, dataset.content_token_id)
 
 
 def test_native_artifact_checksum_rejects_mutated_array(
