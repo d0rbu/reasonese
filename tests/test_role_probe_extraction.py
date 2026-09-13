@@ -1511,3 +1511,73 @@ def test_nemotron_dispatch_audit_rejects_the_naive_mamba_path(
     with pytest.raises(RuntimeError, match="did not execute any audited Mamba mixer"):
         extraction._finish_nemotron_dispatch_audit(missing)
     assert mixer.cuda_kernels_forward("input") == "cuda:input"
+
+
+def test_nemotron_dispatch_audit_restores_partial_setup_on_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class NemotronHMamba2Mixer:
+        def cuda_kernels_forward(self, value: str) -> str:
+            return f"cuda:{value}"
+
+    class Layer:
+        def __init__(self, mixer: object) -> None:
+            self.mixer = mixer
+
+        def modules(self) -> tuple[object, ...]:
+            return (self, self.mixer)
+
+    mixer = NemotronHMamba2Mixer()
+    model = type("Model", (), {"layers": [Layer(mixer)]})()
+    monkeypatch.setattr(extraction, "_uses_nemotron_fast_path", lambda *_args: True)
+
+    with pytest.raises(AttributeError, match="torch_forward"):
+        extraction._start_nemotron_dispatch_audit(model, NEMOTRON_ADAPTER, before_layer=1)
+    assert mixer.cuda_kernels_forward("input") == "cuda:input"
+    assert "cuda_kernels_forward" not in mixer.__dict__
+
+
+def test_capture_restores_activation_hooks_when_audit_setup_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    test_adapter: NativeTemplateAdapter,
+) -> None:
+    torch = pytest.importorskip("torch")
+
+    class Block(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.norm = torch.nn.Identity()
+
+        def forward(self, hidden: Any, **kwargs: Any) -> Any:
+            del kwargs
+            return hidden
+
+    class NemotronHModel(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.embeddings = torch.nn.Embedding(16, 2)
+            self.layers = torch.nn.ModuleList([Block()])
+
+        def get_input_embeddings(self) -> Any:
+            return self.embeddings
+
+        def forward(self, input_ids: Any, **kwargs: Any) -> Any:
+            del kwargs
+            hidden = self.embeddings(input_ids)
+            return self.layers[0](hidden)
+
+    model = NemotronHModel().eval()
+
+    def fail_audit(*_args: Any, **_kwargs: Any) -> Any:
+        raise RuntimeError("audit setup failed")
+
+    monkeypatch.setattr(extraction, "_start_nemotron_dispatch_audit", fail_audit)
+    with pytest.raises(RuntimeError, match="audit setup failed"):
+        extraction._capture_sequences(
+            model,
+            test_adapter,
+            input_ids=((1, 2),),
+            token_positions=((0,),),
+            layers=(0,),
+        )
+    assert not model.layers[0].norm._forward_hooks

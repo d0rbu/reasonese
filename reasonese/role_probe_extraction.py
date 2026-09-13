@@ -1128,32 +1128,36 @@ def _start_nemotron_dispatch_audit(
     audit = _NemotronDispatchAudit(required=fast_path and bool(mixers), restores=[])
     if not audit.required:
         return audit
-    for mixer in mixers:
-        for method_name, counter_name in (
-            ("cuda_kernels_forward", "cuda_calls"),
-            ("torch_forward", "fallback_calls"),
-        ):
-            had_instance_value = method_name in mixer.__dict__
-            instance_value = mixer.__dict__.get(method_name)
-            original = getattr(mixer, method_name)
+    try:
+        for mixer in mixers:
+            for method_name, counter_name in (
+                ("cuda_kernels_forward", "cuda_calls"),
+                ("torch_forward", "fallback_calls"),
+            ):
+                had_instance_value = method_name in mixer.__dict__
+                instance_value = mixer.__dict__.get(method_name)
+                original = getattr(mixer, method_name)
 
-            def audited(
-                *args: Any,
-                _original: Any = original,
-                _counter: str = counter_name,
-                **kwargs: Any,
-            ) -> Any:
-                setattr(audit, _counter, getattr(audit, _counter) + 1)
-                if _counter == "fallback_calls":
-                    raise RuntimeError(
-                        "Nemotron Mamba selected its torch fallback despite a pinned CUDA "
-                        "fast-path runtime"
-                    )
-                return _original(*args, **kwargs)
+                def audited(
+                    *args: Any,
+                    _original: Any = original,
+                    _counter: str = counter_name,
+                    **kwargs: Any,
+                ) -> Any:
+                    setattr(audit, _counter, getattr(audit, _counter) + 1)
+                    if _counter == "fallback_calls":
+                        raise RuntimeError(
+                            "Nemotron Mamba selected its torch fallback despite a pinned CUDA "
+                            "fast-path runtime"
+                        )
+                    return _original(*args, **kwargs)
 
-            setattr(mixer, method_name, audited)
-            assert audit.restores is not None
-            audit.restores.append((mixer, method_name, had_instance_value, instance_value))
+                setattr(mixer, method_name, audited)
+                assert audit.restores is not None
+                audit.restores.append((mixer, method_name, had_instance_value, instance_value))
+    except BaseException:
+        _restore_nemotron_dispatch_audit(audit)
+        raise
     return audit
 
 
@@ -1264,32 +1268,33 @@ def _capture_sequences(
 
         return hook
 
-    for layer_index in layers:
-        module = getattr(layer_modules[layer_index], adapter.activation_module)
-        handles.append(module.register_forward_hook(make_hook(layer_index)))
-
-    device = _input_device(model)
-    max_length = max(len(sequence) for sequence in input_ids)
-    input_tensor = torch.full(
-        (len(input_ids), max_length),
-        adapter.pad_token_id,
-        dtype=torch.long,
-        device=device,
-    )
-    attention_mask = torch.zeros_like(input_tensor)
-    for row, sequence in enumerate(input_ids):
-        length = len(sequence)
-        input_tensor[row, :length] = torch.tensor(sequence, dtype=torch.long, device=device)
-        attention_mask[row, :length] = 1
     audit = _start_nemotron_dispatch_audit(model, adapter, before_layer=final_layer)
     forward_completed = False
     try:
-        with torch.inference_mode():
-            model(input_ids=input_tensor, attention_mask=attention_mask, use_cache=False)
-    except _PrefixComplete:
-        forward_completed = True
-    else:
-        raise RuntimeError("prefix model ran past the final requested activation site")
+        for layer_index in layers:
+            module = getattr(layer_modules[layer_index], adapter.activation_module)
+            handles.append(module.register_forward_hook(make_hook(layer_index)))
+
+        device = _input_device(model)
+        max_length = max(len(sequence) for sequence in input_ids)
+        input_tensor = torch.full(
+            (len(input_ids), max_length),
+            adapter.pad_token_id,
+            dtype=torch.long,
+            device=device,
+        )
+        attention_mask = torch.zeros_like(input_tensor)
+        for row, sequence in enumerate(input_ids):
+            length = len(sequence)
+            input_tensor[row, :length] = torch.tensor(sequence, dtype=torch.long, device=device)
+            attention_mask[row, :length] = 1
+        try:
+            with torch.inference_mode():
+                model(input_ids=input_tensor, attention_mask=attention_mask, use_cache=False)
+        except _PrefixComplete:
+            forward_completed = True
+        else:
+            raise RuntimeError("prefix model ran past the final requested activation site")
     finally:
         for handle in handles:
             handle.remove()
