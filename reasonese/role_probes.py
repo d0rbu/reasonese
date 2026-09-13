@@ -24,6 +24,18 @@ from beartype import beartype
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.linear_model import LogisticRegression
 
+from reasonese.probe_statistics import (
+    CALIBRATION_SPLIT,
+    EXPECTED_CONVERSATIONS,
+    TEST_SPLIT,
+    NativeQualification,
+    PairedBootstrapAuc,
+    PairedSegmentScores,
+    ThresholdCalibration,
+    calibrate_reasoning_threshold,
+    qualify_native_test,
+)
+
 PAIRED_NEUTRAL = "paired-neutral-role-wrappers"
 UNTOUCHED_CONVERSATIONS = "untouched-native-conversations"
 CONTENT_TOKENS_ONLY = "content-tokens-only"
@@ -57,6 +69,7 @@ class ActivationProvenance:
     chat_template_sha256: str
     native_template_adapter: str
     activation_site: str
+    runtime_sha256: str
     model_dtype: str
     activation_dtype: str
     layer_indices: tuple[int, ...]
@@ -89,7 +102,12 @@ class ActivationProvenance:
             "filler_pool_kind",
         ):
             _text(cast(str, getattr(self, name)), name)
-        for name in ("weights_sha256", "chat_template_sha256", "source_sha256"):
+        for name in (
+            "weights_sha256",
+            "chat_template_sha256",
+            "runtime_sha256",
+            "source_sha256",
+        ):
             _sha256(cast(str, getattr(self, name)), name)
         if self.dataset_kind not in {PAIRED_NEUTRAL, UNTOUCHED_CONVERSATIONS}:
             raise ValueError(f"unknown activation dataset kind {self.dataset_kind!r}")
@@ -387,45 +405,38 @@ class ClassificationMetrics:
 
 @beartype
 @dataclass(frozen=True, slots=True)
-class QualificationThresholds:
-    """Preregistered gates for untouched-conversation generalization."""
+class NativeProbeQualification:
+    """Frozen calibration and untouched native-test evidence for QA use."""
 
-    minimum_accuracy: float
-    minimum_per_role_accuracy: float
-    minimum_document_accuracy: float
-    minimum_per_role_document_accuracy: float
-
-    def __post_init__(self) -> None:
-        if any(not 0 <= value <= 1 for value in asdict(self).values()):
-            raise ValueError("conversation acceptance gates must lie between zero and one")
-
-
-@beartype
-@dataclass(frozen=True, slots=True)
-class ConversationQualification:
-    """Measured zero-shot performance on untouched native conversations."""
-
-    dataset_fingerprint: str
-    source_name: str
-    conversation_count: int
-    metrics: ClassificationMetrics
-    thresholds: QualificationThresholds
+    calibration_dataset_fingerprint: str
+    test_dataset_fingerprint: str
+    prompt_partition_name: str
+    prompt_partition_sha256: str
+    calibration_conversation_count: int
+    calibration_scores: PairedSegmentScores
+    calibration: ThresholdCalibration
+    test_metrics: ClassificationMetrics
+    test: NativeQualification
 
     def __post_init__(self) -> None:
-        _sha256(self.dataset_fingerprint, "dataset_fingerprint")
-        _text(self.source_name, "source_name")
-        if self.conversation_count <= 0:
-            raise ValueError("conversation_count must be positive")
+        _sha256(self.calibration_dataset_fingerprint, "calibration_dataset_fingerprint")
+        _sha256(self.test_dataset_fingerprint, "test_dataset_fingerprint")
+        _text(self.prompt_partition_name, "prompt_partition_name")
+        _sha256(self.prompt_partition_sha256, "prompt_partition_sha256")
+        if self.calibration_dataset_fingerprint == self.test_dataset_fingerprint:
+            raise ValueError("calibration and test activation datasets must be distinct")
+        if self.calibration_conversation_count != EXPECTED_CONVERSATIONS:
+            raise ValueError(f"native calibration requires {EXPECTED_CONVERSATIONS} conversations")
+        if self.calibration_scores.split != CALIBRATION_SPLIT:
+            raise ValueError("native calibration scores must use the calibration split")
+        if self.calibration_scores.conversation_count != self.calibration_conversation_count:
+            raise ValueError("native calibration score count does not match its provenance")
+        if self.calibration.calibration_fingerprint != self.calibration_scores.fingerprint:
+            raise ValueError("frozen threshold does not match the calibration scores")
 
     @property
     def passed(self) -> bool:
-        return (
-            self.metrics.accuracy >= self.thresholds.minimum_accuracy
-            and self.metrics.minimum_role_accuracy >= self.thresholds.minimum_per_role_accuracy
-            and self.metrics.document_accuracy >= self.thresholds.minimum_document_accuracy
-            and self.metrics.minimum_role_document_accuracy
-            >= self.thresholds.minimum_per_role_document_accuracy
-        )
+        return self.calibration.usable and self.test.passed
 
 
 @beartype
@@ -441,7 +452,7 @@ class RoleProbe:
     intercepts: Array
     validation_metrics: ClassificationMetrics
     neutral_test_metrics: ClassificationMetrics
-    qualification: ConversationQualification | None = None
+    qualification: NativeProbeQualification | None = None
 
     def __post_init__(self) -> None:
         expected = (len(self.provenance.roles), self.provenance.hidden_size)
@@ -473,7 +484,7 @@ class RoleProbe:
                 raise ValueError(f"{name} confusion matrix does not match probe roles")
         if self.qualification is not None:
             measured = ("reasoning", "assistant")
-            metrics = self.qualification.metrics
+            metrics = self.qualification.test_metrics
             if (
                 tuple(role for role, _ in metrics.per_role_accuracy) != measured
                 or tuple(role for role, _ in metrics.per_role_document_accuracy) != measured
@@ -689,6 +700,7 @@ def _same_pipeline(left: ActivationProvenance, right: ActivationProvenance) -> b
         "chat_template_sha256",
         "native_template_adapter",
         "activation_site",
+        "runtime_sha256",
         "model_dtype",
         "activation_dtype",
         "layer_indices",
@@ -725,37 +737,106 @@ def activation_dataset_fingerprint(dataset: ActivationDataset) -> str:
     return hasher.hexdigest()
 
 
+def _paired_segment_scores(
+    probe: RoleProbe,
+    dataset: ActivationDataset,
+    split: str,
+) -> PairedSegmentScores:
+    layer_offset = dataset.provenance.layer_indices.index(probe.training.layer_index)
+    probabilities = _predict(probe, dataset.activations[:, layer_offset])
+    reasoning_index = probe.provenance.roles.index("reasoning")
+    conversation_ids = tuple(str(value) for value in np.unique(dataset.document_ids))
+
+    def scores_for(role: str) -> tuple[float, ...]:
+        return tuple(
+            float(
+                probabilities[
+                    (dataset.document_ids == document) & (dataset.roles == role), reasoning_index
+                ].mean()
+            )
+            for document in conversation_ids
+        )
+
+    return PairedSegmentScores(
+        split=split,
+        conversation_ids=conversation_ids,
+        reasoning_scores=scores_for("reasoning"),
+        final_scores=scores_for("assistant"),
+    )
+
+
+def _conversation_content_signatures(
+    dataset: ActivationDataset,
+) -> set[tuple[tuple[int, ...], tuple[int, ...]]]:
+    signatures: set[tuple[tuple[int, ...], tuple[int, ...]]] = set()
+    for document in np.unique(dataset.document_ids):
+        segments: list[tuple[int, ...]] = []
+        for role in ("reasoning", "assistant"):
+            rows = _rows(dataset, str(document), role)
+            segments.append(tuple(int(value) for value in dataset.content_token_id[rows]))
+        signature = (segments[0], segments[1])
+        if signature in signatures:
+            raise ValueError("native conversations contain duplicated measured content")
+        signatures.add(signature)
+    return signatures
+
+
 @beartype
 def qualify_role_probe(
     probe: RoleProbe,
-    conversations: ActivationDataset,
-    thresholds: QualificationThresholds,
+    calibration_conversations: ActivationDataset,
+    test_conversations: ActivationDataset,
+    *,
+    prompt_partition_name: str,
+    prompt_partition_sha256: str,
 ) -> RoleProbe:
-    """Measure and attach untouched reasoning/final conversation validity."""
-    if conversations.provenance.dataset_kind != UNTOUCHED_CONVERSATIONS:
+    """Calibrate once and attach disjoint untouched native-test validity."""
+    datasets = (calibration_conversations, test_conversations)
+    if any(dataset.provenance.dataset_kind != UNTOUCHED_CONVERSATIONS for dataset in datasets):
         raise ValueError("qualification requires untouched native conversations")
-    if not _same_pipeline(probe.provenance, conversations.provenance):
+    if any(not _same_pipeline(probe.provenance, dataset.provenance) for dataset in datasets):
         raise ValueError("conversation activations do not match the probe's exact model pipeline")
     if probe.qualification is not None:
         raise ValueError("probe is already qualified")
     neutral_documents = set(probe.split.train + probe.split.validation + probe.split.test)
-    conversation_documents = set(conversations.document_ids.tolist())
-    if neutral_documents & conversation_documents:
+    calibration_documents = set(calibration_conversations.document_ids.tolist())
+    test_documents = set(test_conversations.document_ids.tolist())
+    if neutral_documents & (calibration_documents | test_documents):
         raise ValueError("qualification conversations must be disjoint from neutral documents")
-    layer_offset = conversations.provenance.layer_indices.index(probe.training.layer_index)
-    rows = np.arange(len(conversations.roles))
-    qualification = ConversationQualification(
-        dataset_fingerprint=activation_dataset_fingerprint(conversations),
-        source_name=conversations.provenance.source_name,
-        conversation_count=len(set(conversations.document_ids.tolist())),
-        metrics=_metrics(
-            _predict(probe, conversations.activations[:, layer_offset]),
-            _labels(conversations, rows),
-            probe.provenance.roles,
-            conversations.document_ids,
-            ("reasoning", "assistant"),
+    if calibration_documents & test_documents:
+        raise ValueError("calibration and test conversations must be document-disjoint")
+    calibration_content = _conversation_content_signatures(calibration_conversations)
+    test_content = _conversation_content_signatures(test_conversations)
+    if calibration_content & test_content:
+        raise ValueError("calibration and test conversations must be content-disjoint")
+
+    calibration_scores = _paired_segment_scores(probe, calibration_conversations, CALIBRATION_SPLIT)
+    test_scores = _paired_segment_scores(probe, test_conversations, TEST_SPLIT)
+    if calibration_scores.conversation_count != EXPECTED_CONVERSATIONS:
+        raise ValueError(f"native calibration requires {EXPECTED_CONVERSATIONS} conversations")
+    layer_offset = test_conversations.provenance.layer_indices.index(probe.training.layer_index)
+    rows = np.arange(len(test_conversations.roles))
+    test_metrics = _metrics(
+        _predict(probe, test_conversations.activations[:, layer_offset]),
+        _labels(test_conversations, rows),
+        probe.provenance.roles,
+        test_conversations.document_ids,
+        ("reasoning", "assistant"),
+    )
+    qualification = NativeProbeQualification(
+        calibration_dataset_fingerprint=activation_dataset_fingerprint(calibration_conversations),
+        test_dataset_fingerprint=activation_dataset_fingerprint(test_conversations),
+        prompt_partition_name=prompt_partition_name,
+        prompt_partition_sha256=prompt_partition_sha256,
+        calibration_conversation_count=calibration_scores.conversation_count,
+        calibration_scores=calibration_scores,
+        calibration=calibrate_reasoning_threshold(calibration_scores),
+        test_metrics=test_metrics,
+        test=qualify_native_test(
+            test_scores,
+            minimum_role_accuracy=test_metrics.minimum_role_accuracy,
+            document_macro_accuracy=test_metrics.document_accuracy,
         ),
-        thresholds=thresholds,
     )
     return replace(probe, qualification=qualification)
 
@@ -880,12 +961,36 @@ def _probe_from(metadata: dict[str, Any], coefficients: Array, intercepts: Array
     qualification = metadata["qualification"]
     parsed_qualification = None
     if qualification is not None:
-        parsed_qualification = ConversationQualification(
-            dataset_fingerprint=qualification["dataset_fingerprint"],
-            source_name=qualification["source_name"],
-            conversation_count=qualification["conversation_count"],
-            metrics=_metrics_from(qualification["metrics"]),
-            thresholds=QualificationThresholds(**qualification["thresholds"]),
+        calibration = qualification["calibration"]
+        calibration_scores = qualification["calibration_scores"]
+        test = qualification["test"]
+        scores = test["scores"]
+        bootstrap = test["bootstrap_auc"]
+        parsed_qualification = NativeProbeQualification(
+            calibration_dataset_fingerprint=qualification["calibration_dataset_fingerprint"],
+            test_dataset_fingerprint=qualification["test_dataset_fingerprint"],
+            prompt_partition_name=qualification["prompt_partition_name"],
+            prompt_partition_sha256=qualification["prompt_partition_sha256"],
+            calibration_conversation_count=qualification["calibration_conversation_count"],
+            calibration_scores=PairedSegmentScores(
+                split=calibration_scores["split"],
+                conversation_ids=tuple(calibration_scores["conversation_ids"]),
+                reasoning_scores=tuple(calibration_scores["reasoning_scores"]),
+                final_scores=tuple(calibration_scores["final_scores"]),
+            ),
+            calibration=ThresholdCalibration(**calibration),
+            test_metrics=_metrics_from(qualification["test_metrics"]),
+            test=NativeQualification(
+                scores=PairedSegmentScores(
+                    split=scores["split"],
+                    conversation_ids=tuple(scores["conversation_ids"]),
+                    reasoning_scores=tuple(scores["reasoning_scores"]),
+                    final_scores=tuple(scores["final_scores"]),
+                ),
+                minimum_role_accuracy=test["minimum_role_accuracy"],
+                document_macro_accuracy=test["document_macro_accuracy"],
+                bootstrap_auc=PairedBootstrapAuc(**bootstrap),
+            ),
         )
     return RoleProbe(
         provenance=ActivationProvenance(**provenance),

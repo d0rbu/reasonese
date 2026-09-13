@@ -13,7 +13,7 @@ from reasonese.role_probes import (
     ActivationDataset,
     ActivationProvenance,
     ProbeTrainingConfig,
-    QualificationThresholds,
+    RoleProbe,
     _parameters,
     _predict_parameters,
     activation_dataset_fingerprint,
@@ -49,6 +49,7 @@ def _provenance(
         chat_template_sha256=_SHA_B,
         native_template_adapter="test-native-template",
         activation_site="normalized_pre_mixer",
+        runtime_sha256="f" * 64,
         model_dtype="bfloat16",
         activation_dtype="float32",
         layer_indices=layers,
@@ -75,6 +76,8 @@ def _dataset(
     document_count: int = 20,
     layers: tuple[int, ...] = (3, 7),
     model_revision: str = "model-commit-a",
+    document_prefix: str | None = None,
+    content_token_offset: int = 0,
 ) -> ActivationDataset:
     activations: list[np.ndarray] = []
     document_ids: list[str] = []
@@ -83,7 +86,9 @@ def _dataset(
     content_token_ids: list[int] = []
     sequence_positions: list[int] = []
     filler_document_ids: list[str] = []
-    document_prefix = "document" if kind == "paired-neutral-role-wrappers" else "conversation"
+    document_prefix = document_prefix or (
+        "document" if kind == "paired-neutral-role-wrappers" else "conversation"
+    )
     for document_index in range(document_count):
         for role_index, role in enumerate(roles):
             for token_index in range(4):
@@ -109,7 +114,9 @@ def _dataset(
                 document_ids.append(f"{document_prefix}-{document_index:03d}")
                 labels.append(role)
                 content_positions.append(token_index)
-                content_token_ids.append(100 + document_index * 4 + token_index)
+                content_token_ids.append(
+                    content_token_offset + 100 + document_index * 4 + token_index
+                )
                 sequence_positions.append(32 + token_index)
                 filler_document_ids.append(
                     f"filler-{document_index:03d}" if kind == "paired-neutral-role-wrappers" else ""
@@ -147,8 +154,30 @@ def _training_config(selected_layer: int = 7) -> ProbeTrainingConfig:
     )
 
 
-def _thresholds(value: float = 0.95) -> QualificationThresholds:
-    return QualificationThresholds(value, value, value, value)
+def _qualify(
+    bundle: RoleProbe,
+    *,
+    calibration: ActivationDataset | None = None,
+    test: ActivationDataset | None = None,
+) -> RoleProbe:
+    return qualify_role_probe(
+        bundle,
+        calibration
+        or _dataset(
+            kind="untouched-native-conversations",
+            document_count=12,
+            document_prefix="calibration",
+        ),
+        test
+        or _dataset(
+            kind="untouched-native-conversations",
+            document_count=12,
+            document_prefix="test",
+            content_token_offset=10_000,
+        ),
+        prompt_partition_name="native-prompt-partitions.json",
+        prompt_partition_sha256="e" * 64,
+    )
 
 
 def test_neutral_data_requires_exact_paired_content_and_positions() -> None:
@@ -266,26 +295,34 @@ def test_multinomial_training_preserves_explicit_role_order() -> None:
     assert full_projection.mean_reasoning_probability > 0.99
     assert full_projection.mean_probabilities[2] < 0.01
 
-    conversations = _dataset(
-        kind="untouched-native-conversations",
-        roles=roles,
-        layers=(5,),
-        document_count=6,
+    def measured(prefix: str) -> ActivationDataset:
+        conversations = _dataset(
+            kind="untouched-native-conversations",
+            roles=roles,
+            layers=(5,),
+            document_count=12,
+            document_prefix=prefix,
+            content_token_offset=0 if prefix == "calibration" else 10_000,
+        )
+        keep = np.isin(conversations.roles, ("reasoning", "assistant"))
+        return replace(
+            conversations,
+            activations=conversations.activations[keep],
+            document_ids=conversations.document_ids[keep],
+            roles=conversations.roles[keep],
+            content_token_index=conversations.content_token_index[keep],
+            content_token_id=conversations.content_token_id[keep],
+            sequence_token_index=conversations.sequence_token_index[keep],
+            filler_document_ids=conversations.filler_document_ids[keep],
+        )
+
+    qualified = _qualify(
+        bundle,
+        calibration=measured("calibration"),
+        test=measured("test"),
     )
-    keep = np.isin(conversations.roles, ("reasoning", "assistant"))
-    conversations = replace(
-        conversations,
-        activations=conversations.activations[keep],
-        document_ids=conversations.document_ids[keep],
-        roles=conversations.roles[keep],
-        content_token_index=conversations.content_token_index[keep],
-        content_token_id=conversations.content_token_id[keep],
-        sequence_token_index=conversations.sequence_token_index[keep],
-        filler_document_ids=conversations.filler_document_ids[keep],
-    )
-    qualified = qualify_role_probe(bundle, conversations, _thresholds())
     assert qualified.qualification is not None
-    assert qualified.qualification.metrics.per_role_accuracy == (
+    assert qualified.qualification.test_metrics.per_role_accuracy == (
         ("reasoning", 1.0),
         ("assistant", 1.0),
     )
@@ -306,12 +343,13 @@ def test_portable_softmax_exactly_matches_sklearn_probabilities(class_count: int
 
 def test_qualification_recomputes_untouched_conversation_metrics() -> None:
     bundle = train_role_probe(_dataset(), _training_config())
-    conversations = _dataset(kind="untouched-native-conversations", document_count=6)
-    qualified = qualify_role_probe(bundle, conversations, _thresholds())
+    qualified = _qualify(bundle)
     assert qualified.qualification is not None
     assert qualified.qualification.passed
-    assert qualified.qualification.conversation_count == 6
-    assert qualified.qualification.metrics.document_accuracy == 1.0
+    assert qualified.qualification.calibration_conversation_count == 12
+    assert qualified.qualification.test_metrics.document_accuracy == 1.0
+    assert qualified.qualification.test.bootstrap_auc.auc == 1.0
+    assert qualified.qualification.calibration.usable
     assert qualified.qa_eligible
 
     projection = project_role(
@@ -328,33 +366,48 @@ def test_qualification_recomputes_untouched_conversation_metrics() -> None:
 def test_qualification_rejects_surrogate_or_nonconversation_data() -> None:
     bundle = train_role_probe(_dataset(), _training_config())
     with pytest.raises(ValueError, match="untouched native conversation"):
-        qualify_role_probe(bundle, _dataset(), _thresholds())
+        _qualify(bundle, calibration=_dataset())
     surrogate = _dataset(
         kind="untouched-native-conversations",
-        document_count=6,
+        document_count=12,
         model_revision="surrogate-commit",
+        document_prefix="calibration",
     )
     with pytest.raises(ValueError, match="exact model pipeline"):
-        qualify_role_probe(bundle, surrogate, _thresholds())
+        _qualify(bundle, calibration=surrogate)
     protocol_mismatch = replace(
-        _dataset(kind="untouched-native-conversations", document_count=6),
+        _dataset(
+            kind="untouched-native-conversations",
+            document_count=12,
+            document_prefix="calibration",
+        ),
         provenance=replace(
-            _dataset(kind="untouched-native-conversations", document_count=6).provenance,
+            _dataset(kind="untouched-native-conversations", document_count=12).provenance,
             extraction_protocol="different-extraction-protocol",
         ),
     )
     with pytest.raises(ValueError, match="exact model pipeline"):
-        qualify_role_probe(bundle, protocol_mismatch, _thresholds())
+        _qualify(bundle, calibration=protocol_mismatch)
 
-    conversations = _dataset(kind="untouched-native-conversations", document_count=6)
+    conversations = _dataset(
+        kind="untouched-native-conversations",
+        document_count=12,
+        document_prefix="calibration",
+    )
     overlapping_ids = conversations.document_ids.copy()
-    overlapping_ids[overlapping_ids == "conversation-000"] = bundle.split.test[0]
+    overlapping_ids[overlapping_ids == "calibration-000"] = bundle.split.test[0]
     with pytest.raises(ValueError, match="disjoint from neutral"):
-        qualify_role_probe(
-            bundle,
-            replace(conversations, document_ids=overlapping_ids),
-            _thresholds(),
-        )
+        _qualify(bundle, calibration=replace(conversations, document_ids=overlapping_ids))
+
+    with pytest.raises(ValueError, match="document-disjoint"):
+        _qualify(bundle, test=conversations)
+    duplicated_test_content = _dataset(
+        kind="untouched-native-conversations",
+        document_count=12,
+        document_prefix="test",
+    )
+    with pytest.raises(ValueError, match="content-disjoint"):
+        _qualify(bundle, test=duplicated_test_content)
 
 
 def test_every_native_conversation_requires_both_measured_roles() -> None:
@@ -377,11 +430,16 @@ def test_every_native_conversation_requires_both_measured_roles() -> None:
 
 def test_failed_empirical_threshold_keeps_probe_out_of_qa() -> None:
     bundle = train_role_probe(_dataset(), _training_config())
-    conversations = _dataset(kind="untouched-native-conversations", document_count=6)
+    conversations = _dataset(
+        kind="untouched-native-conversations",
+        document_count=12,
+        document_prefix="test",
+        content_token_offset=10_000,
+    )
     # Exchange the two role directions while keeping labels unchanged.
     flipped = conversations.activations.copy()
     flipped[:, :, [0, 1]] = flipped[:, :, [1, 0]]
-    failed = qualify_role_probe(bundle, replace(conversations, activations=flipped), _thresholds())
+    failed = _qualify(bundle, test=replace(conversations, activations=flipped))
     assert failed.qualification is not None
     assert not failed.qualification.passed
     assert not failed.qa_eligible
@@ -397,8 +455,19 @@ def test_failed_empirical_threshold_keeps_probe_out_of_qa() -> None:
 def test_artifact_round_trip_preserves_exact_numpy_scoring(tmp_path: Path) -> None:
     bundle = qualify_role_probe(
         train_role_probe(_dataset(), _training_config()),
-        _dataset(kind="untouched-native-conversations", document_count=6),
-        _thresholds(),
+        _dataset(
+            kind="untouched-native-conversations",
+            document_count=12,
+            document_prefix="calibration",
+        ),
+        _dataset(
+            kind="untouched-native-conversations",
+            document_count=12,
+            document_prefix="test",
+            content_token_offset=10_000,
+        ),
+        prompt_partition_name="native-prompt-partitions.json",
+        prompt_partition_sha256="e" * 64,
     )
     path = tmp_path / "nemotron-role-probe.npz"
     save_role_probe(bundle, path)

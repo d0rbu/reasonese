@@ -16,9 +16,9 @@ checks from Appendix G:
 2. zero-shot role identification on untouched, model-native conversational traces that were not
    used to train the probe.
 
-Acceptance thresholds are explicit configuration. The paper does not prescribe numerical
-cutoffs, so a run must record its thresholds rather than attributing them to the paper. Synthetic
-unit tests establish implementation behavior only. They do not qualify a model probe.
+Acceptance thresholds belong to a frozen project protocol. The paper does not prescribe those
+numerical cutoffs, so reports must identify them as project choices. Synthetic unit tests
+establish implementation behavior only. They do not qualify a model probe.
 
 Local open-weight activations also do not establish exact parity with an OpenRouter deployment
 unless the hosted checkpoint, quantization, tokenizer, and template are all independently shown
@@ -51,9 +51,11 @@ stricter than splitting role variants independently, which would leak the same u
 across the holdout boundary.
 
 The provenance includes exact model and tokenizer revisions, a digest of the resolved weight
-manifest, the native template digest, the model-specific activation site and dtype, the neutral
-corpus digest, layers, masking counts, and extraction protocol. A probe for one model pipeline
-cannot be qualified with conversation activations from another.
+manifest, the native template digest, model and stored-activation dtypes, the model-specific
+activation site, a runtime digest covering the software and kernel path, the neutral corpus
+digest, layers, masking counts, and extraction protocol. A probe for one model pipeline cannot
+be qualified with conversation activations from another. Projection also requires the exact
+trained layer and stored dtype instead of accepting an unidentified two-dimensional array.
 
 ## Classifier and selection
 
@@ -78,10 +80,18 @@ multiclass fits.
 ## Conversation qualification and scoring
 
 Conversation qualification replays unmodified native reasoning and final-output text through the
-same exact local checkpoint and extraction path. It evaluates the five-class classifier on those
-two observed roles. Predictions of `system`, `user`, or `tool` count as errors, while the absence
-of those roles from an ordinary conversation is not itself an error. Both reasoning and assistant
-tokens must be present.
+same exact local checkpoint and extraction path. It uses 12 calibration conversations and 12
+document- and content-disjoint test conversations. The calibration split alone selects a
+deterministic threshold on the per-segment mean unconditional reasoning probability. The frozen
+test checks pooled AUC with a paired-conversation, 10,000-replicate bootstrap as well as native
+role recall and document-macro accuracy. The test split never selects the threshold. Exact
+activation-dataset fingerprints and the native-prompt partition digest remain in the fitted
+artifact.
+
+The five-class classifier is also evaluated directly on the two observed native roles.
+Predictions of `system`, `user`, or `tool` count as errors, while the absence of those roles from
+an ordinary conversation is not itself an error. Every qualification conversation must contain
+both non-empty reasoning and assistant segments.
 
 Instruction scoring returns the full five-role probability vector for every content token and its
 mean. The QA signal corresponding to the paper's CoTness is the unconditional mean probability of
