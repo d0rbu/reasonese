@@ -215,12 +215,19 @@ def _visible_conversation(trace: ConversationTrace) -> str:
 
 
 def _response_evidence(response: JsonObject) -> str:
+    message = assistant_message_from_response(response)
+    content = message.get("content")
+    # A completed model call can have no final text (for example, after reasoning).
+    # Preserve that as empty evidence; authoring and judge JSON parsing stay strict.
+    if content is None or isinstance(content, str) and not content.strip():
+        content = ""
+    else:
+        content = response_content(response)
     evidence = (
         "<assistant-response>\n"
-        f"{html.escape(response_content(response))}\n"
+        f"{html.escape(content)}\n"
         "</assistant-response>\n"
     )
-    message = assistant_message_from_response(response)
     if "annotations" in message:
         annotations = json.dumps(message["annotations"], ensure_ascii=False, sort_keys=True)
         evidence += (

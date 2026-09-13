@@ -149,6 +149,33 @@ def test_judge_request_is_independent_strict_json_and_medium_reasoning() -> None
     assert judge_requests_for_traces((trace, trace)) == (*judge_requests(trace), *judge_requests(trace))
 
 
+@pytest.mark.parametrize("content", [None, "", " \n\t"])
+def test_empty_final_answer_is_judged_without_exposing_reasoning(content: object) -> None:
+    trace = _trace()
+    trace.response["choices"][0]["message"].update(
+        content=content, reasoning="private reasoning must not become an answer"
+    )
+    requests = judge_requests(trace)
+    assert requests == (judge_request(trace, 0), judge_request(trace, 1))
+    assert judge_requests_for_traces((trace,)) == requests
+    for request in requests:
+        evidence = request["messages"][1]["content"]
+        assert not (ElementTree.fromstring(evidence).findtext("assistant-response") or "").strip()
+        assert "private reasoning" not in evidence
+    judgment = judge_trace(trace, OpenRouterClient(FakeTransport([_completed_batch((False, False))])))
+    assert tuple(verdict.completed for verdict in judgment.verdicts) == (False, False)
+    with pytest.raises(ValueError):
+        parse_completed(trace.response)
+
+
+@pytest.mark.parametrize("content", [42, [], {}])
+def test_malformed_final_content_still_fails(content: object) -> None:
+    trace = _trace()
+    trace.response["choices"][0]["message"]["content"] = content
+    with pytest.raises(ValueError):
+        judge_requests(trace)
+
+
 def test_judge_requests_build_visible_conversation_once(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

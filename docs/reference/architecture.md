@@ -89,6 +89,9 @@ as escaped JSON in a separate `<assistant-annotations>` element when the field i
 This exposes OpenRouter's server-side web-search citations even without local tool calls or URLs
 in the response text. Missing or empty annotations do not prove that no search occurred.
 Hidden reasoning remains in the trace and its fingerprint but is not quoted as judge evidence.
+An absent, null, empty, or whitespace-only final answer is passed as empty response evidence,
+so unsuccessful trials can be judged and cached without aborting collection. Hidden reasoning
+is never substituted for an answer. Author-message and judge-JSON parsing remain strict.
 The response judge does not compare instructions or force a winner.
 
 The collection flow is:
