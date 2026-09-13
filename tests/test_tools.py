@@ -137,6 +137,35 @@ def test_sandbox_reports_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "exceeded 0.01 seconds" in timed_out.content
 
 
+def test_sandbox_can_execute_installed_awk_through_system_alternatives() -> None:
+    if shutil.which("bwrap") is None or shutil.which("awk") is None:
+        pytest.skip("bubblewrap and awk are required")
+    with ToolRuntime(()) as runtime:
+        result = runtime.execute(_call("bash", {"command": "awk 'BEGIN { print 6 * 7 }'"}))
+
+    assert result.content == "exit_code: 0\noutput:\n42"
+
+
+def test_system_alternatives_are_read_only_without_exposing_other_host_etc_files() -> None:
+    if shutil.which("bwrap") is None or not Path("/etc/alternatives").is_dir():
+        pytest.skip("bubblewrap and system alternatives are required")
+    with ToolRuntime(()) as runtime:
+        result = runtime.execute(
+            _call(
+                "python",
+                {
+                    "code": (
+                        "import os\n"
+                        "print(bool(os.statvfs('/etc/alternatives').f_flag & os.ST_RDONLY))\n"
+                        "print(os.path.exists('/etc/passwd'))"
+                    )
+                },
+            )
+        )
+
+    assert result.content == "exit_code: 0\noutput:\nTrue\nFalse"
+
+
 def test_sandbox_reports_missing_bubblewrap(monkeypatch: pytest.MonkeyPatch) -> None:
     with ToolRuntime(()) as runtime:
         monkeypatch.setattr("reasonese.tools.shutil.which", lambda _: None)

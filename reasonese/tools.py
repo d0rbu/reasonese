@@ -194,7 +194,8 @@ class ToolRuntime:
             "--tmpfs",
             "/tmp",
         ]
-        for source in ("/usr", "/bin", "/lib", "/lib64"):
+        # Distribution-managed commands such as awk resolve through this directory.
+        for source in ("/usr", "/bin", "/lib", "/lib64", "/etc/alternatives"):
             if Path(source).exists():
                 prefix.extend(("--ro-bind", source, source))
         prefix.extend(

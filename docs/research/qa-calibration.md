@@ -112,3 +112,13 @@ validated with the production parser. Local `final-author-comparison.py` checks 
 coordinate matching for the priority comparison and accounts for the exhausted provider
 failure separately. The pilot resumes with original authoring, clarified QA, archived
 regeneration history, and the existing bounded regeneration gate.
+
+## Pilot environment correction
+
+Manual review of the first word-count traces found that installed `awk` was unavailable
+inside the sandbox: `/usr/bin/awk` resolves through `/etc/alternatives`, which was not mounted.
+The runtime now mounts that directory read-only when present. A regression test reproduced
+the failure before the fix, and both exact saved failing tool calls succeeded after the fix.
+The affected word-count traces and any associated judgments must be archived and explicitly
+invalidated before recollection; their original tool errors are environment defects and must
+not be presented as clean measurements of model behavior. Unaffected trial caches remain reusable.

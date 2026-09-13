@@ -113,7 +113,9 @@ Every assistant request exposes four tools:
 
 Local shell and Python executions use `bubblewrap`: the task workspace is disposable, the host
 filesystem is not mounted writable, networking is unshared, and time, address space, file size,
-file descriptors, and captured output are limited. `read_file` rejects absolute paths and path
+file descriptors, and captured output are limited. The system alternatives directory is mounted
+read-only when present so installed commands such as `awk` retain their executable symlink
+targets; other host `/etc` files are not exposed. `read_file` rejects absolute paths and path
 traversal. The temporary `README.md` contains the matchup's README treatments in their input
 order for any later model-initiated reads.
 
