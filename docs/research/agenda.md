@@ -69,7 +69,7 @@ from independent runs into one analysis file; analyze the matched runs separatel
 With the current 24-pair bank, selecting all seven authors (including user) and six assistants
 would require 3,745,440 exhaustive trials or 207,360 sampled trials at 720 pairings per pair
 and one rollout per ordering. The default selects only Nemotron 3.5 Lightning and Gemma 4 31B
-for both authoring and assistant evaluation, using registered `:free` routes. This gives 36
+for both authoring and assistant evaluation, using registered `:free` routes. This gives 48
 conditions per instruction, 96 cells and 1,280 eligible pairings per pair, with a minimum of
 95 edges for connectivity. The unchanged 720-pairing default gives mean degree 15 and
 69,120 trials across the bank and two assistants. These are design counts, not cost estimates
