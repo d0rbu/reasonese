@@ -90,9 +90,25 @@ add restrictions or return drafting commentary. Manual review distinguishes thos
 failures from questionable QA objections. This is a prompt-authoring diagnostic, not a score
 of the model's ability to execute the research tasks.
 
-Confirmation on opposite pair sides with shifted channels and a 12-case authoring-message
-priority diagnostic are still in progress. These use known pilot task families, so they are
-not blind tests of generalization to unseen tasks. Production authoring remains unchanged
-while those results are pending. Local `final-author-comparison.py` validates each stored
-verdict with the production parser, checks exact coordinate matching for the priority
-comparison, and reports incomplete or unscored jobs explicitly.
+Confirmation on opposite pair sides with shifted channels yielded 14/24 QA passes for the
+original and 14/23 returned responses for v5. The remaining v5 request exhausted provider
+retries with an upstream timeout; it is recorded separately as a provider failure, not silently
+removed from the 24 planned requests or classified as a QA rejection.
+
+A 12-case diagnostic moved the unchanged original authoring brief from the user message into
+the system message, adding only a user request to return the rewrite. Both it and the matched
+original outputs passed 8/12: two original failures became passes and two passes became
+failures. This did not resolve the substantive omissions seen in manual review. These
+comparisons use known pilot task families, so they are not blind tests of generalization to
+unseen tasks. Temporal and provider variability also limit causal interpretation.
+
+We retain the original authoring prompt. This is the practical plateau among the tested
+wordings and message placement, not a claim that prompt authoring is solved or no better
+prompt exists. No failed trial is discarded, no author output is heuristically repaired, and
+no alternative revision's passing output is selectively inserted into the pilot cache.
+
+All 203 returned author responses from 204 planned requests have selected-rubric QA verdicts
+validated with the production parser. Local `final-author-comparison.py` checks exact
+coordinate matching for the priority comparison and accounts for the exhausted provider
+failure separately. The pilot resumes with original authoring, clarified QA, archived
+regeneration history, and the existing bounded regeneration gate.
