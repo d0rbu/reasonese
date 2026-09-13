@@ -292,6 +292,18 @@ def test_role_dataset_rejects_filler_with_duplicate_target_text(
             max_sequence_tokens=500,
             seed=0,
         )
+    whitespace_variant = NeutralDocument("whitespace-variant", f" \n{documents[0].text}\t", "c4")
+    with pytest.raises(ValueError, match="after trimming"):
+        build_role_dataset(
+            documents,
+            (whitespace_variant,),
+            CharacterTokenizer(native_template),
+            test_adapter,
+            max_content_tokens=8,
+            max_filler_tokens=8,
+            max_sequence_tokens=500,
+            seed=0,
+        )
 
 
 def test_role_example_rejects_broken_token_partitions(
@@ -380,6 +392,10 @@ def test_role_dataset_rejects_inconsistent_group_metadata(
     )
     with pytest.raises(ValueError, match="unknown filler partner"):
         replace(dataset, examples=unknown_partner)
+    with pytest.raises(ValueError, match="source_sha256"):
+        replace(dataset, source_sha256="0" * 64)
+    with pytest.raises(ValueError, match="filler_source_sha256"):
+        replace(dataset, filler_source_sha256="0" * 64)
 
 
 def test_load_documents_fails_closed(tmp_path: Path) -> None:
@@ -708,6 +724,8 @@ def test_loaded_native_prefix_exactly_matches_full_model(tmp_path: Path) -> None
         architectures=["NemotronHForCausalLM"],
     )
     config.save_pretrained(tmp_path)
+    for name in extraction.TOKENIZER_RUNTIME_FILES:
+        (tmp_path / name).write_text(f"exact {name}\n", encoding="utf-8")
     full = cast(Any, NemotronHModel(config)).to(dtype=torch.bfloat16).eval()
     source = {
         f"backbone.{name}": value.detach().cpu()
@@ -745,6 +763,16 @@ def test_loaded_native_prefix_exactly_matches_full_model(tmp_path: Path) -> None
     )
     assert runtime["nemotron_mamba"]["fast_path_selected"] is False
     assert runtime["model_dtype_plan"] == {"e_score_correction_bias": "float32"}
+    assert runtime["adapter"]["activation_module"] == "norm"
+    assert runtime["adapter"]["activation_site"] == "normalized_pre_mixer"
+    assert runtime["adapter"]["layer_container"] == "layers"
+    assert runtime["tokenizer_files_sha256"] == {
+        name: hashlib.sha256(f"exact {name}\n".encode()).hexdigest()
+        for name in extraction.TOKENIZER_RUNTIME_FILES
+    }
+    (tmp_path / "tokenizer_config.json").unlink()
+    with pytest.raises(FileNotFoundError):
+        extraction.model_runtime_identity(loaded, NEMOTRON_ADAPTER, checkpoint=tmp_path)
 
 
 def test_loader_preserves_model_declared_fp32_buffer(

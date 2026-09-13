@@ -140,7 +140,7 @@ PRESETS = {
         metadata_model_id="nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16",
         adapter="nemotron-3.5-lightning-native-v1",
         max_layer=26,
-        auxiliary_files=("tokenizer.json",),
+        auxiliary_files=("chat_template.jinja", "tokenizer.json", "tokenizer_config.json"),
         selection="backbone.embeddings; layers<26; layer26.norm",
         keep=keep_nemotron,
     ),
@@ -150,7 +150,7 @@ PRESETS = {
         metadata_model_id="google/gemma-4-31B-it",
         adapter="gemma-4-31b-native-v1",
         max_layer=30,
-        auxiliary_files=("tokenizer.json",),
+        auxiliary_files=("chat_template.jinja", "tokenizer.json", "tokenizer_config.json"),
         selection=(
             "language embed_tokens; layers<30; layer30 input/post-attention/pre-feedforward "
             "norms and self_attn"

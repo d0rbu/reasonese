@@ -136,11 +136,11 @@ counts, package versions, exact model and template provenance, and runtime durat
 memory measurements.
 
 Runtime provenance hashes the exact config and Transformers model implementation, Torch and CUDA
-versions, attention backend, device capability, numerical flags, and each resolved Nemotron
-kernel module and Hugging Face snapshot revision. Training, qualification, and QA reject runtime
-hash mismatches. Nemotron's optional runtime pins `kernels==0.15.2` and `einops==0.8.2`; changing
-the kernels or taking the unfused path creates a distinct instrument even when model weights are
-unchanged.
+versions, tokenizer package and tokenizer-file bytes, every model-adapter capture field, attention
+backend, device capability, numerical flags, and each resolved Nemotron kernel module and Hugging
+Face snapshot revision. Training, qualification, and QA reject runtime hash mismatches. Nemotron's
+optional runtime pins `kernels==0.15.2` and `einops==0.8.2`; changing the tokenizer, adapter capture
+site, kernels, or fused path creates a distinct instrument even when model weights are unchanged.
 
 This command creates an activation dataset; it does not qualify a probe. The 16-document C4 run
 is a systems smoke and is smaller and less diverse than Appendix G. Local Nemotron BF16 weights

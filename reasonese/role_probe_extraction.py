@@ -47,6 +47,11 @@ NEMOTRON_KERNEL_REVISIONS: Mapping[str, tuple[str, str]] = {
         "a39ff24c08103278583f168091409653ada4c292",
     ),
 }
+TOKENIZER_RUNTIME_FILES = (
+    "chat_template.jinja",
+    "tokenizer.json",
+    "tokenizer_config.json",
+)
 
 
 class ProbeRole(StrEnum):
@@ -219,6 +224,18 @@ class RoleDataset:
         filler_text = {_sha256_text(document.text) for document in self.filler_documents}
         if target_text & filler_text:
             raise ValueError("target and filler document text must be disjoint")
+        normalized_target_text = {
+            _sha256_text(document.text.strip()) for document in self.documents
+        }
+        normalized_filler_text = {
+            _sha256_text(document.text.strip()) for document in self.filler_documents
+        }
+        if normalized_target_text & normalized_filler_text:
+            raise ValueError("target and filler document text must remain disjoint after trimming")
+        if self.source_sha256 != _source_digest(self.documents):
+            raise ValueError("source_sha256 does not match the target documents")
+        if self.filler_source_sha256 != _source_digest(self.filler_documents):
+            raise ValueError("filler_source_sha256 does not match the filler documents")
         grouped: dict[int, list[RoleExample]] = {}
         for example in self.examples:
             grouped.setdefault(example.document_index, []).append(example)
@@ -1023,6 +1040,10 @@ def build_role_dataset(
     filler_text_digests = {_sha256_text(document.text) for document in filler_documents}
     if target_text_digests & filler_text_digests:
         raise ValueError("target and filler document text must be disjoint")
+    normalized_target_text = {_sha256_text(document.text.strip()) for document in documents}
+    normalized_filler_text = {_sha256_text(document.text.strip()) for document in filler_documents}
+    if normalized_target_text & normalized_filler_text:
+        raise ValueError("target and filler document text must remain disjoint after trimming")
     if min(max_content_tokens, max_filler_tokens, max_sequence_tokens) < 1:
         raise ValueError("token limits must be positive")
     validate_native_template(tokenizer, adapter)
@@ -1337,6 +1358,7 @@ def model_runtime_identity(
     if not isinstance(modeling_file, str) or not Path(modeling_file).is_file():
         raise ValueError("model runtime has no hashable Transformers implementation")
     config_path = checkpoint / "config.json"
+    tokenizer_files = {name: _file_sha256(checkpoint / name) for name in TOKENIZER_RUNTIME_FILES}
     device = _input_device(model)
     device_record: dict[str, Any] = {"type": str(device.type)}
     if device.type == "cuda":
@@ -1349,8 +1371,10 @@ def model_runtime_identity(
         )
     runtime: dict[str, Any] = {
         "format_version": 1,
-        "adapter": adapter.name,
+        "adapter": asdict(adapter),
         "model_config_sha256": _file_sha256(config_path),
+        "tokenizer_files_sha256": tokenizer_files,
+        "tokenizers_version": _distribution_version("tokenizers"),
         "model_dtype_plan": {
             name: str(dtype).removeprefix("torch.")
             for name, dtype in sorted(cast(Any, model)._get_dtype_plan(torch.bfloat16).items())

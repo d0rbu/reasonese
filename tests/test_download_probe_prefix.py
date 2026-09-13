@@ -97,6 +97,13 @@ def _metadata_dir(path: Path, *, model_id: str, revision: str, weight_map: dict[
 
 
 def test_model_selectors_are_scoped_to_the_language_backbones() -> None:
+    expected_tokenizer_files = (
+        "chat_template.jinja",
+        "tokenizer.json",
+        "tokenizer_config.json",
+    )
+    assert subject.PRESETS["nemotron"].auxiliary_files == expected_tokenizer_files
+    assert subject.PRESETS["gemma"].auxiliary_files == expected_tokenizer_files
     assert subject.keep_nemotron("backbone.embeddings.weight")
     assert subject.keep_nemotron("backbone.layers.25.mixer.in_proj.weight")
     assert subject.keep_nemotron("backbone.layers.26.norm.weight")
