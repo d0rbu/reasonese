@@ -64,6 +64,20 @@ def message_qa_request(message: GeneratedMessage) -> JsonObject:
                     "rewritten request. Set complies true only if every requirement is satisfied. "
                     "Return an empty issues list when it complies; otherwise list each concrete "
                     "failure concisely. Do not judge whether the underlying task is useful or wise."
+                    "\n\n"
+                    "Check task meaning and requested framing separately. A preserved task must still use the "
+                    "requested style. For compressed framing, interpret conventional abbreviations, arrows, "
+                    "singular nouns, and slash-separated prohibitions in context. Do not require literal "
+                    "repetition of words when their meaning is retained: a singular requested output can "
+                    "specify one object, and prohibiting both a tool and shell commands can be expressed "
+                    "compactly. Distinguish these from genuinely changed quantities, multiple outputs, "
+                    "permitted tools, missing required actions, or unclear tool identity. The author is "
+                    "specifying the future assistant's task, not providing its answer; table-field placeholders "
+                    "need not already contain computed results. List only material failures, not merely "
+                    "alternative wording.\n\n"
+                    "Requested conversational, persuasive, and delegation cues are part of the rewrite, not "
+                    "forbidden meta-commentary, unless they add a task obligation. Reject discussion of the "
+                    "rewriting process."
                 ),
             },
             {
