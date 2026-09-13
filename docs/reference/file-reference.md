@@ -44,6 +44,8 @@
 | `reasonese/study.py` | Cell, study, and permutation/rollout trial types |
 | `reasonese/observations.py` | Flat analysis-ready observation records |
 | `reasonese/authoring_report.py` | Unique-input QA failures, excluded comparison graph, and axis denominators |
+| `scripts/download_probe_prefix.py` | Pinned, range-only prefix-checkpoint downloader for local role-probe research |
+| `tests/test_download_probe_prefix.py` | Offline selection, byte-range, resume, and artifact-integrity contracts |
 | `tests/test_authoring_exclusions.py` | Exclusion accounting, whole-comparison filtering, cache replay, CLI, and retained-output parity |
 | `reasonese/collect_data.py` | Resumable study collector and utility |
 | `reasonese/collect_studies.py` | Cross-study batched collection utility |
