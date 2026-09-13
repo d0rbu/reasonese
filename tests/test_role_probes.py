@@ -1070,6 +1070,30 @@ def test_artifact_round_trip_preserves_exact_numpy_scoring(tmp_path: Path) -> No
     assert loaded.development_candidates == bundle.development_candidates
 
 
+def test_artifact_rejects_mismatched_native_test_document_count(tmp_path: Path) -> None:
+    bundle = _qualify(train_role_probe(_dataset(), _training_config()))
+    path = tmp_path / "mismatched-native-count.npz"
+    save_role_probe(bundle, path)
+    with np.load(path, allow_pickle=False) as archive:
+        envelope = json.loads(np.asarray(archive["metadata"]).tobytes().decode())
+        coefficients = archive["coefficients"].copy()
+        intercepts = archive["intercepts"].copy()
+    metadata = envelope["probe"]
+    metadata["qualification"]["test_metrics"]["document_count"] = 1
+    envelope["fingerprint"] = role_probes._artifact_fingerprint(
+        metadata, coefficients, intercepts
+    )
+    with path.open("wb") as handle:
+        np.savez_compressed(
+            handle,
+            metadata=np.frombuffer(role_probes._json(envelope), dtype=np.uint8),
+            coefficients=coefficients,
+            intercepts=intercepts,
+        )
+    with pytest.raises(ValueError, match="native test metric count"):
+        load_role_probe(path)
+
+
 def test_artifact_fingerprint_uses_the_exact_stored_parameter_dtype(tmp_path: Path) -> None:
     bundle = train_role_probe(_dataset(), _training_config())
     float32_bundle = replace(

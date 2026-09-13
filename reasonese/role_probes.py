@@ -823,6 +823,8 @@ class NativeProbeQualification:
             raise ValueError("native calibration score count does not match its provenance")
         if self.calibration.calibration_fingerprint != self.calibration_scores.fingerprint:
             raise ValueError("frozen threshold does not match the calibration scores")
+        if self.test_metrics.document_count != self.test.scores.conversation_count:
+            raise ValueError("native test metric count does not match its segment scores")
         if self.test.minimum_role_accuracy != self.test_metrics.minimum_role_accuracy:
             raise ValueError("native role gate does not match the test metrics")
         if self.test.document_macro_accuracy != self.test_metrics.document_accuracy:
