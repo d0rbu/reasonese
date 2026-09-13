@@ -153,6 +153,35 @@ def test_frozen_protocol_accepts_both_pinned_adapters_and_rejects_drift() -> Non
         manage._validate_frozen_protocol(invalid_distribution, NEMOTRON_ADAPTER.name)
 
 
+def test_protocol_rejects_invalid_training_bindings() -> None:
+    for field in ("models", "neutral_split", "neutral_gate"):
+        invalid = _protocol()
+        if field == "models":
+            invalid[field] = {"nemotron": []}
+        else:
+            invalid[field] = []
+        with pytest.raises(ValueError, match="invalid training fields"):
+            manage._validate_frozen_protocol(invalid, NEMOTRON_ADAPTER.name)
+
+    missing_partitions = _expanded_protocol()
+    del missing_partitions["native_prompt_partitions_sha256"]
+    with pytest.raises(ValueError, match="bind native prompt partitions"):
+        manage._validate_frozen_protocol(missing_partitions, NEMOTRON_ADAPTER.name)
+    missing_optimizer = _expanded_protocol()
+    del missing_optimizer["optimizer"]
+    with pytest.raises(ValueError, match="bind the optimizer runtime"):
+        manage._validate_frozen_protocol(missing_optimizer, NEMOTRON_ADAPTER.name)
+    mismatched_test_fraction = _protocol()
+    mismatched_test_fraction["neutral_split"] = {
+        "train": 0.6,
+        "development": 0.2,
+        "test": 0.3,
+        "seed": 0,
+    }
+    with pytest.raises(ValueError, match="test fraction"):
+        manage._validate_frozen_protocol(mismatched_test_fraction, NEMOTRON_ADAPTER.name)
+
+
 def test_json_partition_and_parser_boundaries(tmp_path: Path) -> None:
     value = tmp_path / "value.json"
     value.write_text('{"ok":true}', encoding="utf-8")
@@ -253,6 +282,62 @@ def test_train_wires_frozen_dataset_and_reports(
     dataset.provenance.model_revision = "wrong"
     with pytest.raises(ValueError, match="selected native adapter"):
         manage._train(args)
+
+
+def test_train_rejects_expanded_dataset_identity_before_fitting(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    protocol = _expanded_protocol()
+    protocol_path = tmp_path / "expanded-protocol.json"
+    protocol_path.write_text(json.dumps(protocol), encoding="utf-8")
+    activations = tmp_path / "activations"
+    activations.mkdir()
+    (activations / "manifest.json").write_text(
+        json.dumps(
+            {
+                "max_content_tokens": 1_024,
+                "max_filler_tokens": 513,
+                "max_sequence_tokens": 2_048,
+                "seed": 0,
+                "extraction_protocol": "role-confusion-appendix-g-reasoning-assistant-v1",
+            }
+        ),
+        encoding="utf-8",
+    )
+    dataset = SimpleNamespace(
+        document_ids=np.asarray([f"doc-{index}" for index in range(250)]),
+        provenance=SimpleNamespace(
+            activation_dtype="float32",
+            layer_indices=(13, 20, 26),
+            source_sha256="b" * 64,
+            filler_source_sha256="c" * 64,
+            native_template_adapter=NEMOTRON_ADAPTER.name,
+            model_id=NEMOTRON_ADAPTER.model_id,
+            model_revision=NEMOTRON_ADAPTER.model_revision,
+        ),
+    )
+    fit_calls: list[object] = []
+    monkeypatch.setattr(manage, "load_activation_dataset", lambda _path: dataset)
+    monkeypatch.setattr(
+        manage,
+        "train_role_probe",
+        lambda *_args, **_kwargs: fit_calls.append(object()),
+    )
+    args = argparse.Namespace(
+        protocol=protocol_path,
+        activations=activations,
+        adapter=NEMOTRON_ADAPTER.name,
+        output=tmp_path / "probe.npz",
+    )
+
+    dataset.provenance.layer_indices = (13, 20)
+    with pytest.raises(ValueError, match="layers"):
+        manage._train(args)
+    dataset.provenance.layer_indices = (13, 20, 26)
+    dataset.provenance.source_sha256 = "d" * 64
+    with pytest.raises(ValueError, match="sources"):
+        manage._train(args)
+    assert fit_calls == []
 
 
 def test_qualify_binds_partitions_and_reports(

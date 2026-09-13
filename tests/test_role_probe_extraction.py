@@ -203,6 +203,48 @@ def test_frozen_neutral_construction_binds_existing_manifest_fields() -> None:
             validate_frozen_neutral_construction(malformed, protocol)
 
 
+def test_frozen_neutral_construction_rejects_malformed_bindings() -> None:
+    protocol: dict[str, object] = {
+        "neutral_max_content_tokens": 1_024,
+        "neutral_max_filler_tokens": 513,
+        "neutral_max_sequence_tokens": 2_048,
+        "neutral_filler_length_distribution": (
+            extraction.FROZEN_NEUTRAL_FILLER_LENGTH_DISTRIBUTION
+        ),
+        "neutral_split": {"seed": 0},
+    }
+    manifest: dict[str, object] = {
+        "max_content_tokens": 1_024,
+        "max_filler_tokens": 513,
+        "max_sequence_tokens": 2_048,
+        "seed": 0,
+        "extraction_protocol": extraction.EXTRACTION_PROTOCOL,
+    }
+
+    missing_split = {**protocol, "neutral_split": None}
+    with pytest.raises(ValueError, match="lacks its split"):
+        validate_frozen_neutral_construction(manifest, missing_split)
+    missing_protocol_seed = {**protocol, "neutral_split": {}}
+    with pytest.raises(ValueError, match="lacks frozen neutral construction fields"):
+        validate_frozen_neutral_construction(manifest, missing_protocol_seed)
+    missing_manifest_field = {key: value for key, value in manifest.items() if key != "seed"}
+    with pytest.raises(ValueError, match="lacks frozen neutral construction fields"):
+        validate_frozen_neutral_construction(missing_manifest_field, protocol)
+
+    invalid_protocol_limit = {**protocol, "neutral_max_content_tokens": 0}
+    with pytest.raises(ValueError, match="invalid token limits"):
+        validate_frozen_neutral_construction(manifest, invalid_protocol_limit)
+    invalid_protocol_seed = {**protocol, "neutral_split": {"seed": True}}
+    with pytest.raises(ValueError, match="invalid construction seed"):
+        validate_frozen_neutral_construction(manifest, invalid_protocol_seed)
+    invalid_manifest_seed = {**manifest, "seed": True}
+    with pytest.raises(ValueError, match="invalid construction seed"):
+        validate_frozen_neutral_construction(invalid_manifest_seed, protocol)
+    unknown_protocol = {**manifest, "extraction_protocol": "other"}
+    with pytest.raises(ValueError, match="unknown extraction protocol"):
+        validate_frozen_neutral_construction(unknown_protocol, protocol)
+
+
 def test_tokenizer_boundary_helpers_fail_closed(
     native_template: str, test_adapter: NativeTemplateAdapter
 ) -> None:
