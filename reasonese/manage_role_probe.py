@@ -133,12 +133,20 @@ def _protocol_training_config(
         native_prompt_partitions_sha256 = protocol.get("native_prompt_partitions_sha256")
         if not isinstance(native_prompt_partitions_sha256, str):
             raise ValueError("expanded probe protocol must bind native prompt partitions")
+        neutral_target_source_sha256 = protocol.get("neutral_target_source_sha256")
+        neutral_filler_source_sha256 = protocol.get("neutral_filler_source_sha256")
+        if not isinstance(neutral_target_source_sha256, str) or not isinstance(
+            neutral_filler_source_sha256, str
+        ):
+            raise ValueError("expanded probe protocol must bind target and filler sources")
     elif documents == 60:
         if model.get("layer_index") != _ADAPTER_LEGACY_LAYER[adapter_name]:
             raise ValueError("diagnostic probe protocol does not match the pinned layer")
         layer_indices = (_ADAPTER_LEGACY_LAYER[adapter_name],)
         maximum_content_tokens = None
         native_prompt_partitions_sha256 = None
+        neutral_target_source_sha256 = None
+        neutral_filler_source_sha256 = None
     else:
         raise ValueError("probe protocol must define an expanded search or 60-document diagnostic")
     try:
@@ -180,6 +188,8 @@ def _protocol_training_config(
         maximum_content_tokens_per_document=maximum_content_tokens,
         protocol_sha256=protocol_sha256,
         native_prompt_partitions_sha256=native_prompt_partitions_sha256,
+        neutral_target_source_sha256=neutral_target_source_sha256,
+        neutral_filler_source_sha256=neutral_filler_source_sha256,
         train_fraction=train_fraction,
         validation_fraction=validation_fraction,
         seed=seed,
@@ -223,6 +233,11 @@ def _train(args: argparse.Namespace) -> None:
         raise ValueError("probe training requires float32 activation storage")
     if dataset.provenance.layer_indices != config.layer_indices:
         raise ValueError("neutral activation layers do not match the frozen protocol")
+    if config.neutral_target_source_sha256 is not None and (
+        dataset.provenance.source_sha256 != config.neutral_target_source_sha256
+        or dataset.provenance.filler_source_sha256 != config.neutral_filler_source_sha256
+    ):
+        raise ValueError("neutral activation sources do not match the frozen protocol")
     adapter = NATIVE_ADAPTERS[args.adapter]
     if (
         dataset.provenance.native_template_adapter != adapter.name

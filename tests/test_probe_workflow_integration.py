@@ -50,6 +50,8 @@ def _protocol(native_prompt_partitions_sha256: str | None = None) -> dict[str, A
         }
         protocol["neutral_max_content_tokens"] = 5
         protocol["native_prompt_partitions_sha256"] = native_prompt_partitions_sha256
+        protocol["neutral_target_source_sha256"] = "c" * 64
+        protocol["neutral_filler_source_sha256"] = "d" * 64
     return protocol
 
 

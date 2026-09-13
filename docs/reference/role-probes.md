@@ -61,6 +61,8 @@ activation site, a runtime digest covering the software and kernel path, the neu
 digest, layers, masking counts, and extraction protocol. A probe for one model pipeline cannot
 be qualified with conversation activations from another. Projection also requires the exact
 trained layer and stored dtype instead of accepting an unidentified two-dimensional array.
+The qualification protocol separately binds the exact normalized target and filler-source
+digests, its own file digest, and the fresh native-prompt partition digest.
 
 ## Classifier and selection
 

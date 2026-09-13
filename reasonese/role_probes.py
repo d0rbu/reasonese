@@ -343,6 +343,8 @@ class ProbeTrainingConfig:
     maximum_content_tokens_per_document: int | None = None
     protocol_sha256: str | None = None
     native_prompt_partitions_sha256: str | None = None
+    neutral_target_source_sha256: str | None = None
+    neutral_filler_source_sha256: str | None = None
     lambda_grid: tuple[float, ...] = (1e-4, 1e-3, 1e-2, 1e-1, 1.0, 1e1, 1e2, 1e3)
     train_fraction: float = 0.8
     validation_fraction: float = 0.1
@@ -368,7 +370,12 @@ class ProbeTrainingConfig:
             or self.maximum_content_tokens_per_document <= 1
         ):
             raise ValueError("maximum_content_tokens_per_document must be an integer above one")
-        for name in ("protocol_sha256", "native_prompt_partitions_sha256"):
+        for name in (
+            "protocol_sha256",
+            "native_prompt_partitions_sha256",
+            "neutral_target_source_sha256",
+            "neutral_filler_source_sha256",
+        ):
             value = cast(str | None, getattr(self, name))
             if value is not None:
                 _sha256(value, name)

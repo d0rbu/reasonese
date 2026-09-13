@@ -60,6 +60,8 @@ def _expanded_protocol() -> dict[str, Any]:
     protocol["neutral_validation_documents"] = 250
     protocol["neutral_max_content_tokens"] = 1_024
     protocol["native_prompt_partitions_sha256"] = "a" * 64
+    protocol["neutral_target_source_sha256"] = "b" * 64
+    protocol["neutral_filler_source_sha256"] = "c" * 64
     protocol["models"] = {
         "nemotron": {
             "revision": NEMOTRON_ADAPTER.model_revision,
@@ -129,6 +131,10 @@ def test_frozen_protocol_accepts_both_pinned_adapters_and_rejects_drift() -> Non
     }
     with pytest.raises(ValueError, match="split and gate values must be numeric"):
         manage._validate_frozen_protocol(invalid_seed, NEMOTRON_ADAPTER.name)
+    missing_source = _expanded_protocol()
+    del missing_source["neutral_target_source_sha256"]
+    with pytest.raises(ValueError, match="bind target and filler sources"):
+        manage._validate_frozen_protocol(missing_source, NEMOTRON_ADAPTER.name)
 
 
 def test_json_partition_and_parser_boundaries(tmp_path: Path) -> None:
