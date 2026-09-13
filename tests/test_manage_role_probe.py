@@ -60,6 +60,8 @@ def test_frozen_protocol_accepts_both_pinned_adapters_and_rejects_drift() -> Non
         config = manage._validate_frozen_protocol(_protocol(), adapter.name)
         assert config.layer_index == manage._ADAPTER_PROTOCOL_LAYERS[adapter.name]
         assert config.minimum_neutral_accuracy == 0.9
+        assert config.max_iterations == 2_000
+        assert config.tolerance == 1e-4
 
     mutations = (
         ({}, "required training fields"),

@@ -155,6 +155,12 @@ local instrument must not be described as hosted-activation parity.
 The frozen workflow has separate training and qualification stages so a held-out neutral result
 can be saved without being mistaken for a QA-eligible probe:
 
+The multinomial probe uses scikit-learn L-BFGS with a 2,000-iteration limit and a `1e-4`
+stopping tolerance. The released role-confusion analysis leaves the tolerance at cuML's `1e-4`
+default; using `1e-6` here did not converge within 2,000 iterations on the 60-document Nemotron
+dataset. Solver and tolerance are implementation details rather than requirements stated in the
+paper, and the exact training configuration is stored in the probe artifact.
+
 ```bash
 uv run reasonese-role-probe train \
   --adapter nemotron-3.5-lightning-native-v1 \

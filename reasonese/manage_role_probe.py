@@ -135,6 +135,8 @@ def _protocol_training_config(protocol: dict[str, Any], adapter_name: str) -> Pr
         train_fraction=split["train"],
         validation_fraction=split["development"],
         seed=split["seed"],
+        max_iterations=2_000,
+        tolerance=1e-4,
     )
 
 

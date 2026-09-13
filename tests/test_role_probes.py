@@ -261,6 +261,7 @@ def test_training_selects_only_on_grouped_neutral_development_data() -> None:
     dataset = _dataset()
     bundle = train_role_probe(dataset, _training_config())
     assert bundle.training.layer_index == 7
+    assert bundle.training.tolerance == 1e-4
     assert bundle.regularization_lambda in {0.01, 0.1}
     assert bundle.neutral_valid
     assert not bundle.qa_eligible

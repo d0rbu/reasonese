@@ -344,7 +344,7 @@ class ProbeTrainingConfig:
     validation_fraction: float = 0.1
     seed: int = 0
     max_iterations: int = 2_000
-    tolerance: float = 1e-6
+    tolerance: float = 1e-4
 
     def __post_init__(self) -> None:
         if self.layer_index < 0:
