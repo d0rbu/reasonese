@@ -219,9 +219,9 @@ def _extract_native(args: argparse.Namespace) -> None:
             raise ValueError(f"prefix checkpoint {key} does not match the requested extraction")
     validate_prefix_checkpoint_identity(args.checkpoint, checkpoint_manifest)
     try:
-        import torch  # ty: ignore[unresolved-import]
-        import transformers  # ty: ignore[unresolved-import]
-        from transformers import AutoTokenizer  # ty: ignore[unresolved-import]
+        import torch  # ty: ignore[unresolved-import, unused-ignore-comment]
+        import transformers  # ty: ignore[unresolved-import, unused-ignore-comment]
+        from transformers import AutoTokenizer  # ty: ignore[unresolved-import, unused-ignore-comment]
     except ImportError as error:  # pragma: no cover - minimal installations lack probe extras
         raise RuntimeError("native activation extraction requires the 'probes' extra") from error
     tokenizer = AutoTokenizer.from_pretrained(args.checkpoint, local_files_only=True, use_fast=True)

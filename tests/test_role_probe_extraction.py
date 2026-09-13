@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import re
 from collections.abc import Sequence
@@ -84,6 +85,24 @@ def _test_runtime_identity() -> tuple[str, dict[str, object]]:
     return digest, runtime
 
 
+def _test_identity(**changes: Any) -> ExtractionIdentity:
+    runtime_sha256, runtime = _test_runtime_identity()
+    values: dict[str, Any] = {
+        "weights_sha256": "a" * 64,
+        "weights_hash_kind": "test",
+        "tokenizer_id": "test",
+        "tokenizer_revision": "test",
+        "source_name": "test",
+        "model_dtype": "bfloat16",
+        "transformers_version": "test",
+        "torch_version": "test",
+        "runtime_sha256": runtime_sha256,
+        "runtime": runtime,
+    }
+    values.update(changes)
+    return ExtractionIdentity(**values)
+
+
 @pytest.fixture
 def native_template() -> str:
     return "synthetic native template"
@@ -121,6 +140,87 @@ def test_native_template_is_exact(
     tokenizer.chat_template += "\n"
     with pytest.raises(ValueError, match="chat template mismatch"):
         validate_native_template(tokenizer, test_adapter)
+
+
+def test_value_and_identity_contracts_fail_closed() -> None:
+    for values in (("", "text", "c4"), ("id", "", "c4"), ("id", "text", "")):
+        with pytest.raises(ValueError, match="non-empty string"):
+            NeutralDocument(*values)
+    with pytest.raises(ValueError, match="weights_sha256"):
+        _test_identity(weights_sha256="A" * 64)
+    with pytest.raises(ValueError, match="non-empty string"):
+        _test_identity(tokenizer_id="")
+    with pytest.raises(ValueError, match="runtime_sha256 does not match"):
+        _test_identity(runtime_sha256="0" * 64)
+
+
+def test_tokenizer_boundary_helpers_fail_closed(
+    native_template: str, test_adapter: NativeTemplateAdapter
+) -> None:
+    assert extraction._replace_exactly_once("a MARK b", "MARK", "value") == (
+        "a value b",
+        2,
+        7,
+    )
+    with pytest.raises(ValueError, match="unique span marker"):
+        extraction._replace_exactly_once("MARK MARK", "MARK", "value")
+    with pytest.raises(ValueError, match="plain external role"):
+        extraction._role_messages(ProbeRole.ASSISTANT, "content")
+
+    class BrokenTokenizer(CharacterTokenizer):
+        def __init__(self, result: dict[str, Any], decoded: str = "x") -> None:
+            super().__init__(native_template)
+            self.result = result
+            self.decoded = decoded
+
+        def __call__(self, text: str, **kwargs: Any) -> dict[str, Any]:
+            del text, kwargs
+            return self.result
+
+        def decode(self, token_ids: Sequence[int], **kwargs: Any) -> str:
+            del token_ids, kwargs
+            return self.decoded
+
+    with pytest.raises(ValueError, match="did not return input_ids"):
+        extraction._plain_token_ids(BrokenTokenizer({}), "text")
+    with pytest.raises(ValueError, match="batched sequence"):
+        extraction._plain_token_ids(BrokenTokenizer({"input_ids": [[1]]}), "text")
+    with pytest.raises(ValueError, match="empty sequence"):
+        extraction._truncate_text(BrokenTokenizer({"input_ids": []}), "text", 1)
+    with pytest.raises(ValueError, match="decoded to empty"):
+        extraction._truncate_text(BrokenTokenizer({"input_ids": [1]}, ""), "text", 1)
+
+    rendered = extraction._RenderedText("abc", 1, 2, ())
+    with pytest.raises(ValueError, match="offset_mapping"):
+        extraction._tokenize_rendered(
+            BrokenTokenizer({"input_ids": [1]}),
+            rendered,
+            document_index=0,
+            document_id="doc",
+            role=ProbeRole.USER,
+            partner_document_id="filler",
+            content_was_truncated=False,
+        )
+    with pytest.raises(ValueError, match="unequal length"):
+        extraction._tokenize_rendered(
+            BrokenTokenizer({"input_ids": [1], "offset_mapping": []}),
+            rendered,
+            document_index=0,
+            document_id="doc",
+            role=ProbeRole.USER,
+            partner_document_id="filler",
+            content_was_truncated=False,
+        )
+
+    class NonStringTemplate(CharacterTokenizer):
+        def apply_chat_template(self, *args: Any, **kwargs: Any) -> Any:
+            del args, kwargs
+            return None
+
+    with pytest.raises(TypeError, match="must return a string"):
+        extraction._apply_messages(
+            NonStringTemplate(native_template), test_adapter, [{"role": "user", "content": "x"}]
+        )
 
 
 def test_role_dataset_has_exact_content_and_position_controls(
@@ -518,11 +618,13 @@ def test_nemotron_kernel_revisions_load_exact_offline_snapshots(
 def test_loaded_native_prefix_exactly_matches_full_model(tmp_path: Path) -> None:
     torch = pytest.importorskip("torch")
     try:
-        from safetensors.torch import save_file  # ty: ignore[unresolved-import]
-        from transformers.models.nemotron_h.configuration_nemotron_h import (  # ty: ignore[unresolved-import]
+        from safetensors.torch import (
+            save_file,  # ty: ignore[unresolved-import, unused-ignore-comment]
+        )
+        from transformers.models.nemotron_h.configuration_nemotron_h import (  # ty: ignore[unresolved-import, unused-ignore-comment]
             NemotronHConfig,
         )
-        from transformers.models.nemotron_h.modeling_nemotron_h import (  # ty: ignore[unresolved-import]
+        from transformers.models.nemotron_h.modeling_nemotron_h import (  # ty: ignore[unresolved-import, unused-ignore-comment]
             NemotronHModel,
         )
     except ImportError:
@@ -540,7 +642,7 @@ def test_loaded_native_prefix_exactly_matches_full_model(tmp_path: Path) -> None
         architectures=["NemotronHForCausalLM"],
     )
     config.save_pretrained(tmp_path)
-    full = NemotronHModel(config).to(dtype=torch.bfloat16).eval()
+    full = cast(Any, NemotronHModel(config)).to(dtype=torch.bfloat16).eval()
     source = {
         f"backbone.{name}": value.detach().cpu()
         for name, value in full.state_dict().items()
@@ -584,12 +686,14 @@ def test_loader_preserves_model_declared_fp32_buffer(
 ) -> None:
     torch = pytest.importorskip("torch")
     try:
-        import accelerate  # ty: ignore[unresolved-import]
-        from safetensors.torch import save_file  # ty: ignore[unresolved-import]
-        from transformers.models.nemotron_h.configuration_nemotron_h import (  # ty: ignore[unresolved-import]
+        import accelerate  # ty: ignore[unresolved-import, unused-ignore-comment]
+        from safetensors.torch import (
+            save_file,  # ty: ignore[unresolved-import, unused-ignore-comment]
+        )
+        from transformers.models.nemotron_h.configuration_nemotron_h import (  # ty: ignore[unresolved-import, unused-ignore-comment]
             NemotronHConfig,
         )
-        from transformers.models.nemotron_h.modeling_nemotron_h import (  # ty: ignore[unresolved-import]
+        from transformers.models.nemotron_h.modeling_nemotron_h import (  # ty: ignore[unresolved-import, unused-ignore-comment]
             NemotronHModel,
         )
     except ImportError:
@@ -614,7 +718,7 @@ def test_loader_preserves_model_declared_fp32_buffer(
         architectures=["NemotronHForCausalLM"],
     )
     config.save_pretrained(tmp_path)
-    full = NemotronHModel(config).to(dtype=torch.bfloat16).eval()
+    full = cast(Any, NemotronHModel(config)).to(dtype=torch.bfloat16).eval()
     gate = full.layers[0].mixer.gate
     gate.e_score_correction_bias = torch.tensor([0.25012345, -0.50023456, 0.75034567, -1.0004568])
 
@@ -770,9 +874,23 @@ def test_artifact_writer_is_atomic_and_complete(
 
     manifest_path = output / "manifest.json"
     original_manifest = manifest_path.read_bytes()
+    original_files = {
+        name: (output / name).read_bytes() for name in cast(dict[str, str], manifest["files"])
+    }
 
     def write_manifest(value: dict[str, Any]) -> None:
         manifest_path.write_text(json.dumps(value), encoding="utf-8")
+
+    def reject_rewritten_file(name: str, value: bytes, message: str) -> None:
+        path = output / name
+        path.write_bytes(value)
+        rehashed = json.loads(original_manifest)
+        rehashed["files"][name] = hashlib.sha256(value).hexdigest()
+        write_manifest(rehashed)
+        with pytest.raises(ValueError, match=message):
+            load_activation_dataset(output)
+        path.write_bytes(original_files[name])
+        manifest_path.write_bytes(original_manifest)
 
     corruptions = (
         ({**manifest, "format_version": 2}, "format_version"),
@@ -825,6 +943,61 @@ def test_artifact_writer_is_atomic_and_complete(
         load_activation_dataset(output)
     filler_path.write_bytes(original_fillers)
     manifest_path.write_bytes(original_manifest)
+
+    def jsonl_bytes(records: list[dict[str, Any]]) -> bytes:
+        return "".join(json.dumps(record) + "\n" for record in records).encode()
+
+    reject_rewritten_file("target_documents.jsonl", b"not-json\n", "invalid JSONL")
+    document_mutations = (
+        ({**target_documents[0], "extra": 1}, "document mapping fields"),
+        ({**target_documents[0], "document_index": 1}, "contiguous and ordered"),
+        ({**target_documents[0], "document_id": ""}, "document IDs"),
+        ({**target_documents[0], "source": ""}, "document sources"),
+        ({**target_documents[0], "text_sha256": "BAD"}, "text_sha256"),
+    )
+    for first, message in document_mutations:
+        reject_rewritten_file(
+            "target_documents.jsonl",
+            jsonl_bytes([first, *target_documents[1:]]),
+            message,
+        )
+    duplicate_ids = [{**target_documents[0]}, {**target_documents[1], "document_id": "doc-a"}]
+    reject_rewritten_file("target_documents.jsonl", jsonl_bytes(duplicate_ids), "duplicate IDs")
+    duplicate_texts = [
+        {**target_documents[0]},
+        {**target_documents[1], "text_sha256": target_documents[0]["text_sha256"]},
+    ]
+    reject_rewritten_file(
+        "target_documents.jsonl", jsonl_bytes(duplicate_texts), "duplicate source text"
+    )
+
+    array_buffer = io.BytesIO()
+    np.save(array_buffer, np.zeros((2, 3), dtype=np.float32), allow_pickle=False)
+    reject_rewritten_file("activations.npy", array_buffer.getvalue(), "shape")
+    array_buffer = io.BytesIO()
+    np.save(array_buffer, np.zeros(80, dtype=np.int64), allow_pickle=False)
+    reject_rewritten_file("document_index.npy", array_buffer.getvalue(), "dtype int32")
+
+    sequence_records = [
+        json.loads(line)
+        for line in (output / "sequences.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    sequence_mutations = (
+        ({key: value for key, value in sequence_records[0].items() if key != "role"}, "invalid"),
+        ({**sequence_records[0], "sequence_index": 1}, "invalid"),
+        ({**sequence_records[0], "content_tokens": False}, "positive"),
+        ({**sequence_records[0], "document_index": "0"}, "row metadata"),
+        ({**sequence_records[0], "filler_document_index": "0"}, "row metadata"),
+        ({**sequence_records[0], "role": "unknown"}, "row metadata"),
+        ({**sequence_records[0], "document_id": "wrong"}, "row metadata"),
+        ({**sequence_records[0], "partner_document_id": "wrong"}, "row metadata"),
+        ({**sequence_records[0], "content_start": -1}, "row metadata"),
+        ({**sequence_records[0], "content_stop": -1}, "row metadata"),
+    )
+    for first, message in sequence_mutations:
+        reject_rewritten_file(
+            "sequences.jsonl", jsonl_bytes([first, *sequence_records[1:]]), message
+        )
 
     with pytest.raises(FileExistsError, match="refusing to overwrite"):
         extract_role_activations(
@@ -965,16 +1138,16 @@ def test_prefix_capture_equals_full_forward_and_stops_tail(
 def test_native_prefix_batch_matches_unbatched() -> None:
     pytest.importorskip("torch")
     try:
-        from transformers.models.gemma4.configuration_gemma4 import (  # ty: ignore[unresolved-import]
+        from transformers.models.gemma4.configuration_gemma4 import (  # ty: ignore[unresolved-import, unused-ignore-comment]
             Gemma4TextConfig,
         )
-        from transformers.models.gemma4.modeling_gemma4 import (  # ty: ignore[unresolved-import]
+        from transformers.models.gemma4.modeling_gemma4 import (  # ty: ignore[unresolved-import, unused-ignore-comment]
             Gemma4TextModel,
         )
-        from transformers.models.nemotron_h.configuration_nemotron_h import (  # ty: ignore[unresolved-import]
+        from transformers.models.nemotron_h.configuration_nemotron_h import (  # ty: ignore[unresolved-import, unused-ignore-comment]
             NemotronHConfig,
         )
-        from transformers.models.nemotron_h.modeling_nemotron_h import (  # ty: ignore[unresolved-import]
+        from transformers.models.nemotron_h.modeling_nemotron_h import (  # ty: ignore[unresolved-import, unused-ignore-comment]
             NemotronHModel,
         )
     except ImportError:
@@ -985,7 +1158,6 @@ def test_native_prefix_batch_matches_unbatched() -> None:
                 NemotronHConfig(
                     vocab_size=64,
                     hidden_size=32,
-                    num_hidden_layers=3,
                     layers_block_type=["attention"] * 3,
                     num_attention_heads=4,
                     num_key_value_heads=2,
