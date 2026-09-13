@@ -36,6 +36,7 @@ def _provenance(
     roles: tuple[str, ...] = _ROLES,
     layers: tuple[int, ...] = (3, 7),
     model_revision: str = "model-commit-a",
+    filler_documents: int = 20,
 ) -> ActivationProvenance:
     return ActivationProvenance(
         dataset_kind=kind,
@@ -48,6 +49,7 @@ def _provenance(
         chat_template_sha256=_SHA_B,
         native_template_adapter="test-native-template",
         activation_site="normalized_pre_mixer",
+        model_dtype="bfloat16",
         activation_dtype="float32",
         layer_indices=layers,
         hidden_size=5,
@@ -58,6 +60,11 @@ def _provenance(
         content_mask="content-tokens-only",
         masked_control_tokens=48,
         masked_filler_tokens=24,
+        filler_pool_kind=(
+            "dedicated-disjoint-documents" if kind == "paired-neutral-role-wrappers" else "none"
+        ),
+        filler_source_sha256="d" * 64 if kind == "paired-neutral-role-wrappers" else None,
+        filler_documents=filler_documents if kind == "paired-neutral-role-wrappers" else 0,
     )
 
 
@@ -75,6 +82,8 @@ def _dataset(
     content_positions: list[int] = []
     content_token_ids: list[int] = []
     sequence_positions: list[int] = []
+    filler_document_ids: list[str] = []
+    document_prefix = "document" if kind == "paired-neutral-role-wrappers" else "conversation"
     for document_index in range(document_count):
         for role_index, role in enumerate(roles):
             for token_index in range(4):
@@ -97,17 +106,21 @@ def _dataset(
                     vector[-1] = layer_offset * 0.1
                     per_layer.append(vector)
                 activations.append(np.stack(per_layer))
-                document_ids.append(f"document-{document_index:03d}")
+                document_ids.append(f"{document_prefix}-{document_index:03d}")
                 labels.append(role)
                 content_positions.append(token_index)
                 content_token_ids.append(100 + document_index * 4 + token_index)
                 sequence_positions.append(32 + token_index)
+                filler_document_ids.append(
+                    f"filler-{document_index:03d}" if kind == "paired-neutral-role-wrappers" else ""
+                )
     return ActivationDataset(
         provenance=_provenance(
             kind=kind,
             roles=roles,
             layers=layers,
             model_revision=model_revision,
+            filler_documents=document_count,
         ),
         activations=np.stack(activations),
         document_ids=np.asarray(document_ids, dtype=np.str_),
@@ -115,6 +128,7 @@ def _dataset(
         content_token_index=np.asarray(content_positions, dtype=np.int64),
         content_token_id=np.asarray(content_token_ids, dtype=np.int64),
         sequence_token_index=np.asarray(sequence_positions, dtype=np.int64),
+        filler_document_ids=np.asarray(filler_document_ids, dtype=np.str_),
     )
 
 
@@ -161,6 +175,7 @@ def test_neutral_data_requires_exact_paired_content_and_positions() -> None:
             content_token_index=dataset.content_token_index[keep],
             content_token_id=dataset.content_token_id[keep],
             sequence_token_index=dataset.sequence_token_index[keep],
+            filler_document_ids=dataset.filler_document_ids[keep],
         )
 
 
@@ -178,6 +193,23 @@ def test_activation_shape_dtype_and_provenance_are_fail_closed() -> None:
         replace(dataset.provenance, weights_sha256="not-a-digest")
     with pytest.raises(ValueError, match="content_mask"):
         replace(dataset.provenance, content_mask="includes-tags")
+    overlapping_filler = dataset.document_ids.copy()
+    with pytest.raises(ValueError, match="disjoint"):
+        replace(dataset, filler_document_ids=overlapping_filler)
+    with pytest.raises(TypeError, match="integer dtype"):
+        replace(dataset, content_token_index=dataset.content_token_index.astype(np.float64))
+    with pytest.raises(TypeError, match="string dtype"):
+        replace(dataset, roles=dataset.roles.astype(object))
+
+
+def test_document_groups_cannot_hide_duplicate_content_under_distinct_ids() -> None:
+    dataset = _dataset()
+    duplicated = dataset.content_token_id.copy()
+    first = dataset.document_ids == "document-000"
+    second = dataset.document_ids == "document-001"
+    duplicated[second] = duplicated[first]
+    with pytest.raises(ValueError, match="contain identical tokens"):
+        replace(dataset, content_token_id=duplicated)
 
 
 def test_document_split_is_stable_complete_and_group_disjoint() -> None:
@@ -227,6 +259,7 @@ def test_multinomial_training_preserves_explicit_role_order() -> None:
     full_projection = project_role(
         bundle,
         np.asarray([[3.0, 0.0, 0.0, 0.0, 0.0]], dtype=np.float32),
+        provenance=bundle.provenance,
         require_qa_eligible=False,
     )
     assert full_projection.mean_reasoning_probability > 0.99
@@ -247,6 +280,7 @@ def test_multinomial_training_preserves_explicit_role_order() -> None:
         content_token_index=conversations.content_token_index[keep],
         content_token_id=conversations.content_token_id[keep],
         sequence_token_index=conversations.sequence_token_index[keep],
+        filler_document_ids=conversations.filler_document_ids[keep],
     )
     qualified = qualify_role_probe(bundle, conversations, _thresholds())
     assert qualified.qualification is not None
@@ -282,6 +316,7 @@ def test_qualification_recomputes_untouched_conversation_metrics() -> None:
     projection = project_role(
         qualified,
         np.asarray([[4.0, 0.0, 0.0, 0.0, 0.1]], dtype=np.float32),
+        provenance=qualified.provenance,
     )
     assert projection.predicted_role == "reasoning"
     assert np.allclose(projection.token_probabilities.sum(axis=1), 1.0, atol=1e-12)
@@ -299,6 +334,43 @@ def test_qualification_rejects_surrogate_or_nonconversation_data() -> None:
     )
     with pytest.raises(ValueError, match="exact model pipeline"):
         qualify_role_probe(bundle, surrogate, _thresholds())
+    protocol_mismatch = replace(
+        _dataset(kind="untouched-native-conversations", document_count=6),
+        provenance=replace(
+            _dataset(kind="untouched-native-conversations", document_count=6).provenance,
+            extraction_protocol="different-extraction-protocol",
+        ),
+    )
+    with pytest.raises(ValueError, match="exact model pipeline"):
+        qualify_role_probe(bundle, protocol_mismatch, _thresholds())
+
+    conversations = _dataset(kind="untouched-native-conversations", document_count=6)
+    overlapping_ids = conversations.document_ids.copy()
+    overlapping_ids[overlapping_ids == "conversation-000"] = bundle.split.test[0]
+    with pytest.raises(ValueError, match="disjoint from neutral"):
+        qualify_role_probe(
+            bundle,
+            replace(conversations, document_ids=overlapping_ids),
+            _thresholds(),
+        )
+
+
+def test_every_native_conversation_requires_both_measured_roles() -> None:
+    conversations = _dataset(kind="untouched-native-conversations", document_count=6)
+    keep = ~(
+        (conversations.document_ids == "conversation-000") & (conversations.roles == "assistant")
+    )
+    with pytest.raises(ValueError, match="every untouched conversation"):
+        replace(
+            conversations,
+            activations=conversations.activations[keep],
+            document_ids=conversations.document_ids[keep],
+            roles=conversations.roles[keep],
+            content_token_index=conversations.content_token_index[keep],
+            content_token_id=conversations.content_token_id[keep],
+            sequence_token_index=conversations.sequence_token_index[keep],
+            filler_document_ids=conversations.filler_document_ids[keep],
+        )
 
 
 def test_failed_empirical_threshold_keeps_probe_out_of_qa() -> None:
@@ -312,7 +384,7 @@ def test_failed_empirical_threshold_keeps_probe_out_of_qa() -> None:
     assert not failed.qualification.passed
     assert not failed.qa_eligible
     with pytest.raises(ValueError, match="lacks passing"):
-        project_role(failed, flipped[:2, 1, :])
+        project_role(failed, flipped[:2, 1, :], provenance=failed.provenance)
 
 
 def test_artifact_round_trip_preserves_exact_numpy_scoring(tmp_path: Path) -> None:
@@ -328,14 +400,28 @@ def test_artifact_round_trip_preserves_exact_numpy_scoring(tmp_path: Path) -> No
         [[3.0, 0.0, 0.0, 0.0, 0.1], [0.0, 3.0, 0.0, 0.0, 0.1]],
         dtype=np.float32,
     )
-    expected = project_role(bundle, activations)
-    actual = project_role(loaded, activations)
+    expected = project_role(bundle, activations, provenance=bundle.provenance)
+    actual = project_role(loaded, activations, provenance=loaded.provenance)
     assert actual.roles == expected.roles
     assert actual.predicted_role == expected.predicted_role
     assert np.array_equal(actual.token_probabilities, expected.token_probabilities)
     assert actual.mean_probabilities == expected.mean_probabilities
     assert loaded.provenance.weights_hash_kind == "hf_lfs_manifest_sha256"
     assert loaded.split.fingerprint == bundle.split.fingerprint
+
+
+def test_artifact_fingerprint_uses_the_exact_stored_parameter_dtype(tmp_path: Path) -> None:
+    bundle = train_role_probe(_dataset(), _training_config())
+    float32_bundle = replace(
+        bundle,
+        coefficients=bundle.coefficients.astype(np.float32),
+        intercepts=bundle.intercepts.astype(np.float32),
+    )
+    path = tmp_path / "float32-source.npz"
+    save_role_probe(float32_bundle, path)
+    loaded = load_role_probe(path)
+    np.testing.assert_array_equal(loaded.coefficients, float32_bundle.coefficients)
+    np.testing.assert_array_equal(loaded.intercepts, float32_bundle.intercepts)
 
 
 def test_artifact_fingerprint_detects_parameter_tampering(tmp_path: Path) -> None:
@@ -366,7 +452,14 @@ def test_dataset_fingerprint_covers_activations_labels_and_provenance() -> None:
     assert activation_dataset_fingerprint(replace(dataset, activations=changed)) != original
     conversation = replace(
         dataset,
-        provenance=replace(dataset.provenance, dataset_kind="untouched-native-conversations"),
+        provenance=replace(
+            dataset.provenance,
+            dataset_kind="untouched-native-conversations",
+            filler_pool_kind="none",
+            filler_source_sha256=None,
+            filler_documents=0,
+        ),
+        filler_document_ids=np.full(len(dataset.roles), "", dtype=np.str_),
     )
     assert activation_dataset_fingerprint(conversation) != original
 
@@ -374,14 +467,38 @@ def test_dataset_fingerprint_covers_activations_labels_and_provenance() -> None:
 def test_projection_shape_finiteness_and_qualification_are_enforced() -> None:
     bundle = train_role_probe(_dataset(), _training_config())
     with pytest.raises(ValueError, match="lacks passing"):
-        project_role(bundle, np.zeros((2, 5), dtype=np.float32))
+        project_role(bundle, np.zeros((2, 5), dtype=np.float32), provenance=bundle.provenance)
     with pytest.raises(ValueError, match="shape"):
         project_role(
             bundle,
             np.zeros((2, 4), dtype=np.float32),
+            provenance=bundle.provenance,
             require_qa_eligible=False,
         )
     nonfinite = np.zeros((2, 5), dtype=np.float32)
     nonfinite[0, 0] = np.inf
     with pytest.raises(ValueError, match="finite"):
-        project_role(bundle, nonfinite, require_qa_eligible=False)
+        project_role(
+            bundle,
+            nonfinite,
+            provenance=bundle.provenance,
+            require_qa_eligible=False,
+        )
+    mismatched = replace(bundle.provenance, model_dtype="float16")
+    with pytest.raises(ValueError, match="exact model pipeline"):
+        project_role(
+            bundle,
+            np.zeros((2, 5), dtype=np.float32),
+            provenance=mismatched,
+            require_qa_eligible=False,
+        )
+
+
+def test_probe_rejects_metrics_that_do_not_match_its_role_space() -> None:
+    bundle = train_role_probe(_dataset(), _training_config())
+    swapped = replace(
+        bundle.validation_metrics,
+        per_role_accuracy=tuple(reversed(bundle.validation_metrics.per_role_accuracy)),
+    )
+    with pytest.raises(ValueError, match="metrics do not match probe roles"):
+        replace(bundle, validation_metrics=swapped)

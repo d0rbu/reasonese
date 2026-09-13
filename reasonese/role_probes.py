@@ -14,6 +14,7 @@ import json
 import math
 import os
 import warnings
+import zipfile
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any, cast
@@ -56,6 +57,7 @@ class ActivationProvenance:
     chat_template_sha256: str
     native_template_adapter: str
     activation_site: str
+    model_dtype: str
     activation_dtype: str
     layer_indices: tuple[int, ...]
     hidden_size: int
@@ -66,6 +68,9 @@ class ActivationProvenance:
     content_mask: str
     masked_control_tokens: int
     masked_filler_tokens: int
+    filler_pool_kind: str
+    filler_source_sha256: str | None
+    filler_documents: int
 
     def __post_init__(self) -> None:
         for name in (
@@ -77,9 +82,11 @@ class ActivationProvenance:
             "tokenizer_revision",
             "native_template_adapter",
             "activation_site",
+            "model_dtype",
             "activation_dtype",
             "source_name",
             "extraction_protocol",
+            "filler_pool_kind",
         ):
             _text(cast(str, getattr(self, name)), name)
         for name in ("weights_sha256", "chat_template_sha256", "source_sha256"):
@@ -102,6 +109,20 @@ class ActivationProvenance:
             _text(role, "role")
         if self.masked_control_tokens < 0 or self.masked_filler_tokens < 0:
             raise ValueError("masked token counts must be non-negative")
+        if self.dataset_kind == PAIRED_NEUTRAL:
+            if self.filler_pool_kind != "dedicated-disjoint-documents":
+                raise ValueError("neutral extraction requires a dedicated disjoint filler pool")
+            if self.filler_source_sha256 is None:
+                raise ValueError("neutral extraction requires filler source provenance")
+            _sha256(self.filler_source_sha256, "filler_source_sha256")
+            if self.filler_documents <= 0:
+                raise ValueError("neutral extraction requires filler documents")
+        elif (
+            self.filler_pool_kind != "none"
+            or self.filler_source_sha256 is not None
+            or self.filler_documents != 0
+        ):
+            raise ValueError("conversation extraction cannot claim a neutral filler pool")
 
 
 @beartype
@@ -116,6 +137,7 @@ class ActivationDataset:
     content_token_index: Array
     content_token_id: Array
     sequence_token_index: Array
+    filler_document_ids: Array
 
     def __post_init__(self) -> None:
         values = np.asarray(self.activations)
@@ -138,10 +160,17 @@ class ActivationDataset:
             "content_token_index": self.content_token_index,
             "content_token_id": self.content_token_id,
             "sequence_token_index": self.sequence_token_index,
+            "filler_document_ids": self.filler_document_ids,
         }
         for name, vector in vectors.items():
             if np.asarray(vector).ndim != 1 or len(vector) != values.shape[0]:
                 raise ValueError(f"{name} must have one value per activation")
+        for name in ("document_ids", "roles", "filler_document_ids"):
+            if np.asarray(vectors[name]).dtype.kind not in {"U", "S"}:
+                raise TypeError(f"{name} must use a string dtype")
+        for name in ("content_token_index", "content_token_id", "sequence_token_index"):
+            if not np.issubdtype(np.asarray(vectors[name]).dtype, np.integer):
+                raise TypeError(f"{name} must use an integer dtype")
         if any(not value or value.strip() != value for value in self.document_ids.tolist()):
             raise ValueError("document_ids must be non-empty and trimmed")
         observed = set(self.roles.tolist())
@@ -159,6 +188,14 @@ class ActivationDataset:
             raise ValueError("token indices must be non-negative")
         if self.provenance.dataset_kind == PAIRED_NEUTRAL:
             _validate_neutral_pairs(self)
+        else:
+            required_conversation_roles = {"reasoning", "assistant"}
+            for document in np.unique(self.document_ids):
+                observed_for_document = set(self.roles[self.document_ids == document].tolist())
+                if not required_conversation_roles.issubset(observed_for_document):
+                    raise ValueError(
+                        "every untouched conversation must contain reasoning and assistant tokens"
+                    )
 
 
 def _rows(dataset: ActivationDataset, document: str, role: str) -> Array:
@@ -168,8 +205,15 @@ def _rows(dataset: ActivationDataset, document: str, role: str) -> Array:
 
 def _validate_neutral_pairs(dataset: ActivationDataset) -> None:
     """Verify identical token content and controlled positions across roles."""
+    targets = set(dataset.document_ids.tolist())
+    fillers = set(dataset.filler_document_ids.tolist())
+    if "" in fillers or targets & fillers:
+        raise ValueError("neutral filler document IDs must be non-empty and disjoint from targets")
+    if len(fillers) != dataset.provenance.filler_documents:
+        raise ValueError("neutral filler document count does not match provenance")
+    content_signatures: dict[tuple[int, ...], str] = {}
     for document in np.unique(dataset.document_ids):
-        expected: tuple[Array, Array] | None = None
+        expected: tuple[Array, Array, Array] | None = None
         for role in dataset.provenance.roles:
             rows = _rows(dataset, str(document), role)
             if rows.size == 0:
@@ -177,7 +221,11 @@ def _validate_neutral_pairs(dataset: ActivationDataset) -> None:
             relative = dataset.content_token_index[rows]
             if not np.array_equal(relative, np.arange(rows.size)):
                 raise ValueError("neutral content token indices must be contiguous from zero")
-            actual = (dataset.content_token_id[rows], dataset.sequence_token_index[rows])
+            actual = (
+                dataset.content_token_id[rows],
+                dataset.sequence_token_index[rows],
+                dataset.filler_document_ids[rows],
+            )
             if expected is None:
                 expected = actual
             elif not all(
@@ -186,6 +234,14 @@ def _validate_neutral_pairs(dataset: ActivationDataset) -> None:
                 raise ValueError(
                     "neutral role copies must contain identical tokens at identical positions"
                 )
+        assert expected is not None
+        signature = tuple(int(value) for value in expected[0])
+        duplicate = content_signatures.get(signature)
+        if duplicate is not None:
+            raise ValueError(
+                f"neutral documents {duplicate!r} and {str(document)!r} contain identical tokens"
+            )
+        content_signatures[signature] = str(document)
 
 
 @beartype
@@ -395,10 +451,38 @@ class RoleProbe:
             raise ValueError("probe intercept shape does not match provenance")
         if not np.isfinite(self.coefficients).all() or not np.isfinite(self.intercepts).all():
             raise ValueError("probe parameters must be finite")
+        if not np.issubdtype(np.asarray(self.coefficients).dtype, np.floating) or not np.issubdtype(
+            np.asarray(self.intercepts).dtype, np.floating
+        ):
+            raise TypeError("probe parameters must use floating dtypes")
         if self.training.layer_index not in self.provenance.layer_indices:
             raise ValueError("trained layer is absent from activation provenance")
         if self.regularization_lambda <= 0 or not math.isfinite(self.regularization_lambda):
             raise ValueError("regularization_lambda must be finite and positive")
+        expected_roles = self.provenance.roles
+        for name, metrics in (
+            ("validation", self.validation_metrics),
+            ("neutral test", self.neutral_test_metrics),
+        ):
+            if (
+                tuple(role for role, _ in metrics.per_role_accuracy) != expected_roles
+                or tuple(role for role, _ in metrics.per_role_document_accuracy) != expected_roles
+            ):
+                raise ValueError(f"{name} metrics do not match probe roles")
+            if len(metrics.confusion_matrix) != len(expected_roles):
+                raise ValueError(f"{name} confusion matrix does not match probe roles")
+        if self.qualification is not None:
+            measured = ("reasoning", "assistant")
+            metrics = self.qualification.metrics
+            if (
+                tuple(role for role, _ in metrics.per_role_accuracy) != measured
+                or tuple(role for role, _ in metrics.per_role_document_accuracy) != measured
+            ):
+                raise ValueError(
+                    "conversation qualification metrics must measure reasoning and assistant"
+                )
+            if len(metrics.confusion_matrix) != len(expected_roles):
+                raise ValueError("conversation confusion matrix does not match probe roles")
 
     @property
     def neutral_valid(self) -> bool:
@@ -605,11 +689,13 @@ def _same_pipeline(left: ActivationProvenance, right: ActivationProvenance) -> b
         "chat_template_sha256",
         "native_template_adapter",
         "activation_site",
+        "model_dtype",
         "activation_dtype",
         "layer_indices",
         "hidden_size",
         "roles",
         "content_mask",
+        "extraction_protocol",
     )
     return all(getattr(left, field) == getattr(right, field) for field in fields)
 
@@ -633,6 +719,7 @@ def activation_dataset_fingerprint(dataset: ActivationDataset) -> str:
         "content_token_index",
         "content_token_id",
         "sequence_token_index",
+        "filler_document_ids",
     ):
         _array_hash(hasher, name, cast(Array, getattr(dataset, name)))
     return hasher.hexdigest()
@@ -651,6 +738,10 @@ def qualify_role_probe(
         raise ValueError("conversation activations do not match the probe's exact model pipeline")
     if probe.qualification is not None:
         raise ValueError("probe is already qualified")
+    neutral_documents = set(probe.split.train + probe.split.validation + probe.split.test)
+    conversation_documents = set(conversations.document_ids.tolist())
+    if neutral_documents & conversation_documents:
+        raise ValueError("qualification conversations must be disjoint from neutral documents")
     layer_offset = conversations.provenance.layer_indices.index(probe.training.layer_index)
     rows = np.arange(len(conversations.roles))
     qualification = ConversationQualification(
@@ -686,9 +777,12 @@ def project_role(
     probe: RoleProbe,
     activations: Array,
     *,
+    provenance: ActivationProvenance,
     require_qa_eligible: bool = True,
 ) -> RoleProjection:
     """Project content-token activations from the probe's selected layer."""
+    if not _same_pipeline(probe.provenance, provenance):
+        raise ValueError("projection activations do not match the probe's exact model pipeline")
     if require_qa_eligible and not probe.qa_eligible:
         raise ValueError("probe lacks passing neutral and conversation validation")
     values = np.asarray(activations)
@@ -750,9 +844,11 @@ def _artifact_fingerprint(
 def save_role_probe(probe: RoleProbe, path: Path) -> None:
     """Atomically write a fingerprinted artifact without pickled code."""
     metadata = _metadata(probe)
+    coefficients = np.asarray(probe.coefficients, dtype=np.float64)
+    intercepts = np.asarray(probe.intercepts, dtype=np.float64)
     envelope = {
         "probe": metadata,
-        "fingerprint": _artifact_fingerprint(metadata, probe.coefficients, probe.intercepts),
+        "fingerprint": _artifact_fingerprint(metadata, coefficients, intercepts),
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
@@ -761,8 +857,8 @@ def save_role_probe(probe: RoleProbe, path: Path) -> None:
             np.savez_compressed(
                 handle,
                 metadata=np.frombuffer(_json(envelope), dtype=np.uint8),
-                coefficients=np.asarray(probe.coefficients, dtype=np.float64),
-                intercepts=np.asarray(probe.intercepts, dtype=np.float64),
+                coefficients=coefficients,
+                intercepts=intercepts,
             )
         temporary.replace(path)
     finally:
@@ -822,5 +918,13 @@ def load_role_probe(path: Path) -> RoleProbe:
             raise ValueError("role-probe artifact fingerprint does not match its contents")
         del metadata["format"]
         return _probe_from(metadata, coefficients, intercepts)
-    except (KeyError, OSError, TypeError, UnicodeDecodeError, json.JSONDecodeError) as error:
+    except (
+        EOFError,
+        KeyError,
+        OSError,
+        TypeError,
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+        zipfile.BadZipFile,
+    ) as error:
         raise ValueError(f"could not load role-probe artifact {path}") from error

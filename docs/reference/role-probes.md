@@ -30,8 +30,10 @@ Each neutral base document is rendered five times with the exact target checkpoi
 templates: `system`, `user`, `tool`, `reasoning`, and `assistant`. The role labels vary while the
 content is held constant. Reasoning models commonly nest reasoning and final output inside one
 assistant envelope. In that case, assistant content follows variable-length closed reasoning
-filler, and other roles receive position-matched filler. Role tags and filler tokens are excluded
-from the activations used for fitting.
+filler, and other roles receive position-matched filler. Filler comes from a dedicated document
+pool disjoint from every target document. Role tags and filler tokens are excluded from fitting;
+the disjoint pool also prevents held-out target content from influencing training activations
+through attention.
 
 `ActivationDataset` verifies the controls before training:
 
@@ -39,6 +41,7 @@ from the activations used for fitting.
 - ordered content token IDs are identical across all role copies;
 - relative content indices are contiguous;
 - absolute sequence positions match across the role copies;
+- filler document IDs are consistent across each target's role copies and disjoint from targets;
 - every activation is finite and has the recorded dtype, layer count, and hidden size; and
 - the metadata says that only content tokens remain.
 
