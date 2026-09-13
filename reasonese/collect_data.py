@@ -39,6 +39,13 @@ from reasonese.message_qa_cache import YamlMessageQaCache
 from reasonese.observations import Observation, observations_from_trials, write_observations
 from reasonese.openrouter import OpenRouterClient, RequestsTransport, select_route
 from reasonese.planning import PromptSpec
+from reasonese.probe_qa import (
+    ProbeQaScorer,
+    ProbeQaVerdict,
+    check_probe_qa,
+    probe_qa_report,
+    probe_qa_requests,
+)
 from reasonese.routing import CollectionRouting, add_route_arguments, routing_from_arguments
 from reasonese.runner import (
     AssistantRunGroup,
@@ -46,7 +53,7 @@ from reasonese.runner import (
     record_cached_authors,
     run_assistant_groups,
 )
-from reasonese.study import Study, Trial, TrialId, build_trials, study_to_dict
+from reasonese.study import Study, Trial, TrialId, build_trials, study_fingerprint, study_to_dict
 from reasonese.study_cache import SqliteStudyCache
 
 
@@ -72,6 +79,7 @@ class _CollectionState:
     judgments: dict[str, Judgment]
     judgment_hits: int
     excluded_inputs: tuple[MessageQaVerdict, ...] = ()
+    probe_qa_verdicts: tuple[ProbeQaVerdict, ...] = ()
 
 
 @beartype
@@ -84,6 +92,7 @@ class CollectionResult:
     trace_cache_hits: Natural
     judgment_cache_hits: Natural
     excluded_inputs: tuple[MessageQaVerdict, ...] = ()
+    probe_qa_verdicts: tuple[ProbeQaVerdict, ...] = ()
 
 
 def _prepare_task(
@@ -144,6 +153,7 @@ def collect_studies(
     qa_cache: YamlMessageQaCache,
     *,
     prefer_batch: bool,
+    probe_scorer: ProbeQaScorer | None = None,
     routing: CollectionRouting | None = None,
     shared_cache: SqliteStudyCache | None = None,
 ) -> tuple[CollectionResult, ...]:
@@ -157,6 +167,8 @@ def collect_studies(
     studies = tuple(task.study for task in tasks)
     if len(set(studies)) != len(studies):
         raise ValueError("collection task studies must be distinct")
+    if probe_scorer is not None:
+        probe_scorer.preflight(tuple(dict.fromkeys(study.assistant for study in studies)))
 
     trials_by_task = tuple(build_trials(task.study) for task in tasks)
     all_trials = tuple(trial for trials in trials_by_task for trial in trials)
@@ -239,12 +251,17 @@ def collect_studies(
     report = authoring_report(studies, audit.verdicts)
     report_path = message_cache.path.parent / "authoring_report.json"
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    report_path.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
     for verdict in rejected.values():
         logging.getLogger(__name__).warning(
             "Author message QA failed: author=%s framing=%s channel=%s instruction=%r issues=%s",
-            verdict.spec.author, verdict.spec.framing, verdict.spec.channel,
-            verdict.spec.instruction, list(verdict.issues),
+            verdict.spec.author,
+            verdict.spec.framing,
+            verdict.spec.channel,
+            verdict.spec.instruction,
+            list(verdict.issues),
         )
     for state in states:
         state.excluded_inputs = tuple(
@@ -260,21 +277,107 @@ def collect_studies(
     if rejected:
         # A previous aggregate is no longer authoritative; the suite CLI rebuilds it on success.
         (message_cache.path.parent / "observations.jsonl").unlink(missing_ok=True)
-    print(f"Authoring QA: {json.dumps(report['counts'], sort_keys=True)}; report={report_path}", file=sys.stderr)
+    print(
+        f"Authoring QA: {json.dumps(report['counts'], sort_keys=True)}; report={report_path}",
+        file=sys.stderr,
+    )
+
+    setups_by_state: list[tuple[ConversationSetup, ConversationSetup] | None] = []
+    for state, generated, original_trials in zip(
+        states, generated_by_state, trials_by_task, strict=True
+    ):
+        if state.excluded_inputs or (probe_scorer is None and not state.missing_trials):
+            setups_by_state.append(None)
+            continue
+        by_spec = {message.spec: message for message in generated}
+        first_rollouts = tuple(trial for trial in original_trials if int(trial.rollout) == 1)
+        if len(first_rollouts) != 2:
+            raise ValueError("each study must have exactly two ordered permutations")
+        ordered_setups = tuple(
+            construct_conversation(
+                trial.matchup,
+                tuple(by_spec[spec] for spec in trial.matchup.inputs),
+            )
+            for trial in first_rollouts
+        )
+        setups_by_state.append((ordered_setups[0], ordered_setups[1]))
+
+    if probe_scorer is not None:
+        for state, setups in zip(states, setups_by_state, strict=True):
+            if setups is None:
+                continue
+            expected_by_matchup = {setup.matchup: setup for setup in setups}
+            for trial in tuple(state.trials):
+                key = str(trial.trial_id)
+                cached = state.traces.get(key)
+                if cached is None or cached.trace.setup == expected_by_matchup[trial.matchup]:
+                    continue
+                del state.traces[key]
+                state.missing_trials.append(trial)
+                state.trace_hits -= 1
+        active = tuple(
+            (state, setup)
+            for state, setup in zip(states, setups_by_state, strict=True)
+            if setup is not None
+        )
+        requests = tuple(
+            request
+            for state, setup in active
+            for request in probe_qa_requests(state.task.study, setup)
+        )
+        verdicts = check_probe_qa(probe_scorer, requests)
+        verdicts_by_study: dict[str, list[ProbeQaVerdict]] = {}
+        for verdict in verdicts:
+            verdicts_by_study.setdefault(verdict.request.study_id, []).append(verdict)
+        active_studies = tuple(state.task.study for state, _ in active)
+        probe_report = probe_qa_report(active_studies, verdicts)
+        probe_report_path = message_cache.path.parent / "probe_qa_report.json"
+        probe_report_path.write_text(
+            json.dumps(probe_report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+        probe_rejected = False
+        for state, _ in active:
+            study_id = study_fingerprint(state.task.study)
+            state.probe_qa_verdicts = tuple(verdicts_by_study[study_id])
+            failures = tuple(row for row in state.probe_qa_verdicts if row.complies is False)
+            for verdict in failures:
+                logging.getLogger(__name__).warning(
+                    "Activation probe QA failed: assistant=%s framing=%s channel=%s "
+                    "author=%s permutation=%d position=%d reasoning_probability=%f issue=%s",
+                    verdict.request.setup.matchup.assistant,
+                    verdict.request.spec.framing,
+                    verdict.request.spec.channel,
+                    verdict.request.spec.author,
+                    verdict.request.permutation,
+                    verdict.request.position,
+                    verdict.reasoning_probability,
+                    verdict.issue,
+                )
+            if failures:
+                probe_rejected = True
+                write_observations(state.task.output_dir / "observations.jsonl", ())
+                state.trials = ()
+                state.missing_trials = []
+                state.trace_hits = 0
+                state.judgment_hits = 0
+        if probe_rejected:
+            (message_cache.path.parent / "observations.jsonl").unlink(missing_ok=True)
+        print(
+            f"Activation probe QA: {json.dumps(probe_report['counts'], sort_keys=True)}; "
+            f"report={probe_report_path}",
+            file=sys.stderr,
+        )
 
     assistant_work: dict[
         Assistant,
         list[tuple[_CollectionState, Trial, ConversationSetup]],
     ] = {}
-    for state, generated in zip(states, generated_by_state, strict=True):
-        by_spec = {message.spec: message for message in generated}
-        setups_by_matchup = {
-            matchup: construct_conversation(
-                matchup,
-                tuple(by_spec[spec] for spec in matchup.inputs),
-            )
-            for matchup in dict.fromkeys(trial.matchup for trial in state.missing_trials)
-        }
+    for state, setups in zip(states, setups_by_state, strict=True):
+        if not state.missing_trials:
+            continue
+        if setups is None:
+            raise RuntimeError("active assistant work is missing its conversation setups")
+        setups_by_matchup = {setup.matchup: setup for setup in setups}
         for trial in state.missing_trials:
             assistant_work.setdefault(state.task.study.assistant, []).append(
                 (state, trial, setups_by_matchup[trial.matchup])
@@ -396,6 +499,7 @@ def collect_studies(
                 Natural.parse(state.trace_hits),
                 Natural.parse(state.judgment_hits),
                 state.excluded_inputs,
+                state.probe_qa_verdicts,
             )
         )
     return tuple(results)
@@ -409,6 +513,7 @@ def collect_study(
     manual_messages: ManualMessageLibrary,
     *,
     prefer_batch: bool,
+    probe_scorer: ProbeQaScorer | None = None,
     routing: CollectionRouting | None = None,
 ) -> CollectionResult:
     """Collect or resume every permutation and rollout in one study."""
@@ -419,6 +524,7 @@ def collect_study(
         YamlMessageCache(output_dir / "generated_messages.yaml"),
         YamlMessageQaCache(output_dir / "message_qa.yaml"),
         prefer_batch=prefer_batch,
+        probe_scorer=probe_scorer,
         routing=routing,
     )[0]
 
