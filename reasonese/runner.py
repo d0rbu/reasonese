@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import logging
-from collections import deque
-from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+from collections.abc import Callable
 from contextlib import ExitStack
 from dataclasses import dataclass
+from threading import Lock
 
 from beartype import beartype
 
@@ -39,6 +39,7 @@ from reasonese.openrouter import (
 )
 from reasonese.planning import PromptSpec
 from reasonese.routing import CollectionRouting
+from reasonese.scheduling import ScheduledRequest
 from reasonese.tools import (
     ASSISTANT_TOOLS,
     ToolRuntime,
@@ -118,14 +119,15 @@ def materialize_specs(
         else manual_messages
     )
     materialized = {message.spec: message for message in cache.load()}
-    new_messages: list[GeneratedMessage] = []
+    new_messages: dict[PromptSpec, GeneratedMessage] = {}
+    message_lock = Lock()
 
     user_specs = tuple(dict.fromkeys(spec for spec in specs if spec.author is Author.USER))
     for spec in user_specs:
         message = GeneratedMessage(spec, manual_snapshot.message_for(spec), None)
         if materialized.get(spec) != message:
             materialized[spec] = message
-            new_messages.append(message)
+            new_messages[spec] = message
 
     missing = tuple(dict.fromkeys(spec for spec in specs if spec not in materialized))
 
@@ -147,33 +149,39 @@ def materialize_specs(
     for group in completion_groups:
         if not str(group.route.model_id).endswith(":free"):
             routing.require_paid("uncached paid authoring")
-    grouped_responses = client.complete_many_grouped(
-        tuple(completion_groups),
-        prefer_batch=prefer_batch,
-    )
-    for authored_specs, responses, group in zip(
-        grouped_specs, grouped_responses, completion_groups, strict=True
-    ):
-        provenance = completion_provenance(group.route, group.bodies, prefer_batch=prefer_batch)
-        for spec, response in zip(authored_specs, responses, strict=True):
-            message = GeneratedMessage(
-                spec,
-                GeneratedText.parse(response_content(response)),
-                response,
-                provenance,
-            )
-            materialized[spec] = message
-            new_messages.append(message)
 
-    if new_messages:
-        cache.put_many(tuple(new_messages))
-    new_specs = {message.spec for message in new_messages}
+    group_provenances = tuple(
+        completion_provenance(group.route, group.bodies, prefer_batch=prefer_batch)
+        for group in completion_groups
+    )
+
+    def collect_message(group_index: int, body_index: int, response: JsonObject) -> None:
+        spec = grouped_specs[group_index][body_index]
+        message = GeneratedMessage(
+            spec,
+            GeneratedText.parse(response_content(response)),
+            response,
+            group_provenances[group_index],
+        )
+        with message_lock:
+            new_messages[spec] = message
+
+    try:
+        client.complete_many_grouped(
+            tuple(completion_groups),
+            prefer_batch=prefer_batch,
+            on_response=collect_message,
+        )
+    finally:
+        if new_messages:
+            cache.put_many(tuple(new_messages.values()))
+    materialized.update(new_messages)
     for spec in dict.fromkeys(specs):
         message = materialized[spec]
         routing.record(
             "author",
             spec.author,
-            "manual" if spec.author is Author.USER else "new" if spec in new_specs else "cache",
+            "manual" if spec.author is Author.USER else "new" if spec in new_messages else "cache",
             message.provenance,
             message.response,
         )
@@ -205,6 +213,8 @@ def run_assistants(
 def run_assistant_groups(
     groups: tuple[AssistantRunGroup, ...],
     client: OpenRouterClient,
+    *,
+    on_trace: Callable[[int, int, ConversationTrace], None] | None = None,
 ) -> tuple[tuple[ConversationTrace, ...], ...]:
     """Run assistant-model groups without blocking fast tool continuations on slow peers."""
     messages = {
@@ -217,107 +227,83 @@ def run_assistant_groups(
     completed: dict[tuple[int, int], ConversationTrace] = {}
     if not messages:
         return tuple(() for _ in groups)
-    waiting = deque(
-        (group_index, setup_index)
-        for setup_index in range(max(len(group.setups) for group in groups))
-        for group_index, group in enumerate(groups)
-        if setup_index < len(group.setups)
-    )
-
     runtimes: dict[tuple[int, int], ToolRuntime] = {}
     available_runtimes: list[ToolRuntime] = []
     runtime_stack = ExitStack()
+    runtime_lock = Lock()
 
     def runtime_for(key: tuple[int, int]) -> ToolRuntime:
-        runtime = runtimes.get(key)
-        if runtime is not None:
+        with runtime_lock:
+            runtime = runtimes.get(key)
+            if runtime is not None:
+                return runtime
+            group_index, setup_index = key
+            readme_contents = groups[group_index].setups[setup_index].readme_contents()
+            if available_runtimes:
+                runtime = available_runtimes.pop()
+                runtime.reset(readme_contents)
+            else:
+                runtime = runtime_stack.enter_context(ToolRuntime(readme_contents))
+            runtimes[key] = runtime
             return runtime
+
+    def request_for(key: tuple[int, int]) -> ScheduledRequest[JsonObject]:
+        group_index, _ = key
+        return client.completion_request(
+            groups[group_index].route.model_id,
+            _assistant_request(messages[key]),
+            lambda response: receive(key, response),
+        )
+
+    def receive(key: tuple[int, int], response: JsonObject) -> ScheduledRequest[JsonObject] | None:
         group_index, setup_index = key
-        readme_contents = groups[group_index].setups[setup_index].readme_contents()
-        if available_runtimes:
-            runtime = available_runtimes.pop()
-            runtime.reset(readme_contents)
-        else:
-            runtime = runtime_stack.enter_context(ToolRuntime(readme_contents))
-        runtimes[key] = runtime
-        return runtime
-
-    def release_runtime(key: tuple[int, int]) -> None:
-        runtime = runtimes.pop(key, None)
-        if runtime is not None:
-            available_runtimes.append(runtime)
-
-    worker_count = min(client.sync_workers, len(messages))
-    with runtime_stack, ThreadPoolExecutor(max_workers=worker_count) as executor:
-
-        def submit(key: tuple[int, int]) -> Future[JsonObject]:
-            group_index, _ = key
-            return executor.submit(
-                client.complete,
-                groups[group_index].route.model_id,
-                _assistant_request(messages[key]),
+        calls = tool_calls_from_response(response)
+        if not calls:
+            try:
+                response_content(response)
+            except ValueError:
+                content = assistant_message_from_response(response).get("content")
+                if content is not None and not isinstance(content, str):
+                    raise
+                logger.exception(
+                    "Empty final assistant answer: model=%s response_id=%s "
+                    "conversation=%s retries_used=%s/%s",
+                    groups[group_index].route.model_id,
+                    response.get("id"),
+                    key,
+                    empty_retries[key],
+                    _MAX_EMPTY_RESPONSE_RETRIES,
+                )
+                if empty_retries[key] == _MAX_EMPTY_RESPONSE_RETRIES:
+                    raise
+                empty_retries[key] += 1
+                return request_for(key)
+            trace = ConversationTrace(
+                groups[group_index].setups[setup_index],
+                response,
+                tuple(steps[key]),
+                RouteProvenance(groups[group_index].route.model_id, CompletionTransport.SYNC),
             )
+            with runtime_lock:
+                completed[key] = trace
+                runtime = runtimes.pop(key, None)
+                if runtime is not None:
+                    available_runtimes.append(runtime)
+            if on_trace is not None:
+                on_trace(group_index, setup_index, trace)
+            return None
+        if len(steps[key]) == _MAX_LOCAL_TOOL_STEPS:
+            raise RuntimeError(f"assistant exceeded {_MAX_LOCAL_TOOL_STEPS} local tool-call steps")
+        runtime = runtime_for(key)
+        results = tuple(runtime.execute(call) for call in calls)
+        steps[key].append(ToolStep(response, results))
+        messages[key].append(assistant_message_from_response(response))
+        messages[key].extend(result.openrouter_dict() for result in results)
+        return request_for(key)
 
-        pending: dict[Future[JsonObject], tuple[int, int]] = {}
+    with runtime_stack:
+        client.scheduler.run(request_for(key) for key in messages)
 
-        def admit_waiting() -> None:
-            while waiting and len(pending) < worker_count:
-                key = waiting.popleft()
-                pending[submit(key)] = key
-
-        admit_waiting()
-        while pending:
-            finished, _ = wait(tuple(pending), return_when=FIRST_COMPLETED)
-            continuations: list[tuple[int, int]] = []
-            for future in sorted(finished, key=pending.__getitem__):
-                key = pending.pop(future)
-                group_index, setup_index = key
-                response = future.result()
-                calls = tool_calls_from_response(response)
-                if not calls:
-                    try:
-                        response_content(response)
-                    except ValueError:
-                        content = assistant_message_from_response(response).get("content")
-                        if content is not None and not isinstance(content, str):
-                            raise
-                        logger.exception(
-                            "Empty final assistant answer: model=%s response_id=%s "
-                            "conversation=%s retries_used=%s/%s",
-                            groups[group_index].route.model_id,
-                            response.get("id"),
-                            key,
-                            empty_retries[key],
-                            _MAX_EMPTY_RESPONSE_RETRIES,
-                        )
-                        if empty_retries[key] == _MAX_EMPTY_RESPONSE_RETRIES:
-                            raise
-                        empty_retries[key] += 1
-                        continuations.append(key)
-                        continue
-                    completed[key] = ConversationTrace(
-                        groups[group_index].setups[setup_index],
-                        response,
-                        tuple(steps[key]),
-                        RouteProvenance(
-                            groups[group_index].route.model_id, CompletionTransport.SYNC
-                        ),
-                    )
-                    release_runtime(key)
-                    continue
-                if len(steps[key]) == _MAX_LOCAL_TOOL_STEPS:
-                    raise RuntimeError(
-                        f"assistant exceeded {_MAX_LOCAL_TOOL_STEPS} local tool-call steps"
-                    )
-                runtime = runtime_for(key)
-                results = tuple(runtime.execute(call) for call in calls)
-                steps[key].append(ToolStep(response, results))
-                messages[key].append(assistant_message_from_response(response))
-                messages[key].extend(result.openrouter_dict() for result in results)
-                continuations.append(key)
-            for key in continuations:
-                pending[submit(key)] = key
-            admit_waiting()
     return tuple(
         tuple(completed[(group_index, setup_index)] for setup_index in range(len(group.setups)))
         for group_index, group in enumerate(groups)

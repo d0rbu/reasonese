@@ -134,22 +134,29 @@ are cached in YAML against a fingerprint of the exact conversation trace.
 It requires exactly two distinct inputs, runs both input orderings, and collects one or more
 rollouts per ordering. With `r` rollouts, the design has `2r` trials; every cell receives `2r`
 verdicts and appears `r` times at each position. The collector runs uncached assistant work
-through eight-worker, completion-driven concurrency by default: as soon as one response requests a local tool,
+through per-model adaptive concurrency (up to eight in-flight requests per model by default): as soon as one response requests a local tool,
 its continuation is submitted without waiting for slower peer responses. It batches judge work,
 resumes from per-rollout caches, and writes flat analysis-ready rows to `observations.jsonl`.
-Initial requests are admitted round-robin across assistant models, and ready tool continuations
-receive freed worker slots before fresh requests, so a large group cannot monopolize the queue.
+Each model has its own admission queue and cooldown, and ready tool continuations receive that
+model's freed slots before fresh requests. A rate-limited model does not consume another model's
+capacity. Local tool processing uses that model's workers, so a slow tool also leaves other
+models free to progress. The same scheduler handles authoring and batch submissions.
 Assistant requests retain the
 OpenRouter web-search tool and therefore use the synchronous API because OpenRouter does not
 support that server tool in batch jobs. Definite HTTP 429 responses are retried a bounded number
-of times using the provider's `Retry-After` delay when present. The same manual-message hierarchy
+of times, halving that model's concurrency window and slowing its request starts. Successful
+requests gradually restore throughput; `Retry-After` seconds or HTTP dates are honored in full.
+See [adaptive scheduling](docs/reference/configuration.md#adaptive-api-scheduling) for the policy
+and its retry boundary. The same manual-message hierarchy
 and message-QA gate apply to user-authored study inputs.
 
 High-volume collector traces and judgments are JSON payloads in SQLite while retaining complete
 raw provider responses. A standalone study or repeated `--study` input keeps one
 `collection.sqlite3` per study. A sampled `--suite` instead uses one shared database at the suite
 root, avoiding tens of thousands of duplicate database files and reducing each collection stage
-to one cache read and transaction. Trace fingerprints are derived once and reused through
+to one cache read and transaction. On a handled collection error, successful authored messages
+and completed trial traces are saved for resume before the error propagates; incomplete tool
+loops are not saved as completed trials. Trace fingerprints are derived once and reused through
 judgment and batched observation construction; the standalone one-conversation utilities keep
 their readable YAML caches.
 Study trials likewise share their two validated ordered matchups, which cache readers reuse while
