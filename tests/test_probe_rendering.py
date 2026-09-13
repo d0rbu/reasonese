@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 
+import reasonese.probe_rendering as rendering_module
 from reasonese.axes import Assistant, Channel
 from reasonese.conversation import GeneratedMessage, GeneratedText, construct_conversation
 from reasonese.probe_rendering import (
@@ -17,7 +18,7 @@ from reasonese.probe_rendering import (
     render_collector_probe_context,
     render_native_dialogue_context,
 )
-from reasonese.role_probe_extraction import NEMOTRON_ADAPTER
+from reasonese.role_probe_extraction import GEMMA_ADAPTER, NEMOTRON_ADAPTER
 from tests.test_matchup_conversation import _spec, make_matchup
 from tests.test_probe_qa import _requests
 
@@ -42,9 +43,10 @@ class CharacterTokenizer:
         rendered = ""
         for message in conversation:
             role = message["role"]
-            if role == "assistant" and "reasoning_content" in message:
+            reasoning = message.get("reasoning_content", message.get("reasoning"))
+            if role == "assistant" and reasoning is not None:
                 rendered += (
-                    f"<|im_start|>assistant\n<think>{message['reasoning_content']}</think>"
+                    f"<|im_start|>assistant\n<think>{reasoning}</think>"
                     f"{message['content']}<|im_end|>\n"
                 )
             elif role == "assistant":
@@ -172,4 +174,171 @@ def test_rendered_context_rejects_positions_outside_the_input(position: int) -> 
             token_positions=((position,),),
             content_token_ids=((12,),),
             render_config_sha256="a" * 64,
+        )
+
+
+@pytest.mark.parametrize(
+    ("changes", "message"),
+    [
+        ({"input_ids": ()}, "contain input and measured tokens"),
+        ({"masked_boundary_tokens": -1}, "must be non-negative"),
+        ({"content_token_ids": ((11,), (12,))}, "same spans"),
+        ({"token_positions": ((),)}, "must contain tokens"),
+        ({"token_positions": ((1, 1),), "content_token_ids": ((11, 11),)}, "non-overlapping"),
+        ({"token_positions": ((2, 1),), "content_token_ids": ((12, 11),)}, "ordered"),
+        ({"content_token_ids": ((12,),)}, "do not match"),
+    ],
+)
+def test_rendered_context_rejects_malformed_span_metadata(
+    changes: dict[str, object], message: str
+) -> None:
+    values = {
+        "input_ids": (10, 11, 12),
+        "token_positions": ((1,),),
+        "content_token_ids": ((11,),),
+        "render_config_sha256": "a" * 64,
+        "masked_boundary_tokens": 0,
+    }
+    values.update(changes)
+    with pytest.raises(ValueError, match=message):
+        RenderedProbeContext(**values)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("calls", "message"),
+    [
+        ({"not": "a-list"}, "tool calls must be a list"),
+        ([{"function": {"arguments": "{"}}], "must contain valid JSON"),
+        ([{"function": {"arguments": "[]"}}], "must decode to an object"),
+    ],
+)
+def test_collector_rejects_invalid_tool_call_argument_shapes(calls: object, message: str) -> None:
+    with pytest.raises(ValueError, match=message):
+        rendering_module._native_tool_arguments([{"role": "assistant", "tool_calls": calls}])
+
+
+def test_public_renderers_reject_invalid_target_or_empty_native_spans() -> None:
+    _, requests = _requests()
+    tokenizer, adapter = _tokenizer_and_adapter()
+    with pytest.raises(ValueError, match="target position must be 1 or 2"):
+        render_collector_probe_context(tokenizer, adapter, requests[0].setup, 0)
+    with pytest.raises(ValueError, match="must contain non-whitespace text"):
+        render_native_dialogue_context(
+            tokenizer,
+            adapter,
+            prompt="question",
+            reasoning=" ",
+            final="answer",
+        )
+
+
+def test_renderer_rejects_template_and_tokenizer_contract_violations() -> None:
+    tokenizer, adapter = _tokenizer_and_adapter()
+
+    class NonTextTemplate(CharacterTokenizer):
+        def apply_chat_template(self, *args: Any, **kwargs: Any) -> Any:
+            return 3
+
+    with pytest.raises(TypeError, match="chat template must return text"):
+        render_native_dialogue_context(
+            NonTextTemplate(tokenizer.chat_template),
+            adapter,
+            prompt="question",
+            reasoning="reasoning",
+            final="answer",
+        )
+
+    class NonMappingTokenizer(CharacterTokenizer):
+        def __call__(self, text: str, **kwargs: Any) -> Any:
+            return []
+
+    with pytest.raises(TypeError, match="tokenizer must return a mapping"):
+        render_native_dialogue_context(
+            NonMappingTokenizer(tokenizer.chat_template),
+            adapter,
+            prompt="question",
+            reasoning="reasoning",
+            final="answer",
+        )
+
+    class MissingOffsetsTokenizer(CharacterTokenizer):
+        def __call__(self, text: str, **kwargs: Any) -> dict[str, Any]:
+            return {"input_ids": [ord(character) for character in text]}
+
+    with pytest.raises(ValueError, match="fast tokenizer"):
+        render_native_dialogue_context(
+            MissingOffsetsTokenizer(tokenizer.chat_template),
+            adapter,
+            prompt="question",
+            reasoning="reasoning",
+            final="answer",
+        )
+
+
+def test_gemma_render_uses_its_native_thinking_template_arguments() -> None:
+    tokenizer, _ = _tokenizer_and_adapter()
+    adapter = replace(
+        GEMMA_ADAPTER,
+        chat_template_sha256=hashlib.sha256(tokenizer.chat_template.encode()).hexdigest(),
+    )
+    render_native_dialogue_context(
+        tokenizer,
+        adapter,
+        prompt="question",
+        reasoning="reasoning",
+        final="answer",
+    )
+    assert all(call["enable_thinking"] is True for _, call in tokenizer.calls)
+    assert all(call["preserve_thinking"] is True for _, call in tokenizer.calls)
+
+
+def test_native_renderer_rejects_reserved_markers_in_source_text() -> None:
+    tokenizer, adapter = _tokenizer_and_adapter()
+    with pytest.raises(ValueError, match="reserved span marker"):
+        render_native_dialogue_context(
+            tokenizer,
+            adapter,
+            prompt="question",
+            reasoning="ROLE_PROBE_SPAN_0_72fce190",
+            final="answer",
+        )
+
+
+@pytest.mark.parametrize("corruption", ["offset-count", "boundary", "plain-token-identity"])
+def test_native_renderer_rejects_token_boundary_and_identity_corruption(corruption: str) -> None:
+    tokenizer, adapter = _tokenizer_and_adapter()
+
+    class CorruptTokenizer(CharacterTokenizer):
+        def __call__(self, text: str, **kwargs: Any) -> dict[str, Any]:
+            value = super().__call__(text, **kwargs)
+            if (
+                corruption == "plain-token-identity"
+                and not kwargs.get("return_offsets_mapping")
+                and text == "reasoning"
+            ):
+                return {"input_ids": [1_000_000]}
+            if not kwargs.get("return_offsets_mapping"):
+                return value
+            if corruption == "offset-count":
+                value["offset_mapping"].append((len(text), len(text)))
+            elif corruption == "boundary":
+                start = text.index("reasoning")
+                ids = value["input_ids"]
+                offsets = value["offset_mapping"]
+                ids[start - 1 : start + 1] = [1_000_000]
+                offsets[start - 1 : start + 1] = [(start - 1, start + 1)]
+            return value
+
+    expected = {
+        "offset-count": "equal length",
+        "boundary": "crosses a measured content boundary",
+        "plain-token-identity": "differ inside and outside",
+    }[corruption]
+    with pytest.raises(ValueError, match=expected):
+        render_native_dialogue_context(
+            CorruptTokenizer(tokenizer.chat_template),
+            adapter,
+            prompt="question",
+            reasoning="reasoning",
+            final="answer",
         )
