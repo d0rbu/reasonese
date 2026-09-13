@@ -1011,11 +1011,13 @@ def test_loader_preserves_model_declared_fp32_buffer(
 def test_artifact_writer_is_atomic_and_complete(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
     native_template: str,
     test_adapter: NativeTemplateAdapter,
     documents: tuple[NeutralDocument, ...],
     filler_documents: tuple[NeutralDocument, ...],
 ) -> None:
+    caplog.set_level("INFO", logger="reasonese.role_probe_extraction")
     dataset = build_role_dataset(
         documents[:2],
         filler_documents[:2],
@@ -1105,6 +1107,15 @@ def test_artifact_writer_is_atomic_and_complete(
     assert manifest["runtime_metrics"]["forward_batches"] == 6
     assert manifest["runtime_metrics"]["configured_batch_size"] == 2
     assert manifest["runtime_metrics"]["role_sequences_per_document"] == 5
+    progress = [
+        record.message
+        for record in caplog.records
+        if record.name == "reasonese.role_probe_extraction"
+    ]
+    assert len(progress) == 2
+    assert "document 1/2" in progress[0]
+    assert "document 2/2" in progress[1]
+    assert all("elapsed=" in message and "last_batch=" in message for message in progress)
     loaded = load_activation_dataset(output)
     assert loaded.activations.shape == (80, 2, 3)
     assert loaded.provenance.model_dtype == "bfloat16"

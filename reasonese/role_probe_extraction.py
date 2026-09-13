@@ -12,6 +12,7 @@ import hashlib
 import importlib.metadata
 import inspect
 import json
+import logging
 import os
 import re
 import resource
@@ -34,6 +35,8 @@ from reasonese.role_probes import (
     ActivationDataset,
     ActivationProvenance,
 )
+
+_LOGGER = logging.getLogger(__name__)
 
 EXTRACTION_PROTOCOL = "role-confusion-appendix-g-reasoning-assistant-v1"
 PREFIX_WEIGHTS_HASH_KIND = "sha256-filtered-index-and-shard-files-v1"
@@ -1882,7 +1885,8 @@ def extract_role_activations(
         filler_indices = {
             document.document_id: index for index, document in enumerate(dataset.filler_documents)
         }
-        for document in dataset.documents:
+        document_count = len(dataset.documents)
+        for document_number, document in enumerate(dataset.documents, start=1):
             group = tuple(
                 example
                 for example in dataset.examples
@@ -1939,6 +1943,15 @@ def extract_role_activations(
                     }
                 )
                 cursor = stop
+            _LOGGER.info(
+                "extracted role activations for document %d/%d: "
+                "elapsed=%.2fs last_batch=%.2fs rows=%d",
+                document_number,
+                document_count,
+                time.perf_counter() - extraction_started,
+                batch_seconds[-1],
+                cursor,
+            )
         activations.flush()
         del activations
         arrays = {

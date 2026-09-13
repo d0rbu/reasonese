@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import time
 from pathlib import Path
 from typing import Any, cast
@@ -66,6 +67,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
     args = build_parser().parse_args(argv)
     if args.documents < 2:
         raise ValueError("--documents must be at least two")
@@ -127,9 +132,7 @@ def main(argv: list[str] | None = None) -> None:
         execution_device=args.execution_device,
     )
     model_load_seconds = time.perf_counter() - load_started
-    runtime_sha256, runtime = model_runtime_identity(
-        model, adapter, checkpoint=args.checkpoint
-    )
+    runtime_sha256, runtime = model_runtime_identity(model, adapter, checkpoint=args.checkpoint)
     output = extract_role_activations(
         model,
         dataset,
