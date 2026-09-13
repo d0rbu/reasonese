@@ -39,7 +39,9 @@ QA checks task meaning and framing separately. Compressed instructions may use c
 abbreviations, arrows, singular output nouns, and slash-separated prohibitions when they preserve
 the requirements. The checker must still reject changed quantities, missing actions, unclear tool
 identity, and the wrong framing. An author specifies the future assistant's response; it need not
-fill an answer table while rewriting the instruction. See the
+fill an answer table while rewriting the instruction. Requested conversational, persuasive, and
+delegation cues belong to the rewrite when they add no task obligation; discussion of the
+rewriting process does not. See the
 [QA calibration record](../research/qa-calibration.md) for the diagnostic evidence and its limits.
 
 QA cache matching uses the datapoint and exact produced text, not a fingerprint of the audit

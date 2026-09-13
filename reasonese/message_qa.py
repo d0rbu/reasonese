@@ -74,7 +74,10 @@ def message_qa_request(message: GeneratedMessage) -> JsonObject:
                     "permitted tools, missing required actions, or unclear tool identity. The author is "
                     "specifying the future assistant's task, not providing its answer; table-field placeholders "
                     "need not already contain computed results. List only material failures, not merely "
-                    "alternative wording."
+                    "alternative wording.\n\n"
+                    "Requested conversational, persuasive, and delegation cues are part of the rewrite, not "
+                    "forbidden meta-commentary, unless they add a task obligation. Reject discussion of the "
+                    "rewriting process."
                 ),
             },
             {

@@ -11,14 +11,16 @@ and generation settings were unchanged.
 The selected QA clarification checks task meaning and framing independently. It allows
 conventional shorthand without relaxing required actions, tool identity, quantities, or output
 constraints. It also distinguishes an instruction specifying an answer table from an actual
-answer table. The implementation remains one system prompt with the existing strict boolean
+answer table, and requested conversational/delegation cues from discussion of rewriting.
+The implementation remains one system prompt with the existing strict boolean
 and issues schema; there is no new acceptance heuristic or retry policy.
 
-| QA wording | Agreement with assigned labels |
-|---|---:|
-| Original | 93/95 |
-| Selected clarification (v4) | 95/95 |
-| Shorter clarification (v5) | 94/95 |
+| QA wording | First 95 cases | Additional 10 cue cases |
+|---|---:|---:|
+| Original | 93/95 | Not run |
+| Shorthand clarification (v4) | 95/95 | 8/10 |
+| Shorter clarification (v5) | 94/95 | Not run |
+| Selected cue clarification (v6) | 95/95 | 10/10 |
 
 For example, the original rejected a rewrite requiring `print a JSON object` because it did not
 repeat the word `single`. Removing the selected prompt's explicit explanation of singular output
@@ -35,9 +37,17 @@ initially retained it, then reopened calibration when live judgments exposed ove
 objections to conventional shorthand.
 
 Sixteen additional shorthand contrasts and sixteen fresh confirmation cases brought the set to
-95 cases. The selected revision passed all of them. The final sixteen cases were written before
+95 cases. The v4 revision passed all of them. The final sixteen cases were written before
 judging v4/v5 on them and were not used to revise either candidate. Earlier held-out cases became
 regression cases once further iteration resumed; they are not counted as fresh validation twice.
+
+Subsequent live review found rejections of requested stylistic cues, including a casual `easy`
+sign-off and `Thanks, teammate.` in a delegation. Ten labelled cue contrasts, with negative
+controls adding an actual token-usage reporting requirement, exposed two false rejections in v4.
+A short clarification distinguishing requested cues from rewriting commentary passed all 105
+cases. These last cue cases were targeted diagnostics; the earlier 95 served as regressions for
+v6, not a new unseen holdout. No cached verdict is selectively replaced merely because a repeat
+judgment passes: changing the selected rubric triggers a complete explicit re-audit.
 
 Labels and rationales were assigned by the coding assistant before the corresponding provider
 calls. They are not independently collected human annotations. Each reported judgment is one
@@ -54,5 +64,6 @@ analysis remain failures; no heuristic strips that text or substitutes an embedd
 
 Exact candidate prompts, labelled cases, request metadata, provider responses, and intermediate
 reviews are local ignored artifacts under `out/prompt-calibration-20260913/`. The relevant QA
-jobs are `qa-r0` through `qa-r4`; `qa-r3` evaluates v4 and `qa-r4` evaluates the shorter v5 and
-fresh confirmation. These diagnostic artifacts are separate from pilot trial caches.
+jobs are `qa-r0` through `qa-r5`; `qa-r3` evaluates v4, `qa-r4` evaluates the shorter v5 and
+fresh confirmation, and `qa-r5` evaluates the cue clarification v6. These diagnostic artifacts
+are separate from pilot trial caches.
