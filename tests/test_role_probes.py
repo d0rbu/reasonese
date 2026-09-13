@@ -260,6 +260,7 @@ def test_multinomial_training_preserves_explicit_role_order() -> None:
         bundle,
         np.asarray([[3.0, 0.0, 0.0, 0.0, 0.0]], dtype=np.float32),
         provenance=bundle.provenance,
+        layer_index=bundle.training.layer_index,
         require_qa_eligible=False,
     )
     assert full_projection.mean_reasoning_probability > 0.99
@@ -317,6 +318,7 @@ def test_qualification_recomputes_untouched_conversation_metrics() -> None:
         qualified,
         np.asarray([[4.0, 0.0, 0.0, 0.0, 0.1]], dtype=np.float32),
         provenance=qualified.provenance,
+        layer_index=qualified.training.layer_index,
     )
     assert projection.predicted_role == "reasoning"
     assert np.allclose(projection.token_probabilities.sum(axis=1), 1.0, atol=1e-12)
@@ -384,7 +386,12 @@ def test_failed_empirical_threshold_keeps_probe_out_of_qa() -> None:
     assert not failed.qualification.passed
     assert not failed.qa_eligible
     with pytest.raises(ValueError, match="lacks passing"):
-        project_role(failed, flipped[:2, 1, :], provenance=failed.provenance)
+        project_role(
+            failed,
+            flipped[:2, 1, :],
+            provenance=failed.provenance,
+            layer_index=failed.training.layer_index,
+        )
 
 
 def test_artifact_round_trip_preserves_exact_numpy_scoring(tmp_path: Path) -> None:
@@ -400,8 +407,18 @@ def test_artifact_round_trip_preserves_exact_numpy_scoring(tmp_path: Path) -> No
         [[3.0, 0.0, 0.0, 0.0, 0.1], [0.0, 3.0, 0.0, 0.0, 0.1]],
         dtype=np.float32,
     )
-    expected = project_role(bundle, activations, provenance=bundle.provenance)
-    actual = project_role(loaded, activations, provenance=loaded.provenance)
+    expected = project_role(
+        bundle,
+        activations,
+        provenance=bundle.provenance,
+        layer_index=bundle.training.layer_index,
+    )
+    actual = project_role(
+        loaded,
+        activations,
+        provenance=loaded.provenance,
+        layer_index=loaded.training.layer_index,
+    )
     assert actual.roles == expected.roles
     assert actual.predicted_role == expected.predicted_role
     assert np.array_equal(actual.token_probabilities, expected.token_probabilities)
@@ -467,12 +484,18 @@ def test_dataset_fingerprint_covers_activations_labels_and_provenance() -> None:
 def test_projection_shape_finiteness_and_qualification_are_enforced() -> None:
     bundle = train_role_probe(_dataset(), _training_config())
     with pytest.raises(ValueError, match="lacks passing"):
-        project_role(bundle, np.zeros((2, 5), dtype=np.float32), provenance=bundle.provenance)
+        project_role(
+            bundle,
+            np.zeros((2, 5), dtype=np.float32),
+            provenance=bundle.provenance,
+            layer_index=bundle.training.layer_index,
+        )
     with pytest.raises(ValueError, match="shape"):
         project_role(
             bundle,
             np.zeros((2, 4), dtype=np.float32),
             provenance=bundle.provenance,
+            layer_index=bundle.training.layer_index,
             require_qa_eligible=False,
         )
     nonfinite = np.zeros((2, 5), dtype=np.float32)
@@ -482,6 +505,7 @@ def test_projection_shape_finiteness_and_qualification_are_enforced() -> None:
             bundle,
             nonfinite,
             provenance=bundle.provenance,
+            layer_index=bundle.training.layer_index,
             require_qa_eligible=False,
         )
     mismatched = replace(bundle.provenance, model_dtype="float16")
@@ -490,6 +514,23 @@ def test_projection_shape_finiteness_and_qualification_are_enforced() -> None:
             bundle,
             np.zeros((2, 5), dtype=np.float32),
             provenance=mismatched,
+            layer_index=bundle.training.layer_index,
+            require_qa_eligible=False,
+        )
+    with pytest.raises(ValueError, match="trained probe layer"):
+        project_role(
+            bundle,
+            np.zeros((2, 5), dtype=np.float32),
+            provenance=bundle.provenance,
+            layer_index=3,
+            require_qa_eligible=False,
+        )
+    with pytest.raises(ValueError, match="dtype"):
+        project_role(
+            bundle,
+            np.zeros((2, 5), dtype=np.float16),
+            provenance=bundle.provenance,
+            layer_index=bundle.training.layer_index,
             require_qa_eligible=False,
         )
 

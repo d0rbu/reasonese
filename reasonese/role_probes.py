@@ -778,11 +778,14 @@ def project_role(
     activations: Array,
     *,
     provenance: ActivationProvenance,
+    layer_index: int,
     require_qa_eligible: bool = True,
 ) -> RoleProjection:
     """Project content-token activations from the probe's selected layer."""
     if not _same_pipeline(probe.provenance, provenance):
         raise ValueError("projection activations do not match the probe's exact model pipeline")
+    if layer_index != probe.training.layer_index:
+        raise ValueError("projection layer does not match the trained probe layer")
     if require_qa_eligible and not probe.qa_eligible:
         raise ValueError("probe lacks passing neutral and conversation validation")
     values = np.asarray(activations)
@@ -790,6 +793,8 @@ def project_role(
         raise ValueError("activations must have shape [tokens, hidden_size]")
     if values.shape[0] == 0 or not np.issubdtype(values.dtype, np.floating):
         raise ValueError("activations must be a non-empty floating array")
+    if values.dtype.name != provenance.activation_dtype:
+        raise ValueError("projection activation dtype does not match provenance")
     if not np.isfinite(values).all():
         raise ValueError("activations must be finite")
     probabilities = _predict(probe, values)
