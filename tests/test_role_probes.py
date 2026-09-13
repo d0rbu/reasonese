@@ -554,18 +554,35 @@ def test_sklearn_probe_does_not_regularize_class_imbalance_intercept() -> None:
 
 
 @pytest.mark.parametrize(
-    ("solver_message", "expected_iterations", "raises"),
-    (("", 0, False), ("", 5_000, False), ("L-BFGS: max iterations reached", 5_000, True)),
+    ("solver_message", "expected_iterations", "free_bytes", "nonfinite", "error"),
+    (
+        ("", 0, 8 * 1024**3, False, None),
+        ("", 5_000, 8 * 1024**3, False, None),
+        (
+            "L-BFGS: max iterations reached",
+            5_000,
+            8 * 1024**3,
+            False,
+            "reported a fitting failure",
+        ),
+        ("", 5_001, 8 * 1024**3, False, "invalid iteration count"),
+        ("", 10, 8 * 1024**3, True, "non-finite parameters"),
+        ("", 10, 1, False, "lacks device headroom"),
+    ),
 )
-def test_cuml_fit_uses_one_fp32_fortran_matrix_and_detects_solver_failure(
+def test_cuml_fit_enforces_layout_memory_solver_and_result_boundaries(
     monkeypatch: pytest.MonkeyPatch,
     solver_message: str,
     expected_iterations: int,
-    raises: bool,
+    free_bytes: int,
+    nonfinite: bool,
+    error: str | None,
 ) -> None:
     class Pool:
+        calls = 0
+
         def free_all_blocks(self) -> None:
-            pass
+            self.calls += 1
 
     class Classifier:
         def __init__(self, **kwargs: object) -> None:
@@ -579,14 +596,16 @@ def test_cuml_fit_uses_one_fp32_fortran_matrix_and_detects_solver_failure(
             if solver_message:
                 print(solver_message)
             self.classes_ = np.arange(3)
-            self.coef_ = np.zeros((3, x.shape[1]), dtype=np.float32)
+            self.coef_ = np.full(
+                (3, x.shape[1]), np.nan if nonfinite else 0.0, dtype=np.float32
+            )
             self.intercept_ = np.zeros(3, dtype=np.float32)
             self.n_iter_ = np.asarray([expected_iterations])
 
     pool = Pool()
     cupy = SimpleNamespace(
         asarray=np.asarray,
-        cuda=SimpleNamespace(runtime=SimpleNamespace(memGetInfo=lambda: (8 * 1024**3, 0))),
+        cuda=SimpleNamespace(runtime=SimpleNamespace(memGetInfo=lambda: (free_bytes, 0))),
         get_default_memory_pool=lambda: pool,
     )
     original_import = role_probes.importlib.import_module
@@ -600,8 +619,8 @@ def test_cuml_fit_uses_one_fp32_fortran_matrix_and_detects_solver_failure(
 
     monkeypatch.setattr(role_probes.importlib, "import_module", import_module)
     config = replace(_training_config(), optimizer=_cuml_optimizer_config())
-    if raises:
-        with pytest.raises(RuntimeError, match="reported a fitting failure"):
+    if error is not None:
+        with pytest.raises((RuntimeError, MemoryError), match=error):
             _fit_parameters(np.ones((6, 2)), np.arange(6) % 3, 1.0, config, 3)
     else:
         coefficients, intercepts, fit_iterations = _fit_parameters(
@@ -610,6 +629,7 @@ def test_cuml_fit_uses_one_fp32_fortran_matrix_and_detects_solver_failure(
         assert coefficients.shape == (3, 2)
         assert intercepts.shape == (3,)
         assert fit_iterations == [expected_iterations]
+    assert pool.calls == 2
 
 
 def test_optimizer_runtime_digest_and_numerical_contract_are_immutable() -> None:
@@ -620,6 +640,101 @@ def test_optimizer_runtime_digest_and_numerical_contract_are_immutable() -> None
     runtime["matrix"]["array_order"] = "C"
     with pytest.raises(ValueError, match="numerical settings"):
         optimizer_config_from_runtime(runtime)
+
+
+def test_cuml_runtime_identity_is_reconstructed_and_checked(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    logistic_path = tmp_path / "logistic_regression.py"
+    qn_path = tmp_path / "qn.abi3.so"
+    libcuml_path = tmp_path / "libcuml.so"
+    for path, content in (
+        (logistic_path, b"logistic"),
+        (qn_path, b"qn"),
+        (libcuml_path, b"libcuml"),
+    ):
+        path.write_bytes(content)
+    cupy = SimpleNamespace(
+        cuda=SimpleNamespace(
+            runtime=SimpleNamespace(
+                getDevice=lambda: 0,
+                getDeviceProperties=lambda _: {
+                    "name": b"test-gpu",
+                    "major": 8,
+                    "minor": 9,
+                },
+                driverGetVersion=lambda: 13_000,
+                runtimeGetVersion=lambda: 13_020,
+            )
+        )
+    )
+    modules = {
+        "cupy": cupy,
+        "cuml.linear_model.logistic_regression": SimpleNamespace(__file__=str(logistic_path)),
+        "cuml.solvers.qn": SimpleNamespace(__file__=str(qn_path)),
+    }
+    original_import = role_probes.importlib.import_module
+    monkeypatch.setattr(
+        role_probes.importlib,
+        "import_module",
+        lambda name: modules.get(name) or original_import(name),
+    )
+    monkeypatch.setattr(role_probes.importlib.metadata, "version", lambda _: "test-version")
+    monkeypatch.setattr(
+        role_probes.importlib.metadata,
+        "distribution",
+        lambda _: SimpleNamespace(locate_file=lambda _: libcuml_path),
+    )
+
+    optimizer = role_probes.cuml_optimizer_config()
+    runtime = json.loads(optimizer.runtime_json)
+    assert runtime["cuda"] == {
+        "compute_capability": "8.9",
+        "device_name": "test-gpu",
+        "driver_version": 13_000,
+        "runtime_version": 13_020,
+    }
+    assert runtime["implementation_sha256"] == {
+        "cuml/linear_model/logistic_regression.py": role_probes._path_sha256(logistic_path),
+        "cuml/solvers/qn.abi3.so": role_probes._path_sha256(qn_path),
+        "libcuml/lib64/libcuml.so": role_probes._path_sha256(libcuml_path),
+    }
+    role_probes._validate_optimizer_runtime(optimizer)
+    modules["cuml.linear_model.logistic_regression"] = SimpleNamespace(__file__=None)
+    with pytest.raises(ValueError, match="implementation is not hashable"):
+        role_probes.cuml_optimizer_config()
+    modules["cuml.linear_model.logistic_regression"] = SimpleNamespace(
+        __file__=str(logistic_path)
+    )
+    monkeypatch.setattr(
+        role_probes.importlib.metadata,
+        "distribution",
+        lambda _: SimpleNamespace(locate_file=lambda _: tmp_path / "missing.so"),
+    )
+    with pytest.raises(ValueError, match="runtime file is missing"):
+        role_probes.cuml_optimizer_config()
+    monkeypatch.setattr(
+        role_probes,
+        "cuml_optimizer_config",
+        lambda **_: role_probes.sklearn_optimizer_config(),
+    )
+    with pytest.raises(ValueError, match="live optimizer runtime"):
+        role_probes._validate_optimizer_runtime(optimizer)
+
+
+def test_cuml_runtime_identity_fails_without_optional_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_import = role_probes.importlib.import_module
+
+    def import_module(name: str) -> object:
+        if name == "cupy":
+            raise ImportError("missing")
+        return original_import(name)
+
+    monkeypatch.setattr(role_probes.importlib, "import_module", import_module)
+    with pytest.raises(RuntimeError, match="pinned isolated GPU environment"):
+        role_probes.cuml_optimizer_config()
 
 
 def test_cuml_qn_matches_sklearn_reference_when_explicitly_enabled() -> None:
