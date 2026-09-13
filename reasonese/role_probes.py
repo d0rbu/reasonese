@@ -1173,6 +1173,22 @@ def _fit_parameters(
             cupy.get_default_memory_pool().free_all_blocks()
 
 
+def _materialize_activation_matrix(
+    dataset: ActivationDataset,
+    rows: Array,
+    layer_offset: int,
+    *,
+    dtype: Any,
+    order: str,
+) -> Array:
+    selected = dataset.activations[rows, layer_offset]
+    if order == "F":
+        return np.asfortranarray(selected, dtype=dtype)
+    if order == "C":
+        return np.ascontiguousarray(selected, dtype=dtype)
+    raise ValueError("activation matrix order must be C or F")
+
+
 @beartype
 def train_role_probe(dataset: ActivationDataset, config: ProbeTrainingConfig) -> RoleProbe:
     """Select layer and L2 strength on grouped neutral dev data and test once."""
@@ -1207,24 +1223,32 @@ def train_role_probe(dataset: ActivationDataset, config: ProbeTrainingConfig) ->
     test_rows = _select_rows(dataset, split.test)
     train_labels = _labels(dataset, train_rows)
     validation_labels = _labels(dataset, validation_rows)
+    fit_dtype = np.float32 if config.optimizer.backend == "cuml-qn" else np.float64
+    fit_order = "F" if config.optimizer.backend == "cuml-qn" else "C"
 
     candidates: list[ProbeCandidateMetrics] = []
     for layer_index in config.layer_indices:
         layer_offset = dataset.provenance.layer_indices.index(layer_index)
+        train_matrix = _materialize_activation_matrix(
+            dataset, train_rows, layer_offset, dtype=fit_dtype, order=fit_order
+        )
+        validation_matrix = _materialize_activation_matrix(
+            dataset, validation_rows, layer_offset, dtype=np.float64, order="C"
+        )
         for regularization in config.lambda_grid:
             started = time.monotonic()
             logger.info(
                 "Fitting role probe candidate layer=%d lambda=%g", layer_index, regularization
             )
             coefficients, intercepts, iterations = _fit_parameters(
-                dataset.activations[train_rows, layer_offset],
+                train_matrix,
                 train_labels,
                 regularization,
                 config,
                 len(dataset.provenance.roles),
             )
             probabilities = _predict_parameters(
-                coefficients, intercepts, dataset.activations[validation_rows, layer_offset]
+                coefficients, intercepts, validation_matrix
             )
             if not np.all(np.isfinite(probabilities)):
                 raise RuntimeError("probe candidate produced non-finite development probabilities")
@@ -1245,6 +1269,7 @@ def train_role_probe(dataset: ActivationDataset, config: ProbeTrainingConfig) ->
                 metrics.negative_log_likelihood,
                 time.monotonic() - started,
             )
+        del train_matrix, validation_matrix
     selected = max(
         candidates,
         key=lambda candidate: (
@@ -1265,13 +1290,17 @@ def train_role_probe(dataset: ActivationDataset, config: ProbeTrainingConfig) ->
         layer_index,
         regularization,
     )
+    fit_matrix = _materialize_activation_matrix(
+        dataset, fit_rows, layer_offset, dtype=fit_dtype, order=fit_order
+    )
     coefficients, intercepts, iterations = _fit_parameters(
-        dataset.activations[fit_rows, layer_offset],
+        fit_matrix,
         _labels(dataset, fit_rows),
         regularization,
         config,
         len(dataset.provenance.roles),
     )
+    del fit_matrix
     logger.info(
         "Finished selected role probe refit layer=%d lambda=%g iterations=%s elapsed_seconds=%.3f",
         layer_index,

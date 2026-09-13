@@ -349,7 +349,11 @@ def test_training_jointly_selects_layer_and_lambda_without_reading_test_candidat
     dataset = _dataset(layers=(3, 7))
     config = replace(_training_config(), layer_indices=(3, 7))
     metric_documents: list[tuple[str, ...]] = []
+    materializations: list[tuple[int, int, str, str]] = []
+    fit_matrix_ids: list[int] = []
     original_metrics = role_probes._metrics
+    original_materialize = role_probes._materialize_activation_matrix
+    original_fit_parameters = role_probes._fit_parameters
 
     def recording_metrics(
         probabilities: np.ndarray,
@@ -362,6 +366,34 @@ def test_training_jointly_selects_layer_and_lambda_without_reading_test_candidat
         return original_metrics(probabilities, labels, roles, documents, evaluated_roles)
 
     monkeypatch.setattr(role_probes, "_metrics", recording_metrics)
+
+    def recording_materialize(
+        source: ActivationDataset,
+        rows: np.ndarray,
+        layer_offset: int,
+        *,
+        dtype: object,
+        order: str,
+    ) -> np.ndarray:
+        result = original_materialize(
+            source, rows, layer_offset, dtype=dtype, order=order
+        )
+        np.testing.assert_array_equal(result, source.activations[rows, layer_offset])
+        materializations.append((layer_offset, len(rows), result.dtype.name, order))
+        return result
+
+    def recording_fit(
+        x: np.ndarray,
+        y: np.ndarray,
+        regularization: float,
+        training: ProbeTrainingConfig,
+        class_count: int,
+    ) -> tuple[np.ndarray, np.ndarray, list[int]]:
+        fit_matrix_ids.append(id(x))
+        return original_fit_parameters(x, y, regularization, training, class_count)
+
+    monkeypatch.setattr(role_probes, "_materialize_activation_matrix", recording_materialize)
+    monkeypatch.setattr(role_probes, "_fit_parameters", recording_fit)
     bundle = train_role_probe(dataset, config)
 
     assert bundle.selected_layer_index == 7
@@ -374,6 +406,20 @@ def test_training_jointly_selects_layer_and_lambda_without_reading_test_candidat
     assert set(metric_documents[0]) == set(bundle.split.validation)
     assert set(metric_documents[-1]) == set(bundle.split.test)
     assert len(metric_documents) == len(bundle.development_candidates) + 1
+    assert materializations == [
+        (0, len(bundle.split.train) * len(_ROLES) * 4, "float64", "C"),
+        (0, len(bundle.split.validation) * len(_ROLES) * 4, "float64", "C"),
+        (1, len(bundle.split.train) * len(_ROLES) * 4, "float64", "C"),
+        (1, len(bundle.split.validation) * len(_ROLES) * 4, "float64", "C"),
+        (
+            1,
+            (len(bundle.split.train) + len(bundle.split.validation)) * len(_ROLES) * 4,
+            "float64",
+            "C",
+        ),
+    ]
+    assert fit_matrix_ids[0] == fit_matrix_ids[1]
+    assert fit_matrix_ids[2] == fit_matrix_ids[3]
 
 
 def test_training_enforces_preregistered_document_and_token_counts() -> None:
