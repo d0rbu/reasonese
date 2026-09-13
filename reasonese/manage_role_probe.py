@@ -25,6 +25,8 @@ from reasonese.probe_statistics import (
     MIN_TEST_AUC,
 )
 from reasonese.role_probe_extraction import (
+    FROZEN_NEUTRAL_FILLER_LENGTH_DISTRIBUTION,
+    FROZEN_NEUTRAL_MAX_FILLER_TOKENS,
     GEMMA_ADAPTER,
     NATIVE_ADAPTERS,
     NEMOTRON_ADAPTER,
@@ -33,6 +35,7 @@ from reasonese.role_probe_extraction import (
     load_activation_dataset,
     load_prefix_model,
     model_runtime_identity,
+    validate_frozen_neutral_construction,
     validate_prefix_checkpoint_identity,
 )
 from reasonese.role_probes import (
@@ -130,6 +133,15 @@ def _protocol_training_config(
             or layers != sorted(layers)
         ):
             raise ValueError("expanded probe protocol contains an invalid document or layer search")
+        if (
+            type(protocol.get("neutral_max_filler_tokens")) is not int
+            or protocol["neutral_max_filler_tokens"] != FROZEN_NEUTRAL_MAX_FILLER_TOKENS
+            or type(protocol.get("neutral_max_sequence_tokens")) is not int
+            or protocol["neutral_max_sequence_tokens"] <= 0
+            or protocol.get("neutral_filler_length_distribution")
+            != FROZEN_NEUTRAL_FILLER_LENGTH_DISTRIBUTION
+        ):
+            raise ValueError("expanded probe protocol contains an invalid neutral construction")
         layer_indices = tuple(layers)
         maximum_content_tokens = content_tokens
         native_prompt_partitions_sha256 = protocol.get("native_prompt_partitions_sha256")
@@ -229,10 +241,14 @@ def _validate_frozen_protocol(
 def _train(args: argparse.Namespace) -> None:
     _require_new_output(args.output)
     protocol = _json_object(args.protocol)
-    dataset = load_activation_dataset(args.activations)
     config = _validate_frozen_protocol(
         protocol, args.adapter, protocol_sha256=_sha256(args.protocol)
     )
+    if config.maximum_content_tokens_per_document is not None:
+        validate_frozen_neutral_construction(
+            _json_object(args.activations / "manifest.json"), protocol
+        )
+    dataset = load_activation_dataset(args.activations)
     if len(set(dataset.document_ids.tolist())) != config.expected_document_count:
         raise ValueError("neutral activation document count does not match the frozen protocol")
     if dataset.provenance.activation_dtype != "float32":
@@ -344,6 +360,15 @@ def _extract_native(args: argparse.Namespace) -> None:
         if checkpoint_manifest.get(key) != expected:
             raise ValueError(f"prefix checkpoint {key} does not match the requested extraction")
     validate_prefix_checkpoint_identity(args.checkpoint, checkpoint_manifest)
+    # Dialogue and partition validation is independent of the checkpoint and
+    # model.  Do it before importing/loading the large native runtime so a bad
+    # input fails without allocating model memory.
+    dialogues = load_native_dialogues(
+        tuple(sorted(args.dialogue_dir.glob(args.dialogue_glob))),
+        assistant=assistant,
+        split=args.split,
+        prompt_partitions=args.prompt_partitions,
+    )
     try:
         import torch  # ty: ignore[unresolved-import, unused-ignore-comment]
         import transformers  # ty: ignore[unresolved-import, unused-ignore-comment]
@@ -360,12 +385,6 @@ def _extract_native(args: argparse.Namespace) -> None:
         execution_device=args.execution_device,
     )
     runtime_sha256, runtime = model_runtime_identity(model, adapter, checkpoint=args.checkpoint)
-    dialogues = load_native_dialogues(
-        tuple(sorted(args.dialogue_dir.glob(args.dialogue_glob))),
-        assistant=assistant,
-        split=args.split,
-        prompt_partitions=args.prompt_partitions,
-    )
     dataset = extract_native_activations(
         model,
         tokenizer,

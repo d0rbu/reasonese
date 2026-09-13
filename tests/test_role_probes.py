@@ -162,6 +162,22 @@ def _training_config(selected_layer: int = 7) -> ProbeTrainingConfig:
     )
 
 
+def test_neutral_source_digests_are_bound_together() -> None:
+    config = _training_config()
+    with pytest.raises(ValueError, match="provided together"):
+        replace(config, neutral_target_source_sha256="a" * 64)
+    with pytest.raises(ValueError, match="provided together"):
+        replace(config, neutral_filler_source_sha256="b" * 64)
+    assert (
+        replace(
+            config,
+            neutral_target_source_sha256="a" * 64,
+            neutral_filler_source_sha256="b" * 64,
+        ).neutral_target_source_sha256
+        == "a" * 64
+    )
+
+
 def _multinomial_objective(
     coefficients: np.ndarray,
     intercepts: np.ndarray,

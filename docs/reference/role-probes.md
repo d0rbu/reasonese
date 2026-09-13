@@ -214,6 +214,10 @@ tolerance. The expanded workflow uses the pinned cuML QN configuration above, ma
 analysis's backend and `1e-4` default tolerance while explicitly binding settings that its notebook
 left at defaults. Solver and tolerance are implementation details rather than requirements stated
 in the paper, so the full runtime and configuration are stored in the probe artifact.
+For expanded neutral training, the command first binds the activation manifest's recorded content,
+filler, sequence, and seed settings to the protocol's existing construction fields; it refuses a
+changed artifact before loading its activation arrays. Native extraction validates the dialogue
+partition and every request/response record before importing or loading the large model runtime.
 
 ```bash
 uv run reasonese-role-probe train \

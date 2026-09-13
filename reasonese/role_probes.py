@@ -692,6 +692,10 @@ class ProbeTrainingConfig:
             or self.maximum_content_tokens_per_document <= 1
         ):
             raise ValueError("maximum_content_tokens_per_document must be an integer above one")
+        if (self.neutral_target_source_sha256 is None) != (
+            self.neutral_filler_source_sha256 is None
+        ):
+            raise ValueError("neutral target and filler source digests must be provided together")
         for name in (
             "protocol_sha256",
             "native_prompt_partitions_sha256",

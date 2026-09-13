@@ -49,6 +49,11 @@ def _protocol(native_prompt_partitions_sha256: str | None = None) -> dict[str, A
             }
         }
         protocol["neutral_max_content_tokens"] = 5
+        protocol["neutral_max_filler_tokens"] = 513
+        protocol["neutral_max_sequence_tokens"] = 2_048
+        protocol["neutral_filler_length_distribution"] = (
+            cli.FROZEN_NEUTRAL_FILLER_LENGTH_DISTRIBUTION
+        )
         protocol["native_prompt_partitions_sha256"] = native_prompt_partitions_sha256
         protocol["neutral_target_source_sha256"] = "c" * 64
         protocol["neutral_filler_source_sha256"] = "d" * 64
@@ -99,6 +104,19 @@ def test_cli_trains_then_qualifies_without_learning_from_native_test(
         json.dumps(_protocol(hashlib.sha256(partition_path.read_bytes()).hexdigest()))
     )
     monkeypatch.setattr(cli, "load_activation_dataset", lambda _: neutral)
+    activation_path = tmp_path / "synthetic"
+    activation_path.mkdir()
+    (activation_path / "manifest.json").write_text(
+        json.dumps(
+            {
+                "max_content_tokens": 5,
+                "max_filler_tokens": 513,
+                "max_sequence_tokens": 2_048,
+                "seed": 0,
+                "extraction_protocol": "role-confusion-appendix-g-reasoning-assistant-v1",
+            }
+        )
+    )
     unqualified = tmp_path / "neutral.npz"
     cli.main(
         [
@@ -106,7 +124,7 @@ def test_cli_trains_then_qualifies_without_learning_from_native_test(
             "--adapter",
             NEMOTRON_ADAPTER.name,
             "--activations",
-            "synthetic",
+            str(activation_path),
             "--protocol",
             str(protocol),
             "--output",

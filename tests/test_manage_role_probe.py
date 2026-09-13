@@ -60,6 +60,11 @@ def _expanded_protocol() -> dict[str, Any]:
     protocol = _protocol()
     protocol["neutral_validation_documents"] = 250
     protocol["neutral_max_content_tokens"] = 1_024
+    protocol["neutral_max_filler_tokens"] = 513
+    protocol["neutral_max_sequence_tokens"] = 2_048
+    protocol["neutral_filler_length_distribution"] = (
+        manage.FROZEN_NEUTRAL_FILLER_LENGTH_DISTRIBUTION
+    )
     protocol["native_prompt_partitions_sha256"] = "a" * 64
     protocol["neutral_target_source_sha256"] = "b" * 64
     protocol["neutral_filler_source_sha256"] = "c" * 64
@@ -137,6 +142,15 @@ def test_frozen_protocol_accepts_both_pinned_adapters_and_rejects_drift() -> Non
     del missing_source["neutral_target_source_sha256"]
     with pytest.raises(ValueError, match="bind target and filler sources"):
         manage._validate_frozen_protocol(missing_source, NEMOTRON_ADAPTER.name)
+    for field in ("neutral_max_filler_tokens", "neutral_max_sequence_tokens"):
+        invalid = _expanded_protocol()
+        invalid[field] = 512 if field == "neutral_max_filler_tokens" else 0
+        with pytest.raises(ValueError, match="invalid neutral construction"):
+            manage._validate_frozen_protocol(invalid, NEMOTRON_ADAPTER.name)
+    invalid_distribution = _expanded_protocol()
+    invalid_distribution["neutral_filler_length_distribution"] = "uniform"
+    with pytest.raises(ValueError, match="invalid neutral construction"):
+        manage._validate_frozen_protocol(invalid_distribution, NEMOTRON_ADAPTER.name)
 
 
 def test_json_partition_and_parser_boundaries(tmp_path: Path) -> None:
@@ -357,19 +371,28 @@ def test_extract_native_wires_exact_checkpoint_and_runtime(
     dialogues = (object(),)
     dataset = object()
     calls: dict[str, Any] = {}
+    events: list[str] = []
     runtime = {"runtime": "test"}
     runtime_sha256 = manage.hashlib.sha256(
         json.dumps(runtime, separators=(",", ":"), sort_keys=True).encode()
     ).hexdigest()
     monkeypatch.setattr(
-        transformers.AutoTokenizer, "from_pretrained", lambda *args, **kwargs: tokenizer
+        transformers.AutoTokenizer,
+        "from_pretrained",
+        lambda *args, **kwargs: events.append("tokenizer") or tokenizer,
     )
     monkeypatch.setattr(manage, "validate_prefix_checkpoint_identity", lambda *args: None)
-    monkeypatch.setattr(manage, "load_prefix_model", lambda *args, **kwargs: model)
+    monkeypatch.setattr(
+        manage, "load_prefix_model", lambda *args, **kwargs: events.append("model") or model
+    )
     monkeypatch.setattr(
         manage, "model_runtime_identity", lambda *args, **kwargs: (runtime_sha256, runtime)
     )
-    monkeypatch.setattr(manage, "load_native_dialogues", lambda *args, **kwargs: dialogues)
+    monkeypatch.setattr(
+        manage,
+        "load_native_dialogues",
+        lambda *args, **kwargs: events.append("dialogues") or dialogues,
+    )
     monkeypatch.setattr(
         manage,
         "extract_native_activations",
@@ -393,6 +416,7 @@ def test_extract_native_wires_exact_checkpoint_and_runtime(
     )
     manage._extract_native(args)
     assert capsys.readouterr().out.strip() == str(args.output)
+    assert events[:3] == ["dialogues", "tokenizer", "model"]
     assert calls["args"][:4] == (model, tokenizer, NEMOTRON_ADAPTER, dialogues)
     assert calls["kwargs"]["layers"] == (13, 20, 26)
     assert calls["kwargs"]["identity"].runtime_sha256 == runtime_sha256
@@ -404,6 +428,58 @@ def test_extract_native_wires_exact_checkpoint_and_runtime(
     )
     with pytest.raises(ValueError, match="model_id"):
         manage._extract_native(args)
+
+
+def test_extract_native_validates_dialogues_before_loading_model(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    checkpoint = tmp_path / "checkpoint"
+    checkpoint.mkdir()
+    (checkpoint / "prefix-checkpoint-manifest.json").write_text(
+        json.dumps(
+            {
+                "adapter": NEMOTRON_ADAPTER.name,
+                "model_id": NEMOTRON_ADAPTER.model_id,
+                "revision": NEMOTRON_ADAPTER.model_revision,
+                "max_layer": 26,
+                "weights_sha256": "a" * 64,
+                "weights_hash_kind": "test",
+            }
+        ),
+        encoding="utf-8",
+    )
+    protocol = tmp_path / "expanded-protocol.json"
+    protocol.write_text(json.dumps(_expanded_protocol()), encoding="utf-8")
+    partitions = tmp_path / "partitions.json"
+    partitions.write_text("[]", encoding="utf-8")
+    dialogues = tmp_path / "dialogues"
+    dialogues.mkdir()
+    args = argparse.Namespace(
+        adapter=NEMOTRON_ADAPTER.name,
+        protocol=protocol,
+        checkpoint=checkpoint,
+        execution_device="cuda:0",
+        dialogue_dir=dialogues,
+        dialogue_glob="*.json",
+        split="calibration",
+        prompt_partitions=partitions,
+        output=tmp_path / "native",
+    )
+    events: list[str] = []
+    monkeypatch.setattr(manage, "validate_prefix_checkpoint_identity", lambda *args: None)
+
+    def reject_dialogues(*args: object, **kwargs: object) -> tuple[object, ...]:
+        del args, kwargs
+        events.append("dialogues")
+        raise ValueError("invalid native dialogue")
+
+    monkeypatch.setattr(manage, "load_native_dialogues", reject_dialogues)
+    monkeypatch.setattr(
+        manage, "load_prefix_model", lambda *args, **kwargs: pytest.fail("model was loaded")
+    )
+    with pytest.raises(ValueError, match="invalid native dialogue"):
+        manage._extract_native(args)
+    assert events == ["dialogues"]
 
 
 def test_main_dispatches_selected_command(monkeypatch: pytest.MonkeyPatch) -> None:

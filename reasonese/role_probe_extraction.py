@@ -39,6 +39,14 @@ from reasonese.role_probes import (
 _LOGGER = logging.getLogger(__name__)
 
 EXTRACTION_PROTOCOL = "role-confusion-appendix-g-reasoning-assistant-v1"
+# This description is part of the frozen expanded neutral protocol.  Keep it
+# next to the sampler below so a protocol edit cannot silently select a
+# different construction while retaining the same extraction protocol name.
+FROZEN_NEUTRAL_FILLER_LENGTH_DISTRIBUTION = (
+    "Beta(0.5,4.0) scaled by513, integer floor, minimum1; "
+    "exact native position matching may adjust chosen length"
+)
+FROZEN_NEUTRAL_MAX_FILLER_TOKENS = 513
 PREFIX_WEIGHTS_HASH_KIND = "sha256-filtered-index-and-shard-files-v1"
 NEMOTRON_KERNEL_REVISIONS: Mapping[str, tuple[str, str]] = {
     "causal-conv1d": (
@@ -66,6 +74,56 @@ class ProbeRole(StrEnum):
     TOOL = "tool"
     REASONING = "reasoning"
     ASSISTANT = "assistant"
+
+
+@beartype
+def validate_frozen_neutral_construction(
+    manifest: Mapping[str, object], protocol: Mapping[str, object]
+) -> None:
+    """Bind an expanded activation artifact to its recorded construction.
+
+    The activation artifact already records the token caps and sampling seed;
+    keeping this check at the train boundary avoids adding a second artifact
+    schema or trusting command-line defaults.  The distribution itself is a
+    protocol value implemented by :func:`build_role_dataset`, so it is pinned
+    to the implementation constant here.
+    """
+    split = protocol.get("neutral_split")
+    if not isinstance(split, Mapping):
+        raise ValueError("frozen neutral construction lacks its split")
+    split = cast(Mapping[str, object], split)
+    protocol_fields = (
+        "neutral_max_content_tokens",
+        "neutral_max_filler_tokens",
+        "neutral_max_sequence_tokens",
+    )
+    try:
+        expected_limits = tuple(protocol[field] for field in protocol_fields)
+        expected_seed = split["seed"]
+        actual_limits = tuple(manifest[field.removeprefix("neutral_")] for field in protocol_fields)
+        actual_seed = manifest["seed"]
+    except (KeyError, TypeError) as error:
+        raise ValueError("activation manifest lacks frozen neutral construction fields") from error
+    if any(type(value) is not int or value <= 0 for value in expected_limits):
+        raise ValueError("frozen neutral protocol contains invalid token limits")
+    if expected_limits[1] != FROZEN_NEUTRAL_MAX_FILLER_TOKENS:
+        raise ValueError("frozen neutral protocol contains an invalid filler cap")
+    if type(expected_seed) is not int:
+        raise ValueError("frozen neutral protocol contains an invalid construction seed")
+    if any(type(value) is not int or value <= 0 for value in actual_limits):
+        raise ValueError("activation manifest contains invalid neutral token limits")
+    if type(actual_seed) is not int:
+        raise ValueError("activation manifest contains an invalid construction seed")
+    if actual_limits != expected_limits or actual_seed != expected_seed:
+        raise ValueError("activation construction does not match the frozen neutral protocol")
+    if manifest.get("extraction_protocol") != EXTRACTION_PROTOCOL:
+        raise ValueError("activation construction uses an unknown extraction protocol")
+    if protocol.get("neutral_filler_length_distribution") != (
+        FROZEN_NEUTRAL_FILLER_LENGTH_DISTRIBUTION
+    ):
+        raise ValueError(
+            "frozen neutral filler length distribution is not the pinned implementation"
+        )
 
 
 @dataclass(frozen=True)

@@ -29,6 +29,7 @@ from reasonese.role_probe_extraction import (
     load_activation_dataset,
     load_neutral_documents,
     select_prefix_checkpoint_keys,
+    validate_frozen_neutral_construction,
     validate_native_template,
     validate_prefix_checkpoint_identity,
 )
@@ -152,6 +153,54 @@ def test_value_and_identity_contracts_fail_closed() -> None:
         _test_identity(tokenizer_id="")
     with pytest.raises(ValueError, match="runtime_sha256 does not match"):
         _test_identity(runtime_sha256="0" * 64)
+
+
+def test_frozen_neutral_construction_binds_existing_manifest_fields() -> None:
+    protocol: dict[str, object] = {
+        "neutral_max_content_tokens": 1_024,
+        "neutral_max_filler_tokens": 513,
+        "neutral_max_sequence_tokens": 2_048,
+        "neutral_filler_length_distribution": (
+            extraction.FROZEN_NEUTRAL_FILLER_LENGTH_DISTRIBUTION
+        ),
+        "neutral_split": {"seed": 0},
+    }
+    manifest: dict[str, object] = {
+        "max_content_tokens": 1_024,
+        "max_filler_tokens": 513,
+        "max_sequence_tokens": 2_048,
+        "seed": 0,
+        "extraction_protocol": extraction.EXTRACTION_PROTOCOL,
+    }
+    validate_frozen_neutral_construction(manifest, protocol)
+
+    changed_filler_cap = {**manifest, "max_filler_tokens": 512}
+    with pytest.raises(ValueError, match="does not match"):
+        validate_frozen_neutral_construction(changed_filler_cap, protocol)
+    changed_sequence_cap = {**manifest, "max_sequence_tokens": 2_047}
+    with pytest.raises(ValueError, match="does not match"):
+        validate_frozen_neutral_construction(changed_sequence_cap, protocol)
+    changed_distribution = {
+        **protocol,
+        "neutral_filler_length_distribution": "uniform",
+    }
+    with pytest.raises(ValueError, match="distribution"):
+        validate_frozen_neutral_construction(manifest, changed_distribution)
+    changed_protocol_cap = {
+        **protocol,
+        "neutral_max_filler_tokens": 512,
+    }
+    changed_protocol_manifest = {
+        **manifest,
+        "max_filler_tokens": 512,
+    }
+    with pytest.raises(ValueError, match="filler cap"):
+        validate_frozen_neutral_construction(changed_protocol_manifest, changed_protocol_cap)
+
+    for field in ("max_content_tokens", "max_filler_tokens", "max_sequence_tokens", "seed"):
+        malformed = {**manifest, field: True}
+        with pytest.raises(ValueError, match="invalid"):
+            validate_frozen_neutral_construction(malformed, protocol)
 
 
 def test_tokenizer_boundary_helpers_fail_closed(
