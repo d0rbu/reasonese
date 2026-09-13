@@ -171,7 +171,7 @@ def test_local_scorer_preflights_groups_contexts_and_reuses_exact_cache(
     verdicts = scorer.check(requests)
 
     assert len(verdicts) == 4
-    assert len(loaded) == 1
+    assert len(loaded) == 2
     assert captured == [(1, 2, 7, 8), (1, 2, 7, 8)]
     assert len({row.context_fingerprint for row in verdicts}) == 4
     assert all(len(row.role_probabilities) == 5 for row in verdicts)
@@ -181,7 +181,7 @@ def test_local_scorer_preflights_groups_contexts_and_reuses_exact_cache(
     )
 
     assert scorer.check(requests) == verdicts
-    assert len(loaded) == 1
+    assert len(loaded) == 2
     assert len(captured) == 2
 
 
@@ -189,7 +189,7 @@ def test_local_scorer_rejects_runtime_mismatch_before_projection(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config, cache, runtime_sha256 = _scorer_files(tmp_path)
-    _, captured = _patch_runtime(monkeypatch, runtime_sha256)
+    loaded, captured = _patch_runtime(monkeypatch, runtime_sha256)
     monkeypatch.setattr(
         local_module,
         "model_runtime_identity",
@@ -198,7 +198,31 @@ def test_local_scorer_rejects_runtime_mismatch_before_projection(
     _, requests = _requests()
     with pytest.raises(ValueError, match="runtime does not match"):
         LocalProbeQaScorer(config, cache, execution_device="cpu").check(requests)
+    assert len(loaded) == 1
     assert captured == []
+
+
+@pytest.mark.parametrize("corruption", ["roles", "decision"])
+def test_local_scorer_rejects_internally_inconsistent_cache_records(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, corruption: str
+) -> None:
+    config, cache, runtime_sha256 = _scorer_files(tmp_path)
+    _patch_runtime(monkeypatch, runtime_sha256)
+    _, requests = _requests()
+    LocalProbeQaScorer(config, cache, execution_device="cpu").check(requests)
+    raw = json.loads(cache.read_text(encoding="utf-8"))
+    record = next(iter(raw["records"].values()))
+    if corruption == "roles":
+        record["role_probabilities"][:2] = reversed(record["role_probabilities"][:2])
+        expected = "do not match the qualified probe"
+    else:
+        record["complies"] = not record["complies"]
+        record["issue"] = "tampered cached decision" if record["complies"] is False else None
+        expected = "does not match its probability and threshold"
+    cache.write_text(json.dumps(raw), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=expected):
+        LocalProbeQaScorer(config, cache, execution_device="cpu").check(requests)
 
 
 def test_probe_bundle_rejects_assistant_adapter_mismatch(tmp_path: Path) -> None:

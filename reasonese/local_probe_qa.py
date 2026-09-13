@@ -148,7 +148,7 @@ class _VerdictCache:
             raise ValueError("invalid local probe-QA cache records")
         self.records = cast(dict[str, dict[str, Any]], records)
 
-    def verdict(self, key: str, request: ProbeQaRequest) -> ProbeQaVerdict | None:
+    def verdict(self, key: str, request: ProbeQaRequest, probe: RoleProbe) -> ProbeQaVerdict | None:
         raw = self.records.get(key)
         if raw is None:
             return None
@@ -174,6 +174,11 @@ class _VerdictCache:
             issue is not None and not isinstance(issue, str)
         ):
             raise ValueError("invalid cached probe decision")
+        if tuple(role for role, _ in probabilities) != probe.provenance.roles:
+            raise ValueError("cached role probabilities do not match the qualified probe")
+        expected_complies, expected_issue = _decision(request, probe, reasoning)
+        if (complies, issue) != (expected_complies, expected_issue):
+            raise ValueError("cached probe decision does not match its probability and threshold")
         return ProbeQaVerdict(
             request,
             key,
@@ -291,9 +296,44 @@ class LocalProbeQaScorer:
             if any(manifest.get(key) != value for key, value in expected.items()):
                 raise ValueError(f"prefix checkpoint does not match the probe for {assistant}")
             validate_prefix_checkpoint_identity(bundle.checkpoint, manifest)
-            self._prepared[assistant] = _PreparedBundle(
-                bundle, probe, _file_sha256(bundle.probe_path), manifest
+            prepared = _PreparedBundle(bundle, probe, _file_sha256(bundle.probe_path), manifest)
+            model = self._load_validated_model(prepared)
+            del model
+            self._release_device_cache()
+            self._prepared[assistant] = prepared
+
+    def _load_validated_model(self, prepared: _PreparedBundle) -> object:
+        try:
+            model = load_prefix_model(
+                prepared.bundle.checkpoint,
+                prepared.bundle.adapter,
+                max_layer=prepared.probe.training.layer_index,
+                execution_device=self.execution_device,
             )
+        except BaseException:
+            self._release_device_cache()
+            raise
+        try:
+            validate_prefix_checkpoint_identity(
+                prepared.bundle.checkpoint, prepared.checkpoint_manifest
+            )
+            runtime_sha256, _ = model_runtime_identity(
+                model, prepared.bundle.adapter, checkpoint=prepared.bundle.checkpoint
+            )
+            if runtime_sha256 != prepared.probe.provenance.runtime_sha256:
+                raise ValueError("local scorer runtime does not match qualified probe provenance")
+        except BaseException:
+            del model
+            self._release_device_cache()
+            raise
+        return model
+
+    @staticmethod
+    def _release_device_cache() -> None:
+        gc.collect()
+        torch = importlib.import_module("torch")
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     @staticmethod
     def _context_key(
@@ -364,7 +404,7 @@ class LocalProbeQaScorer:
                 context.render_config_sha256,
             )
             keys[request] = key
-            cached = self.cache.verdict(key, request)
+            cached = self.cache.verdict(key, request, prepared.probe)
             if cached is None:
                 missing.append(request)
             else:
@@ -372,21 +412,8 @@ class LocalProbeQaScorer:
         if not missing:
             return
 
-        model = load_prefix_model(
-            prepared.bundle.checkpoint,
-            prepared.bundle.adapter,
-            max_layer=prepared.probe.training.layer_index,
-            execution_device=self.execution_device,
-        )
+        model = self._load_validated_model(prepared)
         try:
-            validate_prefix_checkpoint_identity(
-                prepared.bundle.checkpoint, prepared.checkpoint_manifest
-            )
-            runtime_sha256, _ = model_runtime_identity(
-                model, prepared.bundle.adapter, checkpoint=prepared.bundle.checkpoint
-            )
-            if runtime_sha256 != prepared.probe.provenance.runtime_sha256:
-                raise ValueError("local scorer runtime does not match qualified probe provenance")
             by_context: dict[tuple[str, int], list[ProbeQaRequest]] = defaultdict(list)
             for request in missing:
                 by_context[(request.study_id, request.permutation)].append(request)
@@ -444,10 +471,7 @@ class LocalProbeQaScorer:
                     raise ValueError("captured activations did not map to every target span")
         finally:
             del model
-            gc.collect()
-            torch = importlib.import_module("torch")
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+            self._release_device_cache()
 
     @property
     def limitations(self) -> tuple[str, ...]:
