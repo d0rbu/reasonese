@@ -16,7 +16,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-probes = ["scikit-learn>=1.8.0"]
+probes = [
+    "accelerate==1.12.0",
+    "einops==0.8.2",
+    "kernels==0.15.2",
+    "safetensors==0.8.0",
+    "scikit-learn>=1.8.0",
+    "torch==2.13.0",
+    "transformers==5.14.1",
+]
 
 [project.scripts]
 reasonese-axes = "reasonese.show_axes:main"
@@ -30,6 +38,7 @@ reasonese-collect-studies = "reasonese.collect_studies:main"
 reasonese-analyze = "reasonese.analyze:main"
 reasonese-curate-instructions = "reasonese.curate_instructions:main"
 reasonese-write-variants = "reasonese.write_variants:main"
+reasonese-extract-role-activations = "reasonese.extract_role_activations:main"
 
 [build-system]
 requires = ["hatchling"]

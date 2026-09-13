@@ -35,6 +35,9 @@
 | `reasonese/cache.py` | Readable message and trace caches |
 | `reasonese/message_qa.py` | Independent materialized-message compliance judgments |
 | `reasonese/role_probes.py` | Grouped activation-role probe training, qualification, scoring, and portable artifacts |
+| `reasonese/role_probe_extraction.py` | Exact native role rendering, prefix-only model loading, activation capture, and dataset artifacts |
+| `reasonese/extract_role_activations.py` | Local BF16 role-activation extraction utility |
+| `tests/test_role_probe_extraction.py` | Native-template controls, prefix equivalence, batching, and artifact contracts |
 | `docs/reference/role-probes.md` | Role-probe method, provenance, validity gates, and scientific limits |
 | `reasonese/message_qa_cache.py` | Exact-text-keyed readable QA cache |
 | `reasonese/check_messages.py` | Fail-closed QA gate and `reasonese-check-messages` utility |

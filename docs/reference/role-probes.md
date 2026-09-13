@@ -102,3 +102,46 @@ Probe artifacts are fingerprinted, pickle-free `.npz` files containing portable 
 and JSON metadata. The fingerprint covers the weights, fit and validation metrics, split document
 IDs, thresholds, and full provenance. Generated activation exports, fitted probes, and reports
 belong below ignored `out/` directories rather than in source control.
+
+## Local extraction
+
+`reasonese-extract-role-activations` extracts one exact, pinned native model adapter at a time.
+It loads a filtered BF16 checkpoint only through the highest requested probe site, CPU-offloads
+the retained prefix, and microbatches the five position-matched role copies of each document.
+The default is all five sequences when Nemotron's pinned fused Mamba kernels are active or for
+Gemma, and two sequences when Nemotron falls back to the memory-intensive native PyTorch scan;
+`--batch-size` records and overrides it. A dedicated filler pool must follow the target documents
+in the corpus JSONL; its
+document IDs and text must be disjoint from every target. For example, the 16-document systems
+smoke uses:
+
+```bash
+uv run reasonese-extract-role-activations \
+  --adapter nemotron-3.5-lightning-native-v1 \
+  --checkpoint out/role-probe-research/prefix-nemotron \
+  --corpus out/role-probe-research/smoke-corpus.jsonl \
+  --output out/role-probe-research/smoke-nemotron-activations \
+  --layers 8,17,26 \
+  --documents 16 \
+  --filler-documents 16
+```
+
+The checkpoint directory must contain the pinned config, tokenizer, filtered safetensors index
+and shards, and `prefix-checkpoint-manifest.json`. The utility rejects a template, architecture,
+revision, layer bound, tensor set, or weight identity that does not exactly match the adapter.
+It refuses to overwrite an existing artifact. A completed directory includes content-only
+activations, numeric row metadata, target and filler-document mappings, file digests, masking
+counts, package versions, exact model and template provenance, and runtime duration and peak
+memory measurements.
+
+Runtime provenance hashes the exact config and Transformers model implementation, Torch and CUDA
+versions, attention backend, device capability, numerical flags, and each resolved Nemotron
+kernel module and Hugging Face snapshot revision. Training, qualification, and QA reject runtime
+hash mismatches. Nemotron's optional runtime pins `kernels==0.15.2` and `einops==0.8.2`; changing
+the kernels or taking the unfused path creates a distinct instrument even when model weights are
+unchanged.
+
+This command creates an activation dataset; it does not qualify a probe. The 16-document C4 run
+is a systems smoke and is smaller and less diverse than Appendix G. Local Nemotron BF16 weights
+also differ from the NVFP4 checkpoint served by its OpenRouter free route, so results from the
+local instrument must not be described as hosted-activation parity.
