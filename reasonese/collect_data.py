@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import sys
 from collections.abc import Mapping, Sequence
@@ -15,9 +16,10 @@ import yaml
 from beartype import beartype
 from phantom.interval import Natural
 
+from reasonese.authoring_report import authoring_report
 from reasonese.axes import Assistant
 from reasonese.cache import YamlMessageCache
-from reasonese.check_messages import audit_messages, require_compliant_messages
+from reasonese.check_messages import audit_messages
 from reasonese.config import load_study
 from reasonese.conversation import (
     ConversationSetup,
@@ -32,6 +34,7 @@ from reasonese.judging import (
     judge_fingerprinted_traces,
 )
 from reasonese.manual_messages import ManualMessageLibrary, ManualMessageSnapshot
+from reasonese.message_qa import MessageQaVerdict
 from reasonese.message_qa_cache import YamlMessageQaCache
 from reasonese.observations import Observation, observations_from_trials, write_observations
 from reasonese.openrouter import OpenRouterClient, RequestsTransport, select_route
@@ -68,6 +71,7 @@ class _CollectionState:
     trace_hits: int
     judgments: dict[str, Judgment]
     judgment_hits: int
+    excluded_inputs: tuple[MessageQaVerdict, ...] = ()
 
 
 @beartype
@@ -79,6 +83,7 @@ class CollectionResult:
     trials: tuple[Trial, ...]
     trace_cache_hits: Natural
     judgment_cache_hits: Natural
+    excluded_inputs: tuple[MessageQaVerdict, ...] = ()
 
 
 def _prepare_task(
@@ -202,11 +207,6 @@ def collect_studies(
     )
     materialized_by_spec: dict[PromptSpec, GeneratedMessage] = {}
     if specs_to_materialize:
-        routing.require_paid(
-            "uncached assistant work (chargeable web search), including required message QA"
-        )
-        if client is None:
-            raise ValueError("OPENROUTER_API_KEY is required for uncached conversation trials")
         materialized_by_spec = {
             message.spec: message
             for message in materialize_specs(
@@ -216,6 +216,7 @@ def collect_studies(
                 manual_snapshot,
                 prefer_batch=prefer_batch,
                 routing=routing,
+                require_collection_permission=True,
             )
         }
 
@@ -228,14 +229,38 @@ def collect_studies(
         else:
             generated_by_state.append(_messages_from_cached_trace(state))
 
-    require_compliant_messages(
-        audit_messages(
-            tuple(message for messages in generated_by_state for message in messages),
-            qa_cache,
-            client,
-            routing=routing,
-        )
+    audit = audit_messages(
+        tuple(message for messages in generated_by_state for message in messages),
+        qa_cache,
+        client,
+        routing=routing,
     )
+    rejected = {verdict.spec: verdict for verdict in audit.verdicts if not verdict.complies}
+    report = authoring_report(studies, audit.verdicts)
+    report_path = message_cache.path.parent / "authoring_report.json"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    for verdict in rejected.values():
+        logging.getLogger(__name__).warning(
+            "Author message QA failed: author=%s framing=%s channel=%s instruction=%r issues=%s",
+            verdict.spec.author, verdict.spec.framing, verdict.spec.channel,
+            verdict.spec.instruction, list(verdict.issues),
+        )
+    for state in states:
+        state.excluded_inputs = tuple(
+            rejected[spec] for spec in state.task.study.inputs if spec in rejected
+        )
+        if state.excluded_inputs:
+            # Keep cached evidence, but never publish stale outcomes for excluded comparisons.
+            write_observations(state.task.output_dir / "observations.jsonl", ())
+            state.trials = ()
+            state.missing_trials = []
+            state.trace_hits = 0
+            state.judgment_hits = 0
+    if rejected:
+        # A previous aggregate is no longer authoritative; the suite CLI rebuilds it on success.
+        (message_cache.path.parent / "observations.jsonl").unlink(missing_ok=True)
+    print(f"Authoring QA: {json.dumps(report['counts'], sort_keys=True)}; report={report_path}", file=sys.stderr)
 
     assistant_work: dict[
         Assistant,
@@ -256,8 +281,9 @@ def collect_studies(
             )
 
     if assistant_work:
-        if client is None:  # pragma: no cover - guarded by materialization above
-            raise RuntimeError("assistant work requires an OpenRouter client")
+        routing.require_paid("uncached assistant work (chargeable web search)")
+        if client is None:
+            raise ValueError("OPENROUTER_API_KEY is required for uncached conversation trials")
         ordered_work = tuple(assistant_work.items())
         completed_traces: dict[tuple[int, int], ConversationTrace] = {}
         completion_lock = Lock()
@@ -369,6 +395,7 @@ def collect_studies(
                 state.trials,
                 Natural.parse(state.trace_hits),
                 Natural.parse(state.judgment_hits),
+                state.excluded_inputs,
             )
         )
     return tuple(results)
@@ -433,6 +460,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             {
                 "routes": routing.summary(),
                 "cells": len(study.inputs),
+                "excluded_comparisons": int(bool(result.excluded_inputs)),
+                "excluded_trials": len(build_trials(study)) if result.excluded_inputs else 0,
+                "authoring_report": str(args.output / "authoring_report.json"),
                 "judgment_cache_hits": int(result.judgment_cache_hits),
                 "observations": len(result.observations),
                 "output": str(args.output),

@@ -613,7 +613,7 @@ def test_collect_study_batches_trials_and_judgments_then_resumes_without_a_key(
 
     first_directory = next(directory for directory in manual.root.iterdir() if directory.is_dir())
     (first_directory / "normal.txt").write_text("Changed manual instruction.")
-    with pytest.raises(ValueError, match="conversation trials"):
+    with pytest.raises(ValueError, match="uncached message QA"):
         collect_study(study, output, None, manual, routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True)
 
 
@@ -896,7 +896,7 @@ def test_collect_study_runs_each_active_tool_round(tmp_path: Path) -> None:
 def test_collect_study_requires_key_only_for_missing_work(tmp_path: Path) -> None:
     study = _study()
     manual = _manual_library(tmp_path, study)
-    with pytest.raises(ValueError, match="conversation trials"):
+    with pytest.raises(ValueError, match="uncached message QA"):
         collect_study(study, tmp_path / "empty", None, manual, routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True)
 
     output = tmp_path / "traces-only"

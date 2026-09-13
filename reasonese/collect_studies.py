@@ -18,7 +18,7 @@ from reasonese.message_qa_cache import YamlMessageQaCache
 from reasonese.observations import write_observations
 from reasonese.openrouter import OpenRouterClient, RequestsTransport
 from reasonese.routing import add_route_arguments, routing_from_arguments
-from reasonese.study import Study, study_fingerprint
+from reasonese.study import Study, build_trials, study_fingerprint
 from reasonese.study_cache import SqliteStudyCache
 
 
@@ -107,6 +107,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     study_summaries = [
         {
             "cells": len(task.study.inputs),
+            "excluded_comparisons": int(bool(result.excluded_inputs)),
+            "excluded_trials": len(build_trials(task.study)) if result.excluded_inputs else 0,
             "judgment_cache_hits": int(result.judgment_cache_hits),
             "observations": len(result.observations),
             "output": str(task.output_dir),
@@ -118,6 +120,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     ]
     summary = {
         "routes": routing.summary(),
+        "authoring_report": str(args.output / "authoring_report.json"),
+        "excluded_comparisons": sum(item["excluded_comparisons"] for item in study_summaries),
+        "excluded_trials": sum(item["excluded_trials"] for item in study_summaries),
         "observations": sum(item["observations"] for item in study_summaries),
         "output": str(args.output),
         "studies": study_summaries,

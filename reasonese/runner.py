@@ -101,12 +101,13 @@ def materialize_messages(
 @beartype
 def materialize_specs(
     specs: tuple[PromptSpec, ...],
-    client: OpenRouterClient,
+    client: OpenRouterClient | None,
     cache: YamlMessageCache,
     manual_messages: ManualMessageLibrary | ManualMessageSnapshot,
     *,
     prefer_batch: bool,
     routing: CollectionRouting | None = None,
+    require_collection_permission: bool = False,
 ) -> tuple[GeneratedMessage, ...]:
     """Materialize arbitrary prompt specs with one shared model-grouped cache pass."""
     routing = routing or CollectionRouting()
@@ -143,6 +144,11 @@ def materialize_specs(
             )
         )
 
+    if completion_groups and require_collection_permission:
+        routing.require_paid("uncached collection authoring and required message QA")
+    if completion_groups and client is None:
+        raise ValueError("OPENROUTER_API_KEY is required for uncached conversation trials")
+
     for group in completion_groups:
         if not str(group.route.model_id).endswith(":free"):
             routing.require_paid("uncached paid authoring")
@@ -164,11 +170,13 @@ def materialize_specs(
             new_messages[spec] = message
 
     try:
-        client.complete_many_grouped(
-            tuple(completion_groups),
-            prefer_batch=prefer_batch,
-            on_response=collect_message,
-        )
+        if completion_groups:
+            assert client is not None
+            client.complete_many_grouped(
+                tuple(completion_groups),
+                prefer_batch=prefer_batch,
+                on_response=collect_message,
+            )
     finally:
         if new_messages:
             cache.put_many(tuple(new_messages.values()))
