@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 import reasonese.local_probe_qa as local_module
-from reasonese.axes import Assistant
+from reasonese.axes import Assistant, Framing
 from reasonese.local_probe_qa import LocalProbeQaScorer
 from reasonese.probe_rendering import RenderedProbeContext
 from reasonese.role_probe_extraction import EXTRACTION_PROTOCOL, NEMOTRON_ADAPTER, ProbeRole
@@ -185,6 +185,20 @@ def test_local_scorer_preflights_groups_contexts_and_reuses_exact_cache(
     assert len(captured) == 2
 
 
+def test_local_scorer_keeps_compressed_scores_descriptive(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config, cache, runtime_sha256 = _scorer_files(tmp_path)
+    _patch_runtime(monkeypatch, runtime_sha256)
+    _, requests = _requests(Framing.COMPRESSED_NORMAL)
+    verdicts = LocalProbeQaScorer(config, cache, execution_device="cpu").check(requests)
+    compressed = tuple(
+        verdict for verdict in verdicts if verdict.request.spec.framing is Framing.COMPRESSED_NORMAL
+    )
+    assert len(compressed) == 2
+    assert all(verdict.complies is None and verdict.issue is None for verdict in compressed)
+
+
 def test_local_scorer_rejects_runtime_mismatch_before_projection(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -280,6 +294,35 @@ def test_local_scorer_rejects_internally_inconsistent_cache_records(
         LocalProbeQaScorer(config, cache, execution_device="cpu").check(requests)
 
 
+@pytest.mark.parametrize(
+    "corruption", ["fields", "probability-type", "probability-row", "decision"]
+)
+def test_local_scorer_rejects_malformed_cached_verdicts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, corruption: str
+) -> None:
+    config, cache, runtime_sha256 = _scorer_files(tmp_path)
+    _patch_runtime(monkeypatch, runtime_sha256)
+    _, requests = _requests()
+    LocalProbeQaScorer(config, cache, execution_device="cpu").check(requests)
+    raw = json.loads(cache.read_text(encoding="utf-8"))
+    record = next(iter(raw["records"].values()))
+    if corruption == "fields":
+        record.pop("issue")
+        expected = "cache verdict"
+    elif corruption == "probability-type":
+        record["role_probabilities"] = {}
+        expected = "cached role probabilities"
+    elif corruption == "probability-row":
+        record["role_probabilities"][0] = []
+        expected = "cached role probabilities"
+    else:
+        record["complies"] = "yes"
+        expected = "cached probe decision"
+    cache.write_text(json.dumps(raw), encoding="utf-8")
+    with pytest.raises(ValueError, match=expected):
+        LocalProbeQaScorer(config, cache, execution_device="cpu").check(requests)
+
+
 def test_probe_bundle_rejects_assistant_adapter_mismatch(tmp_path: Path) -> None:
     config = tmp_path / "bundles.json"
     config.write_text(
@@ -299,6 +342,117 @@ def test_probe_bundle_rejects_assistant_adapter_mismatch(tmp_path: Path) -> None
     )
     with pytest.raises(ValueError, match="assistant does not match"):
         LocalProbeQaScorer(config, tmp_path / "cache.json")
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        ([], "invalid JSON object"),
+        ({"bundles": {}}, "must contain only a bundles list"),
+        ({"bundles": []}, "requires distinct assistant bundles"),
+        (
+            {
+                "bundles": [
+                    {
+                        "assistant": "unsupported",
+                        "adapter": NEMOTRON_ADAPTER.name,
+                        "checkpoint": "prefix",
+                        "probe": "probe.npz",
+                    }
+                ]
+            },
+            "unsupported assistant or adapter",
+        ),
+        (
+            {
+                "bundles": [
+                    {
+                        "assistant": str(Assistant.NEMOTRON_3_5_LIGHTNING),
+                        "adapter": NEMOTRON_ADAPTER.name,
+                        "checkpoint": 3,
+                        "probe": "probe.npz",
+                    }
+                ]
+            },
+            "paths must be strings",
+        ),
+    ],
+)
+def test_probe_bundle_config_rejects_malformed_records(
+    tmp_path: Path, payload: object, message: str
+) -> None:
+    config = tmp_path / "bundles.json"
+    config.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match=message):
+        LocalProbeQaScorer(config, tmp_path / "cache.json")
+
+
+def test_probe_bundle_config_rejects_invalid_json_and_incomplete_record(tmp_path: Path) -> None:
+    config = tmp_path / "bundles.json"
+    config.write_text("{", encoding="utf-8")
+    with pytest.raises(ValueError, match="invalid JSON object"):
+        LocalProbeQaScorer(config, tmp_path / "cache.json")
+    config.write_text(json.dumps({"bundles": [{"assistant": "missing fields"}]}), encoding="utf-8")
+    with pytest.raises(ValueError, match="invalid role-probe bundle record"):
+        LocalProbeQaScorer(config, tmp_path / "cache.json")
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"format_version": 2, "records": {}},
+        {"format_version": 1, "records": []},
+    ],
+)
+def test_local_probe_cache_rejects_invalid_envelopes(tmp_path: Path, payload: object) -> None:
+    config, cache, _ = _scorer_files(tmp_path)
+    cache.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="probe-QA cache"):
+        LocalProbeQaScorer(config, cache)
+
+
+def test_preflight_rejects_checkpoint_manifest_mismatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config, cache, runtime_sha256 = _scorer_files(tmp_path)
+    _patch_runtime(monkeypatch, runtime_sha256)
+    manifest = tmp_path / "prefix" / "prefix-checkpoint-manifest.json"
+    raw = json.loads(manifest.read_text(encoding="utf-8"))
+    raw["max_layer"] += 1
+    manifest.write_text(json.dumps(raw), encoding="utf-8")
+    with pytest.raises(ValueError, match="checkpoint does not match"):
+        LocalProbeQaScorer(config, cache).preflight((Assistant.NEMOTRON_3_5_LIGHTNING,))
+
+
+def test_preflight_rejects_probe_pipeline_mismatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config, cache, runtime_sha256 = _scorer_files(tmp_path)
+    _patch_runtime(monkeypatch, runtime_sha256)
+    probe_path = tmp_path / "probe.npz"
+    probe = load_role_probe(probe_path)
+    save_role_probe(
+        replace(probe, provenance=replace(probe.provenance, activation_dtype="float16")),
+        tmp_path / "mismatched.npz",
+    )
+    raw = json.loads(config.read_text(encoding="utf-8"))
+    raw["bundles"][0]["probe"] = "mismatched.npz"
+    config.write_text(json.dumps(raw), encoding="utf-8")
+    with pytest.raises(ValueError, match="does not match its native adapter"):
+        LocalProbeQaScorer(config, cache).preflight((Assistant.NEMOTRON_3_5_LIGHTNING,))
+
+
+def test_preflight_reports_missing_optional_runtime_dependencies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config, cache, _ = _scorer_files(tmp_path)
+    monkeypatch.setattr(
+        local_module.importlib,
+        "import_module",
+        lambda name: (_ for _ in ()).throw(ImportError(name)),
+    )
+    with pytest.raises(RuntimeError, match="requires the 'probes' extra"):
+        LocalProbeQaScorer(config, cache).preflight((Assistant.NEMOTRON_3_5_LIGHTNING,))
 
 
 def test_preflight_rejects_probe_without_native_qualification(
