@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from enum import StrEnum
 from threading import get_ident, local
@@ -15,6 +14,7 @@ from beartype import beartype
 from phantom import Phantom
 
 from reasonese.axes import Assistant, Author
+from reasonese.scheduling import ModelScheduler, ScheduledRequest
 
 JsonObject = dict[str, Any]
 _TERMINAL_BATCH_STATUSES = frozenset({"completed", "failed", "cancelled", "expired"})
@@ -205,18 +205,12 @@ class RequestsTransport:
         *,
         base_url: str = "https://openrouter.ai",
         timeout_seconds: float = 120.0,
-        rate_limit_retries: int = 3,
-        retry_sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         if not api_key.strip():
             raise ValueError("OpenRouter API key must not be blank")
-        if isinstance(rate_limit_retries, bool) or rate_limit_retries < 0:
-            raise ValueError("rate-limit retries must be a non-negative integer")
         self._api_key = api_key
         self._base_url = base_url.rstrip("/")
         self._timeout_seconds = timeout_seconds
-        self._rate_limit_retries = rate_limit_retries
-        self._retry_sleep = retry_sleep
         self._session = requests.Session()
         self._owner_thread = get_ident()
         self._thread_sessions = local()
@@ -244,29 +238,16 @@ class RequestsTransport:
             raise ValueError("OpenRouter returned a non-object JSON response")
         return cast(JsonObject, payload)
 
-    @staticmethod
-    def _retry_delay(response: requests.Response, attempt: int) -> float:
-        raw_delay = response.headers.get("Retry-After")
-        if raw_delay is not None:
-            try:
-                return min(max(float(raw_delay), 0.0), 30.0)
-            except ValueError:
-                pass
-        return min(2.0**attempt, 30.0)
-
     @beartype
     def post_json(self, path: str, body: JsonObject) -> JsonObject:
-        for attempt in range(self._rate_limit_retries + 1):
-            response = self._active_session().post(
-                f"{self._base_url}{path}",
-                headers=self._headers(),
-                json=body,
-                timeout=self._timeout_seconds,
-            )
-            if response.status_code != 429 or attempt == self._rate_limit_retries:
-                return self._json(response)
-            self._retry_sleep(self._retry_delay(response, attempt))
-        raise RuntimeError("rate-limit retry loop did not return")  # pragma: no cover
+        """Send one attempt; the client schedules model-specific retries."""
+        response = self._active_session().post(
+            f"{self._base_url}{path}",
+            headers=self._headers(),
+            json=body,
+            timeout=self._timeout_seconds,
+        )
+        return self._json(response)
 
     @beartype
     def get_json(self, path: str) -> JsonObject:
@@ -287,19 +268,37 @@ class OpenRouterClient:
     poll_interval_seconds: float = 10.0
     batch_timeout_seconds: float = 86_400.0
     sync_workers: int = 8
+    rate_limit_retries: int = 3
     sleep: Callable[[float], None] = field(default=time.sleep, repr=False)
     monotonic: Callable[[], float] = field(default=time.monotonic, repr=False)
 
+    scheduler: ModelScheduler = field(init=False, repr=False)
+
     def __post_init__(self) -> None:
-        if isinstance(self.sync_workers, bool) or self.sync_workers < 1:
-            raise ValueError("sync workers must be a positive integer")
+        self.scheduler = ModelScheduler(
+            self.sync_workers, self.rate_limit_retries, self.sleep, self.monotonic
+        )
+
+    def completion_request(
+        self,
+        model_id: OpenRouterModelId,
+        body: JsonObject,
+        receive: Callable[[JsonObject], ScheduledRequest[JsonObject] | None],
+    ) -> ScheduledRequest[JsonObject]:
+        """Prepare one completion attempt for the shared per-model scheduler."""
+        return ScheduledRequest(
+            str(model_id),
+            lambda: self.transport.post_json(
+                "/api/v1/chat/completions", {**body, "model": str(model_id)}
+            ),
+            receive,
+        )
 
     def complete(self, model_id: OpenRouterModelId, body: JsonObject) -> JsonObject:
-        """Run one synchronous chat completion."""
-        return self.transport.post_json(
-            "/api/v1/chat/completions",
-            {**body, "model": str(model_id)},
-        )
+        """Run one completion with the same model limit and bounded retries as groups."""
+        responses: list[JsonObject] = []
+        self.scheduler.run((self.completion_request(model_id, body, responses.append),))
+        return responses[0]
 
     def complete_many(
         self,
@@ -321,61 +320,69 @@ class OpenRouterClient:
         prefer_batch: bool,
     ) -> tuple[tuple[JsonObject, ...], ...]:
         """Complete model groups while overlapping independent batch jobs."""
-        results: list[tuple[JsonObject, ...] | None] = [None] * len(groups)
-        pending: list[tuple[int, _PendingBatch]] = []
+        results: list[list[JsonObject | None]] = [[None] * len(group.bodies) for group in groups]
+        pending: dict[int, _PendingBatch] = {}
+        batch_requests: list[ScheduledRequest[JsonObject]] = []
+        sync_requests: list[ScheduledRequest[JsonObject]] = []
+
+        def collect_batch(index: int, batch: JsonObject) -> None:
+            batch_id = batch.get("id")
+            if not isinstance(batch_id, str) or not batch_id:
+                raise ValueError("OpenRouter batch response is missing an id")
+            pending[index] = _PendingBatch(
+                batch_id,
+                batch,
+                len(groups[index].bodies),
+                self.monotonic() + self.batch_timeout_seconds,
+            )
+
+        def collect_sync(index: int, body_index: int, response: JsonObject) -> None:
+            results[index][body_index] = response
 
         for index, group in enumerate(groups):
             if not group.bodies:
-                results[index] = ()
-            elif (
+                continue
+            if (
                 completion_provenance(
                     group.route, group.bodies, prefer_batch=prefer_batch
                 ).transport
                 is CompletionTransport.BATCH
             ):
-                pending.append((index, self._submit_batch(group.route.model_id, group.bodies)))
-
-        pending_indexes = {index for index, _ in pending}
-        sync_work = tuple(
-            (group_index, body_index, group.route.model_id, body)
-            for group_index, group in enumerate(groups)
-            if results[group_index] is None and group_index not in pending_indexes
-            for body_index, body in enumerate(group.bodies)
-        )
-        if sync_work:
-            sync_results: dict[int, list[JsonObject | None]] = {
-                index: [None] * len(group.bodies)
-                for index, group in enumerate(groups)
-                if results[index] is None and index not in pending_indexes
-            }
-            with ThreadPoolExecutor(max_workers=min(self.sync_workers, len(sync_work))) as executor:
-                responses = executor.map(
-                    lambda work: self.complete(work[2], work[3]),
-                    sync_work,
+                batch_requests.append(
+                    ScheduledRequest(
+                        str(group.route.model_id),
+                        lambda group=group: self._submit_batch(group.route.model_id, group.bodies),
+                        lambda batch, index=index: collect_batch(index, batch),
+                    )
                 )
-                for (group_index, body_index, _, _), response in zip(
-                    sync_work, responses, strict=True
-                ):
-                    sync_results[group_index][body_index] = response
-            for index, group_results in sync_results.items():
-                if any(response is None for response in group_results):
-                    raise RuntimeError("synchronous completion group was not collected")
-                results[index] = cast(tuple[JsonObject, ...], tuple(group_results))
+            else:
+                for body_index, body in enumerate(group.bodies):
+                    sync_requests.append(
+                        self.completion_request(
+                            group.route.model_id,
+                            body,
+                            lambda response, index=index, body_index=body_index: collect_sync(
+                                index, body_index, response
+                            ),
+                        )
+                    )
+        self.scheduler.run((*batch_requests, *sync_requests))
 
         if pending:
-            completed = self._wait_for_batches(tuple(job for _, job in pending))
-            for (index, _), responses in zip(pending, completed, strict=True):
-                results[index] = responses
+            indexes = sorted(pending)
+            completed = self._wait_for_batches(tuple(pending[index] for index in indexes))
+            for index, responses in zip(indexes, completed, strict=True):
+                results[index] = list(responses)
 
-        if any(result is None for result in results):  # pragma: no cover - internal invariant
-            raise RuntimeError("completion group was not executed")
-        return cast(tuple[tuple[JsonObject, ...], ...], tuple(results))
+        if any(response is None for group in results for response in group):
+            raise RuntimeError("completion group was not executed")  # pragma: no cover
+        return cast(tuple[tuple[JsonObject, ...], ...], tuple(tuple(group) for group in results))
 
     def _submit_batch(
         self,
         model_id: OpenRouterModelId,
         bodies: tuple[JsonObject, ...],
-    ) -> _PendingBatch:
+    ) -> JsonObject:
         requests_payload = [
             {
                 "custom_id": f"request-{index}",
@@ -383,22 +390,13 @@ class OpenRouterClient:
             }
             for index, body in enumerate(bodies)
         ]
-        batch = self.transport.post_json(
+        return self.transport.post_json(
             "/api/beta/batches",
             {
                 "endpoint": "/v1/chat/completions",
                 "model": str(model_id),
                 "requests": requests_payload,
             },
-        )
-        batch_id = batch.get("id")
-        if not isinstance(batch_id, str) or not batch_id:
-            raise ValueError("OpenRouter batch response is missing an id")
-        return _PendingBatch(
-            batch_id,
-            batch,
-            len(bodies),
-            self.monotonic() + self.batch_timeout_seconds,
         )
 
     def _wait_for_batches(

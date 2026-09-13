@@ -27,11 +27,15 @@ matchup -> authored messages -> independent message QA -> conversation -> assist
 ```
 
 - `reasonese.matchup` validates an assistant and an ordered tuple of two or more datapoints.
-- `reasonese.openrouter` provides eight-worker concurrent synchronous completions by default,
-  retries definite rate limits with bounded backoff, and overlaps
+- `reasonese.openrouter` uses the shared model scheduler for synchronous completions and batch
+  submissions, and overlaps
   independent model-grouped batch jobs while preserving request and group order. Requests with
   OpenRouter server tools stay on the synchronous API because those tools are rejected by the
   Batch API.
+- `reasonese.scheduling` owns a separate adaptive concurrency window, start interval, and
+  cooldown per requested model slug. HTTP attempts run in bounded thread workers; retries wait
+  in model queues, so a cooling model cannot occupy another model's capacity. Limits persist
+  across stages on one client.
 - `reasonese.conversation` builds authoring requests and channel-specific chat messages.
 - `reasonese.manual_messages` resolves filesystem-backed variants for the user author and
   snapshots the needed files once per top-level invocation.
@@ -42,8 +46,8 @@ matchup -> authored messages -> independent message QA -> conversation -> assist
 - `reasonese.check_messages` provides the reusable fail-closed gate and standalone utility.
 - `reasonese.runner` coordinates cache lookup, generation, construction, and completion-driven
   assistant execution. A tool continuation is submitted as soon as its preceding response
-  arrives, independently of slower peers. Bounded admission is round-robin across model groups,
-  with ready continuations prioritized over fresh requests.
+  arrives, independently of slower peers. The shared scheduler prioritizes ready continuations
+  over fresh requests within each model, under that model's adaptive limit.
 - `reasonese.run_conversation` is the standalone conversation utility.
 
 The utilities have separate console entry points. There is no package-level dispatcher

@@ -24,7 +24,9 @@
 | `docs/reference/prompt-generation.md` | Exact prompts, framing guidance, and current limitations |
 | `reasonese/routing.py` | Collection route preference, paid opt-in, and invocation summaries |
 | `tests/test_routes.py` | Routing, provenance, billing, and fingerprint compatibility contracts |
-| `reasonese/openrouter.py` | Concurrent synchronous and overlapping grouped-batch provider client |
+| `reasonese/openrouter.py` | Provider transport, scheduled completions, and overlapping grouped batches |
+| `reasonese/scheduling.py` | Per-model adaptive concurrency, pacing, cooldowns, and bounded 429 retries |
+| `tests/test_scheduling.py` | Offline model isolation, adaptive recovery, pacing, and retry tests |
 | `reasonese/cache.py` | Readable message and trace caches |
 | `reasonese/message_qa.py` | Independent materialized-message compliance judgments |
 | `reasonese/message_qa_cache.py` | Exact-text-keyed readable QA cache |

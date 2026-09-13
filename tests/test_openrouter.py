@@ -132,7 +132,7 @@ def test_sync_completion_groups_run_concurrently_and_restore_order() -> None:
     )
 
     assert results == (_chat("one"), _chat("two"), _chat("three"))
-    assert transport.max_active == 3
+    assert transport.max_active == 2
 
 
 def test_sync_worker_count_must_be_positive() -> None:
@@ -472,46 +472,21 @@ def test_requests_transport_posts_and_gets_authenticated_json() -> None:
     assert session.calls[0][2]["headers"]["Authorization"] == "Bearer secret"
 
 
-def test_requests_transport_retries_429_using_retry_after() -> None:
-    limited = FakeResponse({}, 429, {"Retry-After": "0.25"})
-    completed = FakeResponse({"done": True})
-    session = FakeSession(iter((limited, completed)))
-    sleeps: list[float] = []
-    transport = RequestsTransport(
-        "secret",
-        rate_limit_retries=1,
-        retry_sleep=sleeps.append,
-    )
+def test_requests_transport_leaves_429_retry_to_the_scheduler() -> None:
+    session = FakeSession(iter((FakeResponse({}, 429),)))
+    transport = RequestsTransport("secret")
     cast(Any, transport)._session = session
 
-    assert transport.post_json("/post", {}) == {"done": True}
-    assert len(session.calls) == 2
-    assert sleeps == [0.25]
-    assert limited.raised is False
-    assert completed.raised is True
-
-
-def test_requests_transport_bounds_retry_after() -> None:
-    limited = FakeResponse({}, 429, {"Retry-After": "3600"})
-    completed = FakeResponse({"done": True})
-    session = FakeSession(iter((limited, completed)))
-    sleeps: list[float] = []
-    transport = RequestsTransport(
-        "secret",
-        rate_limit_retries=1,
-        retry_sleep=sleeps.append,
-    )
-    cast(Any, transport)._session = session
-
-    assert transport.post_json("/post", {}) == {"done": True}
-    assert sleeps == [30.0]
+    with pytest.raises(requests.HTTPError, match="429"):
+        transport.post_json("/post", {})
+    assert len(session.calls) == 1
 
 
 def test_requests_transport_rejects_blank_keys_and_non_object_json() -> None:
     with pytest.raises(ValueError, match="must not be blank"):
         RequestsTransport(" ")
     with pytest.raises(ValueError, match="non-negative integer"):
-        RequestsTransport("secret", rate_limit_retries=-1)
+        OpenRouterClient(FakeTransport(), rate_limit_retries=-1)
     response = FakeResponse([])
     transport = RequestsTransport("secret")
     cast(Any, transport)._session = FakeSession(iter((response,)))

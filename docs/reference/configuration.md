@@ -179,3 +179,41 @@ The Inkling free endpoints are restricted to agentic harnesses. Their presence i
 catalog and zero token prices do not establish access for this runner: a September 12, 2026
 smoke test was rejected during authoring with HTTP 403 (`Gate Free Endpoints by Agentic Harness`).
 Resolve provider access before launching the pilot; failed free calls do not trigger paid fallback.
+
+
+## Adaptive API scheduling
+
+One `OpenRouterClient` keeps independent limiter state for each **requested model slug** across
+its sequential authoring and assistant stages. Free and paid slugs have separate state, and
+multiple groups using the same slug share one limit. This applies to chat completions, tool
+continuations, and batch submissions. Batch status polling retains its existing polling policy.
+
+Each model starts with at most two in-flight requests. On success its concurrency window grows
+by `1 / window`, up to `OpenRouterClient(sync_workers=8)` by default. `sync_workers` is now a
+**per-model ceiling**, so two healthy models may have sixteen HTTP requests in flight in total.
+Requests use asynchronous thread workers behind the existing blocking Python entry points.
+Only admitted attempts occupy workers; cooldowns and retries remain in the scheduler's queues.
+Ready tool continuations take priority over new requests for the same model.
+
+A definite HTTP 429 halves that model's window (floor one), doubles its minimum request-start
+interval (initially one second, capped at thirty), and pauses **all new attempts for that model**
+until the cooldown expires. The cooldown is at least that interval and honors the full
+`Retry-After` value, including HTTP dates and values above thirty seconds. Missing, malformed,
+negative, or nonfinite headers use the adaptive interval. Each subsequent successful request
+reduces the interval by 20%; intervals below 10 ms return to zero. Successes from attempts already
+in flight when a 429 arrived cannot undo the backoff. Each 429 logs the model, current
+concurrency, start interval, and remaining cooldown to stderr. No model or paid-route fallback
+occurs.
+
+`OpenRouterClient(rate_limit_retries=3)` permits three retries after each request's initial
+attempt, including each tool continuation. Retry configuration moved from `RequestsTransport`
+to the client; the transport now sends a single attempt. Other HTTP failures, ambiguous network
+errors, and malformed responses propagate without retries. If one model exhausts its 429
+budget, its queued work stops and healthy models finish their queued requests before the error
+propagates. Collection still fails closed and uses its existing stage-level cache writes; this
+policy does not promise partial-stage persistence after an error.
+
+Limits are local to one client invocation, not shared across processes, clients, or API keys.
+They cannot override provider-wide or account-wide quotas. Offline tests establish scheduling
+and retry behavior only; actual throughput and suitable concurrency ceilings require a
+separately authorized live measurement.
