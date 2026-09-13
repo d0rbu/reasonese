@@ -485,9 +485,9 @@ def test_prefix_checkpoint_identity_is_recomputed(tmp_path: Path) -> None:
 def test_nemotron_kernel_revisions_load_exact_offline_snapshots(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    import kernels
-    from huggingface_hub import constants
-    from transformers.integrations import hub_kernels
+    import kernels  # ty: ignore[unresolved-import, unused-ignore-comment]
+    from huggingface_hub import constants  # ty: ignore[unresolved-import, unused-ignore-comment]
+    from transformers.integrations import hub_kernels  # ty: ignore[unresolved-import, unused-ignore-comment]
 
     module_mapping: dict[str, ModuleType | None] = {}
     hub_mapping: dict[str, dict[str, str]] = {}
@@ -517,9 +517,13 @@ def test_nemotron_kernel_revisions_load_exact_offline_snapshots(
 def test_loaded_native_prefix_exactly_matches_full_model(tmp_path: Path) -> None:
     torch = pytest.importorskip("torch")
     try:
-        from safetensors.torch import save_file
-        from transformers.models.nemotron_h.configuration_nemotron_h import NemotronHConfig
-        from transformers.models.nemotron_h.modeling_nemotron_h import NemotronHModel
+        from safetensors.torch import save_file  # ty: ignore[unresolved-import, unused-ignore-comment]
+        from transformers.models.nemotron_h.configuration_nemotron_h import (  # ty: ignore[unresolved-import, unused-ignore-comment]
+            NemotronHConfig,
+        )
+        from transformers.models.nemotron_h.modeling_nemotron_h import (  # ty: ignore[unresolved-import, unused-ignore-comment]
+            NemotronHModel,
+        )
     except ImportError:
         pytest.skip("pinned role-probe runtime is not installed")
     config = NemotronHConfig(
@@ -579,10 +583,14 @@ def test_loader_preserves_model_declared_fp32_buffer(
 ) -> None:
     torch = pytest.importorskip("torch")
     try:
-        import accelerate
-        from safetensors.torch import save_file
-        from transformers.models.nemotron_h.configuration_nemotron_h import NemotronHConfig
-        from transformers.models.nemotron_h.modeling_nemotron_h import NemotronHModel
+        import accelerate  # ty: ignore[unresolved-import, unused-ignore-comment]
+        from safetensors.torch import save_file  # ty: ignore[unresolved-import, unused-ignore-comment]
+        from transformers.models.nemotron_h.configuration_nemotron_h import (  # ty: ignore[unresolved-import, unused-ignore-comment]
+            NemotronHConfig,
+        )
+        from transformers.models.nemotron_h.modeling_nemotron_h import (  # ty: ignore[unresolved-import, unused-ignore-comment]
+            NemotronHModel,
+        )
     except ImportError:
         pytest.skip("pinned role-probe runtime is not installed")
     config = NemotronHConfig(
@@ -956,10 +964,18 @@ def test_prefix_capture_equals_full_forward_and_stops_tail(
 def test_native_prefix_batch_matches_unbatched() -> None:
     pytest.importorskip("torch")
     try:
-        from transformers.models.gemma4.configuration_gemma4 import Gemma4TextConfig
-        from transformers.models.gemma4.modeling_gemma4 import Gemma4TextModel
-        from transformers.models.nemotron_h.configuration_nemotron_h import NemotronHConfig
-        from transformers.models.nemotron_h.modeling_nemotron_h import NemotronHModel
+        from transformers.models.gemma4.configuration_gemma4 import (  # ty: ignore[unresolved-import, unused-ignore-comment]
+            Gemma4TextConfig,
+        )
+        from transformers.models.gemma4.modeling_gemma4 import (  # ty: ignore[unresolved-import, unused-ignore-comment]
+            Gemma4TextModel,
+        )
+        from transformers.models.nemotron_h.configuration_nemotron_h import (  # ty: ignore[unresolved-import, unused-ignore-comment]
+            NemotronHConfig,
+        )
+        from transformers.models.nemotron_h.modeling_nemotron_h import (  # ty: ignore[unresolved-import, unused-ignore-comment]
+            NemotronHModel,
+        )
     except ImportError:
         pytest.skip("pinned role-probe runtime is not installed")
     cases = (
