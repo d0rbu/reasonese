@@ -29,14 +29,23 @@ rather than reporting an instruction margin.
 | `casual` | Conversational wording, lowercase text, and reduced punctuation. |
 | `persuasive` | Natural language deliberately intended to secure compliance. |
 | `subagent` | A delegation written as though a parent agent were instructing a subagent. |
-| `reasonese-normal` | A compressed reasonese representation without deliberate persuasive intent. |
-| `reasonese-persuasive` | A compressed reasonese representation deliberately intended to secure compliance. |
+| `reasonese-normal` | A first-person, self-directed task note in the author model's natural planning voice. |
+| `reasonese-persuasive` | The same first-person planning style with natural self-encouragement or commitment to compliance. |
+| `compressed-normal` | Terse planning shorthand using fragments, abbreviations, symbols, and omitted function words. |
+| `compressed-persuasive` | Compressed shorthand with deliberate confidence, urgency, social-proof, or consensus cues. |
 
 These values name intended treatments. Model authors receive explicit transformation guidance.
 User-authored inputs load the matching manually written framing from `prompts/user`. The `user`
-author writes only `normal`, `casual`, and `persuasive`. The `subagent`, `reasonese-normal`, and
-`reasonese-persuasive` framings are produced by model authors only, so no user-authored datapoint
-carries them and constructing one is rejected.
+author writes only `normal`, `casual`, and `persuasive`. The `subagent`, `reasonese-normal`,
+`reasonese-persuasive`, `compressed-normal`, and `compressed-persuasive` framings are produced
+by model authors only, so no user-authored datapoint carries them and constructing one is rejected.
+
+Reasonese targets stylistic resemblance to each author's ordinary first-person planning prose.
+It is a generated instruction representation, not a captured reasoning trace or a claim that
+the message is empirically indistinguishable from one. First-person intent still instructs the
+future executor to perform the base task; the author must not solve it. Compression is an
+independent framing choice, not evidence of a model-native language. Style fidelity requires
+separate empirical validation.
 
 ## Channel
 
@@ -70,13 +79,13 @@ writes each instruction from which model receives the resulting conversation.
 ## Design size
 
 ```text
-model authors: 6 framings × 3 channels × 6 authors = 108
+model authors: 8 framings × 3 channels × 6 authors = 144
 user author:   3 framings × 3 channels × 1 author  =  9
-                                             total = 117 specifications per instruction
+                                             total = 153 specifications per instruction
 
-24 pairs × 2 instructions × 117                    = 5,616 specifications
-117 × 117 − 78 × 78                                = 7,605 eligible pairings per pair
-2 × 117                                            =   234 cells per pair
+24 pairs × 2 instructions × 153                    = 7,344 specifications
+153 × 153 − 102 × 102                                = 13,005 eligible pairings per pair
+2 × 153                                            =   306 cells per pair
 ```
 
 A pairing is eligible when it joins the two sides of one pair and at least one input uses the
@@ -86,6 +95,6 @@ No outcome or model-behavior claim is encoded in a specification.
 
 The counts above describe all supported axis values. The planner and sampler default to
 Nemotron 3.5 Lightning and Gemma 4 31B as authors and the sampler uses those same two
-assistants. That subset has 36 specifications per instruction (1,728 across the bank),
-72 cells and 720 eligible pairings per pair. Explicit author/assistant filters can select
+assistants. That subset has 48 specifications per instruction (2,304 across the bank),
+96 cells and 1,280 eligible pairings per pair. Explicit author/assistant filters can select
 other supported values; model availability does not change the axis definitions.

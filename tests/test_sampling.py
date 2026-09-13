@@ -1,7 +1,7 @@
 """Tests for within-pair study sampling.
 
-These run against the real 24-pair bank at its real size: 117 conditions per
-instruction side, a 7,605-edge population per pair, and the 720-edge pilot
+These run against the real 24-pair bank at its real size: 153 conditions per
+instruction side, a 13,005-edge population per pair, and the 720-edge pilot
 default. Synthetic pairs are used only where a degenerate channel mix is needed
 that the real bank cannot express.
 """
@@ -59,9 +59,9 @@ from reasonese.sampling import (
 from reasonese.study import PositiveInteger, StudyInputs, study_to_dict
 
 BANK = Path("configs/instruction_pairs.yaml")
-# Six framings for five model authors plus three for the user author, over three
-# channels: (6 * 5 + 3) * 3 = 117 conditions per instruction side.
-SIDE_SIZE = 117
+# Eight framings for six model authors plus three for the user author, over three
+# channels: (8 * 6 + 3) * 3 = 153 conditions per instruction side.
+SIDE_SIZE = 153
 USER_CHANNEL_SIDE = SIDE_SIZE // len(Channel)
 POPULATION = SIDE_SIZE**2 - (SIDE_SIZE - USER_CHANNEL_SIDE) ** 2
 NODES = 2 * SIDE_SIZE
@@ -336,7 +336,7 @@ def test_minimum_request_produces_a_spanning_tree() -> None:
     sampled = sample_pair_inputs(
         pair_specs, PositiveInteger.parse(NODES - 1), Natural.parse(3)
     )
-    # 233 edges over 234 connected cells can only be an acyclic spanning tree.
+    # 305 edges over 306 connected cells can only be an acyclic spanning tree.
     assert len(sampled) == NODES - 1
     components = _components(pair_specs, sampled)
     assert len(components) == 1
@@ -619,7 +619,7 @@ def test_sides_reject_duplicate_and_overlapping_specifications() -> None:
 
 def test_sampling_rejects_requests_outside_the_valid_range() -> None:
     pair_specs = _first_pair()
-    with pytest.raises(ValueError, match="at least 233"):
+    with pytest.raises(ValueError, match="at least 305"):
         sample_pair_inputs(pair_specs, PositiveInteger.parse(NODES - 2), Natural.parse(0))
     with pytest.raises(ValueError, match="cannot exceed the valid population"):
         sample_pair_inputs(
@@ -638,12 +638,12 @@ def test_studies_share_one_design_across_assistants() -> None:
     studies = build_sampled_studies(
         specs,
         assistants,
-        PositiveInteger.parse(240),
+        PositiveInteger.parse(320),
         PositiveInteger.parse(1),
         Natural.parse(0),
     )
 
-    assert len(studies) == 2 * 2 * 240
+    assert len(studies) == 2 * 2 * 320
     by_assistant: dict[Assistant, list[StudyInputs]] = {}
     for study in studies:
         by_assistant.setdefault(study.assistant, []).append(study.inputs)
@@ -685,7 +685,7 @@ def test_suite_construction_rejects_invalid_inputs(
         build_sampled_studies(
             specs,
             assistants,
-            PositiveInteger.parse(240),
+            PositiveInteger.parse(320),
             PositiveInteger.parse(1),
             Natural.parse(0),
         )
@@ -697,7 +697,7 @@ def test_suite_construction_rejects_duplicate_pair_ids() -> None:
         build_sampled_studies(
             duplicated,
             (Assistant.INKLING,),
-            PositiveInteger.parse(240),
+            PositiveInteger.parse(320),
             PositiveInteger.parse(1),
             Natural.parse(0),
         )
@@ -707,7 +707,7 @@ def test_study_suite_round_trip_and_validation(tmp_path: Path) -> None:
     studies = build_sampled_studies(
         _bank_specs()[:1],
         (Assistant.INKLING,),
-        PositiveInteger.parse(240),
+        PositiveInteger.parse(320),
         PositiveInteger.parse(1),
         Natural.parse(0),
     )
@@ -766,10 +766,10 @@ def test_sample_studies_cli_writes_a_loadable_suite(
     assert summary["studies"] == 24 * 200
     assert summary["trials"] == 2 * 24 * 200
     assert summary["authors"] == ["Inkling", "Inkling Small"]
-    # Two authors leaves 6 framings x 3 channels x 2 authors per side.
-    assert summary["specs"] == 24 * 2 * 36
-    assert summary["pairing_population_per_pair"] == 36 * 36 - 24 * 24
-    assert summary["minimum_connected_pairings_per_pair"] == 71
+    # Two authors leaves 8 framings x 3 channels x 2 authors per side.
+    assert summary["specs"] == 24 * 2 * 48
+    assert summary["pairing_population_per_pair"] == 48 * 48 - 32 * 32
+    assert summary["minimum_connected_pairings_per_pair"] == 95
 
     studies = load_study_suite(output)
     assert len(studies) == 24 * 200
@@ -800,7 +800,7 @@ def test_sample_studies_cli_uses_the_pilot_default(
     )
     summary = json.loads(capsys.readouterr().out)
     assert summary["pairings_per_pair"] == DEFAULT_PAIRINGS_PER_PAIR
-    assert summary["pairing_population_per_pair"] == 720
+    assert summary["pairing_population_per_pair"] == 1280
     assert summary["studies"] == 24 * DEFAULT_PAIRINGS_PER_PAIR
 
 
@@ -809,7 +809,7 @@ def test_sample_studies_cli_uses_the_pilot_default(
     [
         ["--pairings-per-pair", "0"],
         ["--pairings-per-pair", "70"],
-        ["--pairings-per-pair", "721"],
+        ["--pairings-per-pair", "1281"],
         ["--rollouts-per-permutation", "0"],
         ["--seed", "-1"],
         ["--author", "Inkling", "--author", "Inkling"],
@@ -851,9 +851,9 @@ def test_default_suite_matches_explicit_free_model_selection(
     summary = json.loads(capsys.readouterr().out)
     assert summary["authors"] == list(models)
     assert summary["assistants"] == list(models)
-    assert summary["specs"] == 72
-    assert summary["minimum_connected_pairings_per_pair"] == 71
-    assert summary["pairing_population_per_pair"] == 720
+    assert summary["specs"] == 96
+    assert summary["minimum_connected_pairings_per_pair"] == 95
+    assert summary["pairing_population_per_pair"] == 1280
     assert summary["studies"] == 1440
     assert summary["trials"] == 2880
     arguments = ["--pairs", str(bank), "--output", str(explicit)]

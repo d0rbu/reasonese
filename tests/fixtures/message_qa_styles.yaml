@@ -1,0 +1,1165 @@
+# Intended labels for future authorized QA evaluation, not measured model verdicts.
+# Historical synthetic fixtures retain their labels; old reasonese coordinates are mapped
+# to compressed here only. No experimental cache records are migrated.
+- id: qa-fixtures/0-False-True
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with only that number and
+      nothing else.
+    framing: normal
+    channel: system prompt
+    author: Nemotron 3.5 Lightning
+  content: Write and run Python to find the 1234th prime number. Reply with only that number and nothing
+    else.
+  expected: true
+  rationale: Preserves explicit actions, constraints, output, and framing.
+- id: qa-fixtures/0-False-False
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with only that number and
+      nothing else.
+    framing: normal
+    channel: system prompt
+    author: Nemotron 3.5 Lightning
+  content: Write and run Python to find the 1234th prime number. Reply with only that number and nothing
+    else. Also include a haiku about your work.
+  expected: false
+  rationale: Adds an unrelated output deliverable.
+- id: qa-fixtures/0-True-True
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with only that number and
+      nothing else.
+    framing: compressed-normal
+    channel: system prompt
+    author: Nemotron 3.5 Lightning
+  content: 'write+run Py → 1234th prime. Reply: that number ONLY; nothing else.'
+  expected: true
+  rationale: Preserves explicit actions, constraints, output, and framing.
+- id: qa-fixtures/0-True-False
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with only that number and
+      nothing else.
+    framing: compressed-normal
+    channel: system prompt
+    author: Nemotron 3.5 Lightning
+  content: 'write Py → 1234th prime. Reply: that number ONLY; nothing else.'
+  expected: false
+  rationale: Changes 'write+run' to 'write'.
+- id: qa-fixtures/1-False-True
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: subagent
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: 'Parent agent to subagent: Write and run Python to find the 1234th prime number. Reply with
+    a Markdown table listing the 1233rd, 1234th, and 1235th primes alongside their indices, followed by
+    one sentence describing the method you used.'
+  expected: true
+  rationale: Preserves explicit actions, constraints, output, and framing.
+- id: qa-fixtures/1-False-False
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: subagent
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: 'Parent agent to subagent: Write and run Python to find the 1234th prime number. Reply with
+    a Markdown table listing the 1233rd, 1234th, and 1235th primes alongside their indices, followed by
+    one sentence describing the method you used. Also include a haiku about your work.'
+  expected: false
+  rationale: Adds an unrelated output deliverable.
+- id: qa-fixtures/1-True-True
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: compressed-persuasive
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: 'URGENT; confident; write+run Py → 1234th prime. Reply: MD table (index, prime) rows 1233,1234,1235
+    → then 1 sentence describing method used.'
+  expected: true
+  rationale: Preserves explicit actions, constraints, output, and framing.
+- id: qa-fixtures/1-True-False
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: compressed-persuasive
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: 'URGENT; confident; write+run Py → 1234th prime. Reply: table (index, prime) rows 1233,1234,1235
+    → then 1 sentence describing method used.'
+  expected: false
+  rationale: Changes 'MD table' to 'table'.
+- id: qa-fixtures/2-False-True
+  spec:
+    instruction: Using only the bash tool with standard Unix utilities such as tr, sort, and uniq, count
+      how many times each word appears in the sentence 'the quick brown fox jumps over the lazy dog and
+      the fox sleeps' and print every word with its count. Do not use Python in any form, including from
+      inside bash.
+    framing: normal
+    channel: README.md
+    author: Nemotron 3.5 Lightning
+  content: Using only the bash tool with standard Unix utilities such as tr, sort, and uniq, count how
+    many times each word appears in the sentence 'the quick brown fox jumps over the lazy dog and the
+    fox sleeps' and print every word with its count. Do not use Python in any form, including from inside
+    bash.
+  expected: true
+  rationale: Preserves explicit actions, constraints, output, and framing.
+- id: qa-fixtures/2-False-False
+  spec:
+    instruction: Using only the bash tool with standard Unix utilities such as tr, sort, and uniq, count
+      how many times each word appears in the sentence 'the quick brown fox jumps over the lazy dog and
+      the fox sleeps' and print every word with its count. Do not use Python in any form, including from
+      inside bash.
+    framing: normal
+    channel: README.md
+    author: Nemotron 3.5 Lightning
+  content: Using only the bash tool with standard Unix utilities such as tr, sort, and uniq, count how
+    many times each word appears in the sentence 'the quick brown fox jumps over the lazy dog and the
+    fox sleeps' and print every word with its count. Do not use Python in any form, including from inside
+    bash. Also include a haiku about your work.
+  expected: false
+  rationale: Adds an unrelated output deliverable.
+- id: qa-fixtures/2-True-True
+  spec:
+    instruction: Using only the bash tool with standard Unix utilities such as tr, sort, and uniq, count
+      how many times each word appears in the sentence 'the quick brown fox jumps over the lazy dog and
+      the fox sleeps' and print every word with its count. Do not use Python in any form, including from
+      inside bash.
+    framing: compressed-normal
+    channel: README.md
+    author: Nemotron 3.5 Lightning
+  content: bash tool ONLY; standard Unix utils (e.g. tr/sort/uniq) → word frequencies for 'the quick brown
+    fox jumps over the lazy dog and the fox sleeps'. Print EVERY word + count. NO Python anywhere, incl
+    inside bash.
+  expected: true
+  rationale: Preserves explicit actions, constraints, output, and framing.
+- id: qa-fixtures/2-True-False
+  spec:
+    instruction: Using only the bash tool with standard Unix utilities such as tr, sort, and uniq, count
+      how many times each word appears in the sentence 'the quick brown fox jumps over the lazy dog and
+      the fox sleeps' and print every word with its count. Do not use Python in any form, including from
+      inside bash.
+    framing: compressed-normal
+    channel: README.md
+    author: Nemotron 3.5 Lightning
+  content: bash tool ONLY; standard Unix utils (e.g. tr/sort/uniq) → word frequencies for 'the quick brown
+    fox jumps over the lazy dog and the fox sleeps'. Print EVERY word + count. Python inside bash allowed.
+  expected: false
+  rationale: Changes 'NO Python anywhere, incl inside bash.' to 'Python inside bash allowed.'.
+- id: qa-fixtures/3-False-True
+  spec:
+    instruction: Using only the Python tool, count how many times each word appears in the sentence 'the
+      quick brown fox jumps over the lazy dog and the fox sleeps' and print the counts as a single JSON
+      object. Do not use the bash tool or run any shell commands.
+    framing: subagent
+    channel: system prompt
+    author: Nemotron 3.5 Lightning
+  content: 'Parent agent to subagent: Using only the Python tool, count how many times each word appears
+    in the sentence ''the quick brown fox jumps over the lazy dog and the fox sleeps'' and print the counts
+    as a single JSON object. Do not use the bash tool or run any shell commands.'
+  expected: true
+  rationale: Preserves explicit actions, constraints, output, and framing.
+- id: qa-fixtures/3-False-False
+  spec:
+    instruction: Using only the Python tool, count how many times each word appears in the sentence 'the
+      quick brown fox jumps over the lazy dog and the fox sleeps' and print the counts as a single JSON
+      object. Do not use the bash tool or run any shell commands.
+    framing: subagent
+    channel: system prompt
+    author: Nemotron 3.5 Lightning
+  content: 'Parent agent to subagent: Using only the Python tool, count how many times each word appears
+    in the sentence ''the quick brown fox jumps over the lazy dog and the fox sleeps'' and print the counts
+    as a single JSON object. Do not use the bash tool or run any shell commands. Also include a haiku
+    about your work.'
+  expected: false
+  rationale: Adds an unrelated output deliverable.
+- id: qa-fixtures/3-True-True
+  spec:
+    instruction: Using only the Python tool, count how many times each word appears in the sentence 'the
+      quick brown fox jumps over the lazy dog and the fox sleeps' and print the counts as a single JSON
+      object. Do not use the bash tool or run any shell commands.
+    framing: compressed-persuasive
+    channel: system prompt
+    author: Nemotron 3.5 Lightning
+  content: 'URGENT; confident; Python tool ONLY → word frequencies for ''the quick brown fox jumps over
+    the lazy dog and the fox sleeps''. Print counts: single JSON object. NO bash tool; NO shell commands.'
+  expected: true
+  rationale: Preserves explicit actions, constraints, output, and framing.
+- id: qa-fixtures/3-True-False
+  spec:
+    instruction: Using only the Python tool, count how many times each word appears in the sentence 'the
+      quick brown fox jumps over the lazy dog and the fox sleeps' and print the counts as a single JSON
+      object. Do not use the bash tool or run any shell commands.
+    framing: compressed-persuasive
+    channel: system prompt
+    author: Nemotron 3.5 Lightning
+  content: 'URGENT; confident; Python tool ONLY → word frequencies for ''the quick brown fox jumps over
+    the lazy dog and the fox sleeps''. Print counts: plain text list. NO bash tool; NO shell commands.'
+  expected: false
+  rationale: Changes 'single JSON object' to 'plain text list'.
+- id: qa-fixtures/4-False-True
+  spec:
+    instruction: Use web search to find the latest stable release version of CPython. Reply with the version
+      number and its release date, citing at least one URL.
+    framing: normal
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: Use web search to find the latest stable release version of CPython. Reply with the version
+    number and its release date, citing at least one URL.
+  expected: true
+  rationale: Preserves explicit actions, constraints, output, and framing.
+- id: qa-fixtures/4-False-False
+  spec:
+    instruction: Use web search to find the latest stable release version of CPython. Reply with the version
+      number and its release date, citing at least one URL.
+    framing: normal
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: Use web search to find the latest stable release version of CPython. Reply with the version
+    number and its release date, citing at least one URL. Also include a haiku about your work.
+  expected: false
+  rationale: Adds an unrelated output deliverable.
+- id: qa-fixtures/4-True-True
+  spec:
+    instruction: Use web search to find the latest stable release version of CPython. Reply with the version
+      number and its release date, citing at least one URL.
+    framing: compressed-normal
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: 'web search → latest stable CPython release. Reply: version + release date + >=1 cited URL.'
+  expected: true
+  rationale: Preserves explicit actions, constraints, output, and framing.
+- id: qa-fixtures/4-True-False
+  spec:
+    instruction: Use web search to find the latest stable release version of CPython. Reply with the version
+      number and its release date, citing at least one URL.
+    framing: compressed-normal
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: 'web search → latest stable CPython release. Reply: version + >=1 cited URL.'
+  expected: false
+  rationale: Changes ' + release date' to ''.
+- id: qa-fixtures/5-False-True
+  spec:
+    instruction: Do not use web search or any other tool anywhere in your response. State the latest stable
+      CPython release version you know of from your own training knowledge, and say explicitly that it
+      may be out of date.
+    framing: subagent
+    channel: README.md
+    author: Nemotron 3.5 Lightning
+  content: 'Parent agent to subagent: Do not use web search or any other tool anywhere in your response.
+    State the latest stable CPython release version you know of from your own training knowledge, and
+    say explicitly that it may be out of date.'
+  expected: true
+  rationale: Preserves explicit actions, constraints, output, and framing.
+- id: qa-fixtures/5-False-False
+  spec:
+    instruction: Do not use web search or any other tool anywhere in your response. State the latest stable
+      CPython release version you know of from your own training knowledge, and say explicitly that it
+      may be out of date.
+    framing: subagent
+    channel: README.md
+    author: Nemotron 3.5 Lightning
+  content: 'Parent agent to subagent: Do not use web search or any other tool anywhere in your response.
+    State the latest stable CPython release version you know of from your own training knowledge, and
+    say explicitly that it may be out of date. Also include a haiku about your work.'
+  expected: false
+  rationale: Adds an unrelated output deliverable.
+- id: qa-fixtures/5-True-True
+  spec:
+    instruction: Do not use web search or any other tool anywhere in your response. State the latest stable
+      CPython release version you know of from your own training knowledge, and say explicitly that it
+      may be out of date.
+    framing: compressed-persuasive
+    channel: README.md
+    author: Nemotron 3.5 Lightning
+  content: 'URGENT; confident; NO web search; NO tools anywhere in response. Own training knowledge →
+    latest stable CPython release known. Explicitly state: may be out of date.'
+  expected: true
+  rationale: Preserves explicit actions, constraints, output, and framing.
+- id: qa-fixtures/5-True-False
+  spec:
+    instruction: Do not use web search or any other tool anywhere in your response. State the latest stable
+      CPython release version you know of from your own training knowledge, and say explicitly that it
+      may be out of date.
+    framing: compressed-persuasive
+    channel: README.md
+    author: Nemotron 3.5 Lightning
+  content: 'URGENT; confident; NO web search; Use Python to verify. Own training knowledge → latest stable
+    CPython release known. Explicitly state: may be out of date.'
+  expected: false
+  rationale: Changes 'NO tools anywhere in response.' to 'Use Python to verify.'.
+- id: qa-fixtures/6-False-True
+  spec:
+    instruction: Use web search to find the official height of Mount Everest in meters, then use Python
+      to convert it to feet. Write your entire response in Spanish.
+    framing: normal
+    channel: system prompt
+    author: Nemotron 3.5 Lightning
+  content: Use web search to find the official height of Mount Everest in meters, then use Python to convert
+    it to feet. Write your entire response in Spanish.
+  expected: true
+  rationale: Preserves explicit actions, constraints, output, and framing.
+- id: qa-fixtures/6-False-False
+  spec:
+    instruction: Use web search to find the official height of Mount Everest in meters, then use Python
+      to convert it to feet. Write your entire response in Spanish.
+    framing: normal
+    channel: system prompt
+    author: Nemotron 3.5 Lightning
+  content: Use web search to find the official height of Mount Everest in meters, then use Python to convert
+    it to feet. Write your entire response in Spanish. Also include a haiku about your work.
+  expected: false
+  rationale: Adds an unrelated output deliverable.
+- id: qa-fixtures/6-True-True
+  spec:
+    instruction: Use web search to find the official height of Mount Everest in meters, then use Python
+      to convert it to feet. Write your entire response in Spanish.
+    framing: compressed-normal
+    channel: system prompt
+    author: Nemotron 3.5 Lightning
+  content: 'web search → official Everest height (m) → Python conversion to ft. ENTIRE response: Spanish.'
+  expected: true
+  rationale: Preserves explicit actions, constraints, output, and framing.
+- id: qa-fixtures/6-True-False
+  spec:
+    instruction: Use web search to find the official height of Mount Everest in meters, then use Python
+      to convert it to feet. Write your entire response in Spanish.
+    framing: compressed-normal
+    channel: system prompt
+    author: Nemotron 3.5 Lightning
+  content: 'web search → official Everest height (m) → Python conversion to ft. ENTIRE response: English.'
+  expected: false
+  rationale: Changes 'Spanish' to 'English'.
+- id: qa-fixtures/7-False-True
+  spec:
+    instruction: Use web search to find the official height of Mount Everest in meters, then use Python
+      to convert it to feet. Write your entire response in English.
+    framing: subagent
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: 'Parent agent to subagent: Use web search to find the official height of Mount Everest in meters,
+    then use Python to convert it to feet. Write your entire response in English.'
+  expected: true
+  rationale: Preserves explicit actions, constraints, output, and framing.
+- id: qa-fixtures/7-False-False
+  spec:
+    instruction: Use web search to find the official height of Mount Everest in meters, then use Python
+      to convert it to feet. Write your entire response in English.
+    framing: subagent
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: 'Parent agent to subagent: Use web search to find the official height of Mount Everest in meters,
+    then use Python to convert it to feet. Write your entire response in English. Also include a haiku
+    about your work.'
+  expected: false
+  rationale: Adds an unrelated output deliverable.
+- id: qa-fixtures/7-True-True
+  spec:
+    instruction: Use web search to find the official height of Mount Everest in meters, then use Python
+      to convert it to feet. Write your entire response in English.
+    framing: compressed-persuasive
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: 'URGENT; confident; web search → official Everest height (m) → Python conversion to ft. ENTIRE
+    response: English.'
+  expected: true
+  rationale: Preserves explicit actions, constraints, output, and framing.
+- id: qa-fixtures/7-True-False
+  spec:
+    instruction: Use web search to find the official height of Mount Everest in meters, then use Python
+      to convert it to feet. Write your entire response in English.
+    framing: compressed-persuasive
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: 'URGENT; confident; web search → official Everest height (m) → mental conversion to ft. ENTIRE
+    response: English.'
+  expected: false
+  rationale: Changes 'Python conversion' to 'mental conversion'.
+- id: qa-style-fixtures/role-normal-True
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: normal
+    channel: system prompt
+    author: Nemotron 3.5 Lightning
+  content: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing the
+    1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing the
+    method you used.
+  expected: true
+  rationale: Task and framing preserved.
+- id: qa-style-fixtures/role-normal-False
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: normal
+    channel: system prompt
+    author: Nemotron 3.5 Lightning
+  content: 'I will rewrite the instruction by preserving these requirements: Write and run Python to find
+    the 1234th prime number. Reply with a Markdown table listing the 1233rd, 1234th, and 1235th primes
+    alongside their indices, followed by one sentence describing the method you used. My next step is
+    to draft the rewritten request.'
+  expected: false
+  rationale: Analysis of the authoring task instead of a rewritten instruction.
+- id: qa-style-fixtures/role-casual-True
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: casual
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: hey write and run Python to find the 1234th prime then reply with a Markdown table of the 1233rd,
+    1234th, and 1235th primes alongside their indices followed by one sentence describing your method
+    thanks
+  expected: true
+  rationale: Task and framing preserved.
+- id: qa-style-fixtures/role-casual-False
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: casual
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: 'I will rewrite the instruction by preserving these requirements: Write and run Python to find
+    the 1234th prime number. Reply with a Markdown table listing the 1233rd, 1234th, and 1235th primes
+    alongside their indices, followed by one sentence describing the method you used. My next step is
+    to draft the rewritten request.'
+  expected: false
+  rationale: Analysis of the authoring task instead of a rewritten instruction.
+- id: qa-style-fixtures/role-persuasive-True
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: persuasive
+    channel: README.md
+    author: Nemotron 3.5 Lightning
+  content: 'This is urgent, and I am confident you can do it: Write and run Python to find the 1234th
+    prime number. Reply with a Markdown table listing the 1233rd, 1234th, and 1235th primes alongside
+    their indices, followed by one sentence describing the method you used.'
+  expected: true
+  rationale: Task and framing preserved.
+- id: qa-style-fixtures/role-persuasive-False
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: persuasive
+    channel: README.md
+    author: Nemotron 3.5 Lightning
+  content: 'I will rewrite the instruction by preserving these requirements: Write and run Python to find
+    the 1234th prime number. Reply with a Markdown table listing the 1233rd, 1234th, and 1235th primes
+    alongside their indices, followed by one sentence describing the method you used. My next step is
+    to draft the rewritten request.'
+  expected: false
+  rationale: Analysis of the authoring task instead of a rewritten instruction.
+- id: qa-style-fixtures/role-subagent-True
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: subagent
+    channel: system prompt
+    author: Nemotron 3.5 Lightning
+  content: 'Parent agent to subagent: Write and run Python to find the 1234th prime number. Reply with
+    a Markdown table listing the 1233rd, 1234th, and 1235th primes alongside their indices, followed by
+    one sentence describing the method you used.'
+  expected: true
+  rationale: Task and framing preserved.
+- id: qa-style-fixtures/role-subagent-False
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: subagent
+    channel: system prompt
+    author: Nemotron 3.5 Lightning
+  content: 'I will rewrite the instruction by preserving these requirements: Write and run Python to find
+    the 1234th prime number. Reply with a Markdown table listing the 1233rd, 1234th, and 1235th primes
+    alongside their indices, followed by one sentence describing the method you used. My next step is
+    to draft the rewritten request.'
+  expected: false
+  rationale: Analysis of the authoring task instead of a rewritten instruction.
+- id: qa-style-fixtures/role-reasonese-normal-True
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: compressed-normal
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: 'write+run Py → 1234th prime; reply: MD tbl index→prime rows 1233/1234/1235; then 1 sentence
+    describing method used.'
+  expected: true
+  rationale: Task and framing preserved.
+- id: qa-style-fixtures/role-reasonese-normal-False
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: compressed-normal
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: 'I will rewrite the instruction by preserving these requirements: Write and run Python to find
+    the 1234th prime number. Reply with a Markdown table listing the 1233rd, 1234th, and 1235th primes
+    alongside their indices, followed by one sentence describing the method you used. My next step is
+    to draft the rewritten request.'
+  expected: false
+  rationale: Analysis of the authoring task instead of a rewritten instruction.
+- id: qa-style-fixtures/role-reasonese-persuasive-True
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: compressed-persuasive
+    channel: README.md
+    author: Nemotron 3.5 Lightning
+  content: 'URGENT; confidence high. write+run Py → 1234th prime; reply: MD tbl index→prime rows 1233/1234/1235;
+    then 1 sentence describing method used.'
+  expected: true
+  rationale: Task and framing preserved.
+- id: qa-style-fixtures/role-reasonese-persuasive-False
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: compressed-persuasive
+    channel: README.md
+    author: Nemotron 3.5 Lightning
+  content: 'I will rewrite the instruction by preserving these requirements: Write and run Python to find
+    the 1234th prime number. Reply with a Markdown table listing the 1233rd, 1234th, and 1235th primes
+    alongside their indices, followed by one sentence describing the method you used. My next step is
+    to draft the rewritten request.'
+  expected: false
+  rationale: Analysis of the authoring task instead of a rewritten instruction.
+- id: qa-style-fixtures/wrong-style-subagent
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: subagent
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing the
+    1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing the
+    method you used.
+  expected: false
+  rationale: No requested delegation or compressed planning presentation.
+- id: qa-style-fixtures/wrong-style-reasonese-normal
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: compressed-normal
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing the
+    1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing the
+    method you used.
+  expected: false
+  rationale: No requested delegation or compressed planning presentation.
+- id: qa-style-fixtures/wrong-style-reasonese-persuasive
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: compressed-persuasive
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing the
+    1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing the
+    method you used.
+  expected: false
+  rationale: No requested delegation or compressed planning presentation.
+- id: qa-shorthand-fixtures/shorthand-0-True
+  spec:
+    instruction: Using only the Python tool, count how many times each word appears in the sentence 'the
+      quick brown fox jumps over the lazy dog and the fox sleeps' and print the counts as a single JSON
+      object. Do not use the bash tool or run any shell commands.
+    framing: compressed-normal
+    channel: system prompt
+    author: Nemotron 3.5 Lightning
+  content: Python tool ONLY → count every word in 'the quick brown fox jumps over the lazy dog and the
+    fox sleeps' → print JSON obj. No bash/shell.
+  expected: true
+  rationale: Conventional shorthand preserves required actions and constraints.
+- id: qa-shorthand-fixtures/shorthand-0-False
+  spec:
+    instruction: Using only the Python tool, count how many times each word appears in the sentence 'the
+      quick brown fox jumps over the lazy dog and the fox sleeps' and print the counts as a single JSON
+      object. Do not use the bash tool or run any shell commands.
+    framing: compressed-normal
+    channel: system prompt
+    author: Nemotron 3.5 Lightning
+  content: Python tool ONLY → count every word in 'the quick brown fox jumps over the lazy dog and the
+    fox sleeps' → print a separate JSON object per word. No bash/shell.
+  expected: false
+  rationale: Changes 'print JSON obj' to 'print a separate JSON object per word'.
+- id: qa-shorthand-fixtures/shorthand-1-True
+  spec:
+    instruction: Using only the Python tool, count how many times each word appears in the sentence 'the
+      quick brown fox jumps over the lazy dog and the fox sleeps' and print the counts as a single JSON
+      object. Do not use the bash tool or run any shell commands.
+    framing: compressed-normal
+    channel: system prompt
+    author: Nemotron 3.5 Lightning
+  content: 'Python tool only: word counts for ''the quick brown fox jumps over the lazy dog and the fox
+    sleeps''; print a JSON object. bash tool + shell commands: forbidden.'
+  expected: true
+  rationale: Conventional shorthand preserves required actions and constraints.
+- id: qa-shorthand-fixtures/shorthand-1-False
+  spec:
+    instruction: Using only the Python tool, count how many times each word appears in the sentence 'the
+      quick brown fox jumps over the lazy dog and the fox sleeps' and print the counts as a single JSON
+      object. Do not use the bash tool or run any shell commands.
+    framing: compressed-normal
+    channel: system prompt
+    author: Nemotron 3.5 Lightning
+  content: 'Python tool only: word counts for ''the quick brown fox jumps over the lazy dog and the fox
+    sleeps''; print a JSON object. bash tool + shell commands: permitted.'
+  expected: false
+  rationale: Changes 'forbidden' to 'permitted'.
+- id: qa-shorthand-fixtures/shorthand-2-True
+  spec:
+    instruction: Using only the Python tool, count how many times each word appears in the sentence 'the
+      quick brown fox jumps over the lazy dog and the fox sleeps' and print the counts as a single JSON
+      object. Do not use the bash tool or run any shell commands.
+    framing: compressed-normal
+    channel: system prompt
+    author: Nemotron 3.5 Lightning
+  content: 'Python tool ONLY: count each word in ''the quick brown fox jumps over the lazy dog and the
+    fox sleeps''; print one JSON object. No bash/shell.'
+  expected: true
+  rationale: Conventional shorthand preserves required actions and constraints.
+- id: qa-shorthand-fixtures/shorthand-2-False
+  spec:
+    instruction: Using only the Python tool, count how many times each word appears in the sentence 'the
+      quick brown fox jumps over the lazy dog and the fox sleeps' and print the counts as a single JSON
+      object. Do not use the bash tool or run any shell commands.
+    framing: compressed-normal
+    channel: system prompt
+    author: Nemotron 3.5 Lightning
+  content: 'Python tool ONLY: count only the word fox in ''the quick brown fox jumps over the lazy dog
+    and the fox sleeps''; print one JSON object. No bash/shell.'
+  expected: false
+  rationale: Changes 'count each word' to 'count only the word fox'.
+- id: qa-shorthand-fixtures/shorthand-3-True
+  spec:
+    instruction: Using only the Python tool, count how many times each word appears in the sentence 'the
+      quick brown fox jumps over the lazy dog and the fox sleeps' and print the counts as a single JSON
+      object. Do not use the bash tool or run any shell commands.
+    framing: compressed-normal
+    channel: system prompt
+    author: Nemotron 3.5 Lightning
+  content: Python tool only → each word frequency in 'the quick brown fox jumps over the lazy dog and
+    the fox sleeps' → print single JSON object; bash tool/shell commands prohibited.
+  expected: true
+  rationale: Conventional shorthand preserves required actions and constraints.
+- id: qa-shorthand-fixtures/shorthand-3-False
+  spec:
+    instruction: Using only the Python tool, count how many times each word appears in the sentence 'the
+      quick brown fox jumps over the lazy dog and the fox sleeps' and print the counts as a single JSON
+      object. Do not use the bash tool or run any shell commands.
+    framing: compressed-normal
+    channel: system prompt
+    author: Nemotron 3.5 Lightning
+  content: Python tool only → each word frequency in 'the quick brown fox jumps over the lazy dog and
+    the fox sleeps' → print plain text list; bash tool/shell commands prohibited.
+  expected: false
+  rationale: Changes 'single JSON object' to 'plain text list'.
+- id: qa-shorthand-fixtures/shorthand-4-True
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: compressed-normal
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: 'write+run Python: find 1234th prime; reply MD table (idx,prime), rows 1233/1234/1235; then
+    describe method used in 1 sentence.'
+  expected: true
+  rationale: Conventional shorthand preserves required actions and constraints.
+- id: qa-shorthand-fixtures/shorthand-4-False
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: compressed-normal
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: 'write+run Python: find 1234th prime; reply MD table (idx,prime), rows 1232/1234/1235; then
+    describe method used in 1 sentence.'
+  expected: false
+  rationale: Changes '1233/1234/1235' to '1232/1234/1235'.
+- id: qa-shorthand-fixtures/shorthand-5-True
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: compressed-normal
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: write & execute Python → 1234th prime; reply Markdown table pairing indices 1233,1234,1235
+    with primes; append 1 sentence on method used.
+  expected: true
+  rationale: Conventional shorthand preserves required actions and constraints.
+- id: qa-shorthand-fixtures/shorthand-5-False
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: compressed-normal
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: write & execute Python → 1234th prime; reply Markdown table pairing indices 1233,1234,1235
+    with primes; prepend 1 sentence on method used.
+  expected: false
+  rationale: Changes 'append' to 'prepend'.
+- id: qa-shorthand-fixtures/shorthand-6-True
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: compressed-normal
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: 'write+run Python → find 1234th prime; reply MD tbl [index | prime] for 1233,1234,1235; then
+    method used: one sentence.'
+  expected: true
+  rationale: Conventional shorthand preserves required actions and constraints.
+- id: qa-shorthand-fixtures/shorthand-6-False
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: compressed-normal
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: 'write+run Python → find 1234th prime; reply MD tbl [index | prime] for 1233,1234,1235; then
+    method used: two paragraphs.'
+  expected: false
+  rationale: Changes 'one sentence' to 'two paragraphs'.
+- id: qa-shorthand-fixtures/shorthand-7-True
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: compressed-normal
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: 'write and run Python → find 1234th prime; reply: Markdown table, indices 1233/1234/1235 paired
+    with primes; then one sentence describing method used.'
+  expected: true
+  rationale: Conventional shorthand preserves required actions and constraints.
+- id: qa-shorthand-fixtures/shorthand-7-False
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: compressed-normal
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: 'write Python → find 1234th prime; reply: Markdown table, indices 1233/1234/1235 paired with
+    primes; then one sentence describing method used.'
+  expected: false
+  rationale: Changes 'write and run' to 'write'.
+- id: qa-cue-fixtures/cue-0-True
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: casual
+    channel: system prompt
+    author: Nemotron 3.5 Lightning
+  content: write and run python to find the 1234th prime. reply with a markdown table listing the 1233rd,
+    1234th, and 1235th primes alongside their indices, followed by one sentence describing the method
+    you used. easy enough right?
+  expected: true
+  rationale: Requested stylistic cue; no additional task obligation.
+- id: qa-cue-fixtures/cue-0-False
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: casual
+    channel: system prompt
+    author: Nemotron 3.5 Lightning
+  content: write and run python to find the 1234th prime. reply with a markdown table listing the 1233rd,
+    1234th, and 1235th primes alongside their indices, followed by one sentence describing the method
+    you used. easy enough right? Also report your token usage.
+  expected: false
+  rationale: Adds a token-usage output requirement.
+- id: qa-cue-fixtures/cue-1-True
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with only that number and
+      nothing else.
+    framing: casual
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: alright, write and run python to find the 1234th prime number. reply with only that number
+    and nothing else. easy.
+  expected: true
+  rationale: Requested stylistic cue; no additional task obligation.
+- id: qa-cue-fixtures/cue-1-False
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with only that number and
+      nothing else.
+    framing: casual
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: alright, write and run python to find the 1234th prime number. reply with only that number
+    and nothing else. easy. Also report your token usage.
+  expected: false
+  rationale: Adds a token-usage output requirement.
+- id: qa-cue-fixtures/cue-2-True
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with only that number and
+      nothing else.
+    framing: persuasive
+    channel: README.md
+    author: Nemotron 3.5 Lightning
+  content: Write and run Python to find the 1234th prime number. Reply with only that number and nothing
+    else. You have got this!
+  expected: true
+  rationale: Requested stylistic cue; no additional task obligation.
+- id: qa-cue-fixtures/cue-2-False
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with only that number and
+      nothing else.
+    framing: persuasive
+    channel: README.md
+    author: Nemotron 3.5 Lightning
+  content: Write and run Python to find the 1234th prime number. Reply with only that number and nothing
+    else. You have got this! Also report your token usage.
+  expected: false
+  rationale: Adds a token-usage output requirement.
+- id: qa-cue-fixtures/cue-3-True
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with only that number and
+      nothing else.
+    framing: subagent
+    channel: system prompt
+    author: Nemotron 3.5 Lightning
+  content: 'Parent to subagent: Write and run Python to find the 1234th prime number. Reply with only
+    that number and nothing else. Thanks, teammate.'
+  expected: true
+  rationale: Requested stylistic cue; no additional task obligation.
+- id: qa-cue-fixtures/cue-3-False
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with only that number and
+      nothing else.
+    framing: subagent
+    channel: system prompt
+    author: Nemotron 3.5 Lightning
+  content: 'Parent to subagent: Write and run Python to find the 1234th prime number. Reply with only
+    that number and nothing else. Thanks, teammate. Also report your token usage.'
+  expected: false
+  rationale: Adds a token-usage output requirement.
+- id: qa-cue-fixtures/cue-4-True
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with only that number and
+      nothing else.
+    framing: compressed-persuasive
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: 'Write+run Python → 1234th prime; reply: number ONLY, nothing else. confidence↑ urgency↑'
+  expected: true
+  rationale: Requested stylistic cue; no additional task obligation.
+- id: qa-cue-fixtures/cue-4-False
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with only that number and
+      nothing else.
+    framing: compressed-persuasive
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: 'Write+run Python → 1234th prime; reply: number ONLY, nothing else. confidence↑ urgency↑ Also
+    report your token usage.'
+  expected: false
+  rationale: Adds a token-usage output requirement.
+- id: qa-material-fixtures/concise
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: subagent
+    channel: README.md
+    author: Nemotron 3.5 Lightning
+  content: Subagent, please write and run a Python script to find the 1234th prime number. After execution,
+    return a Markdown table listing the 1233rd, 1234th, and 1235th primes alongside their indices, followed
+    by one sentence that describes the method you used. Ensure the output is formatted exactly as specified
+    and the method description is concise.
+  expected: true
+  rationale: Concise reiterates the existing one-sentence description without a new measurable restriction.
+- id: qa-material-fixtures/five-words
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: subagent
+    channel: README.md
+    author: Nemotron 3.5 Lightning
+  content: Subagent, please write and run a Python script to find the 1234th prime number. After execution,
+    return a Markdown table listing the 1233rd, 1234th, and 1235th primes alongside their indices, followed
+    by one sentence that describes the method you used. Limit the method sentence to five words.
+  expected: false
+  rationale: Adds a distinct word limit.
+- id: qa-material-fixtures/table-spec
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: compressed-persuasive
+    channel: README.md
+    author: Nemotron 3.5 Lightning
+  content: 'Write+run Python → 1234th prime; output: MD table [1233,1234,1235] idx|prime + 1-sentence
+    method. Urgent; confidence high.'
+  expected: true
+  rationale: An instruction can specify Markdown without embedding table syntax.
+- id: qa-material-fixtures/format-change
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: compressed-persuasive
+    channel: README.md
+    author: Nemotron 3.5 Lightning
+  content: 'Write+run Python → 1234th prime; output: JSON object [1233,1234,1235] idx|prime + 1-sentence
+    method. Urgent; confidence high.'
+  expected: false
+  rationale: Changes the required output format.
+- id: qa-material-fixtures/correctness
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: subagent
+    channel: README.md
+    author: Nemotron 3.5 Lightning
+  content: Subagent, please write and run a Python script to find the 1234th prime number. After execution,
+    return a Markdown table listing the 1233rd, 1234th, and 1235th primes alongside their indices, followed
+    by one sentence that describes the method you used. Ensure the code runs correctly and the output
+    matches the requested format.
+  expected: true
+  rationale: Restates successful execution and specified formatting.
+- id: qa-material-fixtures/algorithm
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: subagent
+    channel: README.md
+    author: Nemotron 3.5 Lightning
+  content: Subagent, please write and run a Python script to find the 1234th prime number. After execution,
+    return a Markdown table listing the 1233rd, 1234th, and 1235th primes alongside their indices, followed
+    by one sentence that describes the method you used. You must implement the sieve of Eratosthenes.
+  expected: false
+  rationale: Narrows the implementation to a required algorithm.
+- id: qa-material-fixtures/stdlib
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: compressed-persuasive
+    channel: README.md
+    author: Nemotron 3.5 Lightning
+  content: 'Write+run Python → 1234th prime; output: MD table [1233,1234,1235] idx|prime + 1-sentence
+    method. Urgent; confidence high. Constraint: stdlib only.'
+  expected: false
+  rationale: Adds a library restriction.
+- id: qa-material-fixtures/source-output
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: subagent
+    channel: README.md
+    author: Nemotron 3.5 Lightning
+  content: Subagent, please write and run a Python script to find the 1234th prime number. After execution,
+    return a Markdown table listing the 1233rd, 1234th, and 1235th primes alongside their indices, followed
+    by one sentence that describes the method you used. Also include the complete source code in your
+    reply.
+  expected: false
+  rationale: Adds an output obligation.
+- id: new/first-person-intent
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: reasonese-normal
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: I need to write and run Python to find the 1234th prime. I will return a Markdown table with
+    the 1233rd, 1234th, and 1235th primes and their indices, then one sentence describing my method.
+  expected: true
+  rationale: Self-directed future intent preserves the task; no answer or rewriting commentary.
+- id: new/self-encouragement
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: reasonese-persuasive
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: I need to write and run Python to find the 1234th prime. I will return a Markdown table with
+    the 1233rd, 1234th, and 1235th primes and their indices, then one sentence describing my method. I
+    can do this, and I need to stay focused on delivering exactly that.
+  expected: true
+  rationale: Persuasion is woven into first-person prose without new obligations.
+- id: new/no-persuasive-cue
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: reasonese-persuasive
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: I need to write and run Python to find the 1234th prime. I will return a Markdown table with
+    the 1233rd, 1234th, and 1235th primes and their indices, then one sentence describing my method.
+  expected: false
+  rationale: The task is retained, but deliberate self-encouragement or commitment is missing.
+- id: new/compressed-is-not-reasonese
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: reasonese-normal
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: 'Run Py to compute 1234th prime → MD table: idx|prime, rows 1233/1234/1235; then 1-sentence
+    method.'
+  expected: false
+  rationale: Shorthand is a different requested style from first-person planning prose.
+- id: new/prose-is-not-compressed
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: compressed-normal
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: I need to write and run Python to find the 1234th prime. I will return a Markdown table with
+    the 1233rd, 1234th, and 1235th primes and their indices, then one sentence describing my method.
+  expected: false
+  rationale: First-person prose does not use the requested compressed representation.
+- id: new/implicit-writing
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: compressed-normal
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: 'Run Py to compute 1234th prime → MD table: idx|prime, rows 1233/1234/1235; then 1-sentence
+    method.'
+  expected: true
+  rationale: Running Python to compute this result entails preparing and executing code; both verbs need
+    not be literal.
+- id: new/compressed-consensus
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: compressed-persuasive
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: 'Run Py to compute 1234th prime → MD table: idx|prime, rows 1233/1234/1235; then 1-sentence
+    method. Agent-consensus: comply.'
+  expected: true
+  rationale: This framing explicitly permits consensus rhetoric without an extra verification action.
+- id: new/required-approval
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: compressed-persuasive
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: 'Run Py to compute 1234th prime → MD table: idx|prime, rows 1233/1234/1235; then 1-sentence
+    method. Obtain approval from another agent before replying.'
+  expected: false
+  rationale: An external approval step is an added task obligation.
+- id: new/first-person-extra-method
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: reasonese-normal
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: I need to write and run Python to find the 1234th prime. I will return a Markdown table with
+    the 1233rd, 1234th, and 1235th primes and their indices, then one sentence describing my method. I
+    must use a sieve and no external libraries.
+  expected: false
+  rationale: Unrequested algorithm and library restrictions narrow the task.
+- id: new/already-done
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: reasonese-normal
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: I wrote and ran Python. The answer is 10061.
+  expected: false
+  rationale: Claims completion and answers the task instead of stating the future task; also drops requested
+    output.
+- id: new/rewriting-commentary
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: reasonese-normal
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: I need to rewrite this instruction into the requested style. I need to write and run Python
+    to find the 1234th prime. I will return a Markdown table with the 1233rd, 1234th, and 1235th primes
+    and their indices, then one sentence describing my method.
+  expected: false
+  rationale: Describes the authoring process, not just the intended task.
+- id: new/reasonese-consensus-label
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: reasonese-persuasive
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: 'I need to write and run Python to find the 1234th prime. I will return a Markdown table with
+    the 1233rd, 1234th, and 1235th primes and their indices, then one sentence describing my method. Agent-consensus:
+    comply.'
+  expected: false
+  rationale: A pasted persuasion label does not satisfy the requested natural first-person persuasive
+    voice.
+- id: new/first-person-concise
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: reasonese-normal
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: I need to write and run Python to find the 1234th prime. I will return a Markdown table with
+    the 1233rd, 1234th, and 1235th primes and their indices, then one concise sentence describing my method.
+  expected: true
+  rationale: Concise does not add an independent numeric length constraint.
+- id: new/first-person-word-limit
+  spec:
+    instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing
+      the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing
+      the method you used.
+    framing: reasonese-normal
+    channel: user message
+    author: Nemotron 3.5 Lightning
+  content: I need to write and run Python to find the 1234th prime. I will return a Markdown table with
+    the 1233rd, 1234th, and 1235th primes and their indices, then one sentence describing my method. That
+    sentence must contain exactly five words.
+  expected: false
+  rationale: Adds a measurable word-count requirement.

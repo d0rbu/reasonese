@@ -1,5 +1,8 @@
 # Message-QA calibration
 
+This is a historical record for the pre-split six-framing protocol. Its `reasonese-*`
+messages used compressed shorthand. The current [framing protocol](../reference/prompt-generation.md#revised-framing-protocol-and-cache-boundary) separates first-person planning from compression and revises QA; the scores below do not validate that revision.
+
 On September 13, 2026, a Nemotron-only pilot stopped at author-message QA. Manual inspection
 found both substantive rewrite failures and questionable objections to compressed wording.
 This calibration concerns the author-message gate, not assistant response judgments or research

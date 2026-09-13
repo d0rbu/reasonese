@@ -33,14 +33,14 @@ def test_plan_writes_selected_specs_for_each_side_of_every_pair(
     )
 
     summary = json.loads(capsys.readouterr().out)
-    assert summary["specs_per_instruction"] == 36
+    assert summary["specs_per_instruction"] == 48
     assert summary["manual_framings"] == 3
-    assert summary["framings"] == 6
+    assert summary["framings"] == 8
     assert summary["instruction_pairs"] == 24
     assert summary["instructions"] == 48
     assert summary["authors"] == 2
-    assert summary["specs"] == 48 * 36
-    assert len(output.read_text().splitlines()) == 48 * 36
+    assert summary["specs"] == 48 * 48
+    assert len(output.read_text().splitlines()) == 48 * 48
     rows = [json.loads(line) for line in output.read_text().splitlines()]
     assert {row["author"] for row in rows} == {"Nemotron 3.5 Lightning", "Gemma 4 31B"}
 
@@ -64,7 +64,7 @@ def test_plan_filters_by_author(
     )
     summary = json.loads(capsys.readouterr().out)
     assert summary["authors"] == 1
-    assert summary["specs"] == 48 * 18
+    assert summary["specs"] == 48 * 24
     rows = [json.loads(line) for line in output.read_text().splitlines()]
     assert {row["author"] for row in rows} == {"Inkling"}
 
@@ -128,9 +128,9 @@ def test_plan_requires_its_arguments() -> None:
 
 
 @pytest.mark.parametrize(('authors', 'per_instruction'), [
-    (['Gemma 4 31B'], 18),
+    (['Gemma 4 31B'], 24),
     (['user'], 9),
-    (['Gemma 4 31B', 'user'], 27),
+    (['Gemma 4 31B', 'user'], 33),
 ])
 def test_filtered_summary_counts_selected_framings(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], authors: list[str], per_instruction: int

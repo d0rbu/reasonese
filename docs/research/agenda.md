@@ -45,7 +45,7 @@ margin.
 
 ## Construct questions for later work
 
-- How should the six framing treatments be audited for fidelity and distinctness?
+- How should the eight framing treatments be audited for fidelity and distinctness?
 - Which protocol should be used to write and review the manual user-authored variants?
 - How well do message-QA verdicts agree with blinded human semantic-equivalence ratings?
 - How should model revisions and provider routing be recorded alongside stable display names?
@@ -67,11 +67,11 @@ free routes are development-only and pooling is inappropriate. Do not combine du
 from independent runs into one analysis file; analyze the matched runs separately.
 
 With the current 24-pair bank, selecting all seven authors (including user) and six assistants
-would require 2,190,240 exhaustive trials or 207,360 sampled trials at 720 pairings per pair
+would require 3,745,440 exhaustive trials or 207,360 sampled trials at 720 pairings per pair
 and one rollout per ordering. The default selects only Nemotron 3.5 Lightning and Gemma 4 31B
 for both authoring and assistant evaluation, using registered `:free` routes. This gives 36
-conditions per instruction, 72 cells and 720 eligible pairings per pair, with a minimum of
-71 edges for connectivity. The unchanged 720-pairing default gives mean degree 20 and
+conditions per instruction, 96 cells and 1,280 eligible pairings per pair, with a minimum of
+95 edges for connectivity. The unchanged 720-pairing default gives mean degree 15 and
 69,120 trials across the bank and two assistants. These are design counts, not cost estimates
 or evidence that any provider can serve the full pilot; QA, judgments, and search can still incur
 charges and require `--allow-paid` for uncached collection.

@@ -10,7 +10,7 @@ from typing import cast
 import pytest
 from beartype.roar import BeartypeCallHintParamViolation
 
-from reasonese.axes import Assistant, Author
+from reasonese.axes import Assistant, Author, Framing
 from reasonese.cache import YamlMessageCache, YamlTraceCache, trace_from_dict, trace_to_dict
 from reasonese.collect_data import collect_study
 from reasonese.conversation import (
@@ -335,6 +335,7 @@ def test_exact_legacy_fingerprint_and_filtered_planner_bytes() -> None:
         for pair in build_pair_specs(load_instruction_pairs(Path("configs/instruction_pairs.yaml")))
         for spec in pair.first + pair.second
         if spec.author not in (Author.GEMMA_4_31B_IT, Author.NEMOTRON_3_5_LIGHTNING)
+        and spec.framing not in (Framing.COMPRESSED_NORMAL, Framing.COMPRESSED_PERSUASIVE)
     ]
     assert (
         hashlib.sha256(json.dumps(specs, sort_keys=True).encode()).hexdigest()

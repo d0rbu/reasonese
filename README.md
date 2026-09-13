@@ -14,17 +14,17 @@ its exact datapoint authoring instructions before assistant inference.
 
 | Axis | Current values |
 |---|---|
-| framing | `normal`, `casual`, `persuasive`, `subagent`, `reasonese-normal`, `reasonese-persuasive` |
+| framing | `normal`, `casual`, `persuasive`, `subagent`, `reasonese-normal`, `reasonese-persuasive`, `compressed-normal`, `compressed-persuasive` |
 | channel | `system prompt`, `user message`, `README.md` |
 | author | `user`, `Qwen3.8 Flash`, `Qwen3.8 2.4T`, `Inkling`, `Inkling Small`, `Gemma 4 31B`, `Nemotron 3.5 Lightning` |
 
 Framing and author are independent. “Normal” is the author's default rendering in clear
 prose. A `user`-authored input is treated as already written and used verbatim, and it exists
 only for the `normal`, `casual`, and `persuasive` framings; model authors rewrite the base
-instruction according to any of the six framings.
+instruction according to any of the eight framings.
 
-With all supported authors selected, six framings for each of the six model authors plus three framings for the `user` author, across
-three channels, produce `(6 × 6 + 3) × 3 = 117` specifications per base instruction. A
+With all supported authors selected, eight framings for each of the six model authors plus three framings for the `user` author, across
+three channels, produce `(8 × 6 + 3) × 3 = 153` specifications per base instruction. A
 specification is just a four-field dataclass containing those axes.
 
 Instruction is not a treatment axis. Instructions come in 24 mutually exclusive pairs, and a
@@ -191,10 +191,10 @@ replaces exactly `components - 1` redundant cycle edges, the minimum possible re
 same-stratum replacements. Seeds derive from the pair id, so reordering the bank does not change
 any design.
 
-With all axes enabled, each of the 24 pairs has 234 cells (`2 × 117`) and
-`117 × 117 − 78 × 78 = 7,605` eligible pairings, for 182,520 eligible pairings per assistant. The
-minimum connected design uses 233 pairings per pair. The pilot default of 720 gives every cell an
-average degree of about 6.15 (936 pairings would give degree 8).
+With all axes enabled, each of the 24 pairs has 306 cells (`2 × 153`) and
+`153 × 153 − 102 × 102 = 13,005` eligible pairings, for 312,120 eligible pairings per assistant. The
+minimum connected design uses 305 pairings per pair. The pilot default of 720 gives every cell an
+average degree of about 4.71 (1,224 pairings would give degree 8).
 
 Connectivity is required within a pair and is impossible between pairs, so the comparison graph
 has exactly one component per `(pair, assistant)`.
@@ -203,10 +203,10 @@ The planner and sampler default to Nemotron 3.5 Lightning and Gemma 4 31B as aut
 the sampler evaluates those same two assistants. The default collection route is `free`, so
 both use their registered `:free` slugs. Repeated `--author` and `--assistant` options
 replace the corresponding default set; Qwen/Inkling models and the manual `user` author remain
-available explicitly. With these defaults there are 36 conditions per instruction, 72 cells
-and 720 eligible pairings per pair. The 24-pair bank produces 1,728 prompt specifications
-and 34,560 studies (69,120 trials at one rollout per ordering). With two authors, the 720-pairing default covers every eligible
-pairing; smaller explicit counts such as `--pairings-per-pair 216` remain available.
+available explicitly. With these defaults there are 48 conditions per instruction, 96 cells
+and 1,280 eligible pairings per pair. The 24-pair bank produces 2,304 prompt specifications
+and 34,560 studies (69,120 trials at one rollout per ordering). With two authors, the 720-pairing default samples from 1,280 eligible
+pairings; smaller explicit counts such as `--pairings-per-pair 216` remain available.
 `reasonese-collect-studies --suite` consumes the
 artifact directly, uses study fingerprints for resumable subdirectories, and writes the combined
 analysis input to `observations.jsonl` at the suite root.

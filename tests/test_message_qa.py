@@ -32,7 +32,7 @@ def _message(
     text: str = "Do the task.",
     content: str = "task: execute; return result",
     *,
-    framing: Framing = Framing.REASONESE_NORMAL,
+    framing: Framing = Framing.COMPRESSED_NORMAL,
 ) -> GeneratedMessage:
     return GeneratedMessage(
         PromptSpec(

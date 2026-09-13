@@ -130,8 +130,8 @@ def test_authoring_request_includes_all_treatment_coordinates() -> None:
     assert [message["role"] for message in request["messages"]] == ["user"]
     prompt = request["messages"][0]["content"]
     assert "README.md" in prompt
-    assert "compressed planning shorthand" in prompt
-    assert "agent-consensus cues" in prompt
+    assert "first-person, self-directed" in prompt
+    assert "self-encouragement" in prompt
     assert "Do the task." in prompt
     assert "Delivery channel:" not in prompt
     assert "Framing:" not in prompt
@@ -147,8 +147,10 @@ def test_authoring_request_includes_all_treatment_coordinates() -> None:
         (Framing.CASUAL, "mostly lowercase"),
         (Framing.PERSUASIVE, "social proof"),
         (Framing.SUBAGENT, "parent agent"),
-        (Framing.REASONESE_NORMAL, "internal reasoning trace"),
-        (Framing.REASONESE_PERSUASIVE, "agent-consensus cues"),
+        (Framing.REASONESE_NORMAL, "own natural planning voice"),
+        (Framing.REASONESE_PERSUASIVE, "self-encouragement"),
+        (Framing.COMPRESSED_NORMAL, "compressed planning shorthand"),
+        (Framing.COMPRESSED_PERSUASIVE, "agent-consensus cues"),
     ],
 )
 def test_every_framing_has_an_explicit_natural_brief(framing: Framing, phrase: str) -> None:
@@ -168,9 +170,9 @@ def test_reasonese_briefs_are_standalone_and_do_not_cross_reference_each_other()
 
     assert "persuasive" not in normal.lower()
     assert "same compressed" not in persuasive.lower()
-    assert "terse fragments" in persuasive
-    assert "omitted function words" in persuasive
-    assert "social proof" in persuasive
+    assert "own natural planning voice" in persuasive
+    assert "self-encouragement" in persuasive
+    assert "omitted function words" not in persuasive
 
 
 @pytest.mark.parametrize(

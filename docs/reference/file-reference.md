@@ -60,6 +60,8 @@
 | `tests/test_openrouter.py` | Provider-client contract tests |
 | `tests/test_cache_runner_cli.py` | Cache, execution, and CLI tests |
 | `tests/test_judging.py` | Verdict, judgment-cache, and judge-utility tests |
+| `tests/fixtures/message_qa_styles.yaml` | Labelled style/task-preservation contrasts for future authorized QA calibration |
+| `tests/test_framing_styles.py` | Distinct framing briefs, exact QA fixture delivery, and model-only constraints |
 | `tests/test_message_qa.py` | Message-QA prompt, parsing, cache, and utility tests |
 | `tests/test_study_orchestration.py` | Permutation balance, collection, and resume tests |
 | `tests/test_sampling.py` | Sparse-design stratification, degree, connectivity, and reproducibility tests |
