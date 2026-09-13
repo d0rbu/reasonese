@@ -502,6 +502,31 @@ def _receipt_chunks(
     return completed
 
 
+def _matches_expected_bytes(handle: BinaryIO, expected: bytes) -> bool:
+    offset = 0
+    while offset < len(expected):
+        requested = min(_STREAM_CHUNK_BYTES, len(expected) - offset)
+        chunk = handle.read(requested)
+        if not chunk or len(chunk) > requested:
+            return False
+        if chunk != expected[offset : offset + len(chunk)]:
+            return False
+        offset += len(chunk)
+    return True
+
+
+def _sha256_region(handle: BinaryIO, expected_size: int) -> str:
+    digest = hashlib.sha256()
+    remaining = expected_size
+    while remaining:
+        chunk = handle.read(min(_STREAM_CHUNK_BYTES, remaining))
+        if not chunk or len(chunk) > remaining:
+            raise ValueError("integrity receipt covers bytes missing from file")
+        digest.update(chunk)
+        remaining -= len(chunk)
+    return digest.hexdigest()
+
+
 def _verify_receipt_payload(
     path: Path,
     receipt: JsonObject,
@@ -535,16 +560,16 @@ def _verify_receipt_payload(
         if actual_size != expected_size:
             raise ValueError(f"completed file size does not match its integrity receipt: {path}")
     with path.open("rb") as handle:
-        if handle.read(len(prefix)) != prefix:
+        if not _matches_expected_bytes(handle, prefix):
             raise ValueError(f"integrity receipt prefix does not match source selection: {path}")
         for raw_chunk, source_range in zip(
             cast(list[dict[str, Any]], receipt["chunks"]), ranges, strict=False
         ):
-            payload = handle.read(source_range.size)
-            if (
-                len(payload) != source_range.size
-                or hashlib.sha256(payload).hexdigest() != raw_chunk["sha256"]
-            ):
+            try:
+                digest = _sha256_region(handle, source_range.size)
+            except ValueError as error:
+                raise ValueError(f"integrity receipt covers bytes missing from {path}") from error
+            if digest != raw_chunk["sha256"]:
                 raise ValueError(f"integrity receipt payload checksum mismatch: {path}")
         if complete:
             file_sha256 = receipt.get("file_sha256")

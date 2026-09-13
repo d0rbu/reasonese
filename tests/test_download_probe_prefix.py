@@ -5,6 +5,7 @@ import json
 import struct
 from collections.abc import Iterator, Mapping
 from pathlib import Path
+from typing import Any
 from urllib.parse import unquote
 
 import pytest
@@ -253,6 +254,59 @@ def test_completed_shard_must_match_selection(tmp_path: Path) -> None:
     output.write_bytes(hashlib.sha256(b"wrong").digest())
     with pytest.raises(ValueError, match="no integrity receipt"):
         subject.download_filtered_shard(session, source, {"keep"}, output, token=None, timeout=1)
+
+
+def test_receipt_verification_streams_large_ranges_in_bounded_reads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = b"x" * (subject._STREAM_CHUNK_BYTES + 1)
+    path = tmp_path / "weights.safetensors.partial"
+    path.write_bytes(data)
+    source_range = subject.SourceRange(0, len(data) - 1)
+    receipt = {
+        "expected_size": len(data),
+        "prefix_bytes": 0,
+        "chunks": [
+            {
+                "source_start": source_range.start,
+                "source_end": source_range.end,
+                "sha256": hashlib.sha256(data).hexdigest(),
+            }
+        ],
+        "completed_data_bytes": len(data),
+    }
+    read_sizes: list[int] = []
+    original_open = Path.open
+
+    class BoundedReader:
+        def __init__(self, handle: Any) -> None:
+            self._handle = handle
+
+        def __enter__(self) -> BoundedReader:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            self._handle.__exit__(*args)
+
+        def read(self, size: int = -1) -> bytes:
+            if size > subject._STREAM_CHUNK_BYTES:
+                raise AssertionError(f"oversized read: {size}")
+            read_sizes.append(size)
+            return self._handle.read(size)
+
+    def bounded_open(self: Path, *args: Any, **kwargs: Any) -> BoundedReader:
+        return BoundedReader(original_open(self, *args, **kwargs))
+
+    monkeypatch.setattr(Path, "open", bounded_open)
+    assert subject._verify_receipt_payload(
+        path,
+        receipt,
+        (source_range,),
+        prefix=b"",
+        expected_size=len(data),
+        complete=False,
+    ) == len(data)
+    assert read_sizes == [subject._STREAM_CHUNK_BYTES, 1]
 
 
 def test_completed_shard_receipt_rejects_same_size_payload_corruption(tmp_path: Path) -> None:

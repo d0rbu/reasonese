@@ -80,3 +80,9 @@
 | `tests/test_instructions.py` | Pair loading, audit parsing, cache, scaffolding, and curation-utility tests |
 
 Generated files belong under ignored directories such as `out/`.
+The prefix downloader writes an atomic `.receipt` sidecar beside every completed or partial
+shard and auxiliary file. A resume verifies each completed source range, keeps those verified
+ranges, and truncates any unreceipted suffix before refetching it; that suffix can be large after
+a process interruption. A completed legacy checkpoint may migrate from its persisted full-file
+manifest checksum, while a legacy partial file without a receipt is rejected rather than trusted
+by size alone.
