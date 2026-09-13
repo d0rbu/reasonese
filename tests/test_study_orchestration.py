@@ -617,6 +617,24 @@ def test_collect_study_batches_trials_and_judgments_then_resumes_without_a_key(
         collect_study(study, output, None, manual, routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True)
 
 
+def test_collection_retries_empty_final_before_judging_and_caching(tmp_path: Path) -> None:
+    study = _study()
+    manual = _manual_library(tmp_path, study)
+    output = tmp_path / "empty-final"
+    transport = FakeTransport([_message_qa_batch(2), _chat("", "empty"),
+                               *_assistant_responses(2), _judge_batch((True, False, False, True))])
+    result = collect_study(study, output, OpenRouterClient(transport, sync_workers=1), manual,
+                           routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True)
+    assert transport.post_calls[1] == transport.post_calls[2]
+    assert len(transport.post_calls) == 5
+    warm = collect_study(study, output, None, manual,
+                         routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True)
+    assert warm.observations == result.observations
+    assert warm.trace_cache_hits == warm.judgment_cache_hits == 2
+    for trace in SqliteStudyCache(output / "collection.sqlite3").load_traces(result.trials).values():
+        assert trace.response["id"] != "empty"
+
+
 def test_collect_study_preserves_distinct_verdicts_for_identical_rollout_traces(
     tmp_path: Path,
 ) -> None:
