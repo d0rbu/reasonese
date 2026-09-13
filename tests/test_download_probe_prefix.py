@@ -174,6 +174,26 @@ def test_download_prefix_builds_exact_filtered_checkpoint(tmp_path: Path) -> Non
     )
     assert requested_weight_bytes < len(shard)
 
+    # A checkpoint produced before receipt sidecars existed can migrate from its
+    # persisted complete-file checksums without fetching the selected payload again.
+    for receipt in output_dir.glob("*.receipt"):
+        receipt.unlink()
+    resumed_session = FakeSession(
+        {"model-00001-of-00001.safetensors": shard, "tokenizer.json": tokenizer}
+    )
+    resumed_manifest = subject.download_prefix(
+        preset, metadata_dir, output_dir, token=None, timeout=1, session=resumed_session
+    )
+    assert resumed_manifest["weights_sha256"] == manifest["weights_sha256"]
+    assert (output_dir / "model-00001-of-00001.safetensors.receipt").is_file()
+    assert (output_dir / "tokenizer.json.receipt").is_file()
+    source_data_start = 8 + struct.unpack("<Q", shard[:8])[0]
+    assert all(
+        not (name == "model-00001-of-00001.safetensors" and start >= source_data_start)
+        for name, start, _end in resumed_session.requested
+        if name == "model-00001-of-00001.safetensors"
+    )
+
 
 def test_filtered_shard_resumes_after_truncated_range(tmp_path: Path) -> None:
     source_bytes = _safetensors([("drop", "U8", [2], b"ab"), ("keep", "U8", [6], b"cdefgh")])
@@ -199,9 +219,11 @@ def test_filtered_shard_resumes_after_truncated_range(tmp_path: Path) -> None:
     subject.download_filtered_shard(
         resumed, source, {"keep"}, output, token=None, timeout=1, chunk_size=2
     )
-    assert resumed.requested == [("weights.safetensors", selected_start + 5, selected_start + 5)]
+    assert resumed.requested == [("weights.safetensors", selected_start, selected_start + 5)]
     assert output.stat().st_size == partial_size + 1
     assert not (tmp_path / "weights.safetensors.partial").exists()
+    assert not (tmp_path / "weights.safetensors.partial.receipt").exists()
+    assert (tmp_path / "weights.safetensors.receipt").is_file()
 
 
 def test_inspection_rejects_server_that_ignores_range() -> None:
@@ -229,5 +251,199 @@ def test_completed_shard_must_match_selection(tmp_path: Path) -> None:
     )
     output = tmp_path / "weights.safetensors"
     output.write_bytes(hashlib.sha256(b"wrong").digest())
-    with pytest.raises(ValueError, match="does not match the requested selection"):
+    with pytest.raises(ValueError, match="no integrity receipt"):
         subject.download_filtered_shard(session, source, {"keep"}, output, token=None, timeout=1)
+
+
+def test_completed_shard_receipt_rejects_same_size_payload_corruption(tmp_path: Path) -> None:
+    source_bytes = _safetensors([("keep", "U8", [2], b"ok")])
+    source_session = FakeSession({"weights.safetensors": source_bytes})
+    source = subject.inspect_source_shard(
+        source_session,
+        "weights.safetensors",
+        "https://example/weights.safetensors",
+        token=None,
+        timeout=1,
+    )
+    output = tmp_path / "weights.safetensors"
+    subject.download_filtered_shard(source_session, source, {"keep"}, output, token=None, timeout=1)
+    payload = bytearray(output.read_bytes())
+    payload[-1] ^= 0xFF
+    output.write_bytes(payload)
+
+    with pytest.raises(ValueError, match="checksum mismatch"):
+        subject.download_filtered_shard(
+            FakeSession({"weights.safetensors": source_bytes}),
+            source,
+            {"keep"},
+            output,
+            token=None,
+            timeout=1,
+        )
+
+
+def test_completed_shard_without_receipt_is_not_trusted(tmp_path: Path) -> None:
+    source_bytes = _safetensors([("keep", "U8", [2], b"ok")])
+    source_session = FakeSession({"weights.safetensors": source_bytes})
+    source = subject.inspect_source_shard(
+        source_session,
+        "weights.safetensors",
+        "https://example/weights.safetensors",
+        token=None,
+        timeout=1,
+    )
+    output = tmp_path / "weights.safetensors"
+    subject.download_filtered_shard(source_session, source, {"keep"}, output, token=None, timeout=1)
+    (tmp_path / "weights.safetensors.receipt").unlink()
+
+    with pytest.raises(ValueError, match="no integrity receipt"):
+        subject.download_filtered_shard(
+            FakeSession({"weights.safetensors": source_bytes}),
+            source,
+            {"keep"},
+            output,
+            token=None,
+            timeout=1,
+        )
+
+
+def test_partial_shard_receipt_rejects_corruption_of_completed_range(tmp_path: Path) -> None:
+    source_bytes = _safetensors(
+        [("keep.one", "U8", [2], b"ab"), ("drop", "U8", [2], b"xx"), ("keep.two", "U8", [2], b"cd")]
+    )
+    inspect_session = FakeSession({"weights.safetensors": source_bytes})
+    source = subject.inspect_source_shard(
+        inspect_session,
+        "weights.safetensors",
+        "https://example/weights.safetensors",
+        token=None,
+        timeout=1,
+    )
+    ranges = subject._coalesced_ranges(
+        source, tuple(tensor for tensor in source.tensors if tensor.name.startswith("keep"))
+    )
+    output = tmp_path / "weights.safetensors"
+    interrupted = FakeSession({"weights.safetensors": source_bytes}, truncate_start=ranges[1].start)
+    with pytest.raises(RuntimeError, match="body has 1 bytes"):
+        subject.download_filtered_shard(
+            interrupted,
+            source,
+            {"keep.one", "keep.two"},
+            output,
+            token=None,
+            timeout=1,
+        )
+    partial = tmp_path / "weights.safetensors.partial"
+    raw = bytearray(partial.read_bytes())
+    raw[-2] ^= 0xFF
+    partial.write_bytes(raw)
+
+    with pytest.raises(ValueError, match="payload checksum mismatch"):
+        subject.download_filtered_shard(
+            FakeSession({"weights.safetensors": source_bytes}),
+            source,
+            {"keep.one", "keep.two"},
+            output,
+            token=None,
+            timeout=1,
+        )
+
+
+def test_partial_shard_without_receipt_is_not_trusted(tmp_path: Path) -> None:
+    source_bytes = _safetensors([("keep", "U8", [2], b"ok")])
+    inspect_session = FakeSession({"weights.safetensors": source_bytes})
+    source = subject.inspect_source_shard(
+        inspect_session,
+        "weights.safetensors",
+        "https://example/weights.safetensors",
+        token=None,
+        timeout=1,
+    )
+    output = tmp_path / "weights.safetensors"
+    partial = output.with_name(output.name + ".partial")
+    prefix, _ = subject._filtered_header(source, {"keep"})
+    partial.write_bytes(prefix)
+
+    with pytest.raises(ValueError, match="no integrity receipt"):
+        subject.download_filtered_shard(
+            FakeSession({"weights.safetensors": source_bytes}),
+            source,
+            {"keep"},
+            output,
+            token=None,
+            timeout=1,
+        )
+
+
+def test_auxiliary_receipt_rejects_same_size_payload_corruption(tmp_path: Path) -> None:
+    source_bytes = b"abcdef"
+    output = tmp_path / "tokenizer.json"
+    subject._download_auxiliary_file(
+        FakeSession({"tokenizer.json": source_bytes}),
+        "https://example/tokenizer.json",
+        output,
+        token=None,
+        timeout=1,
+    )
+    payload = bytearray(output.read_bytes())
+    payload[-1] ^= 0xFF
+    output.write_bytes(payload)
+
+    with pytest.raises(ValueError, match="checksum mismatch"):
+        subject._download_auxiliary_file(
+            FakeSession({"tokenizer.json": source_bytes}),
+            "https://example/tokenizer.json",
+            output,
+            token=None,
+            timeout=1,
+        )
+
+
+def test_partial_auxiliary_receipt_rejects_corruption_of_completed_byte(
+    tmp_path: Path,
+) -> None:
+    source_bytes = b"abcdef"
+    output = tmp_path / "tokenizer.json"
+    with pytest.raises(RuntimeError, match="body has 4 bytes"):
+        subject._download_auxiliary_file(
+            FakeSession({"tokenizer.json": source_bytes}, truncate_start=1),
+            "https://example/tokenizer.json",
+            output,
+            token=None,
+            timeout=1,
+        )
+    partial = output.with_name(output.name + ".partial")
+    raw = bytearray(partial.read_bytes())
+    raw[0] ^= 0xFF
+    partial.write_bytes(raw)
+
+    with pytest.raises(ValueError, match="payload checksum mismatch"):
+        subject._download_auxiliary_file(
+            FakeSession({"tokenizer.json": source_bytes}),
+            "https://example/tokenizer.json",
+            output,
+            token=None,
+            timeout=1,
+        )
+
+
+def test_auxiliary_file_without_receipt_is_not_trusted(tmp_path: Path) -> None:
+    source_bytes = b"abcdef"
+    output = tmp_path / "tokenizer.json"
+    subject._download_auxiliary_file(
+        FakeSession({"tokenizer.json": source_bytes}),
+        "https://example/tokenizer.json",
+        output,
+        token=None,
+        timeout=1,
+    )
+    (tmp_path / "tokenizer.json.receipt").unlink()
+
+    with pytest.raises(ValueError, match="no integrity receipt"):
+        subject._download_auxiliary_file(
+            FakeSession({"tokenizer.json": source_bytes}),
+            "https://example/tokenizer.json",
+            output,
+            token=None,
+            timeout=1,
+        )

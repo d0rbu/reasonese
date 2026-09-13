@@ -419,7 +419,8 @@ def _coalesced_ranges(
     return tuple(ranges)
 
 
-def _stream_to(response: HttpResponse, output: BinaryIO, expected: int, *, chunk_size: int) -> None:
+def _stream_to(response: HttpResponse, output: BinaryIO, expected: int, *, chunk_size: int) -> str:
+    digest = hashlib.sha256()
     written = 0
     try:
         for chunk in response.iter_content(chunk_size=chunk_size):
@@ -428,11 +429,13 @@ def _stream_to(response: HttpResponse, output: BinaryIO, expected: int, *, chunk
             written += len(chunk)
             if written > expected:
                 raise RuntimeError("range response body is longer than Content-Range")
+            digest.update(chunk)
             output.write(chunk)
     finally:
         response.close()
     if written != expected:
         raise RuntimeError(f"range response body has {written} bytes, expected {expected}")
+    return digest.hexdigest()
 
 
 def _remaining_ranges(ranges: tuple[SourceRange, ...], completed: int) -> Iterator[SourceRange]:
@@ -449,6 +452,256 @@ def _remaining_ranges(ranges: tuple[SourceRange, ...], completed: int) -> Iterat
         )
 
 
+def _receipt_path(path: Path) -> Path:
+    return path.with_name(path.name + ".receipt")
+
+
+def _receipt_json(path: Path, kind: str) -> JsonObject:
+    try:
+        value = _json_object(path.read_bytes(), f"{kind} integrity receipt")
+    except OSError as error:
+        raise ValueError(f"{kind} integrity receipt cannot be read: {path}") from error
+    if value.get("format_version") != 1 or value.get("kind") != kind:
+        raise ValueError(f"unsupported {kind} integrity receipt: {path}")
+    return value
+
+
+def _chunk_record(source_range: SourceRange, digest: str) -> JsonObject:
+    return {
+        "source_start": source_range.start,
+        "source_end": source_range.end,
+        "sha256": digest,
+    }
+
+
+def _receipt_chunks(
+    receipt: JsonObject, ranges: tuple[SourceRange, ...], *, prefix_bytes: int, path: Path
+) -> int:
+    raw_chunks = receipt.get("chunks")
+    if not isinstance(raw_chunks, list) or len(raw_chunks) > len(ranges):
+        raise ValueError(f"invalid integrity receipt chunks: {path}")
+    completed = 0
+    for index, raw_chunk in enumerate(raw_chunks):
+        if not isinstance(raw_chunk, dict):
+            raise ValueError(f"invalid integrity receipt chunk: {path}")
+        chunk = cast(dict[str, Any], raw_chunk)
+        expected = ranges[index]
+        if (
+            chunk.get("source_start") != expected.start
+            or chunk.get("source_end") != expected.end
+            or not isinstance(chunk.get("sha256"), str)
+            or not re.fullmatch(r"[0-9a-f]{64}", cast(str, chunk["sha256"]))
+        ):
+            raise ValueError(f"integrity receipt chunk does not match its source range: {path}")
+        completed += expected.size
+
+    if receipt.get("completed_data_bytes") != completed:
+        raise ValueError(f"integrity receipt completed byte count is invalid: {path}")
+    if receipt.get("prefix_bytes") != prefix_bytes:
+        raise ValueError(f"integrity receipt prefix size is invalid: {path}")
+    return completed
+
+
+def _verify_receipt_payload(
+    path: Path,
+    receipt: JsonObject,
+    ranges: tuple[SourceRange, ...],
+    *,
+    prefix: bytes,
+    expected_size: int,
+    complete: bool,
+) -> int:
+    """Verify the bytes covered by a receipt and return completed data bytes."""
+    if receipt.get("expected_size") != expected_size:
+        raise ValueError(f"integrity receipt expected size does not match source: {path}")
+    legacy_manifest = complete and receipt.get("legacy_manifest") is True
+    if legacy_manifest:
+        if receipt.get("chunks") != []:
+            raise ValueError(f"invalid legacy integrity receipt chunks: {path}")
+        completed = sum(source_range.size for source_range in ranges)
+        if receipt.get("completed_data_bytes") != completed:
+            raise ValueError(f"legacy integrity receipt byte count is invalid: {path}")
+        if receipt.get("prefix_bytes") != len(prefix):
+            raise ValueError(f"legacy integrity receipt prefix size is invalid: {path}")
+    else:
+        completed = _receipt_chunks(receipt, ranges, prefix_bytes=len(prefix), path=path)
+    minimum_size = len(prefix) + completed
+    actual_size = path.stat().st_size
+    if actual_size < minimum_size:
+        raise ValueError(f"integrity receipt covers bytes missing from {path}")
+    if complete:
+        if completed != sum(source_range.size for source_range in ranges):
+            raise ValueError(f"completed integrity receipt is incomplete: {path}")
+        if actual_size != expected_size:
+            raise ValueError(f"completed file size does not match its integrity receipt: {path}")
+    with path.open("rb") as handle:
+        if handle.read(len(prefix)) != prefix:
+            raise ValueError(f"integrity receipt prefix does not match source selection: {path}")
+        for raw_chunk, source_range in zip(
+            cast(list[dict[str, Any]], receipt["chunks"]), ranges, strict=False
+        ):
+            payload = handle.read(source_range.size)
+            if (
+                len(payload) != source_range.size
+                or hashlib.sha256(payload).hexdigest() != raw_chunk["sha256"]
+            ):
+                raise ValueError(f"integrity receipt payload checksum mismatch: {path}")
+        if complete:
+            file_sha256 = receipt.get("file_sha256")
+            if not isinstance(file_sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", file_sha256):
+                raise ValueError(f"completed integrity receipt lacks a file checksum: {path}")
+            if _sha256_file(path) != file_sha256:
+                raise ValueError(f"completed file checksum does not match its receipt: {path}")
+    return completed
+
+
+def _new_shard_receipt(
+    source: SourceShard,
+    prefix: bytes,
+    ranges: tuple[SourceRange, ...],
+    expected_size: int,
+    chunks: list[JsonObject],
+) -> JsonObject:
+    return {
+        "format_version": 1,
+        "kind": "filtered-shard",
+        "source_filename": source.filename,
+        "source_url": source.url,
+        "source_total_bytes": source.total_size,
+        "source_header_sha256": source.header_sha256,
+        "selected_header_sha256": hashlib.sha256(prefix[8:]).hexdigest(),
+        "prefix_bytes": len(prefix),
+        "expected_size": expected_size,
+        "source_ranges": [[item.start, item.end] for item in ranges],
+        "chunks": chunks,
+        "completed_data_bytes": sum(
+            item["source_end"] - item["source_start"] + 1 for item in chunks
+        ),
+    }
+
+
+def _validate_shard_receipt(
+    path: Path,
+    receipt: JsonObject,
+    source: SourceShard,
+    prefix: bytes,
+    ranges: tuple[SourceRange, ...],
+    expected_size: int,
+    *,
+    complete: bool,
+) -> int:
+    expected_ranges = [[item.start, item.end] for item in ranges]
+    if (
+        receipt.get("source_filename") != source.filename
+        or receipt.get("source_url") != source.url
+        or receipt.get("source_total_bytes") != source.total_size
+        or receipt.get("source_header_sha256") != source.header_sha256
+        or receipt.get("selected_header_sha256") != hashlib.sha256(prefix[8:]).hexdigest()
+        or receipt.get("source_ranges") != expected_ranges
+    ):
+        raise ValueError(f"integrity receipt does not match source selection: {path}")
+    return _verify_receipt_payload(
+        path, receipt, ranges, prefix=prefix, expected_size=expected_size, complete=complete
+    )
+
+
+def _shard_receipt_from_manifest(
+    record: Mapping[str, Any],
+    source: SourceShard,
+    prefix: bytes,
+    ranges: tuple[SourceRange, ...],
+    expected_size: int,
+) -> JsonObject:
+    receipt = _new_shard_receipt(source, prefix, ranges, expected_size, [])
+    fields = (
+        "source_url",
+        "source_total_bytes",
+        "source_header_sha256",
+        "selected_header_sha256",
+        "source_ranges",
+    )
+    if record.get("filename") != source.filename or any(
+        record.get(field) != receipt[field] for field in fields
+    ):
+        raise ValueError("existing shard manifest record does not match source selection")
+    digest = record.get("sha256")
+    if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+        raise ValueError("existing shard manifest record lacks a valid file checksum")
+    receipt["completed_data_bytes"] = sum(item.size for item in ranges)
+    receipt["file_sha256"] = digest
+    receipt["legacy_manifest"] = True
+    return receipt
+
+
+def _new_auxiliary_receipt(
+    url: str, total_size: int, ranges: tuple[SourceRange, ...], chunks: list[JsonObject]
+) -> JsonObject:
+    return {
+        "format_version": 1,
+        "kind": "auxiliary-file",
+        "source_url": url,
+        "source_total_bytes": total_size,
+        "prefix_bytes": 0,
+        "expected_size": total_size,
+        "source_ranges": [[item.start, item.end] for item in ranges],
+        "chunks": chunks,
+        "completed_data_bytes": sum(
+            item["source_end"] - item["source_start"] + 1 for item in chunks
+        ),
+    }
+
+
+def _validate_auxiliary_receipt(
+    path: Path,
+    receipt: JsonObject,
+    url: str,
+    total_size: int,
+    ranges: tuple[SourceRange, ...],
+    *,
+    complete: bool,
+) -> int:
+    if (
+        receipt.get("source_url") != url
+        or receipt.get("source_total_bytes") != total_size
+        or receipt.get("source_ranges") != [[item.start, item.end] for item in ranges]
+    ):
+        raise ValueError(f"integrity receipt does not match auxiliary source: {path}")
+    chunks = receipt.get("chunks")
+    if not (complete and receipt.get("legacy_manifest") is True and chunks == []) and (
+        not isinstance(chunks, list)
+        or not chunks
+        or not isinstance(chunks[0], dict)
+        or chunks[0].get("source_start") != 0
+    ):
+        raise ValueError(f"auxiliary integrity receipt must begin at byte zero: {path}")
+    return _verify_receipt_payload(
+        path, receipt, ranges, prefix=b"", expected_size=total_size, complete=complete
+    )
+
+
+def _auxiliary_receipt_from_manifest(
+    record: Mapping[str, Any],
+    filename: str,
+    url: str,
+    total_size: int,
+    ranges: tuple[SourceRange, ...],
+) -> JsonObject:
+    receipt = _new_auxiliary_receipt(url, total_size, ranges, [])
+    if (
+        record.get("filename") != filename
+        or record.get("source_url") != url
+        or record.get("bytes") != total_size
+    ):
+        raise ValueError("existing auxiliary manifest record does not match source")
+    digest = record.get("sha256")
+    if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+        raise ValueError("existing auxiliary manifest record lacks a valid file checksum")
+    receipt["completed_data_bytes"] = total_size
+    receipt["file_sha256"] = digest
+    receipt["legacy_manifest"] = True
+    return receipt
+
+
 def download_filtered_shard(
     session: HttpSession,
     source: SourceShard,
@@ -458,6 +711,7 @@ def download_filtered_shard(
     token: str | None,
     timeout: float,
     chunk_size: int = _STREAM_CHUNK_BYTES,
+    expected_record: Mapping[str, Any] | None = None,
 ) -> JsonObject:
     """Download selected tensor ranges into one resumable, atomically published shard."""
     prefix, tensors = _filtered_header(source, selected_names)
@@ -465,29 +719,72 @@ def download_filtered_shard(
     data_size = sum(tensor.size for tensor in tensors)
     expected_size = len(prefix) + data_size
     partial = output_path.with_name(output_path.name + ".partial")
+    output_receipt = _receipt_path(output_path)
+    partial_receipt = _receipt_path(partial)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     if output_path.exists():
-        with output_path.open("rb") as handle:
-            actual_prefix = handle.read(len(prefix))
-        if output_path.stat().st_size != expected_size or actual_prefix != prefix:
-            raise ValueError(
-                f"completed shard does not match the requested selection: {output_path}"
-            )
+        if not output_receipt.exists():
+            if partial_receipt.exists():
+                # Recover the narrow crash window between publishing the shard and its receipt.
+                receipt = _receipt_json(partial_receipt, "filtered-shard")
+                _validate_shard_receipt(
+                    output_path,
+                    receipt,
+                    source,
+                    prefix,
+                    ranges,
+                    expected_size,
+                    complete=True,
+                )
+                os.replace(partial_receipt, output_receipt)
+            elif expected_record is not None:
+                receipt = _shard_receipt_from_manifest(
+                    expected_record, source, prefix, ranges, expected_size
+                )
+                _validate_shard_receipt(
+                    output_path,
+                    receipt,
+                    source,
+                    prefix,
+                    ranges,
+                    expected_size,
+                    complete=True,
+                )
+                _atomic_json(output_receipt, receipt)
+            else:
+                raise ValueError(
+                    f"completed shard has no integrity receipt; remove or verify it: {output_path}"
+                )
+        receipt = _receipt_json(output_receipt, "filtered-shard")
+        _validate_shard_receipt(
+            output_path, receipt, source, prefix, ranges, expected_size, complete=True
+        )
         return _shard_manifest(source, tensors, ranges, prefix)
 
     if partial.exists():
-        with partial.open("rb") as handle:
-            actual_prefix = handle.read(len(prefix))
-        if partial.stat().st_size < len(prefix) or actual_prefix != prefix:
-            raise ValueError(f"partial shard does not match the requested selection: {partial}")
-        completed = partial.stat().st_size - len(prefix)
+        if not partial_receipt.exists():
+            raise ValueError(
+                f"partial shard has no integrity receipt; remove or verify it: {partial}"
+            )
+        receipt = _receipt_json(partial_receipt, "filtered-shard")
+        completed = _validate_shard_receipt(
+            partial, receipt, source, prefix, ranges, expected_size, complete=False
+        )
+        with partial.open("r+b") as handle:
+            handle.truncate(len(prefix) + completed)
+        chunks = cast(list[JsonObject], receipt["chunks"])
     else:
         with partial.open("xb") as handle:
             handle.write(prefix)
             handle.flush()
             os.fsync(handle.fileno())
         completed = 0
+        chunks = []
+        _atomic_json(
+            partial_receipt,
+            _new_shard_receipt(source, prefix, ranges, expected_size, chunks),
+        )
 
     remaining = tuple(_remaining_ranges(ranges, completed))
     with partial.open("ab") as handle:
@@ -507,15 +804,24 @@ def download_filtered_shard(
                 timeout=timeout,
                 expected_total=source.total_size,
             )
-            _stream_to(response, handle, source_range.size, chunk_size=chunk_size)
+            digest = _stream_to(response, handle, source_range.size, chunk_size=chunk_size)
             handle.flush()
             os.fsync(handle.fileno())
+            chunks.append(_chunk_record(source_range, digest))
+            _atomic_json(
+                partial_receipt,
+                _new_shard_receipt(source, prefix, ranges, expected_size, chunks),
+            )
 
     if partial.stat().st_size != expected_size:
         raise RuntimeError(
             f"filtered shard has {partial.stat().st_size} bytes, expected {expected_size}: {partial}"
         )
+    receipt = _new_shard_receipt(source, prefix, ranges, expected_size, chunks)
+    receipt["file_sha256"] = _sha256_file(partial)
+    _atomic_json(partial_receipt, receipt)
     os.replace(partial, output_path)
+    os.replace(partial_receipt, output_receipt)
     return _shard_manifest(source, tensors, ranges, prefix)
 
 
@@ -581,6 +887,34 @@ def _copy_metadata(metadata_dir: Path, output_dir: Path) -> None:
         os.replace(temporary, destination)
 
 
+def _existing_manifest_records(
+    output_dir: Path,
+) -> tuple[dict[str, Mapping[str, Any]], dict[str, Mapping[str, Any]]]:
+    """Read prior complete-file checksums for safe migration to receipt sidecars."""
+    path = output_dir / "prefix-checkpoint-manifest.json"
+    if not path.exists():
+        return {}, {}
+    manifest = _json_object(path.read_bytes(), str(path))
+
+    def records(name: str) -> dict[str, Mapping[str, Any]]:
+        value = manifest.get(name)
+        if not isinstance(value, list):
+            raise ValueError(f"existing prefix checkpoint manifest lacks {name}")
+        result: dict[str, Mapping[str, Any]] = {}
+        for record in value:
+            if not isinstance(record, dict) or not isinstance(record.get("filename"), str):
+                raise ValueError(
+                    f"existing prefix checkpoint manifest has an invalid {name} record"
+                )
+            filename = cast(str, record["filename"])
+            if filename in result:
+                raise ValueError(f"existing prefix checkpoint manifest repeats {filename}")
+            result[filename] = record
+        return result
+
+    return records("shards"), records("auxiliary_files")
+
+
 def _download_auxiliary_file(
     session: HttpSession,
     url: str,
@@ -588,40 +922,109 @@ def _download_auxiliary_file(
     *,
     token: str | None,
     timeout: float,
+    expected_record: Mapping[str, Any] | None = None,
 ) -> JsonObject:
     """Download a bounded non-weight artifact through a validated, resumable byte range."""
     first_byte, total_size = _read_range(session, url, 0, 0, token=token, timeout=timeout)
     if total_size <= 0 or total_size > _MAX_AUXILIARY_BYTES:
         raise ValueError(f"auxiliary file size {total_size} is outside the allowed range: {url}")
     partial = output_path.with_name(output_path.name + ".partial")
+    output_receipt = _receipt_path(output_path)
+    partial_receipt = _receipt_path(partial)
+    ranges = (
+        (SourceRange(0, 0),)
+        if total_size == 1
+        else (SourceRange(0, 0), SourceRange(1, total_size - 1))
+    )
     if output_path.exists():
-        if output_path.stat().st_size != total_size:
-            raise ValueError(f"completed auxiliary file has the wrong size: {output_path}")
-    else:
-        completed = partial.stat().st_size if partial.exists() else 0
-        if completed > total_size:
-            raise ValueError(f"partial auxiliary file is larger than its source: {partial}")
-        if completed == 0:
-            with partial.open("xb") as handle:
-                handle.write(first_byte)
-                handle.flush()
-                os.fsync(handle.fileno())
-            completed = 1
-        if completed < total_size:
-            response = _range_response(
-                session,
-                url,
-                completed,
-                total_size - 1,
-                token=token,
-                timeout=timeout,
-                expected_total=total_size,
+        if not output_receipt.exists():
+            if partial_receipt.exists():
+                receipt = _receipt_json(partial_receipt, "auxiliary-file")
+                _validate_auxiliary_receipt(
+                    output_path,
+                    receipt,
+                    url,
+                    total_size,
+                    ranges,
+                    complete=True,
+                )
+                os.replace(partial_receipt, output_receipt)
+            elif expected_record is not None:
+                receipt = _auxiliary_receipt_from_manifest(
+                    expected_record, output_path.name, url, total_size, ranges
+                )
+                _validate_auxiliary_receipt(
+                    output_path, receipt, url, total_size, ranges, complete=True
+                )
+                _atomic_json(output_receipt, receipt)
+            else:
+                raise ValueError(
+                    f"completed auxiliary file has no integrity receipt; "
+                    f"remove or verify it: {output_path}"
+                )
+        receipt = _receipt_json(output_receipt, "auxiliary-file")
+        _validate_auxiliary_receipt(output_path, receipt, url, total_size, ranges, complete=True)
+        return {
+            "filename": output_path.name,
+            "bytes": total_size,
+            "sha256": _sha256_file(output_path),
+            "source_url": url,
+        }
+    if partial.exists():
+        if not partial_receipt.exists():
+            raise ValueError(
+                f"partial auxiliary file has no integrity receipt; remove or verify it: {partial}"
             )
-            with partial.open("ab") as handle:
-                _stream_to(response, handle, total_size - completed, chunk_size=_STREAM_CHUNK_BYTES)
-                handle.flush()
-                os.fsync(handle.fileno())
-        os.replace(partial, output_path)
+        receipt = _receipt_json(partial_receipt, "auxiliary-file")
+        completed = _validate_auxiliary_receipt(
+            partial, receipt, url, total_size, ranges, complete=False
+        )
+        with partial.open("r+b") as handle:
+            handle.truncate(completed)
+        chunks = cast(list[JsonObject], receipt["chunks"])
+    else:
+        with partial.open("xb") as handle:
+            handle.write(first_byte)
+            handle.flush()
+            os.fsync(handle.fileno())
+        completed = 1
+        chunks = [_chunk_record(SourceRange(0, 0), hashlib.sha256(first_byte).hexdigest())]
+        _atomic_json(
+            partial_receipt,
+            _new_auxiliary_receipt(url, total_size, ranges, chunks),
+        )
+
+    if completed < total_size:
+        response = _range_response(
+            session,
+            url,
+            completed,
+            total_size - 1,
+            token=token,
+            timeout=timeout,
+            expected_total=total_size,
+        )
+        with partial.open("ab") as handle:
+            digest = _stream_to(
+                response, handle, total_size - completed, chunk_size=_STREAM_CHUNK_BYTES
+            )
+            handle.flush()
+            os.fsync(handle.fileno())
+        chunks.append(_chunk_record(SourceRange(completed, total_size - 1), digest))
+        _atomic_json(
+            partial_receipt,
+            _new_auxiliary_receipt(url, total_size, ranges, chunks),
+        )
+
+    if partial.stat().st_size != total_size:
+        raise RuntimeError(
+            f"auxiliary file has {partial.stat().st_size} bytes, expected {total_size}: {partial}"
+        )
+    receipt = _new_auxiliary_receipt(url, total_size, ranges, chunks)
+    receipt["file_sha256"] = _sha256_file(partial)
+    _atomic_json(partial_receipt, receipt)
+    os.replace(partial, output_path)
+    os.replace(partial_receipt, output_receipt)
     return {
         "filename": output_path.name,
         "bytes": total_size,
@@ -679,6 +1082,7 @@ def download_prefix(
     if not selected_map:
         raise ValueError("prefix selection did not match any tensors")
     output_dir.mkdir(parents=True, exist_ok=True)
+    prior_shard_records, prior_auxiliary_records = _existing_manifest_records(output_dir)
     _copy_metadata(metadata_dir, output_dir)
 
     auxiliary_manifests: list[JsonObject] = []
@@ -690,6 +1094,7 @@ def download_prefix(
                 output_dir / filename,
                 token=token,
                 timeout=timeout,
+                expected_record=prior_auxiliary_records.get(filename),
             )
             for filename in preset.auxiliary_files
         ]
@@ -702,6 +1107,7 @@ def download_prefix(
                     output_dir / filename,
                     token=token,
                     timeout=timeout,
+                    expected_record=prior_auxiliary_records.get(filename),
                 )
                 for filename in preset.auxiliary_files
             ]
@@ -719,6 +1125,7 @@ def download_prefix(
             output_dir / filename,
             token=token,
             timeout=timeout,
+            expected_record=prior_shard_records.get(filename),
         )
 
     shard_manifests: list[JsonObject]
