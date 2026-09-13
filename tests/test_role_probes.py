@@ -193,7 +193,7 @@ def _multinomial_objective(
     return float(-np.log(likelihoods).mean() + penalty)
 
 
-def _cuml_optimizer_config() -> role_probes.ProbeOptimizerConfig:
+def _cuml_optimizer_config(*, tolerance: float = 1e-4) -> role_probes.ProbeOptimizerConfig:
     record = {
         "backend": "cuml-qn",
         "format_version": 1,
@@ -218,7 +218,7 @@ def _cuml_optimizer_config() -> role_probes.ProbeOptimizerConfig:
             "penalty": "l2",
             "penalty_normalized": True,
             "solver": "qn",
-            "tol": 1e-4,
+            "tol": tolerance,
             "verbose": False,
         },
     }
@@ -602,6 +602,7 @@ def test_cuml_fit_enforces_layout_memory_solver_and_result_boundaries(
         def __init__(self, **kwargs: object) -> None:
             assert kwargs["penalty_normalized"] is True
             assert kwargs["linesearch_max_iter"] == 100
+            assert kwargs["tol"] == 1e-3
 
         def fit(self, x: Any, y: np.ndarray, **kwargs: object) -> None:
             assert x.dtype == np.float32 and x.flags.f_contiguous
@@ -669,7 +670,9 @@ def test_cuml_fit_enforces_layout_memory_solver_and_result_boundaries(
         return original_import(name)
 
     monkeypatch.setattr(role_probes.importlib, "import_module", import_module)
-    config = replace(_training_config(), optimizer=_cuml_optimizer_config())
+    config = replace(
+        _training_config(), optimizer=_cuml_optimizer_config(tolerance=1e-3)
+    )
     if error is not None:
         with pytest.raises((RuntimeError, MemoryError), match=error):
             _fit_parameters(fit_x, np.arange(6) % 3, 1.0, config, 3)
@@ -737,8 +740,10 @@ def test_cuml_runtime_identity_is_reconstructed_and_checked(
         lambda _: SimpleNamespace(locate_file=lambda _: libcuml_path),
     )
 
-    optimizer = role_probes.cuml_optimizer_config()
+    optimizer = role_probes.cuml_optimizer_config(tolerance=1e-3)
     runtime = json.loads(optimizer.runtime_json)
+    assert optimizer_config_from_runtime(runtime) == optimizer
+    assert optimizer.tolerance == runtime["solver"]["tol"] == 1e-3
     assert runtime["cuda"] == {
         "compute_capability": "8.9",
         "device_name": "test-gpu",

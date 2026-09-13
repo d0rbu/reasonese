@@ -82,12 +82,21 @@ document-macro accuracy, per-role document-macro accuracy, and the full confusio
 document metrics prevent a handful of long documents from hiding failures elsewhere.
 
 The expanded protocol uses explicit cuML QN in FP32 with `penalty_normalized=True`, `C=1/lambda`,
-`max_iter=5000`, `linesearch_max_iter=100`, `lbfgs_memory=5`, and `tol=1e-4`. The protocol stores a
+`max_iter=5000`, `linesearch_max_iter=100`, `lbfgs_memory=5`, and `tol=1e-3`. The protocol stores a
 canonical runtime record covering the solver arguments, package versions, CUDA device/runtime,
 matrix layout, and hashes of the fitted implementation files. Training refuses to run when the
 live runtime differs. The older diagnostic protocol uses explicit sklearn LBFGS in FP64 and records
 its runtime separately; results from the two numerical backends are not represented as bitwise
 equivalent.
+
+The cuML tolerance was frozen before any expanded development or test scores were read. At the
+released backend's `1e-4` default, train-only Nemotron layer-13 fits at lambda `1e-4` and `0.1`
+reported line-search failures; increasing L-BFGS memory did not resolve the failure, and a bounded
+FP64 reference run did not finish. With `tol=1e-3`, the preregistered lambda `0.1` fit converged in
+1,791 iterations, and an independent FP64 calculation on the complete training split confirmed
+that its gradient infinity norm (`0.0000994677`) was below the cuML convergence bound
+(`0.0001122102`). This train-only numerical check changed no layer, lambda, split, or acceptance
+gate.
 
 Keep the GPU fitter in an ignored isolated environment so the base and CPU test environments do
 not install RAPIDS. The supported pinned setup is:
@@ -210,10 +219,10 @@ The frozen workflow has separate training and qualification stages so a held-out
 can be saved without being mistaken for a QA-eligible probe:
 
 The 60-document diagnostic uses scikit-learn L-BFGS with a 2,000-iteration limit and `1e-4`
-tolerance. The expanded workflow uses the pinned cuML QN configuration above, matching the released
-analysis's backend and `1e-4` default tolerance while explicitly binding settings that its notebook
-left at defaults. Solver and tolerance are implementation details rather than requirements stated
-in the paper, so the full runtime and configuration are stored in the probe artifact.
+tolerance. The expanded workflow uses the pinned cuML QN backend from the released analysis and the
+explicit `1e-3` tolerance selected by the train-only check above. Solver and tolerance are
+implementation details rather than requirements stated in the paper, so the full runtime and
+configuration are stored in the probe artifact.
 For expanded neutral training, the command first binds the activation manifest's recorded content,
 filler, sequence, and seed settings to the protocol's existing construction fields; it refuses a
 changed artifact before loading its activation arrays. Native extraction validates the dialogue
