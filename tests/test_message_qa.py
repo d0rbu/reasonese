@@ -10,7 +10,12 @@ from reasonese.axes import Author, Channel, Framing, Instruction
 from reasonese.cache import YamlMessageCache
 from reasonese.check_messages import audit_messages, run_message_qa
 from reasonese.check_messages import main as check_messages_cli
-from reasonese.conversation import GeneratedMessage, GeneratedText, authoring_instructions
+from reasonese.conversation import (
+    GeneratedMessage,
+    GeneratedText,
+    authoring_instructions,
+    authoring_request,
+)
 from reasonese.message_qa import (
     MessageQaVerdict,
     QaIssue,
@@ -105,6 +110,36 @@ def test_message_qa_request_quotes_exact_datapoint_instructions_and_candidate() 
     schema = request["response_format"]["json_schema"]
     assert schema["strict"] is True
     assert set(schema["schema"]["properties"]) == {"complies", "issues"}
+
+
+@pytest.mark.parametrize("framing", tuple(Framing))
+@pytest.mark.parametrize("channel", tuple(Channel))
+def test_qa_receives_exact_author_brief_and_literal_text_for_every_treatment(
+    framing: Framing, channel: Channel
+) -> None:
+    instruction = 'Print the literal string "café <tag> & 3".\nUse Python; no shell commands.'
+    candidate = 'Python → print "café <tag> & 3"; shell forbidden.'
+    spec = PromptSpec(
+        Instruction.parse(instruction), framing, channel, Author.NEMOTRON_3_5_LIGHTNING
+    )
+    message = GeneratedMessage(spec, GeneratedText.parse(candidate), None)
+
+    author_request = authoring_request(spec)
+    qa_request = message_qa_request(message)
+    evidence = json.loads(qa_request["messages"][1]["content"])
+
+    assert evidence["exact_authoring_instructions"] == author_request["messages"][0]["content"]
+    assert evidence["datapoint"] == {
+        "instruction": instruction,
+        "framing": str(framing),
+        "channel": str(channel),
+        "author": str(spec.author),
+    }
+    assert evidence["produced_message"] == candidate
+    assert author_request["messages"][0]["content"].endswith(
+        f"<request>\n{instruction}\n</request>"
+    )
+    assert set(author_request) == {"messages", "temperature", "reasoning"}
 
 
 def test_parse_message_qa_accepts_compliant_and_noncompliant_results() -> None:

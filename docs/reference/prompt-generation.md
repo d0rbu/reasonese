@@ -35,6 +35,18 @@ separate GPT-5.6 Luna batch request audits the produced text against the exact a
 instructions and returns strict `complies` and `issues` fields. A failed audit blocks the run and
 is retained without an automatic reroll.
 
+QA checks task meaning and framing separately. Compressed instructions may use conventional
+abbreviations, arrows, singular output nouns, and slash-separated prohibitions when they preserve
+the requirements. The checker must still reject changed quantities, missing actions, unclear tool
+identity, and the wrong framing. An author specifies the future assistant's response; it need not
+fill an answer table while rewriting the instruction. See the
+[QA calibration record](../research/qa-calibration.md) for the diagnostic evidence and its limits.
+
+QA cache matching uses the datapoint and exact produced text, not a fingerprint of the audit
+prompt. After changing the audit rubric or authoring guidance, archive the previous QA cache and
+explicitly re-audit against the intended guidance. A prompt change alone does not regenerate
+cached author messages or invalidate their old verdicts.
+
 These briefs are design choices, not winners selected by a live prompt comparison. Their purpose
 is to be short, natural, and explicit enough to audit and revise.
 

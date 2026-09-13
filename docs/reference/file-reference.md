@@ -22,6 +22,7 @@
 | `reasonese/write_variants.py` | Blinded local editor for hand-written user variants |
 | `reasonese/tools.py` | Bounded assistant tool definitions and local execution |
 | `docs/reference/prompt-generation.md` | Exact prompts, framing guidance, and current limitations |
+| `docs/research/qa-calibration.md` | Message-QA rubric calibration evidence and limitations |
 | `reasonese/routing.py` | Collection route preference, paid opt-in, and invocation summaries |
 | `tests/test_routes.py` | Routing, provenance, billing, and fingerprint compatibility contracts |
 | `reasonese/openrouter.py` | Provider transport, scheduled completions, and overlapping grouped batches |
