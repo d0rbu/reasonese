@@ -67,3 +67,32 @@ reviews are local ignored artifacts under `out/prompt-calibration-20260913/`. Th
 jobs are `qa-r0` through `qa-r5`; `qa-r3` evaluates v4, `qa-r4` evaluates the shorter v5 and
 fresh confirmation, and `qa-r5` evaluates the cue clarification v6. These diagnostic artifacts
 are separate from pilot trial caches.
+
+## Authoring comparison
+
+The completed wording comparison uses 24 coordinates per candidate: four pilot task pairs,
+six framings, and evenly rotated destination channels. Each candidate is scored under the same
+selected QA rubric, including failures and unusually long drafting outputs.
+
+| Authoring guidance | QA passes |
+|---|---:|
+| Original brief | 18/24 |
+| Verbose preservation checklist (v1) | 16/24 |
+| Shorter preservation checklist (v2) | 19/24 |
+| Explicit tool names added (v3) | 11/24 |
+| Source, recency, exclusivity, and language qualifiers added (v4) | 17/24 |
+| Compact preservation paragraph (v5) | 17/24 |
+
+These results do not show a reliable benefit from adding more guidance. The one-case increase
+for v2 is below the protocol's practical improvement threshold of two cases and was not
+replicated across the later variants. Some outputs omit execution or tool exclusivity; others
+add restrictions or return drafting commentary. Manual review distinguishes those substantive
+failures from questionable QA objections. This is a prompt-authoring diagnostic, not a score
+of the model's ability to execute the research tasks.
+
+Confirmation on opposite pair sides with shifted channels and a 12-case authoring-message
+priority diagnostic are still in progress. These use known pilot task families, so they are
+not blind tests of generalization to unseen tasks. Production authoring remains unchanged
+while those results are pending. Local `final-author-comparison.py` validates each stored
+verdict with the production parser, checks exact coordinate matching for the priority
+comparison, and reports incomplete or unscored jobs explicitly.
