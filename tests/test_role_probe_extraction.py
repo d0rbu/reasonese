@@ -751,6 +751,87 @@ def test_prefix_loader_rejects_config_before_reading_weights(tmp_path: Path) -> 
         )
 
 
+def test_prefix_loader_rejects_missing_or_changed_source_weights(tmp_path: Path) -> None:
+    torch = pytest.importorskip("torch")
+    try:
+        from safetensors.torch import (  # ty: ignore[unresolved-import, unused-ignore-comment]
+            save_file,
+        )
+        from transformers.models.nemotron_h.configuration_nemotron_h import (  # ty: ignore[unresolved-import, unused-ignore-comment]
+            NemotronHConfig,
+        )
+        from transformers.models.nemotron_h.modeling_nemotron_h import (  # ty: ignore[unresolved-import, unused-ignore-comment]
+            NemotronHModel,
+        )
+    except ImportError:
+        pytest.skip("pinned role-probe runtime is not installed")
+
+    config = NemotronHConfig(
+        vocab_size=64,
+        hidden_size=32,
+        layers_block_type=["attention", "attention"],
+        num_attention_heads=4,
+        num_key_value_heads=2,
+        head_dim=8,
+        intermediate_size=64,
+        use_mamba_kernels=False,
+        dtype="bfloat16",
+        architectures=[NEMOTRON_ADAPTER.architecture],
+    )
+    full = cast(Any, NemotronHModel(config)).to(dtype=torch.bfloat16).eval()
+    source = {
+        f"backbone.{name}": value.detach().cpu()
+        for name, value in full.state_dict().items()
+        if name == "embeddings.weight"
+        or name.startswith("layers.0.")
+        or name == "layers.1.norm.weight"
+    }
+    shard_name = "model-00001-of-00001.safetensors"
+
+    def write_case(name: str, values: dict[str, Any] | None) -> Path:
+        path = tmp_path / name
+        path.mkdir()
+        config.save_pretrained(path)
+        (path / "model.safetensors.index.json").write_text(
+            json.dumps({"weight_map": dict.fromkeys(source, shard_name)}), encoding="utf-8"
+        )
+        if values is not None:
+            save_file(values, path / shard_name)
+        return path
+
+    missing_shard = write_case("missing-shard", None)
+    with pytest.raises(FileNotFoundError, match="missing selected checkpoint shard"):
+        extraction.load_prefix_model(
+            missing_shard, NEMOTRON_ADAPTER, max_layer=1, execution_device="cpu"
+        )
+
+    missing_name = next(iter(source))
+    missing_tensor = write_case(
+        "missing-tensor", {name: value for name, value in source.items() if name != missing_name}
+    )
+    with pytest.raises(ValueError, match="is absent from selected shard"):
+        extraction.load_prefix_model(
+            missing_tensor, NEMOTRON_ADAPTER, max_layer=1, execution_device="cpu"
+        )
+
+    dtype_name = "backbone.embeddings.weight"
+    wrong_dtype = write_case(
+        "wrong-dtype", {**source, dtype_name: source[dtype_name].to(torch.float32)}
+    )
+    with pytest.raises(ValueError, match="has dtype torch.float32, expected torch.bfloat16"):
+        extraction.load_prefix_model(
+            wrong_dtype, NEMOTRON_ADAPTER, max_layer=1, execution_device="cpu"
+        )
+
+    wrong_shape = write_case(
+        "wrong-shape", {**source, dtype_name: source[dtype_name][:-1].contiguous()}
+    )
+    with pytest.raises(ValueError, match="shape .* does not match"):
+        extraction.load_prefix_model(
+            wrong_shape, NEMOTRON_ADAPTER, max_layer=1, execution_device="cpu"
+        )
+
+
 def test_loaded_native_prefix_exactly_matches_full_model(tmp_path: Path) -> None:
     torch = pytest.importorskip("torch")
     try:
