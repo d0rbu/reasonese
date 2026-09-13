@@ -581,6 +581,72 @@ def test_prefix_checkpoint_identity_is_recomputed(tmp_path: Path) -> None:
     (tmp_path / "one.safetensors").write_bytes(b"changed")
     with pytest.raises(ValueError, match="weight identity"):
         validate_prefix_checkpoint_identity(tmp_path, manifest)
+    (tmp_path / "one.safetensors").write_bytes(b"one")
+
+    manifest_mutations = (
+        ({**manifest, "weights_hash_kind": "unknown"}, "hash kind"),
+        ({**manifest, "shards": None}, "lacks shard records"),
+        ({**manifest, "shards": [None]}, "invalid prefix checkpoint shard record"),
+        (
+            {**manifest, "shards": [{"filename": False, "sha256": "x"}]},
+            "invalid prefix checkpoint shard record",
+        ),
+        (
+            {**manifest, "shards": [manifest["shards"][0], manifest["shards"][0]]},
+            "invalid prefix checkpoint shard record",
+        ),
+        (
+            {**manifest, "shards": [{"filename": "one.safetensors", "sha256": "0" * 64}]},
+            "shard records do not match",
+        ),
+        ({**manifest, "auxiliary_files": None}, "lacks auxiliary file records"),
+        ({**manifest, "auxiliary_files": [None]}, "invalid prefix checkpoint auxiliary record"),
+        (
+            {
+                **manifest,
+                "auxiliary_files": [
+                    {"filename": "tokenizer.json", "bytes": False, "sha256": "0" * 64}
+                ],
+            },
+            "invalid prefix checkpoint auxiliary record",
+        ),
+        (
+            {
+                **manifest,
+                "auxiliary_files": [
+                    {"filename": "tokenizer.json", "bytes": 10, "sha256": "0" * 64}
+                ],
+            },
+            "auxiliary file does not match",
+        ),
+    )
+    for corrupted, message in manifest_mutations:
+        with pytest.raises(ValueError, match=message):
+            validate_prefix_checkpoint_identity(tmp_path, corrupted)
+
+
+def test_checkpoint_index_and_prefix_plan_fail_closed(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="invalid checkpoint index"):
+        extraction._read_weight_map(tmp_path)
+    index = tmp_path / "model.safetensors.index.json"
+    index.write_text("not-json", encoding="utf-8")
+    with pytest.raises(ValueError, match="invalid checkpoint index"):
+        extraction._read_weight_map(tmp_path)
+    index.write_text(json.dumps({"weight_map": []}), encoding="utf-8")
+    with pytest.raises(ValueError, match="invalid weight_map"):
+        extraction._read_weight_map(tmp_path)
+    with pytest.raises(ValueError, match="non-negative"):
+        select_prefix_checkpoint_keys({}, NEMOTRON_ADAPTER, max_layer=-1)
+
+    prefix = "model.language_model."
+    incomplete_gemma = {
+        f"{prefix}embed_tokens.weight": "one.safetensors",
+        f"{prefix}layers.0.input_layernorm.weight": "one.safetensors",
+        f"{prefix}layers.0.post_attention_layernorm.weight": "one.safetensors",
+        f"{prefix}layers.0.pre_feedforward_layernorm.weight": "one.safetensors",
+    }
+    with pytest.raises(ValueError, match=r"self_attn\.\*"):
+        select_prefix_checkpoint_keys(incomplete_gemma, extraction.GEMMA_ADAPTER, max_layer=0)
 
 
 def test_nemotron_kernel_revisions_load_exact_offline_snapshots(
@@ -998,6 +1064,55 @@ def test_artifact_writer_is_atomic_and_complete(
         reject_rewritten_file(
             "sequences.jsonl", jsonl_bytes([first, *sequence_records[1:]]), message
         )
+
+    invalid_output = tmp_path / "invalid-artifact"
+    with pytest.raises(ValueError, match="activation_dtype"):
+        extract_role_activations(
+            Model(),
+            dataset,
+            test_adapter,
+            layers=(0,),
+            identity=_test_identity(),
+            output=invalid_output,
+            activation_dtype="float64",
+        )
+    for invalid_layers, message in (((), "non-empty"), ((2, 1), "sorted")):
+        with pytest.raises(ValueError, match=message):
+            extract_role_activations(
+                Model(),
+                dataset,
+                test_adapter,
+                layers=invalid_layers,
+                identity=_test_identity(),
+                output=invalid_output,
+            )
+    with pytest.raises(ValueError, match="batch_size"):
+        extract_role_activations(
+            Model(),
+            dataset,
+            test_adapter,
+            layers=(0,),
+            identity=_test_identity(),
+            output=invalid_output,
+            batch_size=0,
+        )
+
+    monkeypatch.setattr(
+        extraction,
+        "_capture_role_group",
+        lambda *_args, **_kwargs: np.zeros((1, 1, 1, 1), dtype=np.float32),
+    )
+    with pytest.raises(ValueError, match="activation shape"):
+        extract_role_activations(
+            Model(),
+            dataset,
+            test_adapter,
+            layers=(0,),
+            identity=_test_identity(),
+            output=invalid_output,
+        )
+    assert not invalid_output.exists()
+    assert not tuple(tmp_path.glob(".invalid-artifact.*"))
 
     with pytest.raises(FileExistsError, match="refusing to overwrite"):
         extract_role_activations(
