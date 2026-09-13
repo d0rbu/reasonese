@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
@@ -192,6 +193,94 @@ def test_role_dataset_rejects_filler_with_duplicate_target_text(
         )
 
 
+def test_role_example_rejects_broken_token_partitions(
+    native_template: str,
+    test_adapter: NativeTemplateAdapter,
+    documents: tuple[NeutralDocument, ...],
+    filler_documents: tuple[NeutralDocument, ...],
+) -> None:
+    dataset = build_role_dataset(
+        documents[:2],
+        filler_documents[:1],
+        CharacterTokenizer(native_template),
+        test_adapter,
+        max_content_tokens=8,
+        max_filler_tokens=80,
+        max_sequence_tokens=500,
+        seed=0,
+    )
+    example = dataset.examples[0]
+    mutations = (
+        lambda: replace(example, content_positions=()),
+        lambda: replace(example, content_token_ids=example.content_token_ids[:-1]),
+        lambda: replace(example, content_positions=tuple(reversed(example.content_positions))),
+        lambda: replace(
+            example,
+            content_positions=(len(example.input_ids),),
+            content_token_ids=(0,),
+        ),
+        lambda: replace(
+            example,
+            content_token_ids=(example.content_token_ids[0] + 1, *example.content_token_ids[1:]),
+        ),
+        lambda: replace(example, tag_positions=example.tag_positions[1:]),
+        lambda: replace(
+            example,
+            filler_positions=(example.content_positions[0], *example.filler_positions),
+        ),
+    )
+    for mutate in mutations:
+        with pytest.raises(ValueError):
+            mutate()
+
+
+def test_role_dataset_rejects_inconsistent_group_metadata(
+    native_template: str,
+    test_adapter: NativeTemplateAdapter,
+    documents: tuple[NeutralDocument, ...],
+    filler_documents: tuple[NeutralDocument, ...],
+) -> None:
+    dataset = build_role_dataset(
+        documents[:2],
+        filler_documents[:2],
+        CharacterTokenizer(native_template),
+        test_adapter,
+        max_content_tokens=8,
+        max_filler_tokens=80,
+        max_sequence_tokens=500,
+        seed=0,
+    )
+    with pytest.raises(ValueError, match="exactly every role"):
+        replace(dataset, examples=dataset.examples[:-1])
+    wrong_id = replace(dataset.examples[0], document_id="wrong")
+    with pytest.raises(ValueError, match="wrong document ID"):
+        replace(dataset, examples=(wrong_id, *dataset.examples[1:]))
+    duplicated_role = replace(dataset.examples[4], role=ProbeRole.REASONING)
+    with pytest.raises(ValueError, match="exactly every role"):
+        replace(dataset, examples=(*dataset.examples[:4], duplicated_role, *dataset.examples[5:]))
+    changed_ids = list(dataset.examples[0].input_ids)
+    changed_ids[dataset.examples[0].content_positions[0]] += 1
+    unequal_content = replace(
+        dataset.examples[0],
+        input_ids=tuple(changed_ids),
+        content_token_ids=(
+            changed_ids[dataset.examples[0].content_positions[0]],
+            *dataset.examples[0].content_token_ids[1:],
+        ),
+    )
+    with pytest.raises(ValueError, match="unequal paired content tokens"):
+        replace(dataset, examples=(unequal_content, *dataset.examples[1:]))
+    unequal_partner = replace(dataset.examples[0], partner_document_id="filler-b")
+    with pytest.raises(ValueError, match="unequal filler partners"):
+        replace(dataset, examples=(unequal_partner, *dataset.examples[1:]))
+    unknown_partner = tuple(
+        replace(example, partner_document_id="unknown") if example.document_index == 0 else example
+        for example in dataset.examples
+    )
+    with pytest.raises(ValueError, match="unknown filler partner"):
+        replace(dataset, examples=unknown_partner)
+
+
 def test_load_documents_fails_closed(tmp_path: Path) -> None:
     corpus = tmp_path / "corpus.jsonl"
     corpus.write_text(
@@ -321,6 +410,40 @@ def test_prefix_key_plan_rejects_layer_gap() -> None:
         select_prefix_checkpoint_keys(weights, NEMOTRON_ADAPTER, max_layer=2)
 
 
+def test_gemma_prefix_key_plan_keeps_only_max_layer_pre_mlp_path() -> None:
+    prefix = "model.language_model."
+    weights = {
+        f"{prefix}embed_tokens.weight": "one.safetensors",
+        f"{prefix}layers.0.input_layernorm.weight": "one.safetensors",
+        f"{prefix}layers.0.self_attn.q_proj.weight": "one.safetensors",
+        f"{prefix}layers.0.post_attention_layernorm.weight": "one.safetensors",
+        f"{prefix}layers.0.pre_feedforward_layernorm.weight": "one.safetensors",
+        f"{prefix}layers.1.input_layernorm.weight": "two.safetensors",
+        f"{prefix}layers.1.self_attn.q_proj.weight": "two.safetensors",
+        f"{prefix}layers.1.post_attention_layernorm.weight": "two.safetensors",
+        f"{prefix}layers.1.pre_feedforward_layernorm.weight": "two.safetensors",
+        f"{prefix}layers.1.mlp.gate_proj.weight": "two.safetensors",
+        f"{prefix}norm.weight": "two.safetensors",
+    }
+    plan = select_prefix_checkpoint_keys(weights, extraction.GEMMA_ADAPTER, max_layer=1)
+    assert set(plan.key_mapping.values()) == {
+        "embed_tokens.weight",
+        "layers.0.input_layernorm.weight",
+        "layers.0.self_attn.q_proj.weight",
+        "layers.0.post_attention_layernorm.weight",
+        "layers.0.pre_feedforward_layernorm.weight",
+        "layers.1.input_layernorm.weight",
+        "layers.1.self_attn.q_proj.weight",
+        "layers.1.post_attention_layernorm.weight",
+        "layers.1.pre_feedforward_layernorm.weight",
+    }
+    assert not any("mlp" in value or value == "norm.weight" for value in plan.key_mapping.values())
+    with pytest.raises(ValueError, match="unsupported native adapter"):
+        select_prefix_checkpoint_keys(
+            weights, replace(NEMOTRON_ADAPTER, name="unsupported"), max_layer=1
+        )
+
+
 def test_prefix_checkpoint_identity_is_recomputed(tmp_path: Path) -> None:
     index = tmp_path / "model.safetensors.index.json"
     index.write_text(
@@ -344,9 +467,7 @@ def test_prefix_checkpoint_identity_is_recomputed(tmp_path: Path) -> None:
     manifest = {
         "weights_hash_kind": extraction.PREFIX_WEIGHTS_HASH_KIND,
         "weights_sha256": weights_sha256,
-        "shards": [
-            {"filename": name, "sha256": digest} for name, digest in shard_hashes.items()
-        ],
+        "shards": [{"filename": name, "sha256": digest} for name, digest in shard_hashes.items()],
         "auxiliary_files": [
             {
                 "filename": "tokenizer.json",
@@ -418,7 +539,9 @@ def test_loaded_native_prefix_exactly_matches_full_model(tmp_path: Path) -> None
     source = {
         f"backbone.{name}": value.detach().cpu()
         for name, value in full.state_dict().items()
-        if name == "embeddings.weight" or name.startswith("layers.0.") or name == "layers.1.norm.weight"
+        if name == "embeddings.weight"
+        or name.startswith("layers.0.")
+        or name == "layers.1.norm.weight"
     }
     shard_name = "model-00001-of-00001.safetensors"
     save_file(source, tmp_path / shard_name)
@@ -437,16 +560,95 @@ def test_loaded_native_prefix_exactly_matches_full_model(tmp_path: Path) -> None
     expected = extraction.capture_token_activations(full, NEMOTRON_ADAPTER, **request)
     actual = extraction.capture_token_activations(loaded, NEMOTRON_ADAPTER, **request)
     assert np.array_equal(actual, expected)
-    assert all(
-        parameter.device.type == "meta" for parameter in cast(Any, loaded).parameters()
-    )
+    assert all(parameter.device.type == "meta" for parameter in cast(Any, loaded).parameters())
     runtime_sha256, runtime = extraction.model_runtime_identity(
         loaded, NEMOTRON_ADAPTER, checkpoint=tmp_path
     )
-    assert hashlib.sha256(
-        json.dumps(runtime, separators=(",", ":"), sort_keys=True).encode()
-    ).hexdigest() == runtime_sha256
+    assert (
+        hashlib.sha256(
+            json.dumps(runtime, separators=(",", ":"), sort_keys=True).encode()
+        ).hexdigest()
+        == runtime_sha256
+    )
     assert runtime["nemotron_mamba"]["fast_path_selected"] is False
+    assert runtime["model_dtype_plan"] == {"e_score_correction_bias": "float32"}
+
+
+def test_loader_preserves_model_declared_fp32_buffer(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    torch = pytest.importorskip("torch")
+    try:
+        import accelerate
+        from safetensors.torch import save_file
+        from transformers.models.nemotron_h.configuration_nemotron_h import NemotronHConfig
+        from transformers.models.nemotron_h.modeling_nemotron_h import NemotronHModel
+    except ImportError:
+        pytest.skip("pinned role-probe runtime is not installed")
+    config = NemotronHConfig(
+        vocab_size=64,
+        hidden_size=32,
+        layers_block_type=["moe", "attention"],
+        num_attention_heads=4,
+        num_key_value_heads=2,
+        head_dim=8,
+        intermediate_size=64,
+        n_routed_experts=4,
+        n_shared_experts=1,
+        moe_intermediate_size=16,
+        moe_shared_expert_intermediate_size=16,
+        num_experts_per_tok=2,
+        n_group=1,
+        topk_group=1,
+        use_mamba_kernels=False,
+        dtype="bfloat16",
+        architectures=["NemotronHForCausalLM"],
+    )
+    config.save_pretrained(tmp_path)
+    full = NemotronHModel(config).to(dtype=torch.bfloat16).eval()  # ty: ignore[missing-argument]
+    gate = full.layers[0].mixer.gate
+    gate.e_score_correction_bias = torch.tensor([0.25012345, -0.50023456, 0.75034567, -1.0004568])
+
+    source: dict[str, Any] = {}
+    for name, value in full.state_dict().items():
+        if not (
+            name == "embeddings.weight"
+            or name.startswith("layers.0.")
+            or name == "layers.1.norm.weight"
+        ):
+            continue
+        match = re.fullmatch(r"(layers\.0\.mixer\.experts)\.(up_proj|down_proj)", name)
+        if match is None:
+            source[f"backbone.{name}"] = value.detach().cpu()
+        else:
+            for expert, expert_value in enumerate(value):
+                source[f"backbone.{match.group(1)}.{expert}.{match.group(2)}.weight"] = (
+                    expert_value.detach().cpu()
+                )
+    shard_name = "model-00001-of-00001.safetensors"
+    save_file(source, tmp_path / shard_name)
+    (tmp_path / "model.safetensors.index.json").write_text(
+        json.dumps({"weight_map": dict.fromkeys(source, shard_name)}), encoding="utf-8"
+    )
+    monkeypatch.setattr(accelerate, "cpu_offload", lambda model, **_kwargs: model)
+
+    loaded = cast(
+        Any,
+        extraction.load_prefix_model(
+            tmp_path, NEMOTRON_ADAPTER, max_layer=1, execution_device="cpu"
+        ),
+    )
+    actual_bias = loaded.layers[0].mixer.gate.e_score_correction_bias
+    assert actual_bias.dtype == torch.float32
+    assert torch.equal(actual_bias, gate.e_score_correction_bias)
+    request = {
+        "input_ids": (1, 2, 3, 4),
+        "token_positions": (1, 2),
+        "layers": (0, 1),
+    }
+    expected = extraction.capture_token_activations(full, NEMOTRON_ADAPTER, **request)
+    actual = extraction.capture_token_activations(loaded, NEMOTRON_ADAPTER, **request)
+    assert np.array_equal(actual, expected)
 
 
 def test_artifact_writer_is_atomic_and_complete(
@@ -556,6 +758,65 @@ def test_artifact_writer_is_atomic_and_complete(
     with pytest.raises(ValueError, match="missing or unexpected files"):
         load_activation_dataset(output)
     unexpected.unlink()
+
+    manifest_path = output / "manifest.json"
+    original_manifest = manifest_path.read_bytes()
+
+    def write_manifest(value: dict[str, Any]) -> None:
+        manifest_path.write_text(json.dumps(value), encoding="utf-8")
+
+    corruptions = (
+        ({**manifest, "format_version": 2}, "format_version"),
+        ({**manifest, "files": {}}, "file manifest"),
+        ({**manifest, "roles": {"reasoning": 0, "assistant": 2}}, "role codes"),
+        ({**manifest, "documents": 3}, "target document count"),
+        ({**manifest, "filler_documents": 3}, "filler document count"),
+        ({**manifest, "activation_rows": 79}, "cover every activation row"),
+        ({**manifest, "runtime_sha256": "0" * 64}, "runtime identity"),
+    )
+    for corrupted, message in corruptions:
+        write_manifest(corrupted)
+        with pytest.raises(ValueError, match=message):
+            load_activation_dataset(output)
+    manifest_path.write_bytes(original_manifest)
+
+    token_path = output / "content_token_id.npy"
+    original_tokens = token_path.read_bytes()
+    token_path.write_bytes(original_tokens + b"corrupt")
+    with pytest.raises(ValueError, match="checksum mismatch"):
+        load_activation_dataset(output)
+    token_path.write_bytes(original_tokens)
+
+    document_path = output / "document_index.npy"
+    original_document_index = document_path.read_bytes()
+    indices = np.load(document_path, allow_pickle=False)
+    indices[0] = 99
+    np.save(document_path, indices, allow_pickle=False)
+    rehashed = json.loads(original_manifest)
+    rehashed["files"]["document_index.npy"] = hashlib.sha256(document_path.read_bytes()).hexdigest()
+    write_manifest(rehashed)
+    with pytest.raises(ValueError, match="out-of-range metadata index"):
+        load_activation_dataset(output)
+    document_path.write_bytes(original_document_index)
+    manifest_path.write_bytes(original_manifest)
+
+    filler_path = output / "filler_documents.jsonl"
+    original_fillers = filler_path.read_bytes()
+    duplicate_text = [*filler_documents_json]
+    duplicate_text[0]["text_sha256"] = target_documents[0]["text_sha256"]
+    filler_path.write_text(
+        "".join(json.dumps(record) + "\n" for record in duplicate_text), encoding="utf-8"
+    )
+    rehashed = json.loads(original_manifest)
+    rehashed["files"]["filler_documents.jsonl"] = hashlib.sha256(
+        filler_path.read_bytes()
+    ).hexdigest()
+    write_manifest(rehashed)
+    with pytest.raises(ValueError, match="disjoint IDs and text"):
+        load_activation_dataset(output)
+    filler_path.write_bytes(original_fillers)
+    manifest_path.write_bytes(original_manifest)
+
     with pytest.raises(FileExistsError, match="refusing to overwrite"):
         extract_role_activations(
             Model(),
@@ -656,6 +917,30 @@ def test_prefix_capture_equals_full_forward_and_stops_tail(
     actual = extraction._capture_one(model, test_adapter, example, (0, 1))
     assert np.array_equal(actual, torch.stack([expected[0], expected[1]], dim=1).numpy())
     assert [layer.calls for layer in model.layers] == [1, 1, 0]
+    with pytest.raises(ValueError, match="requires DifferentModel"):
+        extraction._capture_sequences(
+            model,
+            replace(test_adapter, runtime_architecture="DifferentModel"),
+            input_ids=((1, 2),),
+            token_positions=((0,),),
+            layers=(0,),
+        )
+    invalid_requests = (
+        {"input_ids": ((1, 2),), "token_positions": ((0,),), "layers": ()},
+        {"input_ids": ((1, 2),), "token_positions": ((0,),), "layers": (3,)},
+        {"input_ids": (), "token_positions": (), "layers": (0,)},
+        {"input_ids": ((1, 2),), "token_positions": (), "layers": (0,)},
+        {"input_ids": ((1, 2),), "token_positions": ((),), "layers": (0,)},
+        {
+            "input_ids": ((1, 2), (1, 2)),
+            "token_positions": ((0,), (0, 1)),
+            "layers": (0,),
+        },
+        {"input_ids": ((1, 2),), "token_positions": ((2,),), "layers": (0,)},
+    )
+    for request in invalid_requests:
+        with pytest.raises(ValueError):
+            extraction._capture_sequences(model, test_adapter, **cast(Any, request))
 
     group = tuple(item for item in dataset.examples if item.document_index == 0)
     singles = np.stack(

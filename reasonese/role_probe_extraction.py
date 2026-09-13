@@ -208,12 +208,25 @@ class RoleDataset:
     seed: int
 
     def __post_init__(self) -> None:
+        document_ids = tuple(document.document_id for document in self.documents)
+        filler_ids = tuple(document.document_id for document in self.filler_documents)
+        if len(set(document_ids)) != len(document_ids) or len(set(filler_ids)) != len(filler_ids):
+            raise ValueError("target and filler document IDs must each be unique")
+        if set(document_ids) & set(filler_ids):
+            raise ValueError("target and filler document IDs must be disjoint")
+        target_text = {_sha256_text(document.text) for document in self.documents}
+        filler_text = {_sha256_text(document.text) for document in self.filler_documents}
+        if target_text & filler_text:
+            raise ValueError("target and filler document text must be disjoint")
         grouped: dict[int, list[RoleExample]] = {}
         for example in self.examples:
             grouped.setdefault(example.document_index, []).append(example)
         if set(grouped) != set(range(len(self.documents))):
             raise ValueError("every document must have role examples")
         for document_index, pair in grouped.items():
+            expected_document = self.documents[document_index].document_id
+            if any(example.document_id != expected_document for example in pair):
+                raise ValueError(f"document {document_index} examples have the wrong document ID")
             roles = {example.role for example in pair}
             if len(pair) != len(ProbeRole) or roles != set(ProbeRole):
                 raise ValueError(f"document {document_index} must have exactly every role")
@@ -225,6 +238,10 @@ class RoleDataset:
                     raise ValueError(
                         f"document {document_index} has unequal paired token positions"
                     )
+                if reasoning.partner_document_id != example.partner_document_id:
+                    raise ValueError(f"document {document_index} has unequal filler partners")
+            if reasoning.partner_document_id not in set(filler_ids):
+                raise ValueError(f"document {document_index} uses an unknown filler partner")
 
 
 @dataclass(frozen=True)
@@ -455,6 +472,14 @@ def load_prefix_model(
     weight_map = _read_weight_map(checkpoint)
     plan = select_prefix_checkpoint_keys(weight_map, adapter, max_layer=max_layer)
     expected = model.state_dict()
+    dtype_plan = cast(Any, model)._get_dtype_plan(torch.bfloat16)
+
+    def runtime_dtype(name: str) -> Any:
+        matches = [dtype for pattern, dtype in dtype_plan.items() if re.search(pattern, name)]
+        if len(matches) > 1 and len(set(matches)) != 1:
+            raise ValueError(f"conflicting model dtype policies for {name}")
+        return matches[0] if matches else expected[name].dtype
+
     runtime_sources: dict[str, list[str]] = {}
     for source, runtime in plan.key_mapping.items():
         runtime_sources.setdefault(runtime, []).append(source)
@@ -467,7 +492,7 @@ def load_prefix_model(
     for runtime, sources in runtime_sources.items():
         if len(sources) > 1:
             packed[runtime] = torch.empty(
-                tuple(expected[runtime].shape), dtype=torch.bfloat16, device="cpu"
+                tuple(expected[runtime].shape), dtype=runtime_dtype(runtime), device="cpu"
             )
 
     sources_by_file: dict[str, list[str]] = {}
@@ -485,8 +510,12 @@ def load_prefix_model(
                     raise ValueError(f"{source} is absent from selected shard {filename}")
                 runtime = plan.key_mapping[source]
                 value = handle.get_tensor(source)
-                if value.dtype != torch.bfloat16:
-                    raise ValueError(f"{source} has dtype {value.dtype}, expected torch.bfloat16")
+                target_dtype = runtime_dtype(runtime)
+                if value.dtype != target_dtype:
+                    raise ValueError(
+                        f"{source} has dtype {value.dtype}, expected {target_dtype} "
+                        f"for runtime tensor {runtime}"
+                    )
                 if len(runtime_sources[runtime]) == 1:
                     if tuple(value.shape) != tuple(expected[runtime].shape):
                         raise ValueError(
@@ -494,7 +523,7 @@ def load_prefix_model(
                             f"{runtime} {tuple(expected[runtime].shape)}"
                         )
                     set_module_tensor_to_device(
-                        model, runtime, "cpu", value=value, dtype=torch.bfloat16
+                        model, runtime, "cpu", value=value, dtype=target_dtype
                     )
                 else:
                     expert = _expert_index(source)
@@ -509,7 +538,9 @@ def load_prefix_model(
         source_indices = sorted(_expert_index(source) for source in runtime_sources[runtime])
         if source_indices != list(range(value.shape[0])):
             raise ValueError(f"{runtime} does not contain a complete ordered expert stack")
-        set_module_tensor_to_device(model, runtime, "cpu", value=value, dtype=torch.bfloat16)
+        set_module_tensor_to_device(
+            model, runtime, "cpu", value=value, dtype=runtime_dtype(runtime)
+        )
 
     meta = [name for name, value in model.state_dict().items() if value.device.type == "meta"]
     if meta:
@@ -1311,6 +1342,10 @@ def model_runtime_identity(
         "format_version": 1,
         "adapter": adapter.name,
         "model_config_sha256": _file_sha256(config_path),
+        "model_dtype_plan": {
+            name: str(dtype).removeprefix("torch.")
+            for name, dtype in sorted(cast(Any, model)._get_dtype_plan(torch.bfloat16).items())
+        },
         "torch_version": torch.__version__,
         "torch_cuda_version": torch.version.cuda,
         "transformers_version": transformers.__version__,
@@ -1335,7 +1370,9 @@ def model_runtime_identity(
 def validate_prefix_checkpoint_identity(checkpoint: Path, manifest: Mapping[str, Any]) -> None:
     """Recompute the downloader's exact filtered-index and shard identity."""
     if manifest.get("weights_hash_kind") != PREFIX_WEIGHTS_HASH_KIND:
-        raise ValueError(f"unsupported prefix weights hash kind: {manifest.get('weights_hash_kind')}")
+        raise ValueError(
+            f"unsupported prefix weights hash kind: {manifest.get('weights_hash_kind')}"
+        )
     weight_map = _read_weight_map(checkpoint)
     shard_names = sorted(set(weight_map.values()))
     shard_hashes = {name: _file_sha256(checkpoint / name) for name in shard_names}
@@ -1357,7 +1394,11 @@ def validate_prefix_checkpoint_identity(checkpoint: Path, manifest: Mapping[str,
             raise ValueError("invalid prefix checkpoint shard record")
         filename = record.get("filename")
         digest = record.get("sha256")
-        if not isinstance(filename, str) or not isinstance(digest, str) or filename in recorded_hashes:
+        if (
+            not isinstance(filename, str)
+            or not isinstance(digest, str)
+            or filename in recorded_hashes
+        ):
             raise ValueError("invalid prefix checkpoint shard record")
         recorded_hashes[filename] = digest
     if recorded_hashes != shard_hashes:
@@ -1432,7 +1473,9 @@ def _indexed_documents(
         raise ValueError(f"{index_name} values must be contiguous and ordered")
     document_ids = tuple(record["document_id"] for record in records)
     text_digests = {record["text_sha256"] for record in records}
-    if not all(isinstance(value, str) and value.strip() == value and value for value in document_ids):
+    if not all(
+        isinstance(value, str) and value.strip() == value and value for value in document_ids
+    ):
         raise ValueError("document IDs must be non-empty and trimmed")
     if len(set(document_ids)) != len(document_ids):
         raise ValueError("document mapping contains duplicate IDs")
@@ -1632,9 +1675,7 @@ def load_activation_dataset(path: Path) -> ActivationDataset:
         content_token_index=content_token_index,
         content_token_id=content_token_id,
         sequence_token_index=sequence_token_index,
-        filler_document_ids=np.asarray(
-            [fillers[int(index)] for index in filler_document_index]
-        ),
+        filler_document_ids=np.asarray([fillers[int(index)] for index in filler_document_index]),
     )
 
 
@@ -1668,10 +1709,14 @@ def extract_role_activations(
     if not layers or tuple(sorted(set(layers))) != layers:
         raise ValueError("layers must be a non-empty, sorted, unique tuple")
     effective_batch_size = (
-        len(ProbeRole)
-        if adapter.name != NEMOTRON_ADAPTER.name or _uses_nemotron_fast_path(model, adapter)
-        else 2
-    ) if batch_size is None else batch_size
+        (
+            len(ProbeRole)
+            if adapter.name != NEMOTRON_ADAPTER.name or _uses_nemotron_fast_path(model, adapter)
+            else 2
+        )
+        if batch_size is None
+        else batch_size
+    )
     if effective_batch_size < 1:
         raise ValueError("batch_size must be positive")
     hidden_size = int(_resolve_attribute(model, adapter.hidden_size_path))
