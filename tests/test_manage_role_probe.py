@@ -203,6 +203,8 @@ def test_qualify_binds_partitions_and_reports(
         encoding="utf-8",
     )
     qualification = SimpleNamespace(
+        threshold_reasoning_sensitivity=0.9,
+        threshold_final_specificity=1.0,
         calibration=SimpleNamespace(usable=True, threshold=0.7),
         test=SimpleNamespace(
             passed=True,
