@@ -236,7 +236,7 @@ def _extract_native(args: argparse.Namespace) -> None:
     for key, expected in {
         "adapter": adapter.name,
         "model_id": adapter.model_id,
-        "model_revision": adapter.model_revision,
+        "revision": adapter.model_revision,
         "max_layer": args.layer,
     }.items():
         if checkpoint_manifest.get(key) != expected:
