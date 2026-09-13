@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import subprocess
+import sys
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -32,6 +35,38 @@ from tests.test_study_orchestration import (
     _judge_batch,
     _manual_library,
 )
+
+
+def test_base_collection_imports_and_help_do_not_require_probe_dependencies() -> None:
+    script = textwrap.dedent(
+        """
+        import contextlib
+        import io
+        import sys
+
+        class BlockProbeDependencies:
+            def find_spec(self, fullname, path=None, target=None):
+                if fullname.split('.')[0] in {'sklearn', 'torch', 'transformers', 'kernels'}:
+                    raise ModuleNotFoundError(fullname)
+                return None
+
+        sys.meta_path.insert(0, BlockProbeDependencies())
+        from reasonese import collect_data, collect_studies
+        for module in (collect_data, collect_studies):
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    module.main(['--help'])
+            except SystemExit as error:
+                assert error.code == 0
+        """
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def _verdict(request: ProbeQaRequest, *, complies: bool) -> ProbeQaVerdict:

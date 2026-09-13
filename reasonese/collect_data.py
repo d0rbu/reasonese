@@ -33,7 +33,6 @@ from reasonese.judging import (
     fingerprint_traces,
     judge_fingerprinted_traces,
 )
-from reasonese.local_probe_qa import LocalProbeQaScorer
 from reasonese.manual_messages import ManualMessageLibrary, ManualMessageSnapshot
 from reasonese.message_qa import MessageQaVerdict
 from reasonese.message_qa_cache import YamlMessageQaCache
@@ -547,6 +546,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
+        probe_scorer = None
+        if args.role_probes is not None:
+            try:
+                from reasonese.local_probe_qa import LocalProbeQaScorer
+            except ImportError as error:
+                raise RuntimeError("local role-probe QA requires the 'probes' extra") from error
+            probe_scorer = LocalProbeQaScorer(
+                args.role_probes,
+                args.output / "probe_qa_cache.json",
+                execution_device=args.probe_execution_device,
+            )
         routing = routing_from_arguments(args)
         study = load_study(args.study)
         routing.announce(
@@ -562,15 +572,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             client,
             ManualMessageLibrary(args.user_messages),
             prefer_batch=not args.no_batch,
-            probe_scorer=(
-                LocalProbeQaScorer(
-                    args.role_probes,
-                    args.output / "probe_qa_cache.json",
-                    execution_device=args.probe_execution_device,
-                )
-                if args.role_probes is not None
-                else None
-            ),
+            probe_scorer=probe_scorer,
             routing=routing,
         )
     except (OSError, RuntimeError, TimeoutError, TypeError, ValueError) as error:

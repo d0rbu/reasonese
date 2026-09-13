@@ -13,7 +13,6 @@ from beartype import beartype
 from reasonese.cache import YamlMessageCache
 from reasonese.collect_data import CollectionTask, collect_studies
 from reasonese.config import load_study, load_study_suite
-from reasonese.local_probe_qa import LocalProbeQaScorer
 from reasonese.manual_messages import ManualMessageLibrary
 from reasonese.message_qa_cache import YamlMessageQaCache
 from reasonese.observations import write_observations
@@ -70,6 +69,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
+        probe_scorer = None
+        if args.role_probes is not None:
+            try:
+                from reasonese.local_probe_qa import LocalProbeQaScorer
+            except ImportError as error:
+                raise RuntimeError("local role-probe QA requires the 'probes' extra") from error
+            probe_scorer = LocalProbeQaScorer(
+                args.role_probes,
+                args.output / "probe_qa_cache.json",
+                execution_device=args.probe_execution_device,
+            )
         routing = routing_from_arguments(args)
         if args.suite is None:
             study_paths = tuple(args.study)
@@ -92,15 +102,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             YamlMessageCache(args.output / "generated_messages.yaml"),
             YamlMessageQaCache(args.output / "message_qa.yaml"),
             prefer_batch=not args.no_batch,
-            probe_scorer=(
-                LocalProbeQaScorer(
-                    args.role_probes,
-                    args.output / "probe_qa_cache.json",
-                    execution_device=args.probe_execution_device,
-                )
-                if args.role_probes is not None
-                else None
-            ),
+            probe_scorer=probe_scorer,
             routing=routing,
             shared_cache=(
                 SqliteStudyCache(args.output / "collection.sqlite3")
