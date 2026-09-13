@@ -3,9 +3,9 @@ from __future__ import annotations
 from collections import Counter
 from datetime import UTC, datetime
 from email.utils import format_datetime
-from threading import Event, Lock
-from time import monotonic, sleep
-from typing import cast
+from threading import Barrier, Event, Lock
+from time import monotonic
+from typing import Any, cast
 
 import pytest
 import requests
@@ -64,6 +64,7 @@ def test_retry_after_http_date(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("reasonese.scheduling.time.time", lambda: 1000.0)
     assert retry_after_seconds(format_datetime(datetime.fromtimestamp(1120, UTC))) == 120
     assert retry_after_seconds(format_datetime(datetime.fromtimestamp(900, UTC))) == 0
+    assert retry_after_seconds("Thu Jan  1 00:18:40 1970") == 120
 
 
 def test_limiter_backs_off_and_recovers_without_stale_success_undoing_backoff() -> None:
@@ -164,35 +165,34 @@ def test_other_failures_are_not_retried(error: Exception) -> None:
 
 
 def test_independent_model_capacity_and_successful_ramp() -> None:
-    active: Counter[str] = Counter()
-    peaks: Counter[str] = Counter()
-    starts: Counter[str] = Counter()
-    first_wave: dict[str, int] = {}
-    other_started = Event()
-    lock = Lock()
+    # Each phase holds all its admitted requests until both models reach their
+    # current capacity. No sleep duration or OS completion order determines success.
     scheduler = ModelScheduler(4)
 
-    def send(model: str) -> str:
-        with lock:
-            starts[model] += 1
-            active[model] += 1
-            peaks[model] = max(peaks[model], active[model])
-            if model == "b":
-                other_started.set()
-        assert other_started.wait(2), "first model monopolized worker capacity"
-        sleep(0.015)
-        with lock:
-            first_wave.setdefault(model, starts[model])
-            active[model] -= 1
-        return model
+    def run_phase(width: int) -> dict[str, int]:
+        barrier = Barrier(2 * width, timeout=5)
+        active: Counter[str] = Counter()
+        lock = Lock()
 
-    scheduler.run(
-        ScheduledRequest(model, lambda model=model: send(model), lambda _: None)
-        for model in ("a", "b")
-        for _ in range(30)
-    )
-    assert first_wave == {"a": 2, "b": 2}
-    assert peaks == {"a": 4, "b": 4}
+        def send(model: str) -> str:
+            with lock:
+                active[model] += 1
+            barrier.wait()
+            return model
+
+        scheduler.run(
+            ScheduledRequest(model, lambda model=model: send(model), lambda _: None)
+            for model in ("a", "b")
+            for _ in range(width)
+        )
+        return dict(active)
+
+    observed = [run_phase(width) for width in (2, 2, 3, 3, 4)]
+    assert observed == [{"a": width, "b": width} for width in (2, 2, 3, 3, 4)]
+    assert {model: limiter.window for model, limiter in scheduler.limiters.items()} == {
+        "a": 4,
+        "b": 4,
+    }
 
 
 def test_model_cooldown_wakes_while_another_model_is_still_in_flight() -> None:
@@ -245,7 +245,8 @@ def test_real_transport_reports_429_to_client_and_retries_exact_body(
     )
     model = OpenRouterModelId.parse("google/gemma-4-31b-it:free")
     assert client.complete(model, {"messages": []}) == {"answer": "done"}
-    assert clock.sleeps == [3600]
+    assert sum(clock.sleeps) == 3600
+    assert max(clock.sleeps) <= 60
     assert calls == [{"messages": [], "model": str(model)}] * 2
 
 
@@ -383,3 +384,11 @@ def test_batch_submission_429_does_not_hold_synchronous_model() -> None:
     )
     assert responses == (({"content": "batch"},), ({"content": "sync"},))
     assert submitted[0] == submitted[1]
+
+
+def test_malformed_callback_return_fails_at_boundary() -> None:
+    def malformed(_: str) -> object:
+        return object()
+
+    with pytest.raises(TypeError, match="a callback must return a request or None"):
+        ModelScheduler().run((ScheduledRequest("model", lambda: "done", cast(Any, malformed)),))

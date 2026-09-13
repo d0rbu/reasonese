@@ -33,9 +33,11 @@ matchup -> authored messages -> independent message QA -> conversation -> assist
   OpenRouter server tools stay on the synchronous API because those tools are rejected by the
   Batch API.
 - `reasonese.scheduling` owns a separate adaptive concurrency window, start interval, and
-  cooldown per requested model slug. HTTP attempts run in bounded thread workers; retries wait
-  in model queues, so a cooling model cannot occupy another model's capacity. Limits persist
-  across stages on one client.
+  cooldown per requested model slug. HTTP attempts and response callbacks run in bounded thread
+  workers; retries wait in model queues. Both network calls and local tool processing count
+  against their model's capacity. Completed error feedback is applied before admitting more
+  work. Immutable requests receive a fresh retry budget each time they are queued, and limits
+  persist across stages on one client.
 - `reasonese.conversation` builds authoring requests and channel-specific chat messages.
 - `reasonese.manual_messages` resolves filesystem-backed variants for the user author and
   snapshots the needed files once per top-level invocation.
@@ -47,7 +49,8 @@ matchup -> authored messages -> independent message QA -> conversation -> assist
 - `reasonese.runner` coordinates cache lookup, generation, construction, and completion-driven
   assistant execution. A tool continuation is submitted as soon as its preceding response
   arrives, independently of slower peers. The shared scheduler prioritizes ready continuations
-  over fresh requests within each model, under that model's adaptive limit.
+  over fresh requests within each model, under that model's adaptive limit. A lock protects the
+  shared tool-runtime pool, while each conversation advances its own history sequentially.
 - `reasonese.run_conversation` is the standalone conversation utility.
 
 The utilities have separate console entry points. There is no package-level dispatcher
@@ -104,7 +107,9 @@ study -> both input orderings x rollouts -> traces -> judgments -> observation r
 - `reasonese.study` defines a cell, a strongly typed input pair, and stable ordering/rollout
   trials. Its two distinct inputs produce exactly two validated matchups, reused by every rollout.
 - `reasonese.collect_data` concurrently advances every assistant tool loop as responses arrive,
-  flattens uncached judge requests into one batch, and resumes at trial granularity.
+  flattens uncached judge requests into one batch, and resumes at trial granularity. Completion
+  callbacks retain successful traces; a final bulk transaction saves them even if a peer fails.
+  Failed collection stages do not advance into judging or observation generation.
 - `reasonese.collect_studies` applies the same stages across repeated study paths, sharing
   materialized-message and QA caches and grouping concurrent trials and batched judgments across
   study boundaries. It also consumes sampled suite YAML, uses stable fingerprint output names,

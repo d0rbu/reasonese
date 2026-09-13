@@ -318,6 +318,7 @@ class OpenRouterClient:
         groups: tuple[CompletionGroup, ...],
         *,
         prefer_batch: bool,
+        on_response: Callable[[int, int, JsonObject], None] | None = None,
     ) -> tuple[tuple[JsonObject, ...], ...]:
         """Complete model groups while overlapping independent batch jobs."""
         results: list[list[JsonObject | None]] = [[None] * len(group.bodies) for group in groups]
@@ -338,6 +339,8 @@ class OpenRouterClient:
 
         def collect_sync(index: int, body_index: int, response: JsonObject) -> None:
             results[index][body_index] = response
+            if on_response is not None:
+                on_response(index, body_index, response)
 
         for index, group in enumerate(groups):
             if not group.bodies:
@@ -366,13 +369,38 @@ class OpenRouterClient:
                             ),
                         )
                     )
-        self.scheduler.run((*batch_requests, *sync_requests))
+        failure: Exception | None = None
+        try:
+            self.scheduler.run((*batch_requests, *sync_requests))
+        except Exception as error:
+            failure = error
 
         if pending:
             indexes = sorted(pending)
-            completed = self._wait_for_batches(tuple(pending[index] for index in indexes))
-            for index, responses in zip(indexes, completed, strict=True):
-                results[index] = list(responses)
+
+            def collect_completed_batch(index: int, responses: tuple[JsonObject, ...]) -> None:
+                callback_failure: Exception | None = None
+                for body_index, response in enumerate(responses):
+                    try:
+                        collect_sync(indexes[index], body_index, response)
+                    except Exception as error:
+                        if callback_failure is None:
+                            callback_failure = error
+                if callback_failure is not None:
+                    raise callback_failure
+
+            try:
+                self._wait_for_batches(
+                    tuple(pending[index] for index in indexes),
+                    on_completed=collect_completed_batch,
+                )
+            except Exception as error:
+                if failure is not None:
+                    raise failure from error
+                raise
+
+        if failure is not None:
+            raise failure
 
         if any(response is None for group in results for response in group):
             raise RuntimeError("completion group was not executed")  # pragma: no cover
@@ -402,31 +430,39 @@ class OpenRouterClient:
     def _wait_for_batches(
         self,
         jobs: tuple[_PendingBatch, ...],
-    ) -> tuple[tuple[JsonObject, ...], ...]:
-        results: list[tuple[JsonObject, ...] | None] = [None] * len(jobs)
+        *,
+        on_completed: Callable[[int, tuple[JsonObject, ...]], None],
+    ) -> None:
+        failure: Exception | None = None
         pending = list(enumerate(jobs))
         while pending:
             next_pending: list[tuple[int, _PendingBatch]] = []
             for index, job in pending:
-                if job.batch.get("status") in _TERMINAL_BATCH_STATUSES:
-                    results[index] = self._batch_results(job)
-                else:
-                    next_pending.append((index, job))
+                try:
+                    if job.batch.get("status") in _TERMINAL_BATCH_STATUSES:
+                        on_completed(index, self._batch_results(job))
+                    elif self.monotonic() >= job.deadline:
+                        raise TimeoutError(
+                            f"OpenRouter batch {job.batch_id} did not finish before timeout"
+                        )
+                    else:
+                        next_pending.append((index, job))
+                except Exception as error:
+                    if failure is None:
+                        failure = error
             if not next_pending:
                 break
-            for _, job in next_pending:
-                if self.monotonic() >= job.deadline:
-                    raise TimeoutError(
-                        f"OpenRouter batch {job.batch_id} did not finish before timeout"
-                    )
             self.sleep(self.poll_interval_seconds)
-            for _, job in next_pending:
-                job.batch = self.transport.get_json(f"/api/beta/batches/{job.batch_id}")
-            pending = next_pending
-
-        if any(result is None for result in results):  # pragma: no cover - internal invariant
-            raise RuntimeError("submitted batch was not collected")
-        return cast(tuple[tuple[JsonObject, ...], ...], tuple(results))
+            pending = []
+            for index, job in next_pending:
+                try:
+                    job.batch = self.transport.get_json(f"/api/beta/batches/{job.batch_id}")
+                    pending.append((index, job))
+                except Exception as error:
+                    if failure is None:
+                        failure = error
+        if failure is not None:
+            raise failure
 
     @staticmethod
     def _batch_results(job: _PendingBatch) -> tuple[JsonObject, ...]:
@@ -450,6 +486,10 @@ class OpenRouterClient:
                 raise RuntimeError(f"OpenRouter batch item {custom_id} failed: {error}")
             if not isinstance(custom_id, str) or not isinstance(response, dict):
                 raise ValueError("OpenRouter batch result is malformed")
+            if custom_id in results:
+                raise ValueError(
+                    f"OpenRouter batch {job.batch_id} returned duplicate custom_id {custom_id}"
+                )
             if response.get("status_code") != 200 or not isinstance(response.get("body"), dict):
                 raise RuntimeError(f"OpenRouter batch item {custom_id} returned {response}")
             results[custom_id] = cast(JsonObject, response["body"])

@@ -9,6 +9,7 @@ import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from threading import Lock
 
 import yaml
 from beartype import beartype
@@ -258,43 +259,54 @@ def collect_studies(
         if client is None:  # pragma: no cover - guarded by materialization above
             raise RuntimeError("assistant work requires an OpenRouter client")
         ordered_work = tuple(assistant_work.items())
-        trace_groups = run_assistant_groups(
-            tuple(
-                AssistantRunGroup(
-                    select_route(assistant, routing.preference),
-                    tuple(setup for _, _, setup in work),
-                )
-                for assistant, work in ordered_work
-            ),
-            client,
-        )
-        for (_, work), new_traces in zip(ordered_work, trace_groups, strict=True):
-            fingerprinted_traces = fingerprint_traces(new_traces)
-            for (state, trial, _), trace in zip(work, fingerprinted_traces, strict=True):
-                state.traces[str(trial.trial_id)] = trace
-                routing.record(
-                    "assistant",
-                    trial.matchup.assistant,
-                    "new",
-                    trace.trace.provenance,
-                    trace.trace.response,
-                )
-        if shared_cache is None:
-            for state in states:
-                state.cache.put_traces(
-                    tuple(
-                        (trial.trial_id, state.traces[str(trial.trial_id)].trace)
-                        for trial in state.missing_trials
-                    )
-                )
-        else:
-            shared_cache.put_traces(
+        completed_traces: dict[tuple[int, int], ConversationTrace] = {}
+        completion_lock = Lock()
+
+        def collect_trace(group_index: int, setup_index: int, trace: ConversationTrace) -> None:
+            with completion_lock:
+                completed_traces[(group_index, setup_index)] = trace
+
+        try:
+            run_assistant_groups(
                 tuple(
-                    (trial.trial_id, state.traces[str(trial.trial_id)].trace)
-                    for state in states
-                    for trial in state.missing_trials
-                )
+                    AssistantRunGroup(
+                        select_route(assistant, routing.preference),
+                        tuple(setup for _, _, setup in work),
+                    )
+                    for assistant, work in ordered_work
+                ),
+                client,
+                on_trace=collect_trace,
             )
+        finally:
+            # The scheduler joins its workers before returning or raising. Preserve
+            # completed trials in one transaction per cache even when a peer fails.
+            cache_writes: dict[SqliteStudyCache, list[tuple[TrialId, ConversationTrace]]] = {}
+            for group_index, (_, work) in enumerate(ordered_work):
+                completed_work = tuple(
+                    (state, trial, completed_traces[(group_index, setup_index)])
+                    for setup_index, (state, trial, _) in enumerate(work)
+                    if (group_index, setup_index) in completed_traces
+                )
+                fingerprinted_traces = fingerprint_traces(
+                    tuple(trace for _, _, trace in completed_work)
+                )
+                for (state, trial, _), trace in zip(
+                    completed_work, fingerprinted_traces, strict=True
+                ):
+                    state.traces[str(trial.trial_id)] = trace
+                    routing.record(
+                        "assistant",
+                        trial.matchup.assistant,
+                        "new",
+                        trace.trace.provenance,
+                        trace.trace.response,
+                    )
+                    cache_writes.setdefault(state.cache, []).append(
+                        (trial.trial_id, trace.trace)
+                    )
+            for cache, records in cache_writes.items():
+                cache.put_traces(tuple(records))
 
     missing_judgments: list[tuple[int, Trial, FingerprintedTrace]] = []
     if shared_cache is None:

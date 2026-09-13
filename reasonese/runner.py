@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from contextlib import ExitStack
 from dataclasses import dataclass
+from threading import Lock
 
 from beartype import beartype
 
@@ -115,6 +117,7 @@ def materialize_specs(
     )
     materialized = {message.spec: message for message in cache.load()}
     new_messages: list[GeneratedMessage] = []
+    message_lock = Lock()
 
     user_specs = tuple(dict.fromkeys(spec for spec in specs if spec.author is Author.USER))
     for spec in user_specs:
@@ -143,26 +146,33 @@ def materialize_specs(
     for group in completion_groups:
         if not str(group.route.model_id).endswith(":free"):
             routing.require_paid("uncached paid authoring")
-    grouped_responses = client.complete_many_grouped(
-        tuple(completion_groups),
-        prefer_batch=prefer_batch,
+
+    group_provenances = tuple(
+        completion_provenance(group.route, group.bodies, prefer_batch=prefer_batch)
+        for group in completion_groups
     )
-    for authored_specs, responses, group in zip(
-        grouped_specs, grouped_responses, completion_groups, strict=True
-    ):
-        provenance = completion_provenance(group.route, group.bodies, prefer_batch=prefer_batch)
-        for spec, response in zip(authored_specs, responses, strict=True):
-            message = GeneratedMessage(
-                spec,
-                GeneratedText.parse(response_content(response)),
-                response,
-                provenance,
-            )
+
+    def collect_message(group_index: int, body_index: int, response: JsonObject) -> None:
+        spec = grouped_specs[group_index][body_index]
+        message = GeneratedMessage(
+            spec,
+            GeneratedText.parse(response_content(response)),
+            response,
+            group_provenances[group_index],
+        )
+        with message_lock:
             materialized[spec] = message
             new_messages.append(message)
 
-    if new_messages:
-        cache.put_many(tuple(new_messages))
+    try:
+        client.complete_many_grouped(
+            tuple(completion_groups),
+            prefer_batch=prefer_batch,
+            on_response=collect_message,
+        )
+    finally:
+        if new_messages:
+            cache.put_many(tuple(new_messages))
     new_specs = {message.spec for message in new_messages}
     for spec in dict.fromkeys(specs):
         message = materialized[spec]
@@ -201,6 +211,8 @@ def run_assistants(
 def run_assistant_groups(
     groups: tuple[AssistantRunGroup, ...],
     client: OpenRouterClient,
+    *,
+    on_trace: Callable[[int, int, ConversationTrace], None] | None = None,
 ) -> tuple[tuple[ConversationTrace, ...], ...]:
     """Run assistant-model groups without blocking fast tool continuations on slow peers."""
     messages = {
@@ -215,25 +227,29 @@ def run_assistant_groups(
     runtimes: dict[tuple[int, int], ToolRuntime] = {}
     available_runtimes: list[ToolRuntime] = []
     runtime_stack = ExitStack()
+    runtime_lock = Lock()
+    completion_lock = Lock()
 
     def runtime_for(key: tuple[int, int]) -> ToolRuntime:
-        runtime = runtimes.get(key)
-        if runtime is not None:
+        with runtime_lock:
+            runtime = runtimes.get(key)
+            if runtime is not None:
+                return runtime
+            group_index, setup_index = key
+            readme_contents = groups[group_index].setups[setup_index].readme_contents()
+            if available_runtimes:
+                runtime = available_runtimes.pop()
+                runtime.reset(readme_contents)
+            else:
+                runtime = runtime_stack.enter_context(ToolRuntime(readme_contents))
+            runtimes[key] = runtime
             return runtime
-        group_index, setup_index = key
-        readme_contents = groups[group_index].setups[setup_index].readme_contents()
-        if available_runtimes:
-            runtime = available_runtimes.pop()
-            runtime.reset(readme_contents)
-        else:
-            runtime = runtime_stack.enter_context(ToolRuntime(readme_contents))
-        runtimes[key] = runtime
-        return runtime
 
     def release_runtime(key: tuple[int, int]) -> None:
-        runtime = runtimes.pop(key, None)
-        if runtime is not None:
-            available_runtimes.append(runtime)
+        with runtime_lock:
+            runtime = runtimes.pop(key, None)
+            if runtime is not None:
+                available_runtimes.append(runtime)
 
     def request_for(key: tuple[int, int]) -> ScheduledRequest[JsonObject]:
         group_index, _ = key
@@ -247,13 +263,17 @@ def run_assistant_groups(
         group_index, setup_index = key
         calls = tool_calls_from_response(response)
         if not calls:
-            completed[key] = ConversationTrace(
+            trace = ConversationTrace(
                 groups[group_index].setups[setup_index],
                 response,
                 tuple(steps[key]),
                 RouteProvenance(groups[group_index].route.model_id, CompletionTransport.SYNC),
             )
+            with completion_lock:
+                completed[key] = trace
             release_runtime(key)
+            if on_trace is not None:
+                on_trace(group_index, setup_index, trace)
             return None
         if len(steps[key]) == _MAX_LOCAL_TOOL_STEPS:
             raise RuntimeError(f"assistant exceeded {_MAX_LOCAL_TOOL_STEPS} local tool-call steps")

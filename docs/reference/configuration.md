@@ -192,13 +192,17 @@ Each model starts with at most two in-flight requests. On success its concurrenc
 by `1 / window`, up to `OpenRouterClient(sync_workers=8)` by default. `sync_workers` is now a
 **per-model ceiling**, so two healthy models may have sixteen HTTP requests in flight in total.
 Requests use asynchronous thread workers behind the existing blocking Python entry points.
-Only admitted attempts occupy workers; cooldowns and retries remain in the scheduler's queues.
-Ready tool continuations take priority over new requests for the same model.
+An admitted HTTP attempt retains its model slot through response processing, including local
+tools. Cooldowns and retries remain in the scheduler's queues. Response callbacks may run
+concurrently across requests; each conversation's callbacks remain sequential. Ready tool
+continuations take priority over new requests for the same model.
 
 A definite HTTP 429 halves that model's window (floor one), doubles its minimum request-start
 interval (initially one second, capped at thirty), and pauses **all new attempts for that model**
 until the cooldown expires. The cooldown is at least that interval and honors the full
-`Retry-After` value, including HTTP dates and values above thirty seconds. Missing, malformed,
+`Retry-After` value, including all three HTTP-date formats interpreted in UTC and values above
+thirty seconds. Individual waits are capped at sixty seconds while retaining the full deadline,
+so very large valid headers do not overflow platform timeouts. Missing, malformed,
 negative, or nonfinite headers use the adaptive interval. Each subsequent successful request
 reduces the interval by 20%; intervals below 10 ms return to zero. Successes from attempts already
 in flight when a 429 arrived cannot undo the backoff. Each 429 logs the model, current
@@ -207,11 +211,22 @@ occurs.
 
 `OpenRouterClient(rate_limit_retries=3)` permits three retries after each request's initial
 attempt, including each tool continuation. Retry configuration moved from `RequestsTransport`
-to the client; the transport now sends a single attempt. Other HTTP failures, ambiguous network
-errors, and malformed responses propagate without retries. If one model exhausts its 429
-budget, its queued work stops and healthy models finish their queued requests before the error
-propagates. Collection still fails closed and uses its existing stage-level cache writes; this
-policy does not promise partial-stage persistence after an error.
+to the client; the transport sends a single attempt. Reusing a request specification starts a
+fresh budget. Successes already in flight remain available even after another request for the
+same model exhausts its budget; that model's queued work and later continuations stop, while
+healthy models finish their queued requests.
+
+Other HTTP failures, ambiguous network errors, malformed responses, and response-callback
+errors stop all new admission and propagate after in-flight results are processed. A callback
+failure never resends its already successful HTTP request. Already accepted batches are
+collected despite a peer failure; failed or malformed batches do not discard valid peer batch
+results. Duplicate batch request IDs are rejected rather than overwriting a response.
+
+Successful authored messages and complete trial traces are saved in bulk on both success and
+handled failure. Resuming reuses those results; QA, judging, and observation stages remain
+blocked while required collection work has failed. This is an error-recovery guarantee, not
+continuous checkpointing: abrupt process termination can still lose the active stage, and
+incomplete assistant tool loops are not cached as completed trials.
 
 Limits are local to one client invocation, not shared across processes, clients, or API keys.
 They cannot override provider-wide or account-wide quotas. Offline tests establish scheduling

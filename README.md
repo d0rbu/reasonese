@@ -139,7 +139,8 @@ its continuation is submitted without waiting for slower peer responses. It batc
 resumes from per-rollout caches, and writes flat analysis-ready rows to `observations.jsonl`.
 Each model has its own admission queue and cooldown, and ready tool continuations receive that
 model's freed slots before fresh requests. A rate-limited model does not consume another model's
-capacity. The same scheduler handles authoring and batch submissions.
+capacity. Local tool processing uses that model's workers, so a slow tool also leaves other
+models free to progress. The same scheduler handles authoring and batch submissions.
 Assistant requests retain the
 OpenRouter web-search tool and therefore use the synchronous API because OpenRouter does not
 support that server tool in batch jobs. Definite HTTP 429 responses are retried a bounded number
@@ -153,7 +154,9 @@ High-volume collector traces and judgments are JSON payloads in SQLite while ret
 raw provider responses. A standalone study or repeated `--study` input keeps one
 `collection.sqlite3` per study. A sampled `--suite` instead uses one shared database at the suite
 root, avoiding tens of thousands of duplicate database files and reducing each collection stage
-to one cache read and transaction. Trace fingerprints are derived once and reused through
+to one cache read and transaction. On a handled collection error, successful authored messages
+and completed trial traces are saved for resume before the error propagates; incomplete tool
+loops are not saved as completed trials. Trace fingerprints are derived once and reused through
 judgment and batched observation construction; the standalone one-conversation utilities keep
 their readable YAML caches.
 Study trials likewise share their two validated ordered matchups, which cache readers reuse while
