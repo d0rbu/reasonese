@@ -111,6 +111,10 @@ belong below ignored `out/` directories rather than in source control.
 `reasonese-extract-role-activations` extracts one exact, pinned native model adapter at a time.
 It loads a filtered BF16 checkpoint only through the highest requested probe site, CPU-offloads
 the retained prefix, and microbatches the five position-matched role copies of each document.
+Nemotron preloads each whole `NemotronHMamba2Mixer` while it executes because that module reads a
+child weight directly when choosing its CUDA path. On a runtime identified as fused, every forward
+audits the actual CUDA-kernel and PyTorch-fallback methods and aborts immediately if the fallback is
+selected or no retained Mamba layer executes.
 The default is all five sequences when Nemotron's pinned fused Mamba kernels are active or for
 Gemma, and two sequences when Nemotron falls back to the memory-intensive native PyTorch scan;
 `--batch-size` records and overrides it. A dedicated filler pool must follow the target documents
@@ -140,8 +144,9 @@ memory measurements.
 
 Runtime provenance hashes the exact config and Transformers model implementation, Torch and CUDA
 versions, tokenizer package and tokenizer-file bytes, every model-adapter capture field, attention
-backend, device capability, numerical flags, and each resolved Nemotron kernel module and Hugging
-Face snapshot revision. Training, qualification, and QA reject runtime hash mismatches. Nemotron's
+backend, device capability, numerical flags, CPU-offload/preload policy, dispatch audit, and each
+resolved Nemotron kernel module and Hugging Face snapshot revision. Training, qualification, and QA
+reject runtime hash mismatches. Nemotron's
 optional runtime pins `kernels==0.15.2` and `einops==0.8.2`; changing the tokenizer, adapter capture
 site, kernels, or fused path creates a distinct instrument even when model weights are unchanged.
 
