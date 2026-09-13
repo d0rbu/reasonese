@@ -117,14 +117,15 @@ def _protocol_training_config(
     if layers is not None:
         content_tokens = protocol.get("neutral_max_content_tokens")
         if (
-            not isinstance(documents, int)
+            type(documents) is not int
             or documents < 3
-            or not isinstance(content_tokens, int)
+            or type(content_tokens) is not int
             or content_tokens <= 1
             or not isinstance(layers, list)
             or len(layers) < 2
-            or any(not isinstance(layer, int) or layer < 0 for layer in layers)
+            or any(type(layer) is not int or layer < 0 for layer in layers)
             or len(set(layers)) != len(layers)
+            or layers != sorted(layers)
         ):
             raise ValueError("expanded probe protocol contains an invalid document or layer search")
         layer_indices = tuple(layers)
@@ -159,9 +160,7 @@ def _protocol_training_config(
         minimum_neutral_document_accuracy,
         minimum_neutral_per_role_document_accuracy,
     )
-    if any(not isinstance(value, int | float) for value in numeric_values) or not isinstance(
-        seed, int
-    ):
+    if any(type(value) not in {int, float} for value in numeric_values) or type(seed) is not int:
         raise ValueError("probe protocol split and gate values must be numeric")
     if not isinstance(split.get("test"), int | float) or not math.isclose(
         split["test"], 1 - train_fraction - validation_fraction, abs_tol=1e-12

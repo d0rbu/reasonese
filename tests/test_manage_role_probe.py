@@ -110,6 +110,25 @@ def test_frozen_protocol_accepts_both_pinned_adapters_and_rejects_drift() -> Non
     changed_config = manage._validate_frozen_protocol(changed_layers, NEMOTRON_ADAPTER.name)
     assert changed_config.layer_indices == (13, 26)
     assert changed_config.protocol_sha256 != expanded.protocol_sha256
+    for invalid_layers in ([20, 13, 26], [13, True, 26]):
+        invalid = _expanded_protocol()
+        invalid["models"]["nemotron"]["candidate_layers"] = invalid_layers
+        with pytest.raises(ValueError, match="invalid document or layer search"):
+            manage._validate_frozen_protocol(invalid, NEMOTRON_ADAPTER.name)
+    for field in ("neutral_validation_documents", "neutral_max_content_tokens"):
+        invalid = _expanded_protocol()
+        invalid[field] = True
+        with pytest.raises(ValueError, match="invalid document or layer search"):
+            manage._validate_frozen_protocol(invalid, NEMOTRON_ADAPTER.name)
+    invalid_seed = _expanded_protocol()
+    invalid_seed["neutral_split"] = {
+        "train": 0.6,
+        "development": 0.2,
+        "test": 0.2,
+        "seed": True,
+    }
+    with pytest.raises(ValueError, match="split and gate values must be numeric"):
+        manage._validate_frozen_protocol(invalid_seed, NEMOTRON_ADAPTER.name)
 
 
 def test_json_partition_and_parser_boundaries(tmp_path: Path) -> None:

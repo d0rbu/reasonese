@@ -339,6 +339,12 @@ def test_training_config_requires_canonical_candidates_and_valid_split() -> None
         replace(_training_config(), lambda_grid=(0.1, 0.01))
     with pytest.raises(ValueError, match="split fractions"):
         replace(_training_config(), train_fraction=0.9, validation_fraction=0.1)
+    with pytest.raises(ValueError, match="non-negative layers"):
+        replace(_training_config(), layer_indices=(True,))
+    with pytest.raises(ValueError, match="seed must be an integer"):
+        replace(_training_config(), seed=True)
+    with pytest.raises(ValueError, match="integer of at least three"):
+        replace(_training_config(), expected_document_count=True)
 
 
 def test_multinomial_training_preserves_explicit_role_order() -> None:

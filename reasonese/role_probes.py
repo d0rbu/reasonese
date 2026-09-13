@@ -353,18 +353,21 @@ class ProbeTrainingConfig:
     def __post_init__(self) -> None:
         if (
             not self.layer_indices
+            or any(type(layer) is not int for layer in self.layer_indices)
             or min(self.layer_indices) < 0
             or len(set(self.layer_indices)) != len(self.layer_indices)
             or self.layer_indices != tuple(sorted(self.layer_indices))
         ):
             raise ValueError("layer_indices must contain increasing distinct non-negative layers")
-        if self.expected_document_count is not None and self.expected_document_count < 3:
-            raise ValueError("expected_document_count must be at least three")
-        if (
-            self.maximum_content_tokens_per_document is not None
-            and self.maximum_content_tokens_per_document <= 1
+        if self.expected_document_count is not None and (
+            type(self.expected_document_count) is not int or self.expected_document_count < 3
         ):
-            raise ValueError("maximum_content_tokens_per_document must exceed one")
+            raise ValueError("expected_document_count must be an integer of at least three")
+        if self.maximum_content_tokens_per_document is not None and (
+            type(self.maximum_content_tokens_per_document) is not int
+            or self.maximum_content_tokens_per_document <= 1
+        ):
+            raise ValueError("maximum_content_tokens_per_document must be an integer above one")
         for name in ("protocol_sha256", "native_prompt_partitions_sha256"):
             value = cast(str | None, getattr(self, name))
             if value is not None:
@@ -392,7 +395,14 @@ class ProbeTrainingConfig:
         )
         if any(not math.isfinite(value) or value <= 0 for value in fractions):
             raise ValueError("training split fractions must be finite and positive")
-        if self.max_iterations <= 0 or self.tolerance <= 0 or not math.isfinite(self.tolerance):
+        if type(self.seed) is not int:
+            raise ValueError("training seed must be an integer")
+        if (
+            type(self.max_iterations) is not int
+            or self.max_iterations <= 0
+            or self.tolerance <= 0
+            or not math.isfinite(self.tolerance)
+        ):
             raise ValueError("optimizer limits must be positive")
 
 
