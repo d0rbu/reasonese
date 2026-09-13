@@ -167,6 +167,7 @@ def _qualify(
             kind="untouched-native-conversations",
             document_count=12,
             document_prefix="calibration",
+            content_token_offset=5_000,
         ),
         test
         or _dataset(
@@ -302,7 +303,7 @@ def test_multinomial_training_preserves_explicit_role_order() -> None:
             layers=(5,),
             document_count=12,
             document_prefix=prefix,
-            content_token_offset=0 if prefix == "calibration" else 10_000,
+            content_token_offset=5_000 if prefix == "calibration" else 10_000,
         )
         keep = np.isin(conversations.roles, ("reasoning", "assistant"))
         return replace(
@@ -380,6 +381,7 @@ def test_qualification_rejects_surrogate_or_nonconversation_data() -> None:
             kind="untouched-native-conversations",
             document_count=12,
             document_prefix="calibration",
+            content_token_offset=5_000,
         ),
         provenance=replace(
             _dataset(kind="untouched-native-conversations", document_count=12).provenance,
@@ -393,6 +395,7 @@ def test_qualification_rejects_surrogate_or_nonconversation_data() -> None:
         kind="untouched-native-conversations",
         document_count=12,
         document_prefix="calibration",
+        content_token_offset=5_000,
     )
     overlapping_ids = conversations.document_ids.copy()
     overlapping_ids[overlapping_ids == "calibration-000"] = bundle.split.test[0]
@@ -405,9 +408,30 @@ def test_qualification_rejects_surrogate_or_nonconversation_data() -> None:
         kind="untouched-native-conversations",
         document_count=12,
         document_prefix="test",
+        content_token_offset=5_000,
     )
     with pytest.raises(ValueError, match="content-disjoint"):
         _qualify(bundle, test=duplicated_test_content)
+
+    reused_reasoning = _dataset(
+        kind="untouched-native-conversations",
+        document_count=12,
+        document_prefix="test",
+        content_token_offset=10_000,
+    )
+    token_ids = reused_reasoning.content_token_id.copy()
+    reasoning_rows = reused_reasoning.roles == "reasoning"
+    token_ids[reasoning_rows] -= 5_000
+    with pytest.raises(ValueError, match="segments must be content-disjoint"):
+        _qualify(bundle, test=replace(reused_reasoning, content_token_id=token_ids))
+
+    neutral_overlap = _dataset(
+        kind="untouched-native-conversations",
+        document_count=12,
+        document_prefix="calibration",
+    )
+    with pytest.raises(ValueError, match="native and neutral"):
+        _qualify(bundle, calibration=neutral_overlap)
 
 
 def test_every_native_conversation_requires_both_measured_roles() -> None:
@@ -452,6 +476,17 @@ def test_failed_empirical_threshold_keeps_probe_out_of_qa() -> None:
         )
 
 
+def test_qualification_rejects_metrics_inconsistent_with_native_gates() -> None:
+    qualified = _qualify(train_role_probe(_dataset(), _training_config()))
+    assert qualified.qualification is not None
+    metrics = replace(
+        qualified.qualification.test_metrics,
+        per_role_accuracy=(("reasoning", 0.0), ("assistant", 1.0)),
+    )
+    with pytest.raises(ValueError, match="role gate does not match"):
+        replace(qualified.qualification, test_metrics=metrics)
+
+
 def test_artifact_round_trip_preserves_exact_numpy_scoring(tmp_path: Path) -> None:
     bundle = qualify_role_probe(
         train_role_probe(_dataset(), _training_config()),
@@ -459,6 +494,7 @@ def test_artifact_round_trip_preserves_exact_numpy_scoring(tmp_path: Path) -> No
             kind="untouched-native-conversations",
             document_count=12,
             document_prefix="calibration",
+            content_token_offset=5_000,
         ),
         _dataset(
             kind="untouched-native-conversations",

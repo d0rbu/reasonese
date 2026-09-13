@@ -433,6 +433,10 @@ class NativeProbeQualification:
             raise ValueError("native calibration score count does not match its provenance")
         if self.calibration.calibration_fingerprint != self.calibration_scores.fingerprint:
             raise ValueError("frozen threshold does not match the calibration scores")
+        if self.test.minimum_role_accuracy != self.test_metrics.minimum_role_accuracy:
+            raise ValueError("native role gate does not match the test metrics")
+        if self.test.document_macro_accuracy != self.test_metrics.document_accuracy:
+            raise ValueError("native document gate does not match the test metrics")
 
     @property
     def passed(self) -> bool:
@@ -448,6 +452,7 @@ class RoleProbe:
     training: ProbeTrainingConfig
     split: DocumentSplit
     regularization_lambda: float
+    neutral_content_signatures: tuple[str, ...]
     coefficients: Array
     intercepts: Array
     validation_metrics: ClassificationMetrics
@@ -470,6 +475,16 @@ class RoleProbe:
             raise ValueError("trained layer is absent from activation provenance")
         if self.regularization_lambda <= 0 or not math.isfinite(self.regularization_lambda):
             raise ValueError("regularization_lambda must be finite and positive")
+        expected_documents = len(self.split.train + self.split.validation + self.split.test)
+        if (
+            len(self.neutral_content_signatures) != expected_documents
+            or len(set(self.neutral_content_signatures)) != expected_documents
+        ):
+            raise ValueError(
+                "probe must retain one distinct neutral content signature per document"
+            )
+        for signature in self.neutral_content_signatures:
+            _sha256(signature, "neutral_content_signature")
         expected_roles = self.provenance.roles
         for name, metrics in (
             ("validation", self.validation_metrics),
@@ -677,6 +692,7 @@ def train_role_probe(dataset: ActivationDataset, config: ProbeTrainingConfig) ->
         training=config,
         split=split,
         regularization_lambda=regularization,
+        neutral_content_signatures=_neutral_content_signatures(dataset),
         coefficients=coefficients,
         intercepts=intercepts,
         validation_metrics=validation_metrics,
@@ -765,19 +781,27 @@ def _paired_segment_scores(
     )
 
 
-def _conversation_content_signatures(
-    dataset: ActivationDataset,
-) -> set[tuple[tuple[int, ...], tuple[int, ...]]]:
-    signatures: set[tuple[tuple[int, ...], tuple[int, ...]]] = set()
+def _content_signature(token_ids: Array) -> str:
+    return hashlib.sha256(_json([int(value) for value in token_ids])).hexdigest()
+
+
+def _neutral_content_signatures(dataset: ActivationDataset) -> tuple[str, ...]:
+    role = dataset.provenance.roles[0]
+    return tuple(
+        sorted(
+            _content_signature(dataset.content_token_id[_rows(dataset, str(document), role)])
+            for document in np.unique(dataset.document_ids)
+        )
+    )
+
+
+def _conversation_content_signatures(dataset: ActivationDataset) -> set[str]:
+    signatures: set[str] = set()
     for document in np.unique(dataset.document_ids):
-        segments: list[tuple[int, ...]] = []
         for role in ("reasoning", "assistant"):
             rows = _rows(dataset, str(document), role)
-            segments.append(tuple(int(value) for value in dataset.content_token_id[rows]))
-        signature = (segments[0], segments[1])
-        if signature in signatures:
-            raise ValueError("native conversations contain duplicated measured content")
-        signatures.add(signature)
+            signature = _content_signature(dataset.content_token_id[rows])
+            signatures.add(signature)
     return signatures
 
 
@@ -807,8 +831,11 @@ def qualify_role_probe(
         raise ValueError("calibration and test conversations must be document-disjoint")
     calibration_content = _conversation_content_signatures(calibration_conversations)
     test_content = _conversation_content_signatures(test_conversations)
+    neutral_content = set(probe.neutral_content_signatures)
+    if neutral_content & (calibration_content | test_content):
+        raise ValueError("native and neutral measured content must be disjoint")
     if calibration_content & test_content:
-        raise ValueError("calibration and test conversations must be content-disjoint")
+        raise ValueError("calibration and test conversation segments must be content-disjoint")
 
     calibration_scores = _paired_segment_scores(probe, calibration_conversations, CALIBRATION_SPLIT)
     test_scores = _paired_segment_scores(probe, test_conversations, TEST_SPLIT)
@@ -957,6 +984,7 @@ def _probe_from(metadata: dict[str, Any], coefficients: Array, intercepts: Array
     provenance["roles"] = tuple(provenance["roles"])
     training = dict(metadata["training"])
     training["lambda_grid"] = tuple(training["lambda_grid"])
+    neutral_content_signatures = tuple(metadata["neutral_content_signatures"])
     split = {name: tuple(value) for name, value in metadata["split"].items()}
     qualification = metadata["qualification"]
     parsed_qualification = None
@@ -997,6 +1025,7 @@ def _probe_from(metadata: dict[str, Any], coefficients: Array, intercepts: Array
         training=ProbeTrainingConfig(**training),
         split=DocumentSplit(**split),
         regularization_lambda=metadata["regularization_lambda"],
+        neutral_content_signatures=neutral_content_signatures,
         coefficients=coefficients,
         intercepts=intercepts,
         validation_metrics=_metrics_from(metadata["validation_metrics"]),
