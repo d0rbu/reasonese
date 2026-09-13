@@ -72,6 +72,23 @@ class Assistant(StrEnum):
     NEMOTRON_3_5_LIGHTNING = "Nemotron 3.5 Lightning"
 
 
+# Model families shared by authors and assistants; the user author has none.
+_MODEL_FAMILIES: dict[str, str] = {
+    "Qwen3.8 Flash": "Qwen3.8",
+    "Qwen3.8 2.4T": "Qwen3.8",
+    "Inkling": "Inkling",
+    "Inkling Small": "Inkling",
+    "Gemma 4 31B": "Gemma 4",
+    "Nemotron 3.5 Lightning": "Nemotron 3.5",
+}
+
+
+@beartype
+def model_family(model: Author | Assistant) -> str | None:
+    """Return the family an author or assistant model belongs to; the user has none."""
+    return _MODEL_FAMILIES.get(str(model))
+
+
 # Explicit experiment defaults; the enums above retain every supported model.
 DEFAULT_AUTHORS: tuple[Author, ...] = (
     Author.NEMOTRON_3_5_LIGHTNING,

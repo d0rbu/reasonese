@@ -175,8 +175,17 @@ uv run reasonese-analyze \
   --output out/combined-analysis \
   --l2 1.0 \
   --bootstrap-samples 200 \
+  --lasso-folds 5 \
+  --lasso-path-length 40 \
   --seed 0
 ```
+
+The feature-lasso section of `report.md` lists the contrasts that entered the fit in the order
+the penalty admitted them, with their coefficients at the cross-validated one-standard-error
+penalty. `--lasso-folds 0` skips cross-validation and reports the least penalized end of the
+path; `--lasso-path-length` sets how many penalties are fitted between the value that zeroes
+every feature and one thousandth of it. Cross-validation refits the path once per fold, so it
+dominates the analysis time; at pilot scale the whole lasso stays under a minute.
 
 Inspect `report.md` first, then `diagnostics.json`. A disconnected comparison graph means the
 L2 penalty numerically places components on one list, but the data do not identify their

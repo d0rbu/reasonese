@@ -40,6 +40,7 @@ from reasonese.instructions import (
     load_instruction_pairs,
 )
 from reasonese.judging import TraceFingerprint
+from reasonese.lasso import fit_feature_lasso
 from reasonese.observations import (
     CellId,
     Observation,
@@ -524,7 +525,16 @@ def test_write_analysis_emits_complete_artifact_set(tmp_path: Path) -> None:
         seed=0,
     )
     output = tmp_path / "analysis"
-    write_analysis(output, bundle, 1.0, _index())
+    observations = _synthetic_observations()
+    lasso = fit_feature_lasso(
+        observations,
+        pair_memberships(observations, _pairs()),
+        1.0,
+        folds=0,
+        path_length=5,
+        seed=0,
+    )
+    write_analysis(output, bundle, 1.0, _index(), lasso)
 
     expected = {
         "ranking.csv",
@@ -537,6 +547,10 @@ def test_write_analysis_emits_complete_artifact_set(tmp_path: Path) -> None:
         "axis_position_effects.csv",
         "order_sensitivity.csv",
         "regularization_sensitivity.csv",
+        "lasso_path.csv",
+        "lasso_coefficients.csv",
+        "lasso_features.csv",
+        "lasso_blocks.csv",
         "diagnostics.json",
         "report.md",
     }
@@ -561,6 +575,10 @@ def test_write_analysis_emits_complete_artifact_set(tmp_path: Path) -> None:
     assert "## Strata" in report
     assert str(pair.pair_id) in report
     assert "reasonese-normal" in report
+    assert "## Feature lasso" in report
+    assert "`first_position`" in report
+    diagnostics = json.loads((output / "diagnostics.json").read_text())
+    assert diagnostics["feature_lasso"]["comparisons"] == 20
 
 
 def test_analysis_cli_combines_inputs_and_prints_diagnostics(
@@ -593,6 +611,7 @@ def test_analysis_cli_combines_inputs_and_prints_diagnostics(
         == 0
     )
     summary = json.loads(capsys.readouterr().out)
+    assert isinstance(summary.pop("lasso_selected_features"), int)
     assert summary == {
         "both_completed_trials": 6,
         "cells": 5,

@@ -14,7 +14,8 @@ exact-text message QA and fail-closed inference, trace-sensitive judgment cachin
 ordering, position balance, resumable data
 collection, synthetic Bradley-Terry recovery, ties, clustered bootstrap, disconnected graphs,
 axis and position effects, sparse-design stratification, degree balance, minimum connectivity
-repair, and reproducibility, analysis artifacts,
+repair, and reproducibility, analysis artifacts, feature-lasso optimality conditions, penalty
+paths, cross-validation, and planted-effect recovery,
 and all nine utilities. Sampling and analysis tests run against the real 24-pair bank at its real
 size: 153 conditions per instruction side, 13,005 eligible pairings per pair, and the 720-pairing
 default.
