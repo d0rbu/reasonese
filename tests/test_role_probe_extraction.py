@@ -762,6 +762,13 @@ def test_loaded_native_prefix_exactly_matches_full_model(tmp_path: Path) -> None
         == runtime_sha256
     )
     assert runtime["nemotron_mamba"]["fast_path_selected"] is False
+    assert runtime["cpu_offload"] == {
+        "offload_buffers": True,
+        "preload_module_classes": ["NemotronHMamba2Mixer"],
+        "nemotron_dispatch_verification": (
+            "per-forward cuda_kernels_forward/torch_forward counters"
+        ),
+    }
     assert runtime["model_dtype_plan"] == {"e_score_correction_bias": "float32"}
     assert runtime["adapter"]["activation_module"] == "norm"
     assert runtime["adapter"]["activation_site"] == "normalized_pre_mixer"
@@ -837,7 +844,13 @@ def test_loader_preserves_model_declared_fp32_buffer(
     (tmp_path / "model.safetensors.index.json").write_text(
         json.dumps({"weight_map": dict.fromkeys(source, shard_name)}), encoding="utf-8"
     )
-    monkeypatch.setattr(accelerate, "cpu_offload", lambda model, **_kwargs: model)
+    offload_kwargs: dict[str, object] = {}
+
+    def capture_offload(model: object, **kwargs: object) -> object:
+        offload_kwargs.update(kwargs)
+        return model
+
+    monkeypatch.setattr(accelerate, "cpu_offload", capture_offload)
 
     loaded = cast(
         Any,
@@ -846,6 +859,8 @@ def test_loader_preserves_model_declared_fp32_buffer(
         ),
     )
     actual_bias = loaded.layers[0].mixer.gate.e_score_correction_bias
+    assert offload_kwargs["offload_buffers"] is True
+    assert offload_kwargs["preload_module_classes"] == ["NemotronHMamba2Mixer"]
     assert actual_bias.dtype == torch.float32
     assert torch.equal(actual_bias, gate.e_score_correction_bias)
     request = {
@@ -1355,3 +1370,44 @@ def test_native_prefix_batch_matches_unbatched() -> None:
             layers=(0, 1),
         )
         assert np.array_equal(batched, singles)
+
+
+def test_nemotron_dispatch_audit_rejects_the_naive_mamba_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class NemotronHMamba2Mixer:
+        def cuda_kernels_forward(self, value: str) -> str:
+            return f"cuda:{value}"
+
+        def torch_forward(self, value: str) -> str:
+            return f"torch:{value}"
+
+    class Layer:
+        def __init__(self, mixer: object) -> None:
+            self.mixer = mixer
+
+        def modules(self) -> tuple[object, ...]:
+            return (self, self.mixer)
+
+    mixer = NemotronHMamba2Mixer()
+    model = type("Model", (), {"layers": [Layer(mixer)]})()
+    monkeypatch.setattr(extraction, "_uses_nemotron_fast_path", lambda *_args: True)
+
+    fallback = extraction._start_nemotron_dispatch_audit(model, NEMOTRON_ADAPTER, before_layer=1)
+    with pytest.raises(RuntimeError, match="selected its torch fallback"):
+        mixer.torch_forward("input")
+    extraction._finish_nemotron_dispatch_audit(fallback)
+    assert fallback.fallback_calls == 1
+    assert mixer.torch_forward("input") == "torch:input"
+
+    fast = extraction._start_nemotron_dispatch_audit(model, NEMOTRON_ADAPTER, before_layer=1)
+    assert mixer.cuda_kernels_forward("input") == "cuda:input"
+    extraction._finish_nemotron_dispatch_audit(fast)
+    assert fast.cuda_calls == 1
+    assert fast.fallback_calls == 0
+    assert mixer.cuda_kernels_forward("input") == "cuda:input"
+
+    missing = extraction._start_nemotron_dispatch_audit(model, NEMOTRON_ADAPTER, before_layer=1)
+    with pytest.raises(RuntimeError, match="did not execute any audited Mamba mixer"):
+        extraction._finish_nemotron_dispatch_audit(missing)
+    assert mixer.cuda_kernels_forward("input") == "cuda:input"

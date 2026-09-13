@@ -52,6 +52,7 @@ TOKENIZER_RUNTIME_FILES = (
     "tokenizer.json",
     "tokenizer_config.json",
 )
+NEMOTRON_CPU_OFFLOAD_PRELOAD_MODULE_CLASSES = ("NemotronHMamba2Mixer",)
 
 
 class ProbeRole(StrEnum):
@@ -572,7 +573,17 @@ def load_prefix_model(
     if meta:
         raise ValueError(f"prefix model retains unloaded meta tensors: {meta}")
     model.eval()
-    cpu_offload(model, execution_device=torch.device(execution_device), offload_buffers=True)
+    preload_module_classes = (
+        list(NEMOTRON_CPU_OFFLOAD_PRELOAD_MODULE_CLASSES)
+        if adapter.name == NEMOTRON_ADAPTER.name
+        else None
+    )
+    cpu_offload(
+        model,
+        execution_device=torch.device(execution_device),
+        offload_buffers=True,
+        preload_module_classes=preload_module_classes,
+    )
     return model
 
 
@@ -1095,6 +1106,72 @@ class _PrefixComplete(RuntimeError):
     pass
 
 
+@dataclass(slots=True)
+class _NemotronDispatchAudit:
+    required: bool
+    cuda_calls: int = 0
+    fallback_calls: int = 0
+    restores: list[tuple[Any, str, bool, Any]] | None = None
+
+
+def _start_nemotron_dispatch_audit(
+    model: Any, adapter: NativeTemplateAdapter, *, before_layer: int
+) -> _NemotronDispatchAudit:
+    fast_path = _uses_nemotron_fast_path(model, adapter)
+    layer_modules = _resolve_attribute(model, adapter.layer_container)
+    mixers = [
+        module
+        for layer in layer_modules[:before_layer]
+        for module in layer.modules()
+        if module.__class__.__name__ in NEMOTRON_CPU_OFFLOAD_PRELOAD_MODULE_CLASSES
+    ]
+    audit = _NemotronDispatchAudit(required=fast_path and bool(mixers), restores=[])
+    if not audit.required:
+        return audit
+    for mixer in mixers:
+        for method_name, counter_name in (
+            ("cuda_kernels_forward", "cuda_calls"),
+            ("torch_forward", "fallback_calls"),
+        ):
+            had_instance_value = method_name in mixer.__dict__
+            instance_value = mixer.__dict__.get(method_name)
+            original = getattr(mixer, method_name)
+
+            def audited(
+                *args: Any,
+                _original: Any = original,
+                _counter: str = counter_name,
+                **kwargs: Any,
+            ) -> Any:
+                setattr(audit, _counter, getattr(audit, _counter) + 1)
+                if _counter == "fallback_calls":
+                    raise RuntimeError(
+                        "Nemotron Mamba selected its torch fallback despite a pinned CUDA "
+                        "fast-path runtime"
+                    )
+                return _original(*args, **kwargs)
+
+            setattr(mixer, method_name, audited)
+            assert audit.restores is not None
+            audit.restores.append((mixer, method_name, had_instance_value, instance_value))
+    return audit
+
+
+def _restore_nemotron_dispatch_audit(audit: _NemotronDispatchAudit) -> None:
+    for module, name, had_instance_value, instance_value in reversed(audit.restores or []):
+        if had_instance_value:
+            setattr(module, name, instance_value)
+        else:
+            delattr(module, name)
+    audit.restores = []
+
+
+def _finish_nemotron_dispatch_audit(audit: _NemotronDispatchAudit) -> None:
+    _restore_nemotron_dispatch_audit(audit)
+    if audit.required and audit.cuda_calls == 0 and audit.fallback_calls == 0:
+        raise RuntimeError("Nemotron extraction did not execute any audited Mamba mixer")
+
+
 def _torch_runtime() -> Any:
     try:
         import torch  # ty: ignore[unresolved-import, unused-ignore-comment]
@@ -1204,16 +1281,22 @@ def _capture_sequences(
         length = len(sequence)
         input_tensor[row, :length] = torch.tensor(sequence, dtype=torch.long, device=device)
         attention_mask[row, :length] = 1
+    audit = _start_nemotron_dispatch_audit(model, adapter, before_layer=final_layer)
+    forward_completed = False
     try:
         with torch.inference_mode():
             model(input_ids=input_tensor, attention_mask=attention_mask, use_cache=False)
     except _PrefixComplete:
-        pass
+        forward_completed = True
     else:
         raise RuntimeError("prefix model ran past the final requested activation site")
     finally:
         for handle in handles:
             handle.remove()
+        if forward_completed:
+            _finish_nemotron_dispatch_audit(audit)
+        else:
+            _restore_nemotron_dispatch_audit(audit)
 
     if set(captured) != set(layers):
         raise RuntimeError(f"captured layers {sorted(captured)}, expected {list(layers)}")
@@ -1378,6 +1461,19 @@ def model_runtime_identity(
         "model_dtype_plan": {
             name: str(dtype).removeprefix("torch.")
             for name, dtype in sorted(cast(Any, model)._get_dtype_plan(torch.bfloat16).items())
+        },
+        "cpu_offload": {
+            "offload_buffers": True,
+            "preload_module_classes": (
+                list(NEMOTRON_CPU_OFFLOAD_PRELOAD_MODULE_CLASSES)
+                if adapter.name == NEMOTRON_ADAPTER.name
+                else []
+            ),
+            "nemotron_dispatch_verification": (
+                "per-forward cuda_kernels_forward/torch_forward counters"
+                if adapter.name == NEMOTRON_ADAPTER.name
+                else None
+            ),
         },
         "torch_version": torch.__version__,
         "torch_cuda_version": torch.version.cuda,
