@@ -202,6 +202,61 @@ def test_local_scorer_rejects_runtime_mismatch_before_projection(
     assert captured == []
 
 
+@pytest.mark.parametrize(
+    "captured",
+    [
+        np.zeros((4, 1, 5), dtype=np.float64),
+        np.zeros((4, 2, 5), dtype=np.float32),
+        np.zeros((3, 1, 5), dtype=np.float32),
+    ],
+)
+def test_local_scorer_rejects_capture_shape_layer_or_dtype_mismatch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    captured: np.ndarray,
+) -> None:
+    config, cache, runtime_sha256 = _scorer_files(tmp_path)
+    _patch_runtime(monkeypatch, runtime_sha256)
+    monkeypatch.setattr(local_module, "capture_token_activations", lambda *args, **kwargs: captured)
+    _, requests = _requests()
+
+    with pytest.raises(ValueError, match="invalid shape"):
+        LocalProbeQaScorer(config, cache, execution_device="cpu").check(requests)
+
+
+def test_local_scorer_rejects_position_spans_rendered_in_different_contexts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config, cache, runtime_sha256 = _scorer_files(tmp_path)
+    _patch_runtime(monkeypatch, runtime_sha256)
+
+    def mismatched_render(tokenizer: object, adapter: object, setup: object, position: int):
+        input_ids = tuple(range(12 + position))
+        positions = (1, 2)
+        return RenderedProbeContext(
+            input_ids,
+            (positions,),
+            (tuple(input_ids[index] for index in positions),),
+            "a" * 64,
+        )
+
+    monkeypatch.setattr(local_module, "render_collector_probe_context", mismatched_render)
+    _, requests = _requests()
+    with pytest.raises(ValueError, match="rendered different contexts"):
+        LocalProbeQaScorer(config, cache, execution_device="cpu").check(requests)
+
+
+def test_local_scorer_requires_a_bundle_for_every_assistant(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config, cache, runtime_sha256 = _scorer_files(tmp_path)
+    _patch_runtime(monkeypatch, runtime_sha256)
+    scorer = LocalProbeQaScorer(config, cache, execution_device="cpu")
+    assert scorer.check(()) == ()
+    with pytest.raises(ValueError, match="no local role-probe bundle"):
+        scorer.preflight((Assistant.GEMMA_4_31B_IT,))
+
+
 @pytest.mark.parametrize("corruption", ["roles", "decision"])
 def test_local_scorer_rejects_internally_inconsistent_cache_records(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, corruption: str
