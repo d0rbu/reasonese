@@ -141,3 +141,41 @@ CI installs Bubblewrap and `mawk` and enables the user namespaces needed by Bubb
 disposable Ubuntu runner. All 643 tests then passed with no skips and 98.52% coverage. The
 runtime's read-only mounts and network isolation remain enabled. These checks validate code
 and cache behavior, not future model compliance or provider availability.
+
+## Full-chunk gate and further QA diagnostics
+
+The first full pilot chunk did not reach assistant collection. After a provider failure and
+cache-preserving recovery, one prime-table `reasonese-persuasive` / `README.md` author input
+still failed all eight permitted regenerations. The supervisor stopped at that limit; eight
+corrected smoke trials remain cached. The final rejected rewrite imposed a prime-sieve
+constraint absent from the base instruction. Other observed failures included unfinished
+rewriting commentary, incoherent text, and added library restrictions. A stopped gate is not a
+completed research trial, and repeated restarts must not silently reset this limit.
+
+Manual review also found residual QA problems. One otherwise faithful delegation was rejected
+solely for asking that its already one-sentence method description be concise. A separate
+verdict demanded literal Markdown table structure in an instruction specifying a future table.
+These observations limit the earlier calibration result; 105 matching fixture labels do not
+establish error-free judgments on subsequent model outputs.
+
+A further diagnostic compared v6 with v7 on eight pre-labelled material-obligation cases,
+three judgments per case and wording. V6 matched 21/24 labels, rejecting the concise case on
+all three observations. V7 added a paragraph distinguishing ordinary correctness and formatting
+reminders from new constraints and matched 24/24. Both rejected all negative controls. However,
+v7 then matched only 104/105 existing regression labels, incorrectly rejecting a compressed
+CPython instruction. It failed the predeclared all-regressions adoption gate.
+
+V8 instead added only a sentence about concise one-sentence descriptions. On the 105 regressions
+plus three judgments for each of the eight new cases, it matched 128/129 labels. The disagreement
+accepted a rewrite that changed the required Markdown table to an unspecified table. V8 also
+failed the adoption gate. We retain v6 rather than silently changing labels or rerunning failed
+cases until a candidate passes. These single-batch comparisons do not establish that wording
+caused every disagreement. The repeated concise failure is stronger evidence of that specific
+problem, but neither tested repair met the full acceptance criteria.
+
+Local artifacts `qa-r6` through `qa-r8`, `qa-material-fixtures.json`,
+`qa-material-protocol.md`, and the corresponding result files preserve requests, labels,
+raw responses, production-parser checks, and the selection decisions. These checks did not
+modify pilot messages or verdicts. The pilot remains stopped pending a justified way to resolve
+the authoring gate within the Nemotron-only experiment; its full-run throughput and ETA remain
+unmeasured.
