@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -14,10 +15,49 @@ from beartype import beartype
 from phantom import Phantom
 
 from reasonese.axes import Assistant, Author
-from reasonese.scheduling import ModelScheduler, ScheduledRequest
+from reasonese.scheduling import ModelScheduler, ProviderRequestError, ScheduledRequest
 
 JsonObject = dict[str, Any]
 _TERMINAL_BATCH_STATUSES = frozenset({"completed", "failed", "cancelled", "expired"})
+
+logger = logging.getLogger(__name__)
+
+
+def _provider_error(response_id: object, error: object) -> ProviderRequestError:
+    code = error.get("code") if isinstance(error, dict) else None
+    status = int(code) if isinstance(code, (str, int)) and str(code).isdigit() else None
+    metadata = error.get("metadata") if isinstance(error, dict) else None
+    headers = metadata.get("headers") if isinstance(metadata, dict) else None
+    retry_after = headers.get("Retry-After") if isinstance(headers, dict) else None
+    return ProviderRequestError(
+        f"OpenRouter response {response_id} error: {error}", status,
+        retry_after if isinstance(retry_after, str) else None,
+    )
+
+
+def validate_completion(response: JsonObject) -> None:
+    """Reject failed completions before consuming text or executing tool calls."""
+    response_id = response.get("id")
+    if response.get("error") is not None:
+        raise _provider_error(response_id, response["error"])
+    choices = response.get("choices")
+    if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
+        raise ValueError("OpenRouter response has no first choice or assistant content")
+    choice = choices[0]
+    if choice.get("error") is not None:
+        raise _provider_error(response_id, choice["error"])
+    if choice.get("finish_reason") == "error" or choice.get("native_finish_reason") == "error":
+        raise ProviderRequestError(f"OpenRouter response {response_id} finish reason is error")
+    message = choice.get("message")
+    if not isinstance(message, dict):
+        raise ValueError("OpenRouter response has no assistant message content")
+    if message.get("tool_calls"):
+        return
+    content = message.get("content")
+    if content is None or isinstance(content, str) and not content.strip():
+        raise ProviderRequestError(f"OpenRouter response assistant content is empty (id={response_id})")
+    if not isinstance(content, str):
+        raise ValueError("OpenRouter assistant content must be text")
 
 
 def _batch_compatible(body: JsonObject) -> bool:
@@ -286,13 +326,26 @@ class OpenRouterClient:
         receive: Callable[[JsonObject], ScheduledRequest[JsonObject] | None],
     ) -> ScheduledRequest[JsonObject]:
         """Prepare one completion attempt for the shared per-model scheduler."""
-        return ScheduledRequest(
-            str(model_id),
-            lambda: self.transport.post_json(
-                "/api/v1/chat/completions", {**body, "model": str(model_id)}
-            ),
-            receive,
-        )
+        def send() -> JsonObject:
+            try:
+                response = self.transport.post_json(
+                    "/api/v1/chat/completions", {**body, "model": str(model_id)}
+                )
+            except (requests.HTTPError, requests.Timeout, requests.ConnectionError) as error:
+                http = error.response
+                status = http.status_code if http is not None else None
+                if isinstance(error, requests.HTTPError) and (
+                    status is None or not (status == 408 or 500 <= status < 600)
+                ):
+                    raise
+                raise ProviderRequestError(
+                    f"OpenRouter completion request failed: {error}", status,
+                    http.headers.get("Retry-After") if http is not None else None,
+                ) from error
+            validate_completion(response)
+            return response
+
+        return ScheduledRequest(str(model_id), send, receive)
 
     def complete(self, model_id: OpenRouterModelId, body: JsonObject) -> JsonObject:
         """Run one completion with the same model limit and bounded retries as groups."""
@@ -425,8 +478,13 @@ class OpenRouterClient:
                     if job.batch.get("status") in _TERMINAL_BATCH_STATUSES:
                         for body_index, response in enumerate(self._batch_results(job)):
                             try:
+                                validate_completion(response)
                                 on_response(index, body_index, response)
                             except Exception as error:
+                                logger.exception(
+                                    "Batch completion failed: batch=%s item=%s response_id=%s",
+                                    job.batch_id, body_index, response.get("id"),
+                                )
                                 if failure is None:
                                     failure = error
                     elif self.monotonic() >= job.deadline:
@@ -470,16 +528,20 @@ class OpenRouterClient:
             custom_id = raw_result.get("custom_id")
             response = raw_result.get("response")
             error = raw_result.get("error")
-            if error is not None:
-                raise RuntimeError(f"OpenRouter batch item {custom_id} failed: {error}")
-            if not isinstance(custom_id, str) or not isinstance(response, dict):
+            if not isinstance(custom_id, str):
                 raise ValueError("OpenRouter batch result is malformed")
             if custom_id in results:
                 raise ValueError(
                     f"OpenRouter batch {job.batch_id} returned duplicate custom_id {custom_id}"
                 )
+            if error is not None:
+                results[custom_id] = {"error": f"OpenRouter batch item {custom_id} failed: {error}"}
+                continue
+            if not isinstance(response, dict):
+                raise ValueError("OpenRouter batch result is malformed")
             if response.get("status_code") != 200 or not isinstance(response.get("body"), dict):
-                raise RuntimeError(f"OpenRouter batch item {custom_id} returned {response}")
+                results[custom_id] = {"error": f"OpenRouter batch item {custom_id} returned {response}"}
+                continue
             results[custom_id] = cast(JsonObject, response["body"])
 
         expected_ids = [f"request-{index}" for index in range(job.body_count)]
@@ -489,7 +551,8 @@ class OpenRouterClient:
 
 
 def response_content(response: JsonObject) -> str:
-    """Extract non-empty assistant content from a chat-completion response."""
+    """Extract non-empty assistant content from a successful chat-completion response."""
+    validate_completion(response)
     try:
         content = response["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError) as error:

@@ -420,7 +420,7 @@ def test_failed_batch_does_not_discard_other_accepted_batch_results(failure_kind
                 return {
                     "id": case,
                     "status": "completed",
-                    "results": [_batch_result("request-0", {"id": "healthy-result"})],
+                    "results": [_batch_result("request-0", _chat("healthy", "healthy-result"))],
                 }
             return {
                 "id": case,
@@ -434,7 +434,7 @@ def test_failed_batch_does_not_discard_other_accepted_batch_results(failure_kind
             return {
                 "id": "healthy",
                 "status": "completed",
-                "results": [_batch_result("request-0", {"id": "healthy-result"})],
+                "results": [_batch_result("request-0", _chat("healthy", "healthy-result"))],
             }
 
     cases = ("failed-0", "failed-1") if failure_kind == "all_poll" else (
@@ -466,7 +466,7 @@ def test_failed_batch_does_not_discard_other_accepted_batch_results(failure_kind
             prefer_batch=True,
             on_response=lambda group, index, response: received.append((group, index, response)),
         )
-    assert received == ([] if failure_kind == "all_poll" else [(2, 0, {"id": "healthy-result"})])
+    assert received == ([] if failure_kind == "all_poll" else [(2, 0, _chat("healthy", "healthy-result"))])
     assert polled == (
         [f"/api/beta/batches/{case}" for case in cases]
         if failure_kind in ("poll", "all_poll")
@@ -543,7 +543,7 @@ def test_empty_final_and_429_budgets_are_independent_across_tool_rounds(
     assert all(body == transport.limited_bodies[4] for body in transport.limited_bodies[4:])
     assert transport.limited_bodies[4]["messages"][-1]["role"] == "tool"
     assert client.scheduler.limiters["example/limited"].generation == 4
-    empty_logs = [record for record in caplog.records if record.name == "reasonese.runner"]
+    empty_logs = [record for record in caplog.records if record.name == "reasonese.scheduling" and record.exc_info is not None]
     assert len(empty_logs) == (2 if final_content else 3)
     assert all(record.exc_info is not None for record in empty_logs)
 
@@ -598,7 +598,7 @@ def test_empty_final_exhaustion_preserves_healthy_trials_for_resume(
 
     with pytest.raises(ValueError, match="assistant content is empty"):
         collect(OpenRouterClient(transport, sync_workers=1))
-    assert len([record for record in caplog.records if record.name == "reasonese.runner"]) == 3
+    assert len([record for record in caplog.records if record.name == "reasonese.scheduling" and record.exc_info is not None]) == 3
     assert transport.batch_schemas == ["message_compliance_verdict"]
     for task, expected in zip(tasks, (0, 2), strict=True):
         cache = shared_cache or SqliteStudyCache(task.output_dir / "collection.sqlite3")

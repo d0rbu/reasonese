@@ -51,7 +51,7 @@ def test_http_429_isolates_models_preserves_payloads_and_allows_parallel_connect
                     # Neither request can finish unless real HTTP connections overlap.
                     first_healthy_pair.wait()
                 status = 429 if model == limited and attempt == 1 else 200
-                payload = json.dumps({"id": f"{model}-{body['index']}"}).encode()
+                payload = json.dumps({"id": f"{model}-{body['index']}", "choices": [{"message": {"content": "answer"}}]}).encode()
                 self.send_response(status)
                 if status == 429:
                     self.send_header("Retry-After", "1")
@@ -94,7 +94,7 @@ def test_http_429_isolates_models_preserves_payloads_and_allows_parallel_connect
         thread.join(timeout=5)
     assert not handler_errors
     assert not thread.is_alive()
-    assert result == (({"id": f"{limited}-0"},), tuple({"id": f"{healthy}-{i}"} for i in range(6)))
+    assert result == (({"id": f"{limited}-0", "choices": [{"message": {"content": "answer"}}]},), tuple({"id": f"{healthy}-{i}", "choices": [{"message": {"content": "answer"}}]} for i in range(6)))
     assert counts == {limited: 2, healthy: 6}
     assert peaks[healthy] == 2
     limited_calls = [(body, timestamp) for model, body, timestamp in seen if model == limited]
