@@ -26,6 +26,7 @@ from reasonese.probe_statistics import (
     paired_bootstrap_auc,
     paired_segment_auc,
     qualify_native_test,
+    within_conversation_concordance,
 )
 
 
@@ -103,6 +104,20 @@ def test_bootstrap_is_paired_deterministic_and_uses_linear_quantiles() -> None:
     assert first.upper_95 == 1.0
 
 
+def test_bootstrap_is_invariant_to_input_row_permutation() -> None:
+    scores = _scores(
+        reasoning=tuple(0.51 + index / 100 for index in range(EXPECTED_CONVERSATIONS)),
+        final=tuple(0.49 - index / 100 for index in range(EXPECTED_CONVERSATIONS)),
+    )
+    reordered = replace(
+        scores,
+        conversation_ids=tuple(reversed(scores.conversation_ids)),
+        reasoning_scores=tuple(reversed(scores.reasoning_scores)),
+        final_scores=tuple(reversed(scores.final_scores)),
+    )
+    assert paired_bootstrap_auc(reordered) == paired_bootstrap_auc(scores)
+
+
 def test_bootstrap_preserves_pairs_for_cross_conversation_auc() -> None:
     # Each conversation is correctly ordered, but pooling all segments gives
     # AUC 0.75. A within-conversation statistic would incorrectly report 1.0.
@@ -114,6 +129,15 @@ def test_bootstrap_preserves_pairs_for_cross_conversation_auc() -> None:
     result = paired_bootstrap_auc(scores)
     assert result.auc == pytest.approx(0.75)
     assert 0.5 <= result.lower_95 <= result.auc <= result.upper_95 <= 1.0
+
+
+def test_within_conversation_concordance_is_report_only_and_credits_ties() -> None:
+    scores = _scores(
+        reasoning=(0.9, 0.8, 0.5, 0.1) + (0.5,) * 8,
+        final=(0.1, 0.8, 0.5, 0.9) + (0.5,) * 8,
+    )
+    # Four first pairs contribute 1, .5, .5, 0; eight ties contribute .5.
+    assert within_conversation_concordance(scores) == pytest.approx(0.5)
 
 
 def test_calibration_freezes_threshold_with_explicit_tie_rule() -> None:
@@ -213,7 +237,7 @@ def test_native_test_qualification_uses_only_frozen_gates() -> None:
 def test_native_qualification_boundary_comparisons_are_explicit() -> None:
     scores = _scores(split=TEST_SPLIT)
     auc = PairedBootstrapAuc(
-        auc=MIN_TEST_AUC,
+        auc=paired_segment_auc(scores),
         lower_95=np.nextafter(MIN_AUC_BOOTSTRAP_LOWER, np.inf),
         upper_95=0.9,
         conversation_count=EXPECTED_CONVERSATIONS,
@@ -221,6 +245,18 @@ def test_native_qualification_boundary_comparisons_are_explicit() -> None:
     assert NativeQualification(scores, 0.75, 0.75, auc).passed
     lower_equal = replace(auc, lower_95=MIN_AUC_BOOTSTRAP_LOWER)
     assert NativeQualification(scores, 0.75, 0.75, lower_equal).passed is False
+
+
+def test_native_qualification_rejects_a_mismatched_bootstrap_point_auc() -> None:
+    scores = _scores(split=TEST_SPLIT)
+    mismatched = PairedBootstrapAuc(
+        auc=MIN_TEST_AUC,
+        lower_95=0.6,
+        upper_95=0.9,
+        conversation_count=EXPECTED_CONVERSATIONS,
+    )
+    with pytest.raises(ValueError, match="does not match"):
+        NativeQualification(scores, 0.9, 0.9, mismatched)
 
 
 def test_bootstrap_configuration_cannot_be_changed() -> None:

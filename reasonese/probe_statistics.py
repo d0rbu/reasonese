@@ -190,6 +190,8 @@ class NativeQualification:
         _rate(self.document_macro_accuracy, "document_macro_accuracy")
         if self.bootstrap_auc.conversation_count != self.scores.conversation_count:
             raise ValueError("bootstrap AUC and native scores must contain the same conversations")
+        if self.bootstrap_auc.auc != paired_segment_auc(self.scores):
+            raise ValueError("bootstrap AUC does not match the native scores")
 
     @property
     def passed(self) -> bool:
@@ -219,11 +221,33 @@ def paired_segment_auc(scores: PairedSegmentScores) -> float:
 
 
 @beartype
+def within_conversation_concordance(scores: PairedSegmentScores) -> float:
+    """Report the paired direction rate, with half credit for ties.
+
+    This is a descriptive within-conversation diagnostic.  It is deliberately
+    separate from the preregistered pooled cross-conversation AUC and never
+    contributes to native qualification.
+    """
+    reasoning = np.asarray(scores.reasoning_scores, dtype=np.float64)
+    final = np.asarray(scores.final_scores, dtype=np.float64)
+    comparisons = (reasoning > final).astype(np.float64) + 0.5 * (reasoning == final)
+    return float(comparisons.mean())
+
+
+@beartype
 def paired_bootstrap_auc(scores: PairedSegmentScores) -> PairedBootstrapAuc:
     """Bootstrap pooled AUC by resampling whole conversations in fixed pairs."""
     conversation_count = scores.conversation_count
-    reasoning = np.asarray(scores.reasoning_scores, dtype=np.float64)
-    final = np.asarray(scores.final_scores, dtype=np.float64)
+    rows = sorted(
+        zip(
+            scores.conversation_ids,
+            scores.reasoning_scores,
+            scores.final_scores,
+            strict=True,
+        )
+    )
+    reasoning = np.asarray([row[1] for row in rows], dtype=np.float64)
+    final = np.asarray([row[2] for row in rows], dtype=np.float64)
     rng = np.random.default_rng(BOOTSTRAP_SEED)
     indices = rng.integers(
         0,
