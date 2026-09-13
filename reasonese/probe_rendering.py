@@ -51,6 +51,8 @@ class RenderedProbeContext:
             raise ValueError("every measured probe span must contain tokens")
         if len(set(flattened)) != len(flattened) or flattened != sorted(flattened):
             raise ValueError("measured probe spans must be ordered and non-overlapping")
+        if any(position < 0 or position >= len(self.input_ids) for position in flattened):
+            raise ValueError("measured token position lies outside the rendered input")
         for positions, token_ids in zip(self.token_positions, self.content_token_ids, strict=True):
             if tuple(self.input_ids[position] for position in positions) != token_ids:
                 raise ValueError("measured token IDs do not match the rendered input")

@@ -7,10 +7,13 @@ from collections.abc import Sequence
 from dataclasses import replace
 from typing import Any
 
+import pytest
+
 from reasonese.axes import Assistant, Channel
 from reasonese.conversation import GeneratedMessage, GeneratedText, construct_conversation
 from reasonese.probe_rendering import (
     FUNCTION_TOOLS,
+    RenderedProbeContext,
     render_collector_probe_context,
     render_native_dialogue_context,
 )
@@ -159,3 +162,14 @@ def test_collector_masks_a_token_that_crosses_the_content_boundary() -> None:
 
     assert rendered.masked_boundary_tokens == 1
     assert rendered.content_token_ids[0][0] == ord("r")
+
+
+@pytest.mark.parametrize("position", [-1, 3])
+def test_rendered_context_rejects_positions_outside_the_input(position: int) -> None:
+    with pytest.raises(ValueError, match="outside the rendered input"):
+        RenderedProbeContext(
+            input_ids=(10, 11, 12),
+            token_positions=((position,),),
+            content_token_ids=((12,),),
+            render_config_sha256="a" * 64,
+        )
