@@ -673,6 +673,64 @@ def _setup_with_user_content(content: str) -> ConversationSetup:
     return construct_conversation(matchup, generated)
 
 
+@pytest.mark.parametrize("content", [None, "", " \n\t", "missing"])
+def test_empty_final_answer_logs_and_retries_same_request(
+    content: object, caplog: pytest.LogCaptureFixture,
+) -> None:
+    setup = _setup_with_user_content("Find the answer.")
+    empty = _chat("", "empty-response")
+    empty["choices"][0]["message"]["content"] = content
+    if content == "missing":
+        del empty["choices"][0]["message"]["content"]
+    route = ModelRoute(OpenRouterModelId.parse("example/model:free"), None)
+    transport = FakeTransport([empty, _chat("answer")])
+    result = run_assistant_groups((AssistantRunGroup(route, (setup,)),), OpenRouterClient(transport))
+    assert result[0][0].response == _chat("answer")
+    assert result[0][0].tool_steps == ()
+    assert transport.post_calls[0] == transport.post_calls[1]
+    records = [record for record in caplog.records if record.name == "reasonese.runner"]
+    assert len(records) == 1
+    assert records[0].exc_info is not None
+    assert "empty-response" in records[0].getMessage()
+
+
+def test_empty_retry_preserves_tools_and_successful_trace_exactly() -> None:
+    setup = _setup_with_user_content("Read README.")
+    route = ModelRoute(OpenRouterModelId.parse("example/model:free"), None)
+    group = (AssistantRunGroup(route, (setup,)),)
+    baseline = run_assistant_groups(group, OpenRouterClient(FakeTransport([_tool_chat(), _chat("answer")])))
+    transport = FakeTransport([_tool_chat(), _chat(""), _chat("answer")])
+    recovered = run_assistant_groups(group, OpenRouterClient(transport))
+    assert recovered == baseline
+    assert transport.post_calls[1] == transport.post_calls[2]
+    assert len(recovered[0][0].tool_steps) == 1
+
+
+def test_empty_retry_exhaustion_is_not_cached_or_scored(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture,
+) -> None:
+    setup = _setup_with_user_content("Read README.")
+    cache = YamlTraceCache(tmp_path / "traces.yaml")
+    transport = FakeTransport([_qa_batch(2), _chat(""), _tool_chat(), _chat(""), _chat("")])
+    with pytest.raises(ValueError, match="assistant content is empty"):
+        run_matchup(setup.matchup, OpenRouterClient(transport),
+                    YamlMessageCache(tmp_path / "messages.yaml"), cache,
+                    YamlMessageQaCache(tmp_path / "qa.yaml"),
+                    _manual_library(tmp_path, setup.matchup.inputs),
+                    routing=CollectionRouting(RoutePreference.FREE, True), prefer_batch=False)
+    assert len(transport.post_calls) == 5
+    assert cache.get(setup.matchup) is None
+    assert len([record for record in caplog.records if record.exc_info]) == 3
+
+
+def test_empty_retry_budget_is_independent_for_each_conversation() -> None:
+    setups = (_setup_with_user_content("First."), _setup_with_user_content("Second."))
+    route = ModelRoute(OpenRouterModelId.parse("example/model:free"), None)
+    transport = FakeTransport([_chat(""), _chat(""), _chat("one"), _chat(""), _chat(""), _chat("two")])
+    results = run_assistant_groups((AssistantRunGroup(route, setups),), OpenRouterClient(transport, sync_workers=1))
+    assert [trace.response for trace in results[0]] == [_chat("one"), _chat("two")]
+
+
 def test_ready_tool_continuation_precedes_queued_initial_requests() -> None:
     transport = PriorityAdmissionTransport()
     setups = tuple(
@@ -987,3 +1045,15 @@ def test_run_conversation_cli_requires_key_for_uncached_matchup(
                 str(manual.root),
             ]
         )
+
+
+@pytest.mark.parametrize("content", [42, [], {}])
+def test_malformed_assistant_content_does_not_retry(content: object) -> None:
+    setup = _setup_with_user_content("Answer.")
+    response = _chat("")
+    response["choices"][0]["message"]["content"] = content
+    transport = FakeTransport([response])
+    route = ModelRoute(OpenRouterModelId.parse("example/model:free"), None)
+    with pytest.raises(ValueError):
+        run_assistant_groups((AssistantRunGroup(route, (setup,)),), OpenRouterClient(transport))
+    assert len(transport.post_calls) == 1

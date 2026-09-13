@@ -617,29 +617,22 @@ def test_collect_study_batches_trials_and_judgments_then_resumes_without_a_key(
         collect_study(study, output, None, manual, routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True)
 
 
-@pytest.mark.parametrize("content", [None, "", " \n"])
-def test_collection_resumes_empty_final_answers_from_sqlite(tmp_path: Path, content: object) -> None:
+def test_collection_retries_empty_final_before_judging_and_caching(tmp_path: Path) -> None:
     study = _study()
     manual = _manual_library(tmp_path, study)
     output = tmp_path / "empty-final"
-    response = _chat("", "reasoning-only")
-    response["choices"][0]["message"].update(content=content, reasoning="hidden")
-    transport = FakeTransport([_message_qa_batch(2), response, response])
-    # Simulate interruption after traces are saved, before judgments return.
-    with pytest.raises(IndexError):
-        collect_study(study, output, OpenRouterClient(transport, sync_workers=1), manual,
-                      routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True)
-    judges = FakeTransport([_judge_batch((False, False, False, False))])
-    resumed = collect_study(study, output, OpenRouterClient(judges), manual,
-                            routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True)
-    assert resumed.trace_cache_hits == 2
-    assert len(judges.post_calls) == 1
-    assert judges.post_calls[0][0] == "/api/beta/batches"
-    assert not any(observation.completed for observation in resumed.observations)
+    transport = FakeTransport([_message_qa_batch(2), _chat("", "empty"),
+                               *_assistant_responses(2), _judge_batch((True, False, False, True))])
+    result = collect_study(study, output, OpenRouterClient(transport, sync_workers=1), manual,
+                           routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True)
+    assert transport.post_calls[1] == transport.post_calls[2]
+    assert len(transport.post_calls) == 5
     warm = collect_study(study, output, None, manual,
                          routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True)
-    assert warm.observations == resumed.observations
-    assert warm.judgment_cache_hits == 2
+    assert warm.observations == result.observations
+    assert warm.trace_cache_hits == warm.judgment_cache_hits == 2
+    for trace in SqliteStudyCache(output / "collection.sqlite3").load_traces(result.trials).values():
+        assert trace.response["id"] != "empty"
 
 
 def test_collect_study_preserves_distinct_verdicts_for_identical_rollout_traces(
