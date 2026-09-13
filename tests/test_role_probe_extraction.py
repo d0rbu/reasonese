@@ -1,3 +1,4 @@
+# ruff: noqa: I001
 """Role-probe native dataset and prefix-extraction contracts."""
 
 from __future__ import annotations
@@ -485,9 +486,9 @@ def test_prefix_checkpoint_identity_is_recomputed(tmp_path: Path) -> None:
 def test_nemotron_kernel_revisions_load_exact_offline_snapshots(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    import kernels  # ty: ignore[unresolved-import, unused-ignore-comment]
-    from huggingface_hub import constants  # ty: ignore[unresolved-import, unused-ignore-comment]
-    from transformers.integrations import hub_kernels  # ty: ignore[unresolved-import, unused-ignore-comment]
+    kernels = pytest.importorskip("kernels")
+    constants = pytest.importorskip("huggingface_hub.constants")
+    hub_kernels = pytest.importorskip("transformers.integrations.hub_kernels")
 
     module_mapping: dict[str, ModuleType | None] = {}
     hub_mapping: dict[str, dict[str, str]] = {}
@@ -517,11 +518,11 @@ def test_nemotron_kernel_revisions_load_exact_offline_snapshots(
 def test_loaded_native_prefix_exactly_matches_full_model(tmp_path: Path) -> None:
     torch = pytest.importorskip("torch")
     try:
-        from safetensors.torch import save_file  # ty: ignore[unresolved-import, unused-ignore-comment]
-        from transformers.models.nemotron_h.configuration_nemotron_h import (  # ty: ignore[unresolved-import, unused-ignore-comment]
+        from safetensors.torch import save_file  # ty: ignore[unresolved-import]
+        from transformers.models.nemotron_h.configuration_nemotron_h import (  # ty: ignore[unresolved-import]
             NemotronHConfig,
         )
-        from transformers.models.nemotron_h.modeling_nemotron_h import (  # ty: ignore[unresolved-import, unused-ignore-comment]
+        from transformers.models.nemotron_h.modeling_nemotron_h import (  # ty: ignore[unresolved-import]
             NemotronHModel,
         )
     except ImportError:
@@ -539,7 +540,7 @@ def test_loaded_native_prefix_exactly_matches_full_model(tmp_path: Path) -> None
         architectures=["NemotronHForCausalLM"],
     )
     config.save_pretrained(tmp_path)
-    full = NemotronHModel(config).to(dtype=torch.bfloat16).eval()  # ty: ignore[missing-argument]
+    full = NemotronHModel(config).to(dtype=torch.bfloat16).eval()
     source = {
         f"backbone.{name}": value.detach().cpu()
         for name, value in full.state_dict().items()
@@ -583,12 +584,12 @@ def test_loader_preserves_model_declared_fp32_buffer(
 ) -> None:
     torch = pytest.importorskip("torch")
     try:
-        import accelerate  # ty: ignore[unresolved-import, unused-ignore-comment]
-        from safetensors.torch import save_file  # ty: ignore[unresolved-import, unused-ignore-comment]
-        from transformers.models.nemotron_h.configuration_nemotron_h import (  # ty: ignore[unresolved-import, unused-ignore-comment]
+        import accelerate  # ty: ignore[unresolved-import]
+        from safetensors.torch import save_file  # ty: ignore[unresolved-import]
+        from transformers.models.nemotron_h.configuration_nemotron_h import (  # ty: ignore[unresolved-import]
             NemotronHConfig,
         )
-        from transformers.models.nemotron_h.modeling_nemotron_h import (  # ty: ignore[unresolved-import, unused-ignore-comment]
+        from transformers.models.nemotron_h.modeling_nemotron_h import (  # ty: ignore[unresolved-import]
             NemotronHModel,
         )
     except ImportError:
@@ -613,7 +614,7 @@ def test_loader_preserves_model_declared_fp32_buffer(
         architectures=["NemotronHForCausalLM"],
     )
     config.save_pretrained(tmp_path)
-    full = NemotronHModel(config).to(dtype=torch.bfloat16).eval()  # ty: ignore[missing-argument]
+    full = NemotronHModel(config).to(dtype=torch.bfloat16).eval()
     gate = full.layers[0].mixer.gate
     gate.e_score_correction_bias = torch.tensor([0.25012345, -0.50023456, 0.75034567, -1.0004568])
 
@@ -964,16 +965,16 @@ def test_prefix_capture_equals_full_forward_and_stops_tail(
 def test_native_prefix_batch_matches_unbatched() -> None:
     pytest.importorskip("torch")
     try:
-        from transformers.models.gemma4.configuration_gemma4 import (  # ty: ignore[unresolved-import, unused-ignore-comment]
+        from transformers.models.gemma4.configuration_gemma4 import (  # ty: ignore[unresolved-import]
             Gemma4TextConfig,
         )
-        from transformers.models.gemma4.modeling_gemma4 import (  # ty: ignore[unresolved-import, unused-ignore-comment]
+        from transformers.models.gemma4.modeling_gemma4 import (  # ty: ignore[unresolved-import]
             Gemma4TextModel,
         )
-        from transformers.models.nemotron_h.configuration_nemotron_h import (  # ty: ignore[unresolved-import, unused-ignore-comment]
+        from transformers.models.nemotron_h.configuration_nemotron_h import (  # ty: ignore[unresolved-import]
             NemotronHConfig,
         )
-        from transformers.models.nemotron_h.modeling_nemotron_h import (  # ty: ignore[unresolved-import, unused-ignore-comment]
+        from transformers.models.nemotron_h.modeling_nemotron_h import (  # ty: ignore[unresolved-import]
             NemotronHModel,
         )
     except ImportError:
@@ -984,7 +985,7 @@ def test_native_prefix_batch_matches_unbatched() -> None:
                 NemotronHConfig(
                     vocab_size=64,
                     hidden_size=32,
-                    num_hidden_layers=3,  # ty: ignore[unknown-argument]
+                    num_hidden_layers=3,
                     layers_block_type=["attention"] * 3,
                     num_attention_heads=4,
                     num_key_value_heads=2,

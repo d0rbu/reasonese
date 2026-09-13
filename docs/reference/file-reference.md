@@ -37,6 +37,9 @@
 | `reasonese/role_probes.py` | Grouped activation-role probe training, qualification, scoring, and portable artifacts |
 | `reasonese/role_probe_extraction.py` | Exact native role rendering, prefix-only model loading, activation capture, and dataset artifacts |
 | `reasonese/extract_role_activations.py` | Local BF16 role-activation extraction utility |
+| `reasonese/probe_rendering.py` | Exact native-template rendering and measured-span recovery for probe scoring |
+| `reasonese/native_probe_activations.py` | Untouched native-dialogue extraction and checksummed activation artifacts |
+| `reasonese/manage_role_probe.py` | Frozen two-stage probe training and qualification utility |
 | `tests/test_role_probe_extraction.py` | Native-template controls, prefix equivalence, batching, and artifact contracts |
 | `docs/reference/role-probes.md` | Role-probe method, provenance, validity gates, and scientific limits |
 | `reasonese/message_qa_cache.py` | Exact-text-keyed readable QA cache |

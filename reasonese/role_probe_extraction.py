@@ -1,3 +1,4 @@
+# ruff: noqa: I001
 """Native-template datasets and activation extraction for reasoning-role probes.
 
 The construction follows Appendix G of *Prompt Injection as Role Confusion*: the
@@ -404,9 +405,9 @@ def _expert_index(checkpoint_key: str) -> int:
 def _pin_nemotron_kernel_revisions() -> None:
     """Replace moving kernel version aliases with exact, audited snapshot revisions."""
     try:
-        from huggingface_hub.constants import HF_HUB_CACHE  # ty: ignore[unresolved-import, unused-ignore-comment]
-        from kernels import get_local_kernel  # ty: ignore[unresolved-import, unused-ignore-comment]
-        from transformers.integrations.hub_kernels import (  # ty: ignore[unresolved-import, unused-ignore-comment]
+        from huggingface_hub.constants import HF_HUB_CACHE  # ty: ignore[unresolved-import]
+        from kernels import get_local_kernel  # ty: ignore[unresolved-import]
+        from transformers.integrations.hub_kernels import (  # ty: ignore[unresolved-import]
             _HUB_KERNEL_MAPPING,
             _KERNEL_MODULE_MAPPING,
         )
@@ -440,12 +441,12 @@ def load_prefix_model(
     """Load a BF16 backbone only through the last requested probe site, then CPU-offload it."""
     torch = _torch_runtime()
     try:
-        from accelerate import cpu_offload, init_empty_weights  # ty: ignore[unresolved-import, unused-ignore-comment]
-        from accelerate.utils import (  # ty: ignore[unresolved-import, unused-ignore-comment]
+        from accelerate import cpu_offload, init_empty_weights  # ty: ignore[unresolved-import]
+        from accelerate.utils import (  # ty: ignore[unresolved-import]
             set_module_tensor_to_device,
         )
-        from safetensors import safe_open  # ty: ignore[unresolved-import, unused-ignore-comment]
-        from transformers import AutoConfig, AutoModel  # ty: ignore[unresolved-import, unused-ignore-comment]
+        from safetensors import safe_open  # ty: ignore[unresolved-import]
+        from transformers import AutoConfig, AutoModel  # ty: ignore[unresolved-import]
     except ImportError as error:  # pragma: no cover - exercised by minimal installations
         raise RuntimeError("prefix model loading requires the 'probes' extra") from error
 
@@ -1067,7 +1068,7 @@ class _PrefixComplete(RuntimeError):
 
 def _torch_runtime() -> Any:
     try:
-        import torch  # ty: ignore[unresolved-import, unused-ignore-comment]
+        import torch  # ty: ignore[unresolved-import]
     except ImportError as error:  # pragma: no cover - exercised by minimal installations
         raise RuntimeError("role-probe extraction requires the 'probes' extra") from error
     return torch
@@ -1320,7 +1321,7 @@ def model_runtime_identity(
     """Fingerprint the exact local numerical runtime used for activation extraction."""
     torch = _torch_runtime()
     try:
-        import transformers  # ty: ignore[unresolved-import, unused-ignore-comment]
+        import transformers  # ty: ignore[unresolved-import]
     except ImportError as error:  # pragma: no cover - exercised by minimal installations
         raise RuntimeError("runtime identity requires the 'probes' extra") from error
     modeling_module = sys.modules.get(model.__class__.__module__)
@@ -1682,7 +1683,7 @@ def load_activation_dataset(path: Path) -> ActivationDataset:
 def _cuda_runtime() -> Any | None:
     """Return CUDA-enabled torch when available without making extraction depend on it."""
     try:
-        import torch  # ty: ignore[unresolved-import, unused-ignore-comment]
+        import torch  # ty: ignore[unresolved-import]
     except ImportError:  # pragma: no cover - ordinary extraction installs the probes extra
         return None
     return torch if torch.cuda.is_available() else None

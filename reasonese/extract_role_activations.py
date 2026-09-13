@@ -95,9 +95,9 @@ def main(argv: list[str] | None = None) -> None:
     validate_prefix_checkpoint_identity(args.checkpoint, checkpoint_manifest)
 
     try:
-        import torch
-        import transformers
-        from transformers import AutoTokenizer
+        import torch  # ty: ignore[unresolved-import]
+        import transformers  # ty: ignore[unresolved-import]
+        from transformers import AutoTokenizer  # ty: ignore[unresolved-import]
     except ImportError as error:  # pragma: no cover - exercised by minimal installations
         raise RuntimeError("role-probe extraction requires the 'probes' extra") from error
     tokenizer = AutoTokenizer.from_pretrained(args.checkpoint, local_files_only=True, use_fast=True)

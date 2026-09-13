@@ -146,3 +146,49 @@ This command creates an activation dataset; it does not qualify a probe. The 16-
 is a systems smoke and is smaller and less diverse than Appendix G. Local Nemotron BF16 weights
 also differ from the NVFP4 checkpoint served by its OpenRouter free route, so results from the
 local instrument must not be described as hosted-activation parity.
+
+## Training and native qualification
+
+The frozen workflow has separate training and qualification stages so a held-out neutral result
+can be saved without being mistaken for a QA-eligible probe:
+
+```bash
+uv run reasonese-role-probe train \
+  --adapter nemotron-3.5-lightning-native-v1 \
+  --activations out/role-probe-research/nemotron-neutral-activations \
+  --protocol out/role-probe-research/protocol.json \
+  --output out/role-probe-research/nemotron-neutral-probe.npz
+```
+
+`extract-native` replays exactly one of the 12-conversation frozen partitions. It reads all raw
+dialogue files but selects only records assigned to the requested partition, verifies the original
+request fields, and stores content-token activations without copying prompt, reasoning, or final
+text into the activation artifact. It requires the exact prefix checkpoint and pinned layer:
+
+```bash
+uv run reasonese-role-probe extract-native \
+  --adapter nemotron-3.5-lightning-native-v1 \
+  --checkpoint out/role-probe-research/prefix-nemotron \
+  --dialogue-dir out/role-probe-research \
+  --dialogue-glob 'native-0-*.json' \
+  --prompt-partitions out/role-probe-research/native-prompt-partitions.json \
+  --protocol out/role-probe-research/protocol.json \
+  --split calibration \
+  --layer 26 \
+  --output out/role-probe-research/nemotron-native-calibration
+```
+
+After extracting calibration and test partitions independently, `qualify` calibrates on the first,
+evaluates the frozen test once, binds both activation fingerprints and the prompt-partition digest,
+and writes a new artifact. The output is QA-eligible only when every preregistered neutral and native
+gate passes:
+
+```bash
+uv run reasonese-role-probe qualify \
+  --probe out/role-probe-research/nemotron-neutral-probe.npz \
+  --calibration out/role-probe-research/nemotron-native-calibration \
+  --test out/role-probe-research/nemotron-native-test \
+  --prompt-partitions out/role-probe-research/native-prompt-partitions.json \
+  --protocol out/role-probe-research/protocol.json \
+  --output out/role-probe-research/nemotron-qualified-probe.npz
+```
