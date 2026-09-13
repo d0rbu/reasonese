@@ -16,6 +16,7 @@ import numpy as np
 from beartype import beartype
 
 from reasonese.axes import Assistant
+from reasonese.openrouter import validate_completion
 from reasonese.probe_rendering import render_native_dialogue_context
 from reasonese.role_probe_extraction import (
     EXTRACTION_PROTOCOL,
@@ -136,9 +137,28 @@ def load_native_dialogues(
             raise ValueError("invalid native prompt partition record")
         record = cast(dict[str, Any], raw)
         source_id = record["source_id"]
-        if not isinstance(source_id, str) or source_id in partitions:
+        if (
+            not isinstance(source_id, str)
+            or source_id in partitions
+            or not isinstance(record["index"], int)
+            or isinstance(record["index"], bool)
+            or record["split"] not in {"calibration", "test"}
+            or not isinstance(record["normalized_prompt_sha256"], str)
+        ):
             raise ValueError("native prompt partition IDs must be distinct strings")
+        normalized_digest = record["normalized_prompt_sha256"]
+        if len(normalized_digest) != 64 or any(
+            character not in "0123456789abcdef" for character in normalized_digest
+        ):
+            raise ValueError("native prompt partition contains an invalid prompt digest")
         partitions[source_id] = record
+    if (
+        len(partitions) != 24
+        or {record["index"] for record in partitions.values()} != set(range(24))
+        or sum(record["split"] == "calibration" for record in partitions.values()) != 12
+        or sum(record["split"] == "test" for record in partitions.values()) != 12
+    ):
+        raise ValueError("native prompt partition must contain the frozen 12/12 assignment")
 
     dialogues: list[NativeDialogue] = []
     for path in paths:
@@ -175,6 +195,12 @@ def load_native_dialogues(
             continue
         if not isinstance(prompt_text, str):
             raise ValueError(f"native dialogue prompt text is invalid: {path}")
+        normalized_prompt = " ".join(prompt_text.lower().split())
+        if (
+            hashlib.sha256(normalized_prompt.encode()).hexdigest()
+            != partition["normalized_prompt_sha256"]
+        ):
+            raise ValueError(f"native dialogue prompt text differs from its partition: {path}")
         document_id = cast(str, document_id)
         expected_request = {
             "messages": [{"role": "user", "content": prompt_text}],
@@ -183,6 +209,7 @@ def load_native_dialogues(
         }
         if request != expected_request:
             raise ValueError(f"native dialogue request does not match frozen protocol: {path}")
+        validate_completion(response)
         route = record["route"]
         prompt_source = prompt.get("source")
         prompt_revision = prompt.get("revision")

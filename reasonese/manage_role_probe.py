@@ -74,6 +74,20 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _partition_document_ids(path: Path, split: str) -> set[str]:
+    records = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(records, list):
+        raise ValueError("native prompt partitions must be a list")
+    try:
+        return {
+            record["source_id"]
+            for record in records
+            if isinstance(record, dict) and record["split"] == split
+        }
+    except (KeyError, TypeError) as error:
+        raise ValueError("invalid native prompt partition record") from error
+
+
 def _protocol_training_config(protocol: dict[str, Any], adapter_name: str) -> ProbeTrainingConfig:
     try:
         model = protocol["models"][_ADAPTER_PROTOCOL_KEYS[adapter_name]]
@@ -176,13 +190,21 @@ def _train(args: argparse.Namespace) -> None:
 def _qualify(args: argparse.Namespace) -> None:
     protocol = _json_object(args.protocol)
     probe = load_role_probe(args.probe)
-    _validate_frozen_protocol(protocol, probe.provenance.native_template_adapter)
+    frozen_config = _validate_frozen_protocol(protocol, probe.provenance.native_template_adapter)
+    if probe.training != frozen_config:
+        raise ValueError("probe training configuration does not match the frozen protocol")
     if probe.qualification is not None:
         raise ValueError("input probe is already qualified")
+    calibration = load_native_activation_dataset(args.calibration)
+    test = load_native_activation_dataset(args.test)
+    if set(calibration.document_ids.tolist()) != _partition_document_ids(
+        args.prompt_partitions, "calibration"
+    ) or set(test.document_ids.tolist()) != _partition_document_ids(args.prompt_partitions, "test"):
+        raise ValueError("native activation documents do not match the prompt partitions")
     qualified = qualify_role_probe(
         probe,
-        load_native_activation_dataset(args.calibration),
-        load_native_activation_dataset(args.test),
+        calibration,
+        test,
         prompt_partition_name=args.prompt_partitions.name,
         prompt_partition_sha256=_sha256(args.prompt_partitions),
     )
@@ -206,7 +228,9 @@ def _qualify(args: argparse.Namespace) -> None:
 
 def _extract_native(args: argparse.Namespace) -> None:
     adapter = NATIVE_ADAPTERS[args.adapter]
-    _validate_frozen_protocol(_json_object(args.protocol), adapter.name)
+    frozen_config = _validate_frozen_protocol(_json_object(args.protocol), adapter.name)
+    if args.layer != frozen_config.layer_index:
+        raise ValueError("native extraction layer does not match the frozen protocol")
     assistant = _ADAPTER_ASSISTANTS[adapter.name]
     checkpoint_manifest = _json_object(args.checkpoint / "prefix-checkpoint-manifest.json")
     for key, expected in {

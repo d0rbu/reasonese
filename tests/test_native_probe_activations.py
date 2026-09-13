@@ -20,6 +20,7 @@ from reasonese.native_probe_activations import (
 )
 from reasonese.role_probe_extraction import ExtractionIdentity
 from reasonese.role_probes import activation_dataset_fingerprint
+from reasonese.scheduling import ProviderRequestError
 from tests.test_probe_rendering import _tokenizer_and_adapter
 
 
@@ -74,7 +75,9 @@ def _write_dialogue_sources(tmp_path: Path) -> tuple[tuple[Path, ...], Path]:
             {
                 "index": index,
                 "source_id": source_id,
-                "normalized_prompt_sha256": f"{index + 1:064x}",
+                "normalized_prompt_sha256": hashlib.sha256(
+                    " ".join(text.lower().split()).encode()
+                ).hexdigest(),
                 "split": split,
             }
         )
@@ -97,14 +100,16 @@ def _write_dialogue_sources(tmp_path: Path) -> tuple[tuple[Path, ...], Path]:
                         "reasoning": {"enabled": True, "exclude": False},
                     },
                     "response": {
+                        "id": f"response-{index}",
                         "model": "nvidia/nemotron-3.5-lightning:free",
                         "provider": "Nvidia",
                         "choices": [
                             {
+                                "finish_reason": "stop",
                                 "message": {
                                     "reasoning": f"Reasoning {index}\n",
                                     "content": f"Final {index}",
-                                }
+                                },
                             }
                         ],
                     },
@@ -140,6 +145,35 @@ def test_native_dialogue_loader_rejects_changed_request(tmp_path: Path) -> None:
     changed["request"]["temperature"] = 0
     paths[0].write_text(json.dumps(changed), encoding="utf-8")
     with pytest.raises(ValueError, match="request does not match frozen protocol"):
+        load_native_dialogues(
+            paths,
+            assistant=Assistant.NEMOTRON_3_5_LIGHTNING,
+            split="calibration",
+            prompt_partitions=partitions,
+        )
+
+
+def test_native_dialogue_loader_rejects_changed_prompt_and_provider_error(
+    tmp_path: Path,
+) -> None:
+    paths, partitions = _write_dialogue_sources(tmp_path)
+    changed = json.loads(paths[0].read_text(encoding="utf-8"))
+    changed["prompt"]["text"] += " changed"
+    changed["request"]["messages"][0]["content"] += " changed"
+    paths[0].write_text(json.dumps(changed), encoding="utf-8")
+    with pytest.raises(ValueError, match="prompt text differs"):
+        load_native_dialogues(
+            paths,
+            assistant=Assistant.NEMOTRON_3_5_LIGHTNING,
+            split="calibration",
+            prompt_partitions=partitions,
+        )
+
+    paths, partitions = _write_dialogue_sources(tmp_path)
+    failed = json.loads(paths[0].read_text(encoding="utf-8"))
+    failed["response"]["choices"][0]["finish_reason"] = "error"
+    paths[0].write_text(json.dumps(failed), encoding="utf-8")
+    with pytest.raises(ProviderRequestError, match="finish reason is error"):
         load_native_dialogues(
             paths,
             assistant=Assistant.NEMOTRON_3_5_LIGHTNING,
