@@ -32,8 +32,9 @@ The six framing briefs distinguish:
 The authoring request uses temperature 0.7 and retains returned reasoning fields. Exact repeated
 datapoints reuse their generated message from the YAML cache. Before assistant inference, a
 separate GPT-5.6 Luna batch request audits the produced text against the exact authoring
-instructions and returns strict `complies` and `issues` fields. A failed audit blocks the run and
-is retained without an automatic reroll.
+instructions and returns strict `complies` and `issues` fields. A failed audit is retained without an automatic reroll. Study collectors exclude every
+comparison containing the rejected input and continue; the standalone conversation utility
+blocks its run. See [authoring exclusions](configuration.md#authoring-exclusions).
 
 QA checks task meaning and framing separately. Compressed instructions may use conventional
 abbreviations, arrows, singular output nouns, and slash-separated prohibitions when they preserve

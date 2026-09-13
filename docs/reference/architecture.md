@@ -72,7 +72,9 @@ response are retained so reasoning and provider metadata are not discarded.
 
 Message QA uses GPT-5.6 Luna batch with medium reasoning and a strict `{complies, issues}` schema.
 It quotes the exact output of `authoring_instructions(spec)` and the candidate as data. A false
-verdict blocks assistant inference but never triggers automatic regeneration. Exact content
+verdict prevents assistant inference for that input but never triggers automatic regeneration.
+Study collectors exclude each entire comparison containing a rejected input and continue with
+the remaining comparisons; the standalone conversation utility still fails closed. Exact content
 changes invalidate the verdict. This is an LLM quality-control judgment, not a proof of semantic
 equivalence.
 
@@ -130,6 +132,9 @@ study -> both input orderings x rollouts -> traces -> judgments -> observation r
 
 - `reasonese.study` defines a cell, a strongly typed input pair, and stable ordering/rollout
   trials. Its two distinct inputs produce exactly two validated matchups, reused by every rollout.
+- `reasonese.authoring_report` describes unique QA input failures and the planned comparison
+  graph, including excluded edges, original cell/trial IDs, and marginal axis counts. It does
+  not modify observation schemas or fit an analysis model.
 - `reasonese.collect_data` concurrently advances every assistant tool loop as responses arrive,
   flattens uncached judge requests into one batch, and resumes at trial granularity. Completion
   callbacks retain successful traces; a final bulk transaction saves them even if a peer fails.

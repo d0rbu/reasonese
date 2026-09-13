@@ -41,6 +41,8 @@
 | `reasonese/judgment_cache.py` | Trace-keyed readable judgment cache |
 | `reasonese/study.py` | Cell, study, and permutation/rollout trial types |
 | `reasonese/observations.py` | Flat analysis-ready observation records |
+| `reasonese/authoring_report.py` | Unique-input QA failures, excluded comparison graph, and axis denominators |
+| `tests/test_authoring_exclusions.py` | Exclusion accounting, whole-comparison filtering, cache replay, CLI, and retained-output parity |
 | `reasonese/collect_data.py` | Resumable study collector and utility |
 | `reasonese/collect_studies.py` | Cross-study batched collection utility |
 | `reasonese/sample_studies.py` | Sampled study-suite planning utility |

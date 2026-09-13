@@ -119,8 +119,12 @@ repeated directory scans while ensuring edits are picked up on the next run.
 
 Before a new conversation is sent to its experimental assistant, `openai/gpt-5.6-luna:batch`
 independently checks every exact materialized message against the same authoring instructions
-derived from its datapoint. It returns a strict `complies` boolean plus concrete issues. Any false
-verdict stops the run without regenerating or selecting a replacement. Raw QA responses are
+derived from its datapoint. It returns a strict `complies` boolean plus concrete issues. In study collection, a false
+verdict excludes every comparison containing that input, including both orders and all rollouts;
+other comparisons continue. The collector logs exclusions and writes `authoring_report.json`
+with unique-input failures and comparison/trial attrition by axis. Excluded comparisons produce
+no assistant outcomes. There is no automatic regeneration or replacement. The standalone
+one-conversation utility still stops on failed QA. Raw QA responses are
 cached in `out/message_qa.yaml`; `reasonese-check-messages` exposes the same audit as a separate
 nonzero-exit utility.
 

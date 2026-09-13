@@ -136,8 +136,10 @@ not a `:batch` slug sent to the synchronous endpoint.
 paid authoring, message QA, response judgments, and assistant requests that expose chargeable
 server-side web search. Thus even a cold collection using free model routes needs this opt-in:
 free token pricing is not free end-to-end collection. The harness does not remove tools or skip
-QA to avoid charges. Missing assistant work is rejected before authoring starts. A completely
-warm cache still runs without an API key or paid permission; missing QA or judgments require it.
+QA to avoid charges. Cold model authoring in collection is rejected before provider calls.
+Cached authored messages and QA rejections can be inspected and excluded without an API key or
+paid permission, even when those comparisons have never run. Any remaining uncached assistant
+work, QA, or judgments still requires permission and a key.
 Standalone curation, message-checking, and response-judging commands retain their existing
 explicit paid-provider behavior; this flag governs the three collection commands.
 
@@ -234,3 +236,60 @@ Limits are local to one client invocation, not shared across processes, clients,
 They cannot override provider-wide or account-wide quotas. Offline tests establish scheduling
 and retry behavior only; actual throughput and suitable concurrency ceilings require a
 separately authorized live measurement.
+
+
+## Authoring exclusions
+
+`reasonese-collect-data` and `reasonese-collect-studies` exclude a whole planned comparison
+when either exact materialized input has `complies: false` from message QA. Both input orders
+and every rollout are excluded together. Other comparisons continue. The collector does not
+regenerate, hand-repair, replace edges, or encode the missing trials as false assistant outcomes.
+This applies to model-authored and manual inputs alike. The standalone conversation and
+message-checking commands retain their fail-closed behavior.
+
+Only a valid negative QA verdict causes this exclusion. Provider failures (including empty
+content and server-tool errors) retain bounded retries and error propagation. Malformed QA,
+missing credentials, missing paid permission, and invalid configuration remain errors, not
+scientific evidence of author noncompliance. No instruction-writing retry loop is added.
+
+The collector writes `authoring_report.json` beside the shared generated-message cache before
+assistant collection, including when every comparison is excluded. The report is a snapshot
+of the tasks supplied in that invocation, not an accumulated retry or chunk history. For custom
+chunked launchers, preserve each chunk's report and combine unique input coordinates and study
+IDs rather than summing duplicated inputs. The old local pilot regeneration preflight must be
+removed when adopting this collector policy; this PR does not restart that pilot.
+
+| Report field | Counting unit / interpretation |
+|---|---|
+| `counts.unique_inputs`, `failed_inputs` | Distinct full input coordinates, counted once across shared comparisons and assistants; failed means a negative exact-text QA verdict. |
+| `counts.planned_comparisons`, `excluded_comparisons` | Studies, counted once even if both endpoints fail. |
+| `counts.planned_trials`, `excluded_trials` | Both orders multiplied by rollouts, preserving each study's requested replication. |
+| `inputs_by_axis` | Input denominators and failures by author model, framing, channel, and base instruction. |
+| `comparisons_by_axis` | Planned/excluded comparisons and trials by assistant model and by every distinct author/framing/channel/instruction present on either endpoint. A comparison appears once per distinct value; these marginals overlap across values. |
+| `inputs` | One row per unique input with all four coordinates, exact text, QA verdict, issues, and QA response ID. Enables joint-axis breakdowns without losing denominators. |
+| `comparisons` | Every planned study's existing `study_id`, assistant, input coordinates, `cell_ids`, `trial_ids`, exclusion flag/reason, and zero-based `failed_input_indices`. |
+
+A passing input can lose comparisons because its partner failed. Therefore marginal excluded
+comparison counts measure exposure to exclusions; only `failed_inputs` attributes QA failures
+to the author/framing/channel of the rejected text. Author model and evaluated assistant model
+are deliberately separate. Base instruction remains a blocking factor, not a treatment axis.
+
+Stderr logs each distinct failed input with coordinates and issues, plus aggregate counts and
+the report path. Both collector CLIs include excluded comparison/trial counts and the report
+path in their JSON summary. A completed collection with all comparisons excluded returns exit
+code zero with zero trials/observations and explicit nonzero exclusion counts. It is not a
+successful assistant experiment. Do not run analysis on an empty observation file.
+
+Exclusion reports are written before assistant work so they survive a later provider error.
+Rejected comparisons' per-study observations are cleared and a previous aggregate observation
+file is removed; the suite CLI rebuilds the aggregate after successful collection. Raw authored
+messages, QA responses, traces, and judgments are preserved. Replaying the same cache reproduces
+the exclusions without new calls. Changing input text requires matching new QA before it can be
+included. Reports describe the current audit, not historical regeneration attempts.
+
+`observations.jsonl` retains its existing schema and stable cell/trial IDs for retained edges.
+The planned graph in the report can be joined to those IDs by a BT-Lasso implementation without
+changes to the estimator in this PR. Exclusions can disconnect the graph or leave cells entirely
+unobserved; rankings concern the retained, QA-selected sample. Regularization alone does not
+establish that excluded cells are comparable or remove selection effects. Assistant execution
+failures that yield valid response judgments remain observed outcomes under the existing policy.
