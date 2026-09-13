@@ -134,6 +134,16 @@ def test_request_builder_rejects_wrong_ordered_contexts() -> None:
         probe_qa_requests(study, (requests[2].setup, requests[0].setup))
 
 
+def test_probe_request_rejects_invalid_coordinates_and_empty_study_identity() -> None:
+    _, requests = _requests()
+    with pytest.raises(ValueError, match="permutation and position"):
+        replace(requests[0], permutation=0)
+    with pytest.raises(ValueError, match="permutation and position"):
+        replace(requests[0], position=3)
+    with pytest.raises(ValueError, match="study_id must not be empty"):
+        replace(requests[0], study_id="")
+
+
 def test_verdict_requires_normalized_probabilities_and_framing_policy() -> None:
     _, requests = _requests()
     valid = _verdict(requests[0])
@@ -151,6 +161,32 @@ def test_verdict_requires_normalized_probabilities_and_framing_policy() -> None:
         replace(valid, expectation=ProbeExpectation.NONREASONING)
     with pytest.raises(ValueError, match="issue"):
         replace(valid, complies=False)
+
+
+@pytest.mark.parametrize(
+    ("changes", "message"),
+    [
+        ({"context_fingerprint": ""}, "fingerprint must not be empty"),
+        ({"masked_boundary_tokens": -1}, "must be non-negative"),
+        (
+            {"role_probabilities": (("reasoning", 0.5), ("reasoning", 0.5))},
+            "distinct role probability space",
+        ),
+        (
+            {"role_probabilities": (("reasoning", 1.1), ("assistant", -0.1))},
+            "between zero and one",
+        ),
+        ({"reasoning_probability": float("nan")}, "reasoning_probability must be finite"),
+        ({"complies": None}, "coherent decision"),
+        ({"complies": True, "issue": "unexpected"}, "coherent decision"),
+    ],
+)
+def test_probe_verdict_rejects_malformed_measurement_and_decision_fields(
+    changes: dict[str, object], message: str
+) -> None:
+    _, requests = _requests()
+    with pytest.raises(ValueError, match=message):
+        replace(_verdict(requests[0]), **changes)
 
 
 def test_compressed_scores_are_descriptive_and_cannot_exclude() -> None:
@@ -184,6 +220,17 @@ def test_scorer_results_are_realigned_and_must_be_complete() -> None:
 
     with pytest.raises(ValueError, match="one verdict per request"):
         check_probe_qa(MissingScorer(), requests)
+
+    class DuplicateScorer:
+        def preflight(self, assistants: tuple[Assistant, ...]) -> None:
+            pass
+
+        def check(self, requests: tuple[ProbeQaRequest, ...]) -> tuple[ProbeQaVerdict, ...]:
+            verdicts = tuple(_verdict(row) for row in requests)
+            return verdicts[:-1] + (verdicts[0],)
+
+    with pytest.raises(ValueError, match="duplicated or unexpected"):
+        check_probe_qa(DuplicateScorer(), requests)
 
 
 def test_report_counts_order_and_axis_failures_and_excludes_whole_comparison() -> None:
@@ -235,3 +282,20 @@ def test_report_rejects_duplicate_requests_even_when_four_rows_are_supplied() ->
     duplicate = _verdict(requests[0])
     with pytest.raises(ValueError, match="four distinct requests"):
         probe_qa_report((study,), (duplicate,) * 4)
+
+
+def test_report_rejects_unknown_studies_reused_fingerprints_and_split_setups() -> None:
+    study, requests = _requests()
+    verdicts = tuple(_verdict(request) for request in requests)
+    unknown = replace(verdicts[0], request=replace(requests[0], study_id="unknown"))
+    with pytest.raises(ValueError, match="unknown study"):
+        probe_qa_report((study,), (unknown,) + verdicts[1:])
+
+    reused = replace(verdicts[1], context_fingerprint=verdicts[0].context_fingerprint)
+    with pytest.raises(ValueError, match="distinct fingerprint"):
+        probe_qa_report((study,), (verdicts[0], reused) + verdicts[2:])
+
+    mismatched_request = replace(requests[1], setup=requests[2].setup)
+    mismatched = _verdict(mismatched_request)
+    with pytest.raises(ValueError, match="one setup per permutation"):
+        probe_qa_report((study,), (verdicts[0], mismatched) + verdicts[2:])
