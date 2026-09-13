@@ -332,6 +332,15 @@ def test_training_rejects_nonfinite_optimizer_tolerance(tolerance: float) -> Non
         replace(_training_config(), tolerance=tolerance)
 
 
+def test_training_config_requires_canonical_candidates_and_valid_split() -> None:
+    with pytest.raises(ValueError, match="increasing distinct"):
+        replace(_training_config(), layer_indices=(7, 3))
+    with pytest.raises(ValueError, match="lambda_grid must be increasing"):
+        replace(_training_config(), lambda_grid=(0.1, 0.01))
+    with pytest.raises(ValueError, match="split fractions"):
+        replace(_training_config(), train_fraction=0.9, validation_fraction=0.1)
+
+
 def test_multinomial_training_preserves_explicit_role_order() -> None:
     roles = ("reasoning", "assistant", "tool")
     bundle = train_role_probe(

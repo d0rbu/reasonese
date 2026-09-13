@@ -355,8 +355,9 @@ class ProbeTrainingConfig:
             not self.layer_indices
             or min(self.layer_indices) < 0
             or len(set(self.layer_indices)) != len(self.layer_indices)
+            or self.layer_indices != tuple(sorted(self.layer_indices))
         ):
-            raise ValueError("layer_indices must contain distinct non-negative layers")
+            raise ValueError("layer_indices must contain increasing distinct non-negative layers")
         if self.expected_document_count is not None and self.expected_document_count < 3:
             raise ValueError("expected_document_count must be at least three")
         if (
@@ -382,6 +383,15 @@ class ProbeTrainingConfig:
             raise ValueError("lambda_grid must contain distinct finite positive values")
         if len(set(self.lambda_grid)) != len(self.lambda_grid):
             raise ValueError("lambda_grid must not contain duplicates")
+        if self.lambda_grid != tuple(sorted(self.lambda_grid)):
+            raise ValueError("lambda_grid must be increasing")
+        fractions = (
+            self.train_fraction,
+            self.validation_fraction,
+            1 - self.train_fraction - self.validation_fraction,
+        )
+        if any(not math.isfinite(value) or value <= 0 for value in fractions):
+            raise ValueError("training split fractions must be finite and positive")
         if self.max_iterations <= 0 or self.tolerance <= 0 or not math.isfinite(self.tolerance):
             raise ValueError("optimizer limits must be positive")
 
