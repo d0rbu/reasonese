@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import ctypes
 import json
 import os
 from dataclasses import replace
 from math import inf, nan
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import numpy as np
 import pytest
@@ -554,20 +556,29 @@ def test_sklearn_probe_does_not_regularize_class_imbalance_intercept() -> None:
 
 
 @pytest.mark.parametrize(
-    ("solver_message", "expected_iterations", "free_bytes", "nonfinite", "error"),
     (
-        ("", 0, 8 * 1024**3, False, None),
-        ("", 5_000, 8 * 1024**3, False, None),
+        "solver_message",
+        "expected_iterations",
+        "free_bytes",
+        "nonfinite",
+        "invalid_device_dtype",
+        "error",
+    ),
+    (
+        ("", 0, 8 * 1024**3, False, False, None),
+        ("", 5_000, 8 * 1024**3, False, False, None),
         (
             "L-BFGS: max iterations reached",
             5_000,
             8 * 1024**3,
             False,
+            False,
             "reported a fitting failure",
         ),
-        ("", 5_001, 8 * 1024**3, False, "invalid iteration count"),
-        ("", 10, 8 * 1024**3, True, "non-finite parameters"),
-        ("", 10, 1, False, "lacks device headroom"),
+        ("", 5_001, 8 * 1024**3, False, False, "invalid iteration count"),
+        ("", 10, 8 * 1024**3, True, False, "non-finite parameters"),
+        ("", 10, 1, False, False, "lacks device headroom"),
+        ("", 10, 8 * 1024**3, False, True, "lost its FP32 Fortran-order contract"),
     ),
 )
 def test_cuml_fit_enforces_layout_memory_solver_and_result_boundaries(
@@ -576,8 +587,11 @@ def test_cuml_fit_enforces_layout_memory_solver_and_result_boundaries(
     expected_iterations: int,
     free_bytes: int,
     nonfinite: bool,
+    invalid_device_dtype: bool,
     error: str | None,
 ) -> None:
+    fit_x = np.arange(12, dtype=np.float64).reshape(6, 2) + 0.25
+
     class Pool:
         calls = 0
 
@@ -589,9 +603,13 @@ def test_cuml_fit_enforces_layout_memory_solver_and_result_boundaries(
             assert kwargs["penalty_normalized"] is True
             assert kwargs["linesearch_max_iter"] == 100
 
-        def fit(self, x: np.ndarray, y: np.ndarray, **kwargs: object) -> None:
+        def fit(self, x: Any, y: np.ndarray, **kwargs: object) -> None:
             assert x.dtype == np.float32 and x.flags.f_contiguous
             assert y.dtype == np.int32
+            np.testing.assert_array_equal(x.values, fit_x.astype(np.float32))
+            assert len(x.data.calls) == 1
+            _, copied_bytes = x.data.calls[0]
+            assert copied_bytes == fit_x.astype(np.float32).nbytes
             assert kwargs == {"sample_weight": None, "convert_dtype": False}
             if solver_message:
                 print(solver_message)
@@ -602,9 +620,42 @@ def test_cuml_fit_enforces_layout_memory_solver_and_result_boundaries(
             self.intercept_ = np.zeros(3, dtype=np.float32)
             self.n_iter_ = np.asarray([expected_iterations])
 
+    class DevicePointer:
+        def __init__(self, values: np.ndarray) -> None:
+            self.values = values
+            self.calls: list[tuple[int, int]] = []
+
+        def copy_from_host(self, pointer: int, size: int) -> None:
+            self.calls.append((pointer, size))
+            ctypes.memmove(self.values.ctypes.data, pointer, size)
+
+    def empty(shape: tuple[int, ...], *, dtype: Any, order: str) -> SimpleNamespace:
+        assert shape == fit_x.shape
+        assert dtype is np.float32
+        assert order == "F"
+        values = np.empty(
+            shape,
+            dtype=np.float64 if invalid_device_dtype else dtype,
+            order="F",
+        )
+        return SimpleNamespace(
+            values=values,
+            data=DevicePointer(values),
+            dtype=values.dtype,
+            flags=values.flags,
+            nbytes=values.nbytes,
+            shape=values.shape,
+        )
+
+    def asarray(value: object) -> np.ndarray:
+        result = np.asarray(value)
+        assert result.ndim == 1
+        return result
+
     pool = Pool()
     cupy = SimpleNamespace(
-        asarray=np.asarray,
+        asarray=asarray,
+        empty=empty,
         cuda=SimpleNamespace(runtime=SimpleNamespace(memGetInfo=lambda: (free_bytes, 0))),
         get_default_memory_pool=lambda: pool,
     )
@@ -621,10 +672,10 @@ def test_cuml_fit_enforces_layout_memory_solver_and_result_boundaries(
     config = replace(_training_config(), optimizer=_cuml_optimizer_config())
     if error is not None:
         with pytest.raises((RuntimeError, MemoryError), match=error):
-            _fit_parameters(np.ones((6, 2)), np.arange(6) % 3, 1.0, config, 3)
+            _fit_parameters(fit_x, np.arange(6) % 3, 1.0, config, 3)
     else:
         coefficients, intercepts, fit_iterations = _fit_parameters(
-            np.ones((6, 2)), np.arange(6) % 3, 1.0, config, 3
+            fit_x, np.arange(6) % 3, 1.0, config, 3
         )
         assert coefficients.shape == (3, 2)
         assert intercepts.shape == (3,)

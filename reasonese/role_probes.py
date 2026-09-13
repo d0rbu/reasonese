@@ -1089,10 +1089,18 @@ def _fit(x: Array, y: Array, regularization: float, config: ProbeTrainingConfig)
         raise MemoryError(
             "cuML probe fit lacks device headroom for one Fortran-order activation matrix"
         )
-    device_x = cupy.asarray(host_x, order="F")
-    device_y = cupy.asarray(np.asarray(y, dtype=np.int32))
-    if not device_x.flags.f_contiguous or device_x.dtype.name != "float32":
+    device_x = cupy.empty(host_x.shape, dtype=np.float32, order="F")
+    if (
+        device_x.shape != host_x.shape
+        or device_x.nbytes != host_x.nbytes
+        or not device_x.flags.f_contiguous
+        or device_x.dtype.name != "float32"
+    ):
         raise RuntimeError("cuML probe matrix lost its FP32 Fortran-order contract")
+    # CuPy 14.2's asarray path stages pageable input through an equally large pinned buffer.
+    # This synchronous raw copy keeps host_x alive and avoids that second host allocation.
+    device_x.data.copy_from_host(host_x.ctypes.data, host_x.nbytes)
+    device_y = cupy.asarray(np.asarray(y, dtype=np.int32))
     if device_y.dtype.name != "int32":
         raise RuntimeError("cuML probe labels lost their int32 contract")
     classifier = cuml_linear_model.LogisticRegression(
