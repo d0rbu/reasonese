@@ -34,6 +34,8 @@
 | `tests/test_collection_failure_recovery.py` | Failure persistence, batch isolation, and cache-only resume tests |
 | `reasonese/cache.py` | Readable message and trace caches |
 | `reasonese/message_qa.py` | Independent materialized-message compliance judgments |
+| `reasonese/role_probes.py` | Grouped activation-role probe training, qualification, scoring, and portable artifacts |
+| `docs/reference/role-probes.md` | Role-probe method, provenance, validity gates, and scientific limits |
 | `reasonese/message_qa_cache.py` | Exact-text-keyed readable QA cache |
 | `reasonese/check_messages.py` | Fail-closed QA gate and `reasonese-check-messages` utility |
 | `reasonese/runner.py` | Cache-aware conversation execution |

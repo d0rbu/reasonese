@@ -15,6 +15,9 @@ dependencies = [
     "threadpoolctl>=3.5.0",
 ]
 
+[project.optional-dependencies]
+probes = ["scikit-learn>=1.8.0"]
+
 [project.scripts]
 reasonese-axes = "reasonese.show_axes:main"
 reasonese-plan = "reasonese.plan:main"
@@ -38,6 +41,7 @@ dev = [
     "pytest>=9.0.0",
     "pytest-cov>=7.0.0",
     "ruff>=0.15.0",
+    "scikit-learn>=1.8.0",
     "ty>=0.0.56",
 ]
 
