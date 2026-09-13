@@ -868,6 +868,7 @@ def qualify_role_probe(
         test_conversations.document_ids,
         ("reasoning", "assistant"),
     )
+    calibration = calibrate_reasoning_threshold(calibration_scores)
     qualification = NativeProbeQualification(
         calibration_dataset_fingerprint=activation_dataset_fingerprint(calibration_conversations),
         test_dataset_fingerprint=activation_dataset_fingerprint(test_conversations),
@@ -875,10 +876,11 @@ def qualify_role_probe(
         prompt_partition_sha256=prompt_partition_sha256,
         calibration_conversation_count=calibration_scores.conversation_count,
         calibration_scores=calibration_scores,
-        calibration=calibrate_reasoning_threshold(calibration_scores),
+        calibration=calibration,
         test_metrics=test_metrics,
         test=qualify_native_test(
             test_scores,
+            calibration=calibration,
             minimum_role_accuracy=test_metrics.minimum_role_accuracy,
             document_macro_accuracy=test_metrics.document_accuracy,
         ),
@@ -1035,6 +1037,8 @@ def _probe_from(metadata: dict[str, Any], coefficients: Array, intercepts: Array
                 ),
                 minimum_role_accuracy=test["minimum_role_accuracy"],
                 document_macro_accuracy=test["document_macro_accuracy"],
+                threshold_reasoning_sensitivity=test["threshold_reasoning_sensitivity"],
+                threshold_final_specificity=test["threshold_final_specificity"],
                 bootstrap_auc=PairedBootstrapAuc(**bootstrap),
             ),
         )

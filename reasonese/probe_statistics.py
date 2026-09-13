@@ -25,6 +25,8 @@ BOOTSTRAP_REPLICATES: Final = 10_000
 BOOTSTRAP_QUANTILE_METHOD: Final = "linear"
 MIN_ROLE_ACCURACY: Final = 0.75
 MIN_DOCUMENT_MACRO_ACCURACY: Final = 0.75
+MIN_THRESHOLD_REASONING_SENSITIVITY: Final = 0.75
+MIN_THRESHOLD_FINAL_SPECIFICITY: Final = 0.75
 MIN_TEST_AUC: Final = 0.85
 MIN_AUC_BOOTSTRAP_LOWER: Final = 0.5
 
@@ -164,7 +166,11 @@ class ThresholdCalibration:
                 raise ValueError("usable threshold must be finite")
             if any(
                 value is None
-                for value in (self.balanced_accuracy, self.reasoning_sensitivity, self.final_specificity)
+                for value in (
+                    self.balanced_accuracy,
+                    self.reasoning_sensitivity,
+                    self.final_specificity,
+                )
             ):
                 raise ValueError("usable calibration must contain operating-point metrics")
         elif self.threshold is not None:
@@ -179,15 +185,21 @@ class NativeQualification:
     scores: PairedSegmentScores
     minimum_role_accuracy: float
     document_macro_accuracy: float
+    threshold_reasoning_sensitivity: float
+    threshold_final_specificity: float
     bootstrap_auc: PairedBootstrapAuc
 
     def __post_init__(self) -> None:
         if self.scores.split != TEST_SPLIT:
             raise ValueError("native qualification requires the untouched test split")
         if self.scores.conversation_count != EXPECTED_CONVERSATIONS:
-            raise ValueError(f"native qualification requires {EXPECTED_CONVERSATIONS} conversations")
+            raise ValueError(
+                f"native qualification requires {EXPECTED_CONVERSATIONS} conversations"
+            )
         _rate(self.minimum_role_accuracy, "minimum_role_accuracy")
         _rate(self.document_macro_accuracy, "document_macro_accuracy")
+        _rate(self.threshold_reasoning_sensitivity, "threshold_reasoning_sensitivity")
+        _rate(self.threshold_final_specificity, "threshold_final_specificity")
         if self.bootstrap_auc.conversation_count != self.scores.conversation_count:
             raise ValueError("bootstrap AUC and native scores must contain the same conversations")
         if self.bootstrap_auc.auc != paired_segment_auc(self.scores):
@@ -198,15 +210,16 @@ class NativeQualification:
         return bool(
             self.minimum_role_accuracy >= MIN_ROLE_ACCURACY
             and self.document_macro_accuracy >= MIN_DOCUMENT_MACRO_ACCURACY
+            and self.threshold_reasoning_sensitivity >= MIN_THRESHOLD_REASONING_SENSITIVITY
+            and self.threshold_final_specificity >= MIN_THRESHOLD_FINAL_SPECIFICITY
             and self.bootstrap_auc.auc >= MIN_TEST_AUC
             and self.bootstrap_auc.lower_95 > MIN_AUC_BOOTSTRAP_LOWER
         )
 
 
 def _auc(reasoning: np.ndarray, final: np.ndarray) -> float:
-    comparisons = (
-        (reasoning[:, None] > final[None, :]).astype(np.float64)
-        + 0.5 * (reasoning[:, None] == final[None, :])
+    comparisons = (reasoning[:, None] > final[None, :]).astype(np.float64) + 0.5 * (
+        reasoning[:, None] == final[None, :]
     )
     return float(comparisons.mean())
 
@@ -256,10 +269,9 @@ def paired_bootstrap_auc(scores: PairedSegmentScores) -> PairedBootstrapAuc:
     )
     sampled_reasoning = reasoning[indices]
     sampled_final = final[indices]
-    comparisons = (
-        (sampled_reasoning[:, :, None] > sampled_final[:, None, :]).astype(np.float64)
-        + 0.5 * (sampled_reasoning[:, :, None] == sampled_final[:, None, :])
-    )
+    comparisons = (sampled_reasoning[:, :, None] > sampled_final[:, None, :]).astype(
+        np.float64
+    ) + 0.5 * (sampled_reasoning[:, :, None] == sampled_final[:, None, :])
     estimates = comparisons.mean(axis=(1, 2))
     bounds = np.quantile(
         estimates,
@@ -275,14 +287,11 @@ def paired_bootstrap_auc(scores: PairedSegmentScores) -> PairedBootstrapAuc:
 
 
 def _threshold_candidates(scores: PairedSegmentScores) -> np.ndarray:
-    values = np.unique(
-        np.asarray(scores.reasoning_scores + scores.final_scores, dtype=np.float64)
-    )
+    values = np.unique(np.asarray(scores.reasoning_scores + scores.final_scores, dtype=np.float64))
     candidates = [float(np.nextafter(values[0], -np.inf))]
     candidates.extend(float(value) for value in values)
     candidates.extend(
-        float((left + right) / 2)
-        for left, right in zip(values[:-1], values[1:], strict=True)
+        float((left + right) / 2) for left, right in zip(values[:-1], values[1:], strict=True)
     )
     candidates.append(float(np.nextafter(values[-1], np.inf)))
     return np.asarray(sorted(set(candidates)), dtype=np.float64)
@@ -345,13 +354,21 @@ def classify_reasoning(score: float, calibration: ThresholdCalibration) -> bool:
 def qualify_native_test(
     scores: PairedSegmentScores,
     *,
+    calibration: ThresholdCalibration,
     minimum_role_accuracy: float,
     document_macro_accuracy: float,
 ) -> NativeQualification:
-    """Compute the fixed native-test AUC and role/document gates."""
+    """Apply the frozen threshold and compute the native-test gates."""
+    if not calibration.usable or calibration.threshold is None:
+        raise ValueError("native qualification requires a usable frozen threshold")
+    threshold = calibration.threshold
+    reasoning = np.asarray(scores.reasoning_scores, dtype=np.float64)
+    final = np.asarray(scores.final_scores, dtype=np.float64)
     return NativeQualification(
         scores=scores,
         minimum_role_accuracy=minimum_role_accuracy,
         document_macro_accuracy=document_macro_accuracy,
+        threshold_reasoning_sensitivity=float(np.mean(reasoning >= threshold)),
+        threshold_final_specificity=float(np.mean(final < threshold)),
         bootstrap_auc=paired_bootstrap_auc(scores),
     )

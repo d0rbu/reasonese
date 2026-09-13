@@ -84,7 +84,10 @@ same exact local checkpoint and extraction path. It uses 12 calibration conversa
 document- and content-disjoint test conversations. The calibration split alone selects a
 deterministic threshold on the per-segment mean unconditional reasoning probability. The frozen
 test checks pooled AUC with a paired-conversation, 10,000-replicate bootstrap as well as native
-role recall and document-macro accuracy. The test split never selects the threshold. Exact
+role recall and document-macro accuracy. It also applies the unchanged calibration threshold and
+requires at least 0.75 reasoning sensitivity and 0.75 final-output specificity. This operating-point
+gate prevents rank separation alone from qualifying a threshold that does not transfer. The test
+split never selects or adjusts the threshold. Exact
 activation-dataset fingerprints and the native-prompt partition digest remain in the fitted
 artifact.
 

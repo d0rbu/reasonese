@@ -17,6 +17,8 @@ from reasonese.probe_statistics import (
     MIN_DOCUMENT_MACRO_ACCURACY,
     MIN_ROLE_ACCURACY,
     MIN_TEST_AUC,
+    MIN_THRESHOLD_FINAL_SPECIFICITY,
+    MIN_THRESHOLD_REASONING_SENSITIVITY,
     TEST_SPLIT,
     NativeQualification,
     PairedBootstrapAuc,
@@ -199,6 +201,7 @@ def test_primitives_support_small_synthetic_pairs_but_native_gate_requires_twelv
     with pytest.raises(ValueError, match="12"):
         qualify_native_test(
             replace(small, split=TEST_SPLIT),
+            calibration=calibrate_reasoning_threshold(small),
             minimum_role_accuracy=0.9,
             document_macro_accuracy=0.9,
         )
@@ -212,10 +215,13 @@ def test_native_test_qualification_uses_only_frozen_gates() -> None:
     )
     qualification = qualify_native_test(
         scores,
+        calibration=calibrate_reasoning_threshold(replace(scores, split=CALIBRATION_SPLIT)),
         minimum_role_accuracy=MIN_ROLE_ACCURACY,
         document_macro_accuracy=MIN_DOCUMENT_MACRO_ACCURACY,
     )
     assert qualification.passed
+    assert qualification.threshold_reasoning_sensitivity == 1.0
+    assert qualification.threshold_final_specificity == 1.0
     assert qualification.bootstrap_auc.auc >= MIN_TEST_AUC
     assert qualification.bootstrap_auc.lower_95 > MIN_AUC_BOOTSTRAP_LOWER
 
@@ -226,12 +232,55 @@ def test_native_test_qualification_uses_only_frozen_gates() -> None:
         document_macro_accuracy=MIN_DOCUMENT_MACRO_ACCURACY - 1e-12,
     )
     assert exact_doc_failure.passed is False
+    assert (
+        replace(
+            qualification,
+            threshold_reasoning_sensitivity=np.nextafter(
+                MIN_THRESHOLD_REASONING_SENSITIVITY, -np.inf
+            ),
+        ).passed
+        is False
+    )
+    assert (
+        replace(
+            qualification,
+            threshold_final_specificity=np.nextafter(MIN_THRESHOLD_FINAL_SPECIFICITY, -np.inf),
+        ).passed
+        is False
+    )
     with pytest.raises(ValueError, match="test split"):
         qualify_native_test(
             replace(scores, split=CALIBRATION_SPLIT),
+            calibration=calibrate_reasoning_threshold(replace(scores, split=CALIBRATION_SPLIT)),
             minimum_role_accuracy=0.9,
             document_macro_accuracy=0.9,
         )
+
+
+def test_native_gate_rejects_a_ranked_probe_whose_frozen_threshold_does_not_transfer() -> None:
+    calibration_scores = _scores(
+        reasoning=(0.99,) * EXPECTED_CONVERSATIONS,
+        final=(0.01,) * EXPECTED_CONVERSATIONS,
+    )
+    calibration = calibrate_reasoning_threshold(calibration_scores)
+    assert calibration.threshold == 0.99
+    test_scores = _scores(
+        split=TEST_SPLIT,
+        reasoning=(0.95,) * EXPECTED_CONVERSATIONS,
+        final=(0.01,) * EXPECTED_CONVERSATIONS,
+    )
+
+    qualification = qualify_native_test(
+        test_scores,
+        calibration=calibration,
+        minimum_role_accuracy=1.0,
+        document_macro_accuracy=1.0,
+    )
+
+    assert qualification.bootstrap_auc.auc == 1.0
+    assert qualification.threshold_reasoning_sensitivity == 0.0
+    assert qualification.threshold_final_specificity == 1.0
+    assert qualification.passed is False
 
 
 def test_native_qualification_boundary_comparisons_are_explicit() -> None:
@@ -242,9 +291,9 @@ def test_native_qualification_boundary_comparisons_are_explicit() -> None:
         upper_95=0.9,
         conversation_count=EXPECTED_CONVERSATIONS,
     )
-    assert NativeQualification(scores, 0.75, 0.75, auc).passed
+    assert NativeQualification(scores, 0.75, 0.75, 0.75, 0.75, auc).passed
     lower_equal = replace(auc, lower_95=MIN_AUC_BOOTSTRAP_LOWER)
-    assert NativeQualification(scores, 0.75, 0.75, lower_equal).passed is False
+    assert NativeQualification(scores, 0.75, 0.75, 0.75, 0.75, lower_equal).passed is False
 
 
 def test_native_qualification_rejects_a_mismatched_bootstrap_point_auc() -> None:
@@ -256,7 +305,7 @@ def test_native_qualification_rejects_a_mismatched_bootstrap_point_auc() -> None
         conversation_count=EXPECTED_CONVERSATIONS,
     )
     with pytest.raises(ValueError, match="does not match"):
-        NativeQualification(scores, 0.9, 0.9, mismatched)
+        NativeQualification(scores, 0.9, 0.9, 0.9, 0.9, mismatched)
 
 
 def test_bootstrap_configuration_cannot_be_changed() -> None:
