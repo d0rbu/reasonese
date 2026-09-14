@@ -181,7 +181,10 @@ observation rows -> within-trial comparisons -> ranking + margins + order diagno
   from the same assistant response.
 - Marginal axis rates, pairwise axis contrasts, position effects, connectivity, balance, and
   regularization sensitivity are calculated alongside the ranking.
-- `reasonese.analyze` writes CSV tables, machine-readable diagnostics, and a Markdown report.
+- `reasonese.lasso` refits the same comparisons as a sparse feature model along an L1 penalty
+  path and cross-validates it.
+- `reasonese.analyze` writes CSV tables, machine-readable diagnostics, and a Markdown report
+  for both fits.
 
 The L2 penalty produces a numerical total order even under separation. Comparison-graph
 components are reported because relative levels across disconnected components are not
@@ -225,6 +228,30 @@ reads them, which the bootstrap does not. Every block is a few hundred cells, so
 spend far longer synchronizing threads than doing arithmetic; `threadpoolctl` pins threads to one
 for the duration of a fit and restores the caller's settings on exit. Together these take a pilot
 analysis from hours to well under a minute.
+
+The feature lasso in `reasonese.lasso` refits the same within-trial comparisons independently
+for each evaluation assistant. Every cell's strength is a pair-side offset plus a sparse sum of
+treatment contrasts for framing, channel, and author, all three two-way interactions, and their
+three-way interaction. Assistant is matchup metadata that selects the independent fit, not a
+feature. Delivery position is also absent because every sampled cell pair is measured in both
+orders. The references are the `normal` framing, the `user message` channel, and the first model
+author present. A shared effect needs one lower-order coefficient rather than repeated interaction
+coefficients across levels, so the L1 penalty generally favors the lower-order representation.
+Columns that never
+differ inside a trial are dropped, and a column identical to an earlier one, up to sign, is
+reported as its alias rather than fitted twice; the rank of the remaining columns is reported
+because linearly dependent columns leave the coefficients, though not the fitted
+probabilities, non-unique. The L1 penalty runs down a log-spaced path from the value that
+zeroes every feature. Each point is solved by proximal Newton steps: the quadratic surrogate is
+minimised by coordinate descent over a Gram matrix of the active features, with the offsets in
+closed form, and one pass over every column admits the features whose gradient violates the
+optimality condition. A backtracking line search on the penalized objective guards each step.
+K-fold cross-validation within each assistant assigns folds by cell pair, so both orderings and
+every rollout of one study are held out together, refits the path per fold with both penalties
+scaled to the fold's share of the comparisons (the loss is a sum, so an unscaled penalty would
+bind harder on a smaller fold), and picks the largest penalty within one standard error of the
+minimum held-out loss; that fit is the one reported for that assistant. The offsets keep the
+ranking's L2 penalty, which bounds them under separation.
 
 Collection routing is resolved in `openrouter.select_route` from invocation-local
 `routing.CollectionRouting`. Collection checks paid permission before cold assistant work and

@@ -61,6 +61,7 @@
 | `reasonese/collect_studies.py` | Cross-study batched collection utility |
 | `reasonese/sample_studies.py` | Sampled study-suite planning utility |
 | `reasonese/analysis.py` | Bradley-Terry, axis, position, and diagnostic analyses |
+| `reasonese/lasso.py` | Sparse feature effects over within-trial comparisons: penalty path, cross-validation, screening |
 | `reasonese/analyze.py` | `reasonese-analyze` reporting utility |
 | `reasonese/show_axes.py` | `reasonese-axes` utility |
 | `reasonese/plan.py` | `reasonese-plan` utility |
@@ -80,6 +81,7 @@
 | `tests/test_study_orchestration.py` | Permutation balance, collection, and resume tests |
 | `tests/test_sampling.py` | Sparse-design stratification, degree, connectivity, and reproducibility tests |
 | `tests/test_analysis.py` | Synthetic ranking, position-effect, diagnostics, and output tests |
+| `tests/test_lasso.py` | Feature columns, optimality conditions, penalty path, cross-validation, and planted-effect recovery tests |
 | `tests/test_instructions.py` | Pair loading, audit parsing, cache, scaffolding, and curation-utility tests |
 
 Generated files belong under ignored directories such as `out/`.

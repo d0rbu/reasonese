@@ -7,8 +7,8 @@ two-instruction conversations, collects assistant traces, and independently judg
 every input. The assistant remains matchup metadata rather than an entry axis, and instruction is
 a blocking factor rather than a treatment axis. Study orchestration balances each cell over every
 possible position and supports repeated rollouts. Analysis provides penalized within-component
-cell rankings, framing, channel, and author margins, per-pair exclusivity counts, and explicit
-position and robustness diagnostics.
+cell rankings, framing, channel, and author margins, a cross-validated feature lasso over the
+same comparisons, per-pair exclusivity counts, and explicit position and robustness diagnostics.
 
 This foundation specifies:
 
@@ -36,12 +36,15 @@ does not contain an empirical corpus or statistical result. Future work may add 
 models, multiplicity-aware inference, or explicit position-adjusted rankings after empirical
 sample sizes and study topology are known.
 
-Pooled axis margins currently average per-component cell scores. A Bradley-Terry model with
-axis covariates, absorbing a `(pair, side)` intercept and estimating framing, channel, and
-author contrasts directly, would give those contrasts proper standard errors from far fewer
-parameters. It is deferred rather than rejected. Until then, a pooled framing effect could in
-principle be driven by a few pairs, so per-pair spread is worth inspecting alongside the
-margin.
+Pooled axis margins average per-component cell scores. The feature lasso is their model-based
+counterpart: for each evaluation assistant independently, it absorbs every instruction pair in a
+side offset and fits framing, channel, author, all three two-way interactions, and their three-way
+interaction under an L1 penalty. Position is handled by the symmetric two-permutation collection
+design rather than a model term. A pooled effect across instruction pairs therefore has to survive
+a cross-validated penalty rather than average over cell scores. The lasso selects and shrinks; it
+does not test. Standard errors for selected contrasts, whether from a post-selection refit or from
+stability selection over trial resamples, remain deferred, and a pooled effect can still be driven
+by a few pairs, so per-pair spread is worth inspecting alongside both the margin and the lasso.
 
 ## Construct questions for later work
 
