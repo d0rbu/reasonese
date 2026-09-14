@@ -448,10 +448,18 @@ both instruction spans in each of the two exact ordered contexts with thinking e
 local function declarations. The OpenRouter web-search tool is injected server-side and has no
 reproducible local prompt representation; every report records this limitation.
 
-Each ordered context uses one prefix forward for both target spans. Assistants are processed one at
-a time and the prefix model is released before the next assistant is loaded. The separate readable
-`probe_qa_cache.json` key covers the probe artifact, model/runtime identity, adapter, render/tool
-configuration, full context token IDs, target positions and IDs, assistant, order, and position. It
+Each target span uses one forward ending at that span's final scored token. For the pinned Nemotron
+CUDA runtime, the scorer temporarily selects the registered Triton cumsum configuration with
+`BLOCK_SIZE_H=1` and restores the autotuner state after the capture scope. It validates this kernel
+configuration during preflight, before provider calls. H1 was selected to reproduce the historical
+saved activations, not to improve QA outcomes. This execution-tile choice does not modify or rebind
+the original qualified NPZ, its fitted weights, its threshold, or its recorded runtime provenance.
+
+Assistants are processed one at a time and the prefix model is released before the next assistant
+is loaded. The readable `probe_qa_cache.json` key covers the explicit capture-policy identifier,
+probe artifact, model/runtime identity, adapter, render/tool configuration, prefix context token
+IDs, target positions and IDs, assistant, order, and position. The H1 policy has a new identifier,
+so records produced under the earlier autotuned segment-prefix policy are cache misses. The cache
 does not store instruction text or hidden reasoning.
 
 ```bash

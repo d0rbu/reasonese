@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import sys
+from contextlib import contextmanager, nullcontext
 from dataclasses import replace
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -123,6 +125,7 @@ def _patch_runtime(
         ),
     )
     monkeypatch.setattr(local_module, "validate_prefix_checkpoint_identity", lambda *args: None)
+    monkeypatch.setattr(local_module, "_pinned_nemotron_cumsum", lambda *args: nullcontext())
 
     def load(*args: Any, **kwargs: Any) -> object:
         model = object()
@@ -210,6 +213,20 @@ def test_local_scorer_invalidates_old_full_context_cache_and_hits_new_prefix_cac
     context = local_module.render_collector_probe_context(
         object(), prepared.bundle.adapter, request.setup, request.position
     )
+    prefix = initial_scorer._target_prefix(context)
+    monkeypatch.setattr(local_module, "CAPTURE_POLICY", "segment_prefix_capture_v1")
+    previous_prefix_key = initial_scorer._context_key(
+        prepared,
+        request,
+        prefix.input_ids,
+        prefix.token_positions[0],
+        prefix.content_token_ids[0],
+        prefix.render_config_sha256,
+    )
+    monkeypatch.setattr(
+        local_module, "CAPTURE_POLICY", "segment_prefix_capture_v2_nemotron_cumsum_h1"
+    )
+    assert previous_prefix_key != current_key
     legacy_key = local_module._canonical_sha256(
         {
             "probe_sha256": prepared.probe_sha256,
@@ -242,6 +259,135 @@ def test_local_scorer_invalidates_old_full_context_cache_and_hits_new_prefix_cac
     captured.clear()
     scorer.check((request,))
     assert captured == []
+
+
+class _FakeConfig:
+    def __init__(self, head_tile: int) -> None:
+        self.head_tile = head_tile
+        self.pre_hook = None
+
+    def all_kwargs(self) -> dict[str, int]:
+        return {
+            "BLOCK_SIZE_H": self.head_tile,
+            "num_ctas": 1,
+            "num_stages": 3,
+            "num_warps": 4,
+        }
+
+
+class _FakeAutotuner:
+    def __init__(self) -> None:
+        self.configs = [_FakeConfig(value) for value in (1, 2, 4, 8, 16, 32, 64)]
+        self.cache = {("observed",): self.configs[3]}
+        self.best_config = self.configs[3]
+        self.nargs = {"prior": True}
+
+
+def _patch_cumsum_runtime(
+    monkeypatch: pytest.MonkeyPatch, tuner: _FakeAutotuner
+) -> object:
+    root = "_mamba_ssm_cuda_test"
+    combined_module_name = f"{root}.ops.triton.ssd_combined"
+    state_module_name = f"{root}.ops.triton.ssd_chunk_state"
+
+    def combined() -> None:
+        pass
+
+    combined.__module__ = combined_module_name
+    model_module = ModuleType("test_nemotron_model")
+    model_module.__dict__["mamba_chunk_scan_combined"] = combined
+    model_type = type("FakeModel", (), {"__module__": model_module.__name__})
+    state_module = SimpleNamespace(_chunk_cumsum_fwd_kernel=SimpleNamespace(fn=tuner))
+    monkeypatch.setitem(sys.modules, model_module.__name__, model_module)
+    monkeypatch.setitem(
+        sys.modules,
+        "_mamba_ssm_cuda_unused.ops.triton.ssd_chunk_state",
+        SimpleNamespace(_chunk_cumsum_fwd_kernel=_FakeAutotuner()),
+    )
+    real_import = local_module.importlib.import_module
+    monkeypatch.setattr(
+        local_module.importlib,
+        "import_module",
+        lambda name: (
+            SimpleNamespace(Autotuner=_FakeAutotuner)
+            if name == "triton.runtime.autotuner"
+            else state_module
+            if name == state_module_name
+            else real_import(name)
+        ),
+    )
+    return model_type()
+
+
+def test_nemotron_cumsum_pin_uses_h1_despite_stale_cache_and_restores(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tuner = _FakeAutotuner()
+    original_configs = tuner.configs
+    original_cache = dict(tuner.cache)
+    original_best = tuner.best_config
+    original_nargs = tuner.nargs
+    model = _patch_cumsum_runtime(monkeypatch, tuner)
+
+    with local_module._pinned_nemotron_cumsum(model, NEMOTRON_ADAPTER, "cuda:0"):
+        assert len(tuner.configs) == 1
+        assert tuner.configs[0].all_kwargs()["BLOCK_SIZE_H"] == 1
+        assert tuner.cache == original_cache
+
+    assert tuner.configs is original_configs
+    assert tuner.cache == original_cache
+    assert tuner.best_config is original_best
+    assert tuner.nargs is original_nargs
+
+
+def test_nemotron_cumsum_pin_restores_after_capture_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tuner = _FakeAutotuner()
+    original_configs = tuner.configs
+    model = _patch_cumsum_runtime(monkeypatch, tuner)
+
+    with (
+        pytest.raises(RuntimeError, match="capture failed"),
+        local_module._pinned_nemotron_cumsum(model, NEMOTRON_ADAPTER, "cuda:0"),
+    ):
+        tuner.best_config = tuner.configs[0]
+        tuner.nargs = {"active": True}
+        raise RuntimeError("capture failed")
+
+    assert tuner.configs is original_configs
+    assert tuner.best_config is original_configs[3]
+    assert tuner.nargs == {"prior": True}
+
+
+def test_nemotron_cumsum_pin_fails_closed_on_incompatible_registry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tuner = _FakeAutotuner()
+    tuner.configs[0] = _FakeConfig(3)
+    model = _patch_cumsum_runtime(monkeypatch, tuner)
+
+    with (
+        pytest.raises(RuntimeError, match="configs differ"),
+        local_module._pinned_nemotron_cumsum(model, NEMOTRON_ADAPTER, "cuda:0"),
+    ):
+        pytest.fail("incompatible config registry entered capture scope")
+
+
+@pytest.mark.parametrize(
+    ("adapter", "device"),
+    [(NEMOTRON_ADAPTER, "cpu"), (SimpleNamespace(name="gemma-native"), "cuda:0")],
+)
+def test_cumsum_pin_does_not_touch_cpu_or_other_adapters(
+    monkeypatch: pytest.MonkeyPatch, adapter: Any, device: str
+) -> None:
+    monkeypatch.setattr(
+        local_module,
+        "_nemotron_cumsum_autotuner",
+        lambda model: pytest.fail("unaffected scorer resolved a Nemotron Triton kernel"),
+    )
+    with local_module._pinned_nemotron_cumsum(object(), adapter, device):
+        pass
 
 
 def test_target_prefix_drops_only_external_future_and_preserves_span_positions() -> None:
@@ -508,6 +654,30 @@ def test_preflight_rejects_checkpoint_manifest_mismatch(
     manifest.write_text(json.dumps(raw), encoding="utf-8")
     with pytest.raises(ValueError, match="checkpoint does not match"):
         LocalProbeQaScorer(config, cache).preflight((Assistant.NEMOTRON_3_5_LIGHTNING,))
+
+
+def test_preflight_rejects_incompatible_cumsum_policy_before_scoring(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config, cache, runtime_sha256 = _scorer_files(tmp_path)
+    _patch_runtime(monkeypatch, runtime_sha256)
+    entered = 0
+
+    @contextmanager
+    def incompatible(*args: object):
+        nonlocal entered
+        entered += 1
+        raise RuntimeError("cumsum config incompatible")
+        yield
+
+    monkeypatch.setattr(local_module, "_pinned_nemotron_cumsum", incompatible)
+    scorer = LocalProbeQaScorer(config, cache)
+    with pytest.raises(RuntimeError, match="cumsum config incompatible"):
+        scorer.preflight((Assistant.NEMOTRON_3_5_LIGHTNING,))
+
+    assert entered == 1
+    assert scorer._prepared == {}
+    assert not cache.exists()
 
 
 def test_preflight_uses_extraction_provenance_for_checkpoint_depth(

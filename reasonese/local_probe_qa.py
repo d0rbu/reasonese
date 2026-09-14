@@ -7,8 +7,10 @@ import hashlib
 import importlib
 import json
 import os
+import sys
 import tempfile
 from collections import defaultdict
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -40,11 +42,79 @@ from reasonese.role_probe_extraction import (
 from reasonese.role_probes import RoleProbe, load_role_probe, project_role
 
 _FORMAT_VERSION = 1
-CAPTURE_POLICY = "segment_prefix_capture_v1"
+CAPTURE_POLICY = "segment_prefix_capture_v2_nemotron_cumsum_h1"
 _ASSISTANT_ADAPTERS = {
     Assistant.NEMOTRON_3_5_LIGHTNING: "nemotron-3.5-lightning-native-v1",
     Assistant.GEMMA_4_31B_IT: "gemma-4-31b-native-v1",
 }
+_NEMOTRON_CUMSUM_HEAD_TILES = (1, 2, 4, 8, 16, 32, 64)
+
+
+def _nemotron_cumsum_autotuner(model: object) -> Any:
+    """Return the pinned Mamba cumsum autotuner or fail on runtime drift."""
+    autotuner_type = importlib.import_module("triton.runtime.autotuner").Autotuner
+    model_module = sys.modules.get(model.__class__.__module__)
+    combined = getattr(model_module, "mamba_chunk_scan_combined", None)
+    module_name = getattr(combined, "__module__", "")
+    marker = ".ops.triton."
+    if not module_name.startswith("_mamba_ssm_cuda_") or marker not in module_name:
+        raise RuntimeError("validated Nemotron model lacks its pinned Mamba Triton callable")
+    kernel_module = importlib.import_module(
+        f"{module_name.partition(marker)[0]}{marker}ssd_chunk_state"
+    )
+    value = getattr(kernel_module, "_chunk_cumsum_fwd_kernel", None)
+    visited: set[int] = set()
+    for _ in range(5):
+        if id(value) in visited:
+            break
+        visited.add(id(value))
+        if isinstance(value, autotuner_type):
+            return value
+        value = getattr(value, "fn", None)
+    raise RuntimeError("validated Nemotron model lacks its cumsum Triton autotuner")
+
+
+@contextmanager
+def _pinned_nemotron_cumsum(
+    model: object, adapter: NativeTemplateAdapter, execution_device: str
+) -> Any:
+    """Use the registered H1 cumsum config for one Nemotron CUDA capture scope."""
+    if adapter.name != "nemotron-3.5-lightning-native-v1" or not execution_device.startswith(
+        "cuda"
+    ):
+        yield
+        return
+    tuner = _nemotron_cumsum_autotuner(model)
+    configs = tuner.configs
+    records = [config.all_kwargs() for config in configs]
+    expected = [
+        {
+            "BLOCK_SIZE_H": head_tile,
+            "num_ctas": 1,
+            "num_stages": 3,
+            "num_warps": 4,
+        }
+        for head_tile in _NEMOTRON_CUMSUM_HEAD_TILES
+    ]
+    if records != expected:
+        raise RuntimeError("Nemotron cumsum Triton configs differ from the pinned runtime")
+    selected = configs[0]
+    if selected.pre_hook is not None:
+        raise RuntimeError("Nemotron cumsum H1 config unexpectedly has a pre-hook")
+    absent = object()
+    best_config = getattr(tuner, "best_config", absent)
+    nargs = getattr(tuner, "nargs", absent)
+    tuner.configs = [selected]
+    try:
+        yield
+    finally:
+        tuner.configs = configs
+        for name, value in (("best_config", best_config), ("nargs", nargs)):
+            if value is absent:
+                if hasattr(tuner, name):
+                    delattr(tuner, name)
+            else:
+                setattr(tuner, name, value)
 
 
 def _file_sha256(path: Path) -> str:
@@ -327,6 +397,10 @@ class LocalProbeQaScorer:
             )
             if runtime_sha256 != prepared.probe.provenance.runtime_sha256:
                 raise ValueError("local scorer runtime does not match qualified probe provenance")
+            with _pinned_nemotron_cumsum(
+                model, prepared.bundle.adapter, self.execution_device
+            ):
+                pass
         except BaseException:
             del model
             self._release_device_cache()
@@ -436,45 +510,48 @@ class LocalProbeQaScorer:
 
         model = self._load_validated_model(prepared)
         try:
-            for request in missing:
-                context = rendered[request]
-                positions = context.token_positions[0]
-                captured = capture_token_activations(
-                    model,
-                    prepared.bundle.adapter,
-                    input_ids=context.input_ids,
-                    token_positions=positions,
-                    layers=(prepared.probe.selected_layer_index,),
-                )
-                if (
-                    captured.ndim != 3
-                    or captured.shape[0] != len(positions)
-                    or captured.shape[1] != 1
-                    or captured.dtype.name != prepared.probe.provenance.activation_dtype
-                ):
-                    raise ValueError("local role-probe capture returned an invalid shape")
-                activations = np.asarray(captured[:, 0])
-                projection = project_role(
-                    prepared.probe,
-                    activations,
-                    provenance=prepared.probe.provenance,
-                    layer_index=prepared.probe.selected_layer_index,
-                )
-                complies, issue = _decision(
-                    request, prepared.probe, projection.mean_reasoning_probability
-                )
-                verdict = ProbeQaVerdict(
-                    request,
-                    keys[request],
-                    tuple(zip(projection.roles, projection.mean_probabilities, strict=True)),
-                    projection.mean_reasoning_probability,
-                    probe_expectation(request.spec),
-                    complies,
-                    issue,
-                    context.masked_boundary_tokens,
-                )
-                verdicts[request] = verdict
-                self.cache.put(verdict)
+            with _pinned_nemotron_cumsum(
+                model, prepared.bundle.adapter, self.execution_device
+            ):
+                for request in missing:
+                    context = rendered[request]
+                    positions = context.token_positions[0]
+                    captured = capture_token_activations(
+                        model,
+                        prepared.bundle.adapter,
+                        input_ids=context.input_ids,
+                        token_positions=positions,
+                        layers=(prepared.probe.selected_layer_index,),
+                    )
+                    if (
+                        captured.ndim != 3
+                        or captured.shape[0] != len(positions)
+                        or captured.shape[1] != 1
+                        or captured.dtype.name != prepared.probe.provenance.activation_dtype
+                    ):
+                        raise ValueError("local role-probe capture returned an invalid shape")
+                    activations = np.asarray(captured[:, 0])
+                    projection = project_role(
+                        prepared.probe,
+                        activations,
+                        provenance=prepared.probe.provenance,
+                        layer_index=prepared.probe.selected_layer_index,
+                    )
+                    complies, issue = _decision(
+                        request, prepared.probe, projection.mean_reasoning_probability
+                    )
+                    verdict = ProbeQaVerdict(
+                        request,
+                        keys[request],
+                        tuple(zip(projection.roles, projection.mean_probabilities, strict=True)),
+                        projection.mean_reasoning_probability,
+                        probe_expectation(request.spec),
+                        complies,
+                        issue,
+                        context.masked_boundary_tokens,
+                    )
+                    verdicts[request] = verdict
+                    self.cache.put(verdict)
         finally:
             del model
             self._release_device_cache()
