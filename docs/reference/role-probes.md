@@ -54,6 +54,18 @@ positions and causal context, so it does not isolate prose style. It is descript
 intact conversation segments are not authored instructions, and the result does not establish
 instruction-style indistinguishability or change any gate.
 
+A second post hoc, calibration-only diagnostic found that reasoning recall fell from 95.18%
+over content-token indices `[0, 64)` across 12 conversations to 3.87% over `[512, 1024)`
+across the 10 conversations long enough to contribute. For the first three fixed calibration
+documents with at least 768 reasoning tokens, the `[512, 768)` window was then replayed as
+the only reasoning text, with the original user prompt and final output retained. All 256 token
+IDs matched exactly in each pair. Five-class reasoning recall changed from 0.390625% to
+94.921875%, 0% to 47.265625%, and 6.640625% to 94.140625%. This is direct evidence that
+the probe's classification is context-sensitive in these examples. Removing the preceding 512
+reasoning tokens also changed absolute token positions, so the intervention does not isolate
+context, position, or prose style. It does not justify excluding later reasoning tokens as a
+remedy, and it changed no fit, gate, qualification, or artifact status.
+
 The run therefore produced no QA-eligible Nemotron probe, and the pilot remains paused. The
 earlier diagnostic and expanded runs are not a paired intervention, so their difference does
 not identify a cause or show that the larger setup corrected the failure. Gemma evidence is
