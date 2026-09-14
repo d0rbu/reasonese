@@ -538,6 +538,64 @@ def test_adopt_standardized_rejects_malformed_parameter_archive(
         manage._adopt_standardized(args)
 
 
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        ("report", "saved standardized diagnostic provenance"),
+        ("selection", "DEV-selected candidate"),
+        ("parameter-hash", "saved standardized parameter hashes"),
+        ("scale", "saved standardized parameters have invalid arrays"),
+        ("standardization", "raw-space parameters do not match"),
+        ("protocol", "frozen native gates"),
+    ],
+)
+def test_adopt_standardized_rejects_integrity_tampering_before_activation_load(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    mutation: str,
+    message: str,
+) -> None:
+    args, reference, _ = _adoption_fixture(tmp_path)
+    report = manage._json_object(args.diagnostic)
+    if mutation == "report":
+        report["refit_performed"] = True
+        args.diagnostic.write_text(json.dumps(report), encoding="utf-8")
+    elif mutation == "selection":
+        report["candidates"][6]["diagnostic_parameters"] = "other.npz"
+        args.diagnostic.write_text(json.dumps(report), encoding="utf-8")
+    elif mutation == "parameter-hash":
+        report["candidates"][6]["raw_coefficients_sha256"] = "0" * 64
+        args.diagnostic.write_text(json.dumps(report), encoding="utf-8")
+    elif mutation in {"scale", "standardization"}:
+        with np.load(args.parameters, allow_pickle=False) as archive:
+            arrays = {name: np.asarray(archive[name]) for name in archive.files}
+        if mutation == "scale":
+            arrays["scale"] = arrays["scale"].copy()
+            arrays["scale"][0] = -1.0
+        else:
+            arrays["standardized_bias"] = arrays["standardized_bias"].copy()
+            arrays["standardized_bias"][0] += 1.0
+        with args.parameters.open("wb") as handle:
+            np.savez(handle, **arrays)
+        report["candidates"][6]["diagnostic_parameters_sha256"] = manage._sha256(
+            args.parameters
+        )
+        args.diagnostic.write_text(json.dumps(report), encoding="utf-8")
+    else:
+        protocol = manage._json_object(args.protocol)
+        protocol["native_gate"]["required_segments"] = ["reasoning"]
+        args.protocol.write_text(json.dumps(protocol), encoding="utf-8")
+
+    monkeypatch.setattr(manage, "load_role_probe", lambda _path: reference)
+    monkeypatch.setattr(
+        manage,
+        "load_activation_dataset",
+        lambda _path: pytest.fail("activation dataset loaded after integrity rejection"),
+    )
+    with pytest.raises(ValueError, match=message):
+        manage._adopt_standardized(args)
+
+
 def test_qualify_binds_partitions_and_reports(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
