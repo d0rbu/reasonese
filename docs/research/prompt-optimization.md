@@ -67,8 +67,8 @@ with a message-QA failure can still receive probe scores; combined eligibility i
 separately. Each study must keep both instructions in one declared pair. The comparison preserves
 raw compressed framing reasoning probabilities and explicit per-pair descriptive counts without
 putting them in the pass denominator. `reasonese-compare-prompts` emits a before/after table for
-every pair and each judge, plus overall numerators, denominators, missing records, and compressed
-descriptive counts.
+every pair and each judge, with passed/eligible fractions and pass rates, plus overall numerators,
+denominators, missing records, and compressed descriptive counts.
 
 The table is evidence for selecting a brief, not a claim that one wording is indistinguishable
 from a model's private reasoning or that message QA proves semantic equivalence. Review raw

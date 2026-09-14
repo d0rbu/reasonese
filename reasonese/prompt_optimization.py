@@ -678,9 +678,14 @@ def _format_comparison_markdown(
     candidate_name: str,
     overall: dict[str, object],
 ) -> str:
+    def format_cell(counts: dict[str, int]) -> str:
+        denominator = counts["pass_denominator"]
+        rate = "N/A" if denominator == 0 else f"{100 * counts['pass_numerator'] / denominator:.1f}%"
+        return f"{counts['pass_numerator']}/{denominator} ({rate})"
+
     lines = [
         "| Instruction pair | Judge | "
-        f"{baseline_name} passed/eligible | {candidate_name} passed/eligible |",
+        f"{baseline_name} passed/eligible (rate) | {candidate_name} passed/eligible (rate) |",
         "|---|---|---:|---:|",
     ]
     for row in rows:
@@ -688,16 +693,14 @@ def _format_comparison_markdown(
         candidate = cast(dict[str, int], row["candidate"])
         lines.append(
             f"| {row['pair_id']} | {row['judge']} | "
-            f"{baseline['pass_numerator']}/{baseline['pass_denominator']} | "
-            f"{candidate['pass_numerator']}/{candidate['pass_denominator']} |"
+            f"{format_cell(baseline)} | {format_cell(candidate)} |"
         )
     for judge, key in (("message-QA (GPT-5.6 Luna)", "message_qa"), ("Nemotron role probe", "probe")):
         baseline = cast(dict[str, int], cast(dict[str, object], overall["baseline"])[key])
         candidate = cast(dict[str, int], cast(dict[str, object], overall["candidate"])[key])
         lines.append(
             f"| Overall | {judge} | "
-            f"{baseline['pass_numerator']}/{baseline['pass_denominator']} | "
-            f"{candidate['pass_numerator']}/{candidate['pass_denominator']} |"
+            f"{format_cell(baseline)} | {format_cell(candidate)} |"
         )
     return "\n".join(lines) + "\n"
 

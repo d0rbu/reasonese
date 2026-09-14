@@ -436,6 +436,8 @@ def test_compare_outputs_reports_pair_and_judge_denominators(
     assert qa_baseline["pass_denominator"] == 16
     markdown = cast(str, comparison["markdown"])
     assert "passed/eligible" in markdown
+    assert "16/16 (100.0%)" in markdown
+    assert "15/16 (93.8%)" in markdown
     assert "| Overall |" in markdown
     overall = cast(dict[str, object], comparison["overall"])
     overall_baseline = cast(dict[str, object], overall["baseline"])
@@ -447,6 +449,21 @@ def test_compare_outputs_reports_pair_and_judge_denominators(
         "baseline": {"pilot-pair": 4},
         "candidate": {"pilot-pair": 4},
     }
+
+
+def test_comparison_markdown_uses_na_for_empty_pass_denominator() -> None:
+    empty = {"pass_numerator": 0, "pass_denominator": 0, "missing": 0, "descriptive": 0}
+    markdown = optimization._format_comparison_markdown(
+        [],
+        "baseline",
+        "candidate",
+        {
+            "baseline": {"message_qa": empty, "probe": empty},
+            "candidate": {"message_qa": empty, "probe": empty},
+        },
+    )
+
+    assert markdown.count("0/0 (N/A)") == 4
 
 
 def test_compare_rejects_mismatched_identity(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
