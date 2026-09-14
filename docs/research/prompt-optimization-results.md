@@ -35,8 +35,9 @@ The recorded rule retains the baseline unless a candidate improves joint LLM/pro
 without losing LLM semantic compliance. Neither candidate passes: v1 loses Luna compliance and
 joint eligibility; v2 improves Luna compliance but loses joint eligibility. The baseline is
 retained under that rule. No candidate is adopted, and no pilot or reserved Everest confirmation
-run has launched. The next pilot protocol choice remains pending; these results do not assume a
-different rule or relax either gate.
+run has launched. The baseline was selected for the pilot protocol with both Luna semantic
+compliance and the local probe retained as hard gates. The separately defined
+`constraint-scope-v3` brief is unmeasured and does not alter this result.
 
 Among the six reasonese inputs, Luna compliance was 3/6 for the baseline, 1/6 for v1, and 3/6 for
 v2. Manual objections involving the official CPython source and release date remain ambiguous;

@@ -14,6 +14,7 @@ from reasonese.check_messages import MessageQaRunResult
 from reasonese.conversation import (
     AUTHORING_BRIEFS,
     BASELINE_AUTHORING_BRIEF,
+    CONSTRAINT_SCOPE_AUTHORING_BRIEF,
     REASONESE_NATURAL_AUTHORING_BRIEF,
     SEMANTIC_PRESERVATION_AUTHORING_BRIEF,
     GeneratedMessage,
@@ -167,6 +168,7 @@ def test_briefs_are_immutable_and_candidate_does_not_change_controls() -> None:
         "baseline",
         "reasonese-natural-v1",
         "semantic-preservation-v2",
+        "constraint-scope-v3",
     }
     with pytest.raises(ValueError, match="name"):
         type(BASELINE_AUTHORING_BRIEF)("", "")
@@ -188,6 +190,25 @@ def test_semantic_preservation_v2_covers_all_framings_and_keeps_qa_fixed() -> No
         candidate_request = authoring_request(spec, brief=candidate)
         assert baseline_request != candidate_request
         assert candidate.guidance in candidate_request["messages"][0]["content"]
+
+        qa_evidence = json.loads(message_qa_request(_message(spec))["messages"][1]["content"])
+        assert qa_evidence["exact_authoring_instructions"] == authoring_instructions(spec)
+        assert candidate.guidance not in qa_evidence["exact_authoring_instructions"]
+
+
+def test_constraint_scope_v3_identity_routes_to_authors_but_not_qa() -> None:
+    candidate = CONSTRAINT_SCOPE_AUTHORING_BRIEF
+    assert AUTHORING_BRIEFS[candidate.name] is candidate
+    assert candidate.name == "constraint-scope-v3"
+    assert candidate.framings == tuple(Framing)
+    assert candidate.fingerprint not in {
+        BASELINE_AUTHORING_BRIEF.fingerprint,
+        SEMANTIC_PRESERVATION_AUTHORING_BRIEF.fingerprint,
+    }
+    for number, framing in enumerate(Framing):
+        spec = _spec(200 + number, framing, Channel.USER)
+        request = authoring_request(spec, brief=candidate)
+        assert candidate.guidance in request["messages"][0]["content"]
 
         qa_evidence = json.loads(message_qa_request(_message(spec))["messages"][1]["content"])
         assert qa_evidence["exact_authoring_instructions"] == authoring_instructions(spec)

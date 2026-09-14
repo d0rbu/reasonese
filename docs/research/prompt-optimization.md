@@ -7,7 +7,10 @@ or write observations. The existing default authoring prompt is the `baseline` c
 repository also defines `reasonese-natural-v1`, a measured candidate that adds a short
 reasonese-only reminder to preserve concrete obligations in natural first-person planning prose.
 It also defines `semantic-preservation-v2`, a measured all-framing candidate that keeps supplied
-obligations explicit while leaving optional methods open. Neither candidate is adopted automatically.
+obligations explicit while leaving optional methods open. The unmeasured `constraint-scope-v3`
+candidate makes the scope of modifiers and optional examples explicit and instructs authors not
+to add methods, source requirements, or task substance while changing the requested voice. No
+candidate is adopted automatically.
 
 Each invocation requires a fresh output directory and one candidate name. The suite must contain
 at most 32 one-rollout studies, at most 64 unique inputs, and at most 128 probe scores, and must
@@ -87,7 +90,8 @@ only the local probe scores. The corrected overall results are:
 The recorded rule retains the baseline unless a candidate improves joint LLM/probe eligibility
 without losing LLM semantic compliance. Neither candidate passes, so the baseline is retained
 under that rule. No candidate is adopted, and no pilot or reserved confirmation run has launched.
-The next pilot protocol choice remains pending; no new rule or relaxed gate is assumed. The
+The baseline was selected for the pilot protocol with both Luna semantic compliance and the local
+probe retained as hard gates. V3 is unmeasured and does not alter that selection. The
 [measurement report](prompt-optimization-results.md) gives the corrected per-pair table, joint
 counts, compressed diagnostics, and historical full-context provenance.
 

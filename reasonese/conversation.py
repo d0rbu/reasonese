@@ -333,6 +333,15 @@ SEMANTIC_PRESERVATION_AUTHORING_BRIEF = AuthoringBrief(
     "rewriting analysis, drafts, or self-evaluation.",
     tuple(Framing),
 )
+CONSTRAINT_SCOPE_AUTHORING_BRIEF = AuthoringBrief(
+    "constraint-scope-v3",
+    "Keep every task obligation explicit, with the same scope: examples stay optional, and "
+    'modifiers such as "only", "such as", and "at least" apply to the same things. Change the '
+    "requested voice without adding methods, source requirements, verification steps, or "
+    "deliverables. Preserve supplied text, quantities, requested language, and output format. "
+    "Return only the destination instruction, with no unrequested translation or wrapper.",
+    tuple(Framing),
+)
 
 AUTHORING_BRIEFS = {
     brief.name: brief
@@ -340,6 +349,7 @@ AUTHORING_BRIEFS = {
         BASELINE_AUTHORING_BRIEF,
         REASONESE_NATURAL_AUTHORING_BRIEF,
         SEMANTIC_PRESERVATION_AUTHORING_BRIEF,
+        CONSTRAINT_SCOPE_AUTHORING_BRIEF,
     )
 }
 
