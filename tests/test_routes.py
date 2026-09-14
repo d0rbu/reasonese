@@ -97,6 +97,14 @@ def test_route_boundaries() -> None:
     assert ModelRoute(OpenRouterModelId.parse("example/model"), None).free_model_id is None
 
 
+def test_free_author_transport_is_sync_with_or_without_batch_preference() -> None:
+    route = select_route(Author.NEMOTRON_3_5_LIGHTNING, RoutePreference.FREE)
+    body = {"messages": []}
+
+    assert completion_provenance(route, (body,), prefer_batch=False).transport is CompletionTransport.SYNC
+    assert completion_provenance(route, (body,), prefer_batch=True).transport is CompletionTransport.SYNC
+
+
 @pytest.mark.parametrize(
     ("slug", "expected"),
     [

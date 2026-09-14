@@ -13,6 +13,7 @@ from reasonese.axes import Author
 from reasonese.cache import YamlMessageCache, YamlTraceCache
 from reasonese.check_messages import audit_messages, require_compliant_messages
 from reasonese.conversation import (
+    AuthoringBrief,
     ConversationSetup,
     ConversationTrace,
     GeneratedMessage,
@@ -86,6 +87,7 @@ def materialize_messages(
     *,
     prefer_batch: bool,
     routing: CollectionRouting | None = None,
+    authoring_brief: AuthoringBrief | None = None,
 ) -> tuple[GeneratedMessage, ...]:
     """Generate each distinct uncached input, grouped by author model."""
     return materialize_specs(
@@ -95,6 +97,7 @@ def materialize_messages(
         manual_messages,
         prefer_batch=prefer_batch,
         routing=routing,
+        authoring_brief=authoring_brief,
     )
 
 
@@ -108,6 +111,7 @@ def materialize_specs(
     prefer_batch: bool,
     routing: CollectionRouting | None = None,
     require_collection_permission: bool = False,
+    authoring_brief: AuthoringBrief | None = None,
 ) -> tuple[GeneratedMessage, ...]:
     """Materialize arbitrary prompt specs with one shared model-grouped cache pass."""
     routing = routing or CollectionRouting()
@@ -140,7 +144,9 @@ def materialize_specs(
         completion_groups.append(
             CompletionGroup(
                 select_route(author, routing.preference),
-                tuple(authoring_request(spec) for spec in authored_specs),
+                tuple(
+                    authoring_request(spec, brief=authoring_brief) for spec in authored_specs
+                ),
             )
         )
 

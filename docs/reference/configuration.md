@@ -151,6 +151,12 @@ Author counts refer to distinct materialized messages per pass, not token usage 
 assistant counts refer to trials, not the number of tool continuations. Mixed partial resumes
 can report the same author in both cached and materialized groups.
 
+`reasonese-collect-studies` also accepts `--authoring-brief` with one of the registered authoring
+brief names. The generated-message cache key does not include this brief, so use a fresh output
+and message cache when selecting a different brief; otherwise existing authored text can be reused
+under the new selection. Message QA continues to use the canonical datapoint-derived instructions
+and does not change with the authoring brief.
+
 The planner accepts repeated `--author` and the sampler accepts repeated `--author` and
 `--assistant` filters, including `Gemma 4 31B`. Both default author selection and default assistant selection
 contain only Nemotron 3.5 Lightning and Gemma 4 31B. Supplying a filter replaces its default

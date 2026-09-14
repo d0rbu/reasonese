@@ -5,6 +5,7 @@ import sqlite3
 from contextlib import closing
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 from typing import cast
 
 import pytest
@@ -19,10 +20,12 @@ from reasonese.collect_studies import collection_tasks, suite_collection_tasks
 from reasonese.collect_studies import main as collect_studies_cli
 from reasonese.config import load_study
 from reasonese.conversation import (
+    REASONESE_NATURAL_AUTHORING_BRIEF,
     ConversationSetup,
     ConversationTrace,
     GeneratedMessage,
     GeneratedText,
+    authoring_instructions,
     construct_conversation,
 )
 from reasonese.io import write_study_suite
@@ -617,6 +620,60 @@ def test_collect_study_batches_trials_and_judgments_then_resumes_without_a_key(
         collect_study(study, output, None, manual, routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=True)
 
 
+def test_collect_studies_selected_authoring_brief_preserves_manual_and_qa_contract(
+    tmp_path: Path,
+) -> None:
+    base = _study()
+    model_input = replace(
+        base.inputs[1],
+        framing=Framing.REASONESE_NORMAL,
+        author=Author.NEMOTRON_3_5_LIGHTNING,
+    )
+    study = make_study((base.inputs[0], model_input), Assistant.INKLING, 1)
+    manual = _manual_library(tmp_path, study)
+    output = tmp_path / "selected-brief"
+    transport = FakeTransport(
+        [
+            _chat("I will perform the requested task.", "author"),
+            _message_qa_batch(2),
+            *_assistant_responses(2),
+            _judge_batch((True, False, False, True)),
+        ]
+    )
+
+    result = collect_studies(
+        (CollectionTask(study, output),),
+        OpenRouterClient(transport),
+        manual,
+        YamlMessageCache(output / "generated_messages.yaml"),
+        YamlMessageQaCache(output / "message_qa.yaml"),
+        prefer_batch=False,
+        routing=CollectionRouting(RoutePreference.PAID, True),
+        authoring_brief=REASONESE_NATURAL_AUTHORING_BRIEF,
+    )[0]
+
+    assert len(result.observations) == 4
+    author_body = transport.post_calls[0][1]
+    assert "ordinary first-person note" in author_body["messages"][0]["content"]
+
+    generated = YamlMessageCache(output / "generated_messages.yaml").load()
+    user_spec = base.inputs[0]
+    user_message = next(message for message in generated if message.spec == user_spec)
+    assert user_message.content == str(user_spec.instruction)
+    assert user_message.response is None
+
+    qa_batch = transport.post_calls[1][1]
+    assert qa_batch["model"] == "openai/gpt-5.6-luna"
+    assert len(qa_batch["requests"]) == 2
+    expected_qa_instructions = {
+        str(spec.instruction): authoring_instructions(spec) for spec in study.inputs
+    }
+    for request in qa_batch["requests"]:
+        evidence = json.loads(request["body"]["messages"][1]["content"])
+        instruction = evidence["datapoint"]["instruction"]
+        assert evidence["exact_authoring_instructions"] == expected_qa_instructions[instruction]
+
+
 def test_collection_retries_empty_final_before_judging_and_caching(tmp_path: Path) -> None:
     study = _study()
     manual = _manual_library(tmp_path, study)
@@ -1020,6 +1077,49 @@ def test_collect_studies_cli_batches_tasks_then_reports_warm_cache(
     assert [item["trace_cache_hits"] for item in warm["studies"]] == [2, 2]
     assert [item["judgment_cache_hits"] for item in warm["studies"]] == [2, 2]
     assert len(transport.post_calls) == 6
+
+
+def test_collect_studies_cli_forwards_selected_authoring_brief(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    study = _study()
+    study_path = tmp_path / "study.yaml"
+    _write_study(study_path, study)
+    manual = _manual_library(tmp_path, study)
+    seen: dict[str, object] = {}
+
+    def fake_collect_studies(*args: object, **kwargs: object) -> tuple[object, ...]:
+        seen["authoring_brief"] = kwargs["authoring_brief"]
+        return (
+            SimpleNamespace(
+                excluded_inputs=(),
+                judgment_cache_hits=0,
+                observations=(),
+                probe_qa_verdicts=(),
+                trace_cache_hits=0,
+                trials=(),
+            ),
+        )
+
+    monkeypatch.setattr("reasonese.collect_studies.collect_studies", fake_collect_studies)
+    assert (
+        collect_studies_cli(
+            [
+                "--study",
+                str(study_path),
+                "--output",
+                str(tmp_path / "output"),
+                "--user-messages",
+                str(manual.root),
+                "--authoring-brief",
+                "reasonese-natural-v1",
+            ]
+        )
+        == 0
+    )
+
+    capsys.readouterr()
+    assert seen["authoring_brief"] is REASONESE_NATURAL_AUTHORING_BRIEF
 
 
 def test_collect_studies_cli_accepts_suite_and_writes_combined_observations(

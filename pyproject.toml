@@ -40,6 +40,8 @@ reasonese-curate-instructions = "reasonese.curate_instructions:main"
 reasonese-write-variants = "reasonese.write_variants:main"
 reasonese-extract-role-activations = "reasonese.extract_role_activations:main"
 reasonese-role-probe = "reasonese.manage_role_probe:main"
+reasonese-optimize-prompt = "reasonese.prompt_optimization:main"
+reasonese-compare-prompts = "reasonese.prompt_optimization:compare_main"
 
 [build-system]
 requires = ["hatchling"]

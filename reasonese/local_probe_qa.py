@@ -7,8 +7,10 @@ import hashlib
 import importlib
 import json
 import os
+import sys
 import tempfile
 from collections import defaultdict
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -23,7 +25,11 @@ from reasonese.probe_qa import (
     ProbeQaVerdict,
     probe_expectation,
 )
-from reasonese.probe_rendering import SERVER_TOOL_LIMITATION, render_collector_probe_context
+from reasonese.probe_rendering import (
+    SERVER_TOOL_LIMITATION,
+    RenderedProbeContext,
+    render_collector_probe_context,
+)
 from reasonese.role_probe_extraction import (
     NATIVE_ADAPTERS,
     NativeTemplateAdapter,
@@ -36,10 +42,79 @@ from reasonese.role_probe_extraction import (
 from reasonese.role_probes import RoleProbe, load_role_probe, project_role
 
 _FORMAT_VERSION = 1
+CAPTURE_POLICY = "segment_prefix_capture_v2_nemotron_cumsum_h1"
 _ASSISTANT_ADAPTERS = {
     Assistant.NEMOTRON_3_5_LIGHTNING: "nemotron-3.5-lightning-native-v1",
     Assistant.GEMMA_4_31B_IT: "gemma-4-31b-native-v1",
 }
+_NEMOTRON_CUMSUM_HEAD_TILES = (1, 2, 4, 8, 16, 32, 64)
+
+
+def _nemotron_cumsum_autotuner(model: object) -> Any:
+    """Return the pinned Mamba cumsum autotuner or fail on runtime drift."""
+    autotuner_type = importlib.import_module("triton.runtime.autotuner").Autotuner
+    model_module = sys.modules.get(model.__class__.__module__)
+    combined = getattr(model_module, "mamba_chunk_scan_combined", None)
+    module_name = getattr(combined, "__module__", "")
+    marker = ".ops.triton."
+    if not module_name.startswith("_mamba_ssm_cuda_") or marker not in module_name:
+        raise RuntimeError("validated Nemotron model lacks its pinned Mamba Triton callable")
+    kernel_module = importlib.import_module(
+        f"{module_name.partition(marker)[0]}{marker}ssd_chunk_state"
+    )
+    value = getattr(kernel_module, "_chunk_cumsum_fwd_kernel", None)
+    visited: set[int] = set()
+    for _ in range(5):
+        if id(value) in visited:
+            break
+        visited.add(id(value))
+        if isinstance(value, autotuner_type):
+            return value
+        value = getattr(value, "fn", None)
+    raise RuntimeError("validated Nemotron model lacks its cumsum Triton autotuner")
+
+
+@contextmanager
+def _pinned_nemotron_cumsum(
+    model: object, adapter: NativeTemplateAdapter, execution_device: str
+) -> Any:
+    """Use the registered H1 cumsum config for one Nemotron CUDA capture scope."""
+    if adapter.name != "nemotron-3.5-lightning-native-v1" or not execution_device.startswith(
+        "cuda"
+    ):
+        yield
+        return
+    tuner = _nemotron_cumsum_autotuner(model)
+    configs = tuner.configs
+    records = [config.all_kwargs() for config in configs]
+    expected = [
+        {
+            "BLOCK_SIZE_H": head_tile,
+            "num_ctas": 1,
+            "num_stages": 3,
+            "num_warps": 4,
+        }
+        for head_tile in _NEMOTRON_CUMSUM_HEAD_TILES
+    ]
+    if records != expected:
+        raise RuntimeError("Nemotron cumsum Triton configs differ from the pinned runtime")
+    selected = configs[0]
+    if selected.pre_hook is not None:
+        raise RuntimeError("Nemotron cumsum H1 config unexpectedly has a pre-hook")
+    absent = object()
+    best_config = getattr(tuner, "best_config", absent)
+    nargs = getattr(tuner, "nargs", absent)
+    tuner.configs = [selected]
+    try:
+        yield
+    finally:
+        tuner.configs = configs
+        for name, value in (("best_config", best_config), ("nargs", nargs)):
+            if value is absent:
+                if hasattr(tuner, name):
+                    delattr(tuner, name)
+            else:
+                setattr(tuner, name, value)
 
 
 def _file_sha256(path: Path) -> str:
@@ -322,6 +397,10 @@ class LocalProbeQaScorer:
             )
             if runtime_sha256 != prepared.probe.provenance.runtime_sha256:
                 raise ValueError("local scorer runtime does not match qualified probe provenance")
+            with _pinned_nemotron_cumsum(
+                model, prepared.bundle.adapter, self.execution_device
+            ):
+                pass
         except BaseException:
             del model
             self._release_device_cache()
@@ -336,6 +415,21 @@ class LocalProbeQaScorer:
             torch.cuda.empty_cache()
 
     @staticmethod
+    def _target_prefix(context: RenderedProbeContext) -> RenderedProbeContext:
+        """Keep context through the scored span, omitting only later suffix tokens."""
+        if len(context.token_positions) != 1:
+            raise ValueError("collector probe context must contain exactly one measured span")
+        positions = context.token_positions[0]
+        last_position = positions[-1]
+        return RenderedProbeContext(
+            context.input_ids[: last_position + 1],
+            (positions,),
+            (context.content_token_ids[0],),
+            context.render_config_sha256,
+            context.masked_boundary_tokens,
+        )
+
+    @staticmethod
     def _context_key(
         prepared: _PreparedBundle,
         request: ProbeQaRequest,
@@ -346,6 +440,7 @@ class LocalProbeQaScorer:
     ) -> str:
         return _canonical_sha256(
             {
+                "capture_policy": CAPTURE_POLICY,
                 "probe_sha256": prepared.probe_sha256,
                 "runtime_sha256": prepared.probe.provenance.runtime_sha256,
                 "weights_sha256": prepared.probe.provenance.weights_sha256,
@@ -355,7 +450,7 @@ class LocalProbeQaScorer:
                 "permutation": request.permutation,
                 "position": request.position,
                 "render_config_sha256": render_config_sha256,
-                "input_ids": input_ids,
+                "prefix_input_ids": input_ids,
                 "token_positions": positions,
                 "content_token_ids": content_ids,
             }
@@ -384,7 +479,7 @@ class LocalProbeQaScorer:
         tokenizer = transformers.AutoTokenizer.from_pretrained(
             prepared.bundle.checkpoint, local_files_only=True, use_fast=True
         )
-        rendered: dict[ProbeQaRequest, Any] = {}
+        rendered: dict[ProbeQaRequest, RenderedProbeContext] = {}
         keys: dict[ProbeQaRequest, str] = {}
         missing: list[ProbeQaRequest] = []
         for request in requests:
@@ -394,14 +489,15 @@ class LocalProbeQaScorer:
                 request.setup,
                 request.position,
             )
-            rendered[request] = context
+            prefix = self._target_prefix(context)
+            rendered[request] = prefix
             key = self._context_key(
                 prepared,
                 request,
-                context.input_ids,
-                context.token_positions[0],
-                context.content_token_ids[0],
-                context.render_config_sha256,
+                prefix.input_ids,
+                prefix.token_positions[0],
+                prefix.content_token_ids[0],
+                prefix.render_config_sha256,
             )
             keys[request] = key
             cached = self.cache.verdict(key, request, prepared.probe)
@@ -414,37 +510,27 @@ class LocalProbeQaScorer:
 
         model = self._load_validated_model(prepared)
         try:
-            by_context: dict[tuple[str, int], list[ProbeQaRequest]] = defaultdict(list)
-            for request in missing:
-                by_context[(request.study_id, request.permutation)].append(request)
-            for unsorted_requests in by_context.values():
-                context_requests = sorted(unsorted_requests, key=lambda request: request.position)
-                contexts = [rendered[request] for request in context_requests]
-                if len({context.input_ids for context in contexts}) != 1:
-                    raise ValueError(
-                        "target spans in one ordered setup rendered different contexts"
+            with _pinned_nemotron_cumsum(
+                model, prepared.bundle.adapter, self.execution_device
+            ):
+                for request in missing:
+                    context = rendered[request]
+                    positions = context.token_positions[0]
+                    captured = capture_token_activations(
+                        model,
+                        prepared.bundle.adapter,
+                        input_ids=context.input_ids,
+                        token_positions=positions,
+                        layers=(prepared.probe.selected_layer_index,),
                     )
-                positions = tuple(
-                    position for context in contexts for position in context.token_positions[0]
-                )
-                captured = capture_token_activations(
-                    model,
-                    prepared.bundle.adapter,
-                    input_ids=contexts[0].input_ids,
-                    token_positions=positions,
-                    layers=(prepared.probe.selected_layer_index,),
-                )
-                if (
-                    captured.ndim != 3
-                    or captured.shape[0] != len(positions)
-                    or captured.shape[1] != 1
-                    or captured.dtype.name != prepared.probe.provenance.activation_dtype
-                ):
-                    raise ValueError("local role-probe capture returned an invalid shape")
-                cursor = 0
-                for request, context in zip(context_requests, contexts, strict=True):
-                    count = len(context.token_positions[0])
-                    activations = np.asarray(captured[cursor : cursor + count, 0])
+                    if (
+                        captured.ndim != 3
+                        or captured.shape[0] != len(positions)
+                        or captured.shape[1] != 1
+                        or captured.dtype.name != prepared.probe.provenance.activation_dtype
+                    ):
+                        raise ValueError("local role-probe capture returned an invalid shape")
+                    activations = np.asarray(captured[:, 0])
                     projection = project_role(
                         prepared.probe,
                         activations,
@@ -466,9 +552,6 @@ class LocalProbeQaScorer:
                     )
                     verdicts[request] = verdict
                     self.cache.put(verdict)
-                    cursor += count
-                if cursor != captured.shape[0]:
-                    raise ValueError("captured activations did not map to every target span")
         finally:
             del model
             self._release_device_cache()
