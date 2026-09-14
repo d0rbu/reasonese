@@ -2,19 +2,18 @@
 
 The per-component Bradley-Terry fit in :mod:`reasonese.analysis` gives every
 cell its own score, so it cannot say which of a cell's coordinates carries an
-effect. This module refits the same comparisons with every cell's strength
-decomposed into a ``(pair, assistant)`` side offset plus a sparse sum of
-feature effects::
+effect. This module refits the same comparisons separately for each evaluation
+assistant, with every cell's strength decomposed into a pair-side offset plus
+a sparse sum of feature effects::
 
     logit P(first beats second) = sign * offset[block] + sum_j beta_j * (x_first_j - x_second_j)
 
-The features are treatment contrasts for framing, channel, and author, whether
-the author is the assistant itself or a model from its family, which cell was
-delivered first, and two-way interactions. An L1 penalty on ``beta`` zeroes the
-features the comparisons do not support, so the order in which features enter
-as the penalty relaxes ranks them by how strongly they are tied to completion.
-The offsets keep the L2 penalty of the ranking fit, which bounds them under
-separation without shrinking any feature.
+The features are treatment contrasts for framing, channel, and author, all
+three two-way interactions, and their three-way interaction. An L1 penalty on
+``beta`` zeroes the features the comparisons do not support, so the order in
+which features enter as the penalty relaxes ranks them by how strongly they
+are tied to completion. The offsets keep the L2 penalty of the ranking fit,
+which bounds them under separation without shrinking any feature.
 """
 
 from __future__ import annotations
@@ -23,6 +22,7 @@ import math
 from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
+from itertools import product
 
 import numpy as np
 from beartype import beartype
@@ -30,7 +30,7 @@ from numpy.typing import NDArray
 from threadpoolctl import threadpool_limits
 
 from reasonese.analysis import TableRow, build_comparisons
-from reasonese.axes import Assistant, Author, Channel, Framing, model_family
+from reasonese.axes import Author, Channel, Framing
 from reasonese.instructions import PairMembership, PairSide
 from reasonese.observations import CellId, Observation
 
@@ -50,7 +50,6 @@ _MIN_STEP = 1e-4
 _FRAMING_ORDER = tuple(str(value) for value in Framing)
 _CHANNEL_ORDER = tuple(str(value) for value in Channel)
 _AUTHOR_ORDER = tuple(str(value) for value in Author)
-_ASSISTANT_ORDER = tuple(str(value) for value in Assistant)
 # The author reference is the first model author present rather than the user,
 # because the user writes only three framings. With the user as reference, the
 # subagent and reasonese main effects would be observed under no reference
@@ -61,8 +60,7 @@ _INTERACTIONS = (
     ("framing", "channel"),
     ("framing", "author"),
     ("channel", "author"),
-    ("framing", "assistant"),
-    ("channel", "assistant"),
+    ("framing", "channel", "author"),
 )
 _STATUS_FITTED = "fitted"
 _STATUS_CONSTANT = "never differs"
@@ -87,10 +85,9 @@ class LassoFeature:
 @beartype
 @dataclass(frozen=True, slots=True)
 class LassoBlock:
-    """One (pair, assistant) block whose side offset absorbs the pair's difficulty."""
+    """One pair block whose side offset absorbs its instruction asymmetry."""
 
     pair_id: str
-    assistant: str
     comparisons: int
 
 
@@ -109,7 +106,7 @@ class LassoCrossValidation:
 @beartype
 @dataclass(frozen=True, slots=True)
 class FeatureLasso:
-    """A penalty path of sparse feature fits over the within-trial comparisons.
+    """One assistant's penalty path over the within-trial comparisons.
 
     ``coefficients`` and ``offsets`` hold one row per penalty in ``lambdas``;
     ``selected`` is the row reported as the fit, the one-standard-error choice
@@ -122,6 +119,7 @@ class FeatureLasso:
     orderings and every rollout of one pair share a cross-validation fold.
     """
 
+    assistant: str
     comparisons: int
     cell_pairs: int
     references: dict[str, str]
@@ -218,11 +216,8 @@ class _Candidates:
 def _candidate_columns(observations: tuple[Observation, ...]) -> _Candidates:
     """Build one row of candidate feature values per observation.
 
-    Main effects come first, then the two match indicators, the delivery
-    position, and the interactions in ``_INTERACTIONS`` order. Author by
-    assistant is deliberately absent: ``self_author`` and ``same_family`` are
-    its structured replacement, and a saturated version would make them
-    redundant.
+    Main effects come first, followed by every two-way interaction among
+    framing, channel, and author and then their three-way interaction.
     """
     axes = {
         "framing": _axis(
@@ -238,7 +233,6 @@ def _candidate_columns(observations: tuple[Observation, ...]) -> _Candidates:
         "author": _axis(
             [str(row.spec.author) for row in observations], _AUTHOR_ORDER, _MODEL_AUTHORS
         ),
-        "assistant": _axis([str(row.assistant) for row in observations], _ASSISTANT_ORDER, ()),
     }
     names: list[str] = []
     groups: list[str] = []
@@ -249,40 +243,21 @@ def _candidate_columns(observations: tuple[Observation, ...]) -> _Candidates:
             names.append(f"{axis_name}[{level}]")
             groups.append(axis_name)
             columns.append(axis.dummies[:, position])
-    count = len(observations)
-    names.extend(("self_author", "same_family"))
-    groups.extend(("match", "match"))
-    columns.append(
-        np.fromiter(
-            (str(row.spec.author) == str(row.assistant) for row in observations),
-            dtype=np.float64,
-            count=count,
-        )
-    )
-    columns.append(
-        np.fromiter(
-            (
-                model_family(row.spec.author) is not None
-                and model_family(row.spec.author) == model_family(row.assistant)
-                for row in observations
-            ),
-            dtype=np.float64,
-            count=count,
-        )
-    )
-    names.append("first_position")
-    groups.append("position")
-    columns.append(
-        np.fromiter((int(row.position) == 1 for row in observations), dtype=np.float64, count=count)
-    )
-    for left_name, right_name in _INTERACTIONS:
-        left = axes[left_name]
-        right = axes[right_name]
-        for left_position, left_level in enumerate(left.levels):
-            for right_position, right_level in enumerate(right.levels):
-                names.append(f"{left_name}[{left_level}]:{right_name}[{right_level}]")
-                groups.append(f"{left_name}:{right_name}")
-                columns.append(left.dummies[:, left_position] * right.dummies[:, right_position])
+    for interaction in _INTERACTIONS:
+        interaction_axes = tuple(axes[name] for name in interaction)
+        for positions in product(*(range(len(axis.levels)) for axis in interaction_axes)):
+            terms = tuple(
+                f"{name}[{axis.levels[position]}]"
+                for name, axis, position in zip(
+                    interaction, interaction_axes, positions, strict=True
+                )
+            )
+            names.append(":".join(terms))
+            groups.append(":".join(interaction))
+            column = np.ones(len(observations), dtype=np.float64)
+            for axis, position in zip(interaction_axes, positions, strict=True):
+                column *= axis.dummies[:, position]
+            columns.append(column)
     return _Candidates(
         {axis_name: axis.reference for axis_name, axis in axes.items()},
         tuple(names),
@@ -362,6 +337,7 @@ def _screen(
 
 @dataclass(frozen=True, slots=True)
 class _Assembled:
+    assistant: str
     design: _Design
     groups: NDArray[np.intp]
     group_count: int
@@ -374,15 +350,14 @@ class _Assembled:
 def _assemble(
     observations: tuple[Observation, ...], memberships: dict[CellId, PairMembership]
 ) -> _Assembled:
+    assistants = {str(row.assistant) for row in observations}
+    if len(assistants) != 1:
+        raise ValueError("each feature lasso must contain exactly one evaluation assistant")
     comparisons = build_comparisons(observations)
     row_index = {
         (str(row.trial_id), row.cell_id): position for position, row in enumerate(observations)
     }
-    assistant_by_cell = {row.cell_id: str(row.assistant) for row in observations}
-    keys = [
-        (str(memberships[comparison.first].pair.pair_id), assistant_by_cell[comparison.first])
-        for comparison in comparisons
-    ]
+    keys = [str(memberships[comparison.first].pair.pair_id) for comparison in comparisons]
     block_keys = sorted(set(keys))
     block_position = {key: position for position, key in enumerate(block_keys)}
     count = len(comparisons)
@@ -418,6 +393,7 @@ def _assemble(
     pair_position = {key: position for position, key in enumerate(dict.fromkeys(pair_keys))}
     groups = np.fromiter((pair_position[key] for key in pair_keys), dtype=np.intp, count=count)
     return _Assembled(
+        next(iter(assistants)),
         _Design(
             outcomes,
             block_index,
@@ -430,10 +406,7 @@ def _assemble(
         candidates.references,
         features,
         tuple(candidates.names[column] for column in fitted),
-        tuple(
-            LassoBlock(pair_id, assistant, block_sizes[(pair_id, assistant)])
-            for pair_id, assistant in block_keys
-        ),
+        tuple(LassoBlock(pair_id, block_sizes[pair_id]) for pair_id in block_keys),
     )
 
 
@@ -690,10 +663,11 @@ def _cross_validate(
 ) -> LassoCrossValidation:
     """Refit the path without each fold of cell pairs and score the held-out loss.
 
-    The loss is a sum over comparisons, so a penalty tuned to the full data
-    would bind harder on a smaller fold. Each fold's penalties are scaled by
-    its share of the comparisons, which keeps the per-comparison penalty the
-    same and makes the chosen penalty transfer back to the full fit.
+    The loss is a sum over comparisons, so penalties tuned to the full data
+    would bind harder on a smaller fold. Each fold's L1 and L2 penalties are
+    scaled by its share of the comparisons, which keeps the per-comparison
+    penalties the same and makes the chosen L1 penalty transfer back to the
+    full fit.
     """
     assignment = _fold_assignment(groups, group_count, folds, seed)
     losses = np.empty((folds, len(lambdas)), dtype=np.float64)
@@ -701,8 +675,9 @@ def _cross_validate(
         training = design.rows(np.flatnonzero(assignment != fold))
         held_out = design.rows(np.flatnonzero(assignment == fold))
         share = training.size / design.size
+        scaled_l2 = l2 * share
         scaled = [penalty * share for penalty in lambdas]
-        fits = _fit_path(training, l2, scaled, _null_fit(training, l2))
+        fits = _fit_path(training, scaled_l2, scaled, _null_fit(training, scaled_l2))
         losses[fold] = [_mean_loss(held_out, fit) for fit in fits]
     mean = losses.mean(axis=0)
     standard_error = losses.std(axis=0, ddof=1) / math.sqrt(folds)
@@ -733,7 +708,7 @@ def fit_feature_lasso(
     path_length: int,
     seed: int,
 ) -> FeatureLasso:
-    """Fit the penalty path and, with ``folds`` of at least two, cross-validate it.
+    """Fit one assistant's path and, with at least two folds, cross-validate it.
 
     ``l2`` penalizes the block offsets exactly as it penalizes the ranking's
     cell scores. Feature columns are not standardized: every column is a
@@ -771,6 +746,7 @@ def fit_feature_lasso(
     if lambdas:
         selected = cross_validation.index_1se if cross_validation else len(lambdas) - 1
     return FeatureLasso(
+        assembled.assistant,
         design.size,
         assembled.group_count,
         assembled.references,
@@ -789,6 +765,31 @@ def fit_feature_lasso(
         tuple(fit.iterations for fit in fits),
         cross_validation,
         selected,
+    )
+
+
+@beartype
+def fit_feature_lassos(
+    observations: tuple[Observation, ...],
+    memberships: dict[CellId, PairMembership],
+    l2: float,
+    *,
+    folds: int,
+    path_length: int,
+    seed: int,
+) -> tuple[FeatureLasso, ...]:
+    """Fit an independent feature lasso for every evaluation assistant."""
+    assistants = tuple(sorted({str(row.assistant) for row in observations}))
+    return tuple(
+        fit_feature_lasso(
+            tuple(row for row in observations if str(row.assistant) == assistant),
+            memberships,
+            l2,
+            folds=folds,
+            path_length=path_length,
+            seed=seed,
+        )
+        for assistant in assistants
     )
 
 
@@ -824,6 +825,7 @@ def lasso_tables(result: FeatureLasso) -> LassoTables:
     for index, penalty in enumerate(result.lambdas):
         path.append(
             {
+                "assistant": result.assistant,
                 "lambda_index": index,
                 "lambda": penalty,
                 "lambda_ratio": penalty / result.lambda_max,
@@ -838,6 +840,7 @@ def lasso_tables(result: FeatureLasso) -> LassoTables:
         for column, name in enumerate(result.fitted):
             coefficients.append(
                 {
+                    "assistant": result.assistant,
                     "lambda_index": index,
                     "lambda": penalty,
                     "feature": name,
@@ -858,6 +861,7 @@ def lasso_tables(result: FeatureLasso) -> LassoTables:
                 minimum_value = result.coefficients[cross_validation.index_min][column]
         features.append(
             {
+                "assistant": result.assistant,
                 "feature": feature.name,
                 "group": feature.group,
                 "status": feature.status,
@@ -882,8 +886,8 @@ def lasso_tables(result: FeatureLasso) -> LassoTables:
         offset = offsets[position]
         blocks.append(
             {
+                "assistant": result.assistant,
                 "pair": block.pair_id,
-                "assistant": block.assistant,
                 "comparisons": block.comparisons,
                 "offset_selected": offset,
                 "first_side_win_probability": float(_sigmoid_array(np.array([offset]))[0]),
@@ -916,6 +920,7 @@ def lasso_diagnostics(result: FeatureLasso) -> dict[str, object]:
             "loss_1se": cross_validation.mean_loss[cross_validation.index_1se],
         }
     return {
+        "assistant": result.assistant,
         "comparisons": result.comparisons,
         "cell_pairs": result.cell_pairs,
         "blocks": len(result.blocks),

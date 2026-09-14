@@ -37,13 +37,14 @@ models, multiplicity-aware inference, or explicit position-adjusted rankings aft
 sample sizes and study topology are known.
 
 Pooled axis margins average per-component cell scores. The feature lasso is their model-based
-counterpart: it absorbs each `(pair, assistant)` block in a side offset and fits framing,
-channel, author, match, position, and two-way interaction contrasts under an L1 penalty, so a
-pooled effect has to survive a cross-validated penalty rather than average over cell scores. It
-selects and shrinks; it does not test. Standard errors for the selected contrasts, whether from
-a post-selection refit or from stability selection over trial resamples, remain deferred, and a
-pooled effect can still be driven by a few pairs, so per-pair spread is worth inspecting
-alongside both the margin and the lasso.
+counterpart: for each evaluation assistant independently, it absorbs every instruction pair in a
+side offset and fits framing, channel, author, all three two-way interactions, and their three-way
+interaction under an L1 penalty. Position is handled by the symmetric two-permutation collection
+design rather than a model term. A pooled effect across instruction pairs therefore has to survive
+a cross-validated penalty rather than average over cell scores. The lasso selects and shrinks; it
+does not test. Standard errors for selected contrasts, whether from a post-selection refit or from
+stability selection over trial resamples, remain deferred, and a pooled effect can still be driven
+by a few pairs, so per-pair spread is worth inspecting alongside both the margin and the lasso.
 
 ## Construct questions for later work
 

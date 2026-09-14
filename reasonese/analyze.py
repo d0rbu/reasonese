@@ -25,7 +25,7 @@ from reasonese.instructions import (
 from reasonese.lasso import (
     PATH_MIN_RATIO,
     FeatureLasso,
-    fit_feature_lasso,
+    fit_feature_lassos,
     lasso_diagnostics,
     lasso_tables,
     selected_features,
@@ -84,17 +84,17 @@ def _lasso_lines(lasso: FeatureLasso) -> list[str]:
     aliased = [row for row in tables.features if row["status"] == "aliased"]
     lines = [
         "",
-        "## Feature lasso",
+        f"### {lasso.assistant}",
         "",
-        "Every cell's strength is refitted on the same within-trial comparisons as a `(pair, "
-        "assistant)` side offset plus a sparse sum of feature effects. Feature coefficients "
-        "carry an L1 penalty, so a feature stays at zero until the comparisons support it; "
-        "the offsets keep the L2 penalty. Features are treatment contrasts against "
+        "This evaluation assistant is fitted independently. Every cell's strength is a pair-side "
+        "offset plus a sparse sum of feature effects. Feature coefficients carry an L1 penalty, "
+        "so a feature stays at zero until the comparisons support it; the offsets keep the L2 "
+        "penalty. Features are treatment contrasts against "
         f"`{references['framing']}` framing, the `{references['channel']}` channel, the "
-        f"`{references['author']}` author, and the `{references['assistant']}` assistant, "
-        "plus `self_author`, `same_family`, `first_position`, and two-way interactions. "
-        "Columns are not standardized, so a feature that rarely differs inside a trial needs "
-        "a larger effect to enter.",
+        f"`{references['author']}` author, all three two-way interactions, and the "
+        "framing-by-channel-by-author interaction. Position is excluded because both delivery "
+        "orders are measured symmetrically. Columns are not standardized, so a feature that "
+        "rarely differs inside a trial needs a larger effect to enter.",
         "",
         f"- Comparisons: {lasso.comparisons} over {lasso.cell_pairs} distinct cell pairs; "
         f"blocks: {len(lasso.blocks)}",
@@ -177,7 +177,7 @@ def _lasso_lines(lasso: FeatureLasso) -> list[str]:
             "Lasso coefficients are shrunk toward zero and carry no standard errors. Read the "
             "entry order and the cross-validation curve as a guide to which contrasts deserve "
             "a closer look, not as tests. `lasso_features.csv` lists every candidate, and "
-            "`lasso_blocks.csv` gives each pair's side offset under each assistant.",
+            "`lasso_blocks.csv` gives the nuisance pair-side offsets.",
         ]
     )
     return lines
@@ -188,7 +188,7 @@ def _write_report(
     bundle: AnalysisBundle,
     l2: float,
     index: dict[str, PairMembership],
-    lasso: FeatureLasso,
+    lassos: tuple[FeatureLasso, ...],
 ) -> None:
     lines = [
         "# reasonese analysis",
@@ -252,7 +252,17 @@ def _write_report(
             f"{_format_float(row['mean_bt_score'])} |"
         )
 
-    lines.extend(_lasso_lines(lasso))
+    lines.extend(
+        [
+            "",
+            "## Feature lasso",
+            "",
+            "A separate sparse Bradley-Terry feature model is fitted for each evaluation "
+            "assistant. Assistant is matchup metadata and is never a feature.",
+        ]
+    )
+    for lasso in lassos:
+        lines.extend(_lasso_lines(lasso))
 
     lines.extend(
         [
@@ -336,7 +346,7 @@ def write_analysis(
     bundle: AnalysisBundle,
     l2: float,
     index: dict[str, PairMembership],
-    lasso: FeatureLasso,
+    lassos: tuple[FeatureLasso, ...],
 ) -> None:
     """Write all analysis tables, diagnostics, and a readable report."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -359,17 +369,30 @@ def write_analysis(
         output_dir / "regularization_sensitivity.csv",
         bundle.regularization_sensitivity,
     )
-    tables = lasso_tables(lasso)
-    _write_csv(output_dir / "lasso_path.csv", tables.path)
-    _write_csv(output_dir / "lasso_coefficients.csv", tables.coefficients)
-    _write_csv(output_dir / "lasso_features.csv", tables.features)
-    _write_csv(output_dir / "lasso_blocks.csv", tables.blocks)
-    diagnostics = {**bundle.diagnostics, "feature_lasso": lasso_diagnostics(lasso)}
+    tables = tuple(lasso_tables(lasso) for lasso in lassos)
+    _write_csv(output_dir / "lasso_path.csv", tuple(row for table in tables for row in table.path))
+    _write_csv(
+        output_dir / "lasso_coefficients.csv",
+        tuple(row for table in tables for row in table.coefficients),
+    )
+    _write_csv(
+        output_dir / "lasso_features.csv",
+        tuple(row for table in tables for row in table.features),
+    )
+    _write_csv(
+        output_dir / "lasso_blocks.csv", tuple(row for table in tables for row in table.blocks)
+    )
+    diagnostics = {
+        **bundle.diagnostics,
+        "feature_lasso": {
+            "assistants": {lasso.assistant: lasso_diagnostics(lasso) for lasso in lassos}
+        },
+    }
     (output_dir / "diagnostics.json").write_text(
         json.dumps(diagnostics, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
-    _write_report(output_dir / "report.md", bundle, l2, index, lasso)
+    _write_report(output_dir / "report.md", bundle, l2, index, lassos)
 
 
 @beartype
@@ -402,7 +425,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             bootstrap_samples=args.bootstrap_samples,
             seed=args.seed,
         )
-        lasso = fit_feature_lasso(
+        lassos = fit_feature_lassos(
             observations,
             pair_memberships(observations, pairs),
             args.l2,
@@ -410,7 +433,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             path_length=args.lasso_path_length,
             seed=args.seed,
         )
-        write_analysis(args.output, bundle, args.l2, index, lasso)
+        write_analysis(args.output, bundle, args.l2, index, lassos)
     except (OSError, TypeError, ValueError) as error:
         parser.error(str(error))
 
@@ -423,9 +446,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "components_match_pair_assistant": bundle.diagnostics[
                     "components_match_pair_assistant"
                 ],
-                "lasso_selected_features": (
-                    None if lasso.selected is None else len(selected_features(lasso))
-                ),
+                "lasso_selected_features": {
+                    lasso.assistant: (
+                        None if lasso.selected is None else len(selected_features(lasso))
+                    )
+                    for lasso in lassos
+                },
                 "neither_completed_trials": bundle.diagnostics["neither_completed_trials"],
                 "observations": len(observations),
                 "output": str(args.output),

@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+from collections import Counter
 from dataclasses import dataclass, replace
 from functools import cache
 from pathlib import Path
@@ -30,7 +31,6 @@ from reasonese.axes import (
     Channel,
     Framing,
     author_framings,
-    model_family,
 )
 from reasonese.instructions import InstructionPair, load_instruction_pairs
 from reasonese.judging import TraceFingerprint
@@ -38,6 +38,7 @@ from reasonese.lasso import (
     FeatureLasso,
     entry_index,
     fit_feature_lasso,
+    fit_feature_lassos,
     lasso_diagnostics,
     lasso_tables,
     selected_features,
@@ -65,24 +66,23 @@ class _Planted:
 
     reasonese_normal: float = 0.0
     readme: float = 0.0
-    self_author: float = 0.0
-    same_family: float = 0.0
-    first_position: float = 0.0
+    nemotron_author: float = 0.0
+    reasonese_readme: float = 0.0
+    reasonese_readme_nemotron: float = 0.0
 
 
-def _strength(spec: PromptSpec, assistant: Assistant, position: int, planted: _Planted) -> float:
+def _strength(spec: PromptSpec, planted: _Planted) -> float:
     value = 0.0
     if spec.framing is Framing.REASONESE_NORMAL:
         value += planted.reasonese_normal
     if spec.channel is Channel.README:
         value += planted.readme
-    if str(spec.author) == str(assistant):
-        value += planted.self_author
-    family = model_family(spec.author)
-    if family is not None and family == model_family(assistant):
-        value += planted.same_family
-    if position == 1:
-        value += planted.first_position
+    if spec.author is Author.NEMOTRON_3_5_LIGHTNING:
+        value += planted.nemotron_author
+    if spec.framing is Framing.REASONESE_NORMAL and spec.channel is Channel.README:
+        value += planted.reasonese_readme
+        if spec.author is Author.NEMOTRON_3_5_LIGHTNING:
+            value += planted.reasonese_readme_nemotron
     return value
 
 
@@ -118,6 +118,8 @@ def _synthetic_observations(
     authors: tuple[Author, ...],
     assistants: tuple[Assistant, ...],
     pairs: tuple[InstructionPair, ...],
+    framings: tuple[Framing, ...],
+    channels: tuple[Channel, ...],
     planted: _Planted,
     offsets: dict[tuple[str, str], float],
     seed: int,
@@ -139,8 +141,14 @@ def _synthetic_observations(
                 specs.append(
                     PromptSpec(
                         instruction,
-                        random.choice(author_framings(author)),
-                        random.choice(list(Channel)),
+                        random.choice(
+                            tuple(
+                                framing
+                                for framing in framings
+                                if framing in author_framings(author)
+                            )
+                        ),
+                        random.choice(channels),
                         author,
                     )
                 )
@@ -149,8 +157,8 @@ def _synthetic_observations(
         if random.random() < 0.5:
             specs.reverse()
         strengths = []
-        for position, spec in enumerate(specs, start=1):
-            strength = _strength(spec, assistant, position, planted)
+        for spec in specs:
+            strength = _strength(spec, planted)
             if spec.instruction == pair.first:
                 strength += offsets[(str(pair.pair_id), str(assistant))]
             strengths.append(strength)
@@ -161,9 +169,17 @@ def _synthetic_observations(
     return tuple(rows)
 
 
-_PLANTED = _Planted(reasonese_normal=-1.2, readme=-0.8, self_author=0.9, first_position=0.5)
-_PLANTED_AUTHORS = (Author.USER, Author.GEMMA_4_31B_IT, Author.NEMOTRON_3_5_LIGHTNING)
+_PLANTED = _Planted(
+    reasonese_normal=-1.2,
+    readme=-0.8,
+    nemotron_author=0.7,
+    reasonese_readme=1.5,
+    reasonese_readme_nemotron=0.8,
+)
+_PLANTED_AUTHORS = (Author.GEMMA_4_31B_IT, Author.NEMOTRON_3_5_LIGHTNING)
 _PLANTED_ASSISTANTS = (Assistant.GEMMA_4_31B_IT, Assistant.NEMOTRON_3_5_LIGHTNING)
+_PLANTED_FRAMINGS = (Framing.NORMAL, Framing.REASONESE_NORMAL)
+_PLANTED_CHANNELS = (Channel.USER, Channel.README)
 
 
 def _planted_offsets(
@@ -182,10 +198,12 @@ def _planted_offsets(
 def _planted_study() -> tuple[Observation, ...]:
     pairs = _pairs()[:2]
     return _synthetic_observations(
-        trials=1500,
+        trials=3000,
         authors=_PLANTED_AUTHORS,
         assistants=_PLANTED_ASSISTANTS,
         pairs=pairs,
+        framings=_PLANTED_FRAMINGS,
+        channels=_PLANTED_CHANNELS,
         planted=_PLANTED,
         offsets=_planted_offsets(pairs, _PLANTED_ASSISTANTS),
         seed=11,
@@ -195,8 +213,10 @@ def _planted_study() -> tuple[Observation, ...]:
 @cache
 def _planted_fit() -> FeatureLasso:
     observations = _planted_study()
+    assistant = str(_PLANTED_ASSISTANTS[0])
+    selected = tuple(row for row in observations if str(row.assistant) == assistant)
     return fit_feature_lasso(
-        observations,
+        selected,
         pair_memberships(observations, _pairs()),
         1.0,
         folds=3,
@@ -264,30 +284,22 @@ def _newton_reference(design: lasso._Design, l2: float) -> tuple[np.ndarray, np.
 
 
 # --------------------------------------------------------------------------
-# Model families and feature columns
+# Feature columns
 # --------------------------------------------------------------------------
-
-
-def test_model_family_groups_models_and_leaves_the_user_without_one() -> None:
-    assert model_family(Author.USER) is None
-    assert model_family(Author.QWEN3_8_FLASH) == model_family(Assistant.QWEN3_8_2_4T)
-    assert model_family(Author.INKLING) == model_family(Assistant.INKLING_SMALL)
-    assert model_family(Author.GEMMA_4_31B_IT) != model_family(Author.NEMOTRON_3_5_LIGHTNING)
-    for assistant in Assistant:
-        assert model_family(assistant) is not None
-        assert model_family(assistant) == model_family(Author(str(assistant)))
 
 
 def test_candidate_columns_use_the_documented_references_and_indicators() -> None:
     pair = _pairs()[0]
-    trial = TrialId.parse("trial-1")
-    model_cell = PromptSpec(
-        pair.first, Framing.REASONESE_NORMAL, Channel.README, Author.GEMMA_4_31B_IT
+    reference = PromptSpec(pair.first, Framing.NORMAL, Channel.USER, Author.GEMMA_4_31B_IT)
+    treated = PromptSpec(
+        pair.second,
+        Framing.REASONESE_NORMAL,
+        Channel.README,
+        Author.NEMOTRON_3_5_LIGHTNING,
     )
-    user_cell = PromptSpec(pair.second, Framing.NORMAL, Channel.USER, Author.USER)
     observations = (
-        _observation(trial, user_cell, Assistant.GEMMA_4_31B_IT, 1, False),
-        _observation(trial, model_cell, Assistant.GEMMA_4_31B_IT, 2, True),
+        _observation(TrialId.parse("trial-1"), reference, Assistant.GEMMA_4_31B_IT, 1, False),
+        _observation(TrialId.parse("trial-1"), treated, Assistant.GEMMA_4_31B_IT, 2, True),
     )
 
     candidates = lasso._candidate_columns(observations)
@@ -296,33 +308,60 @@ def test_candidate_columns_use_the_documented_references_and_indicators() -> Non
         "framing": "normal",
         "channel": "user message",
         "author": "Gemma 4 31B",
-        "assistant": "Gemma 4 31B",
     }
     assert candidates.names == (
         "framing[reasonese-normal]",
         "channel[README.md]",
-        "author[user]",
-        "self_author",
-        "same_family",
-        "first_position",
+        "author[Nemotron 3.5 Lightning]",
         "framing[reasonese-normal]:channel[README.md]",
-        "framing[reasonese-normal]:author[user]",
-        "channel[README.md]:author[user]",
+        "framing[reasonese-normal]:author[Nemotron 3.5 Lightning]",
+        "channel[README.md]:author[Nemotron 3.5 Lightning]",
+        "framing[reasonese-normal]:channel[README.md]:author[Nemotron 3.5 Lightning]",
     )
     values = dict(zip(candidates.names, candidates.matrix.T, strict=True))
     groups = dict(zip(candidates.names, candidates.groups, strict=True))
-    # Row 0 is the user-written cell delivered first, row 1 the Gemma-written one.
+    # The second row occupies every non-reference level, so every term is active.
     assert values["framing[reasonese-normal]"].tolist() == [0.0, 1.0]
     assert values["channel[README.md]"].tolist() == [0.0, 1.0]
-    assert values["author[user]"].tolist() == [1.0, 0.0]
-    assert values["self_author"].tolist() == [0.0, 1.0]
-    assert values["same_family"].tolist() == [0.0, 1.0]
-    assert values["first_position"].tolist() == [1.0, 0.0]
-    assert values["framing[reasonese-normal]:channel[README.md]"].tolist() == [0.0, 1.0]
-    assert values["framing[reasonese-normal]:author[user]"].tolist() == [0.0, 0.0]
-    assert groups["framing[reasonese-normal]:author[user]"] == "framing:author"
-    assert groups["self_author"] == "match"
-    assert groups["first_position"] == "position"
+    assert values["author[Nemotron 3.5 Lightning]"].tolist() == [0.0, 1.0]
+    assert all(column.tolist() == [0.0, 1.0] for column in values.values())
+    triple = "framing[reasonese-normal]:channel[README.md]:author[Nemotron 3.5 Lightning]"
+    assert groups[triple] == "framing:channel:author"
+
+
+def test_default_factorial_has_exactly_the_requested_feature_groups() -> None:
+    pair = _pairs()[0]
+    assistant = Assistant.GEMMA_4_31B_IT
+    authors = (Author.GEMMA_4_31B_IT, Author.NEMOTRON_3_5_LIGHTNING)
+    observations = tuple(
+        _observation(
+            TrialId.parse(f"factorial-{number}"),
+            PromptSpec(pair.first, framing, channel, author),
+            assistant,
+            1,
+            False,
+        )
+        for number, (framing, channel, author) in enumerate(
+            (framing, channel, author)
+            for framing in Framing
+            for channel in Channel
+            for author in authors
+        )
+    )
+
+    candidates = lasso._candidate_columns(observations)
+
+    assert Counter(candidates.groups) == {
+        "framing": 7,
+        "channel": 2,
+        "author": 1,
+        "framing:channel": 14,
+        "framing:author": 7,
+        "channel:author": 2,
+        "framing:channel:author": 14,
+    }
+    assert len(candidates.names) == 47
+    assert not any("assistant" in name or "position" in name for name in candidates.names)
 
 
 def test_references_fall_back_to_the_first_present_level() -> None:
@@ -393,24 +432,31 @@ def test_correlations_treat_a_constant_column_as_uncorrelated() -> None:
 def test_assembly_orients_every_comparison_and_block() -> None:
     observations = _planted_study()
     memberships = pair_memberships(observations, _pairs())
+    assistant = str(_PLANTED_ASSISTANTS[0])
+    selected = tuple(row for row in observations if str(row.assistant) == assistant)
 
-    assembled = lasso._assemble(observations, memberships)
+    assembled = lasso._assemble(selected, memberships)
 
     design = assembled.design
-    assert design.size == len(observations) // 2
-    assert design.block_count == 4
-    assert sorted((block.pair_id, block.assistant) for block in assembled.blocks) == sorted(
-        (str(pair.pair_id), str(assistant))
-        for pair in _pairs()[:2]
-        for assistant in _PLANTED_ASSISTANTS
+    assert assembled.assistant == assistant
+    assert design.size == len(selected) // 2
+    assert design.block_count == 2
+    assert sorted(block.pair_id for block in assembled.blocks) == sorted(
+        str(pair.pair_id) for pair in _pairs()[:2]
     )
     assert sum(block.comparisons for block in assembled.blocks) == design.size
     assert set(design.block_sign.tolist()) == {-1.0, 1.0}
     assert set(design.outcomes.tolist()) == {0.0, 1.0}
-    position = assembled.fitted.index("first_position")
-    assert set(design.features[:, position].tolist()) == {-1.0, 1.0}
+    assert "first_position" not in assembled.fitted
+    assert not any("assistant" in feature for feature in assembled.fitted)
     assert design.features.flags.f_contiguous
     assert assembled.group_count == len(set(assembled.groups.tolist())) <= design.size
+
+
+def test_one_lasso_rejects_multiple_evaluation_assistants() -> None:
+    observations = _planted_study()
+    with pytest.raises(ValueError, match="exactly one evaluation assistant"):
+        lasso._assemble(observations, pair_memberships(observations, _pairs()))
 
 
 # --------------------------------------------------------------------------
@@ -565,8 +611,10 @@ def test_fit_pins_blas_threads_and_restores_them(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr(lasso, "_fit_penalty", spy)
     observations = _planted_study()
+    assistant = str(_PLANTED_ASSISTANTS[0])
+    selected = tuple(row for row in observations if str(row.assistant) == assistant)
     fit_feature_lasso(
-        observations,
+        selected,
         pair_memberships(observations, _pairs()),
         1.0,
         folds=0,
@@ -602,63 +650,48 @@ def test_planted_effects_are_selected_with_their_signs() -> None:
     assert {
         "framing[reasonese-normal]",
         "channel[README.md]",
-        "self_author",
-        "first_position",
+        "author[Nemotron 3.5 Lightning]",
+        "framing[reasonese-normal]:channel[README.md]",
+        "framing[reasonese-normal]:channel[README.md]:author[Nemotron 3.5 Lightning]",
     } <= set(chosen)
     assert coefficients["framing[reasonese-normal]"] < 0.0
     assert coefficients["channel[README.md]"] < 0.0
-    assert coefficients["self_author"] > 0.0
-    assert coefficients["first_position"] > 0.0
-    assert len(chosen) <= 8
-
-    # With two single-model families the family match is the self match.
-    by_name = {feature.name: feature for feature in result.features}
-    assert by_name["same_family"].status == "aliased"
-    assert by_name["same_family"].alias_of == "self_author"
-    assert by_name["same_family"].alias_sign == 1
+    assert coefficients["author[Nemotron 3.5 Lightning]"] > 0.0
+    assert coefficients["framing[reasonese-normal]:channel[README.md]"] > 0.0
+    triple = "framing[reasonese-normal]:channel[README.md]:author[Nemotron 3.5 Lightning]"
+    assert coefficients[triple] > 0.0
+    assert len(chosen) <= 10
 
     planted = _planted_offsets(_pairs()[:2], _PLANTED_ASSISTANTS)
     for row in lasso_tables(result).blocks:
         assert row["offset_selected"] == pytest.approx(
-            planted[(str(row["pair"]), str(row["assistant"]))], abs=0.5
+            planted[(str(row["pair"]), result.assistant)], abs=0.5
         )
 
 
-def test_a_family_match_is_separated_from_a_self_match() -> None:
-    # Two assistants from different families, and an author that shares the
-    # first assistant's family without being it: the family match then differs
-    # from the self match and from every author main effect.
-    pairs = _pairs()[:2]
-    assistants = (Assistant.INKLING, Assistant.GEMMA_4_31B_IT)
-    observations = _synthetic_observations(
-        trials=1500,
-        authors=(Author.INKLING, Author.INKLING_SMALL, Author.GEMMA_4_31B_IT),
-        assistants=assistants,
-        pairs=pairs,
-        planted=_Planted(same_family=1.0),
-        offsets=_planted_offsets(pairs, assistants),
-        seed=5,
-    )
+def test_each_evaluation_assistant_gets_an_independent_fit() -> None:
+    observations = _planted_study()
+    memberships = pair_memberships(observations, _pairs())
 
-    result = fit_feature_lasso(
-        observations, pair_memberships(observations, _pairs()), 1.0, folds=0, path_length=30, seed=0
-    )
+    results = fit_feature_lassos(observations, memberships, 1.0, folds=0, path_length=5, seed=0)
 
-    by_name = {feature.name: feature for feature in result.features}
-    assert by_name["same_family"].status == "fitted"
-    assert by_name["self_author"].status == "fitted"
-    family = entry_index(result, "same_family")
-    self_match = entry_index(result, "self_author")
-    assert family is not None
-    assert self_match is None or self_match > family
-    assert result.coefficients[-1][result.fitted.index("same_family")] > 0.5
+    assert {result.assistant for result in results} == {
+        str(assistant) for assistant in _PLANTED_ASSISTANTS
+    }
+    assert sum(result.comparisons for result in results) == len(observations) // 2
+    for result in results:
+        selected = tuple(row for row in observations if str(row.assistant) == result.assistant)
+        assert result == fit_feature_lasso(
+            selected, memberships, 1.0, folds=0, path_length=5, seed=0
+        )
 
 
 def test_cross_validation_is_seeded_and_orders_its_two_choices() -> None:
     result = _planted_fit()
     observations = _planted_study()
+    selected = tuple(row for row in observations if str(row.assistant) == result.assistant)
     again = fit_feature_lasso(
-        observations, pair_memberships(observations, _pairs()), 1.0, folds=3, path_length=30, seed=0
+        selected, pair_memberships(observations, _pairs()), 1.0, folds=3, path_length=30, seed=0
     )
     assert again == result
 
@@ -706,7 +739,9 @@ def test_tables_and_diagnostics_agree_with_the_path() -> None:
     }
     assert selected == set(selected_features(result))
 
-    assert len(tables.blocks) == 4
+    assert len(tables.blocks) == 2
+    for rows in (tables.path, tables.coefficients, tables.features, tables.blocks):
+        assert {row["assistant"] for row in rows} == {result.assistant}
     for row in tables.blocks:
         assert row["first_side_win_probability"] == pytest.approx(
             _sigmoid(float(str(row["offset_selected"])))
@@ -727,14 +762,18 @@ def test_tables_and_diagnostics_agree_with_the_path() -> None:
     json.dumps(diagnostics)
 
 
-def test_entry_index_rejects_a_feature_that_was_not_fitted() -> None:
+def test_entry_index_rejects_an_unknown_feature() -> None:
     with pytest.raises(ValueError):
-        entry_index(_planted_fit(), "same_family")
+        entry_index(_planted_fit(), "unknown")
 
 
 def test_all_tied_outcomes_give_no_penalty_path() -> None:
-    observations = tuple(replace(row, completed=True) for row in _planted_study()[:400])
-    memberships = pair_memberships(observations, _pairs())
+    source = _planted_study()
+    assistant = str(_PLANTED_ASSISTANTS[0])
+    observations = tuple(
+        replace(row, completed=True) for row in source if str(row.assistant) == assistant
+    )[:400]
+    memberships = pair_memberships(source, _pairs())
 
     result = fit_feature_lasso(observations, memberships, 1.0, folds=5, path_length=10, seed=0)
 
@@ -756,8 +795,10 @@ def test_all_tied_outcomes_give_no_penalty_path() -> None:
 
 
 def test_invalid_settings_are_rejected() -> None:
-    observations = _planted_study()[:8]
-    memberships = pair_memberships(observations, _pairs())
+    source = _planted_study()
+    assistant = str(_PLANTED_ASSISTANTS[0])
+    observations = tuple(row for row in source if str(row.assistant) == assistant)[:8]
+    memberships = pair_memberships(source, _pairs())
     with pytest.raises(ValueError, match="L2 penalty"):
         fit_feature_lasso(observations, memberships, 0.0, folds=0, path_length=5, seed=0)
     with pytest.raises(ValueError, match="folds must be zero or at least two"):
@@ -797,12 +838,12 @@ def test_analysis_cli_can_skip_cross_validation(
     )
 
     summary = json.loads(capsys.readouterr().out)
-    assert summary["lasso_selected_features"] >= 4
+    assert all(count >= 4 for count in summary["lasso_selected_features"].values())
     report = (output / "report.md").read_text(encoding="utf-8")
     assert "## Feature lasso" in report
     assert "No cross-validation was run" in report
-    assert "`self_author`" in report
-    assert "Aliased, identical inside every trial: `same_family` = `self_author`." in report
+    assert "framing-by-channel-by-author interaction" in report
+    assert "Position is excluded" in report
     for name in (
         "lasso_path.csv",
         "lasso_coefficients.csv",
@@ -811,8 +852,10 @@ def test_analysis_cli_can_skip_cross_validation(
     ):
         assert (output / name).is_file()
     diagnostics = json.loads((output / "diagnostics.json").read_text(encoding="utf-8"))
-    assert diagnostics["feature_lasso"]["cross_validation"] is None
-    assert diagnostics["feature_lasso"]["selected"]["lambda_index"] == 7
+    assistant_diagnostics = diagnostics["feature_lasso"]["assistants"]
+    assert set(assistant_diagnostics) == {str(assistant) for assistant in _PLANTED_ASSISTANTS}
+    assert all(item["cross_validation"] is None for item in assistant_diagnostics.values())
+    assert all(item["selected"]["lambda_index"] == 7 for item in assistant_diagnostics.values())
 
 
 def test_a_design_without_feature_columns_has_no_penalty_to_relax() -> None:
@@ -849,7 +892,11 @@ def test_report_lines_flag_a_path_point_that_did_not_converge() -> None:
 def test_analysis_cli_reports_an_empty_path_when_every_trial_ties(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    observations = tuple(replace(row, completed=True) for row in _planted_study()[:400])
+    source = _planted_study()
+    assistant = str(_PLANTED_ASSISTANTS[0])
+    observations = tuple(
+        replace(row, completed=True) for row in source if str(row.assistant) == assistant
+    )[:400]
     path = tmp_path / "observations.jsonl"
     write_observations(path, observations)
     output = tmp_path / "analysis"
@@ -871,7 +918,7 @@ def test_analysis_cli_reports_an_empty_path_when_every_trial_ties(
     )
 
     summary = json.loads(capsys.readouterr().out)
-    assert summary["lasso_selected_features"] is None
+    assert summary["lasso_selected_features"] == {assistant: None}
     report = (output / "report.md").read_text(encoding="utf-8")
     assert "No penalty path was fitted" in report
     assert not (output / "lasso_path.csv").exists()
@@ -913,17 +960,19 @@ def test_folds_keep_both_orderings_of_a_cell_pair_together() -> None:
     assert again.tolist() == assignment.tolist()
 
 
-def test_cross_validation_scales_the_penalty_to_each_fold(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_cross_validation_scales_both_penalties_to_each_fold(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     design = _random_design(9, rows=300)
     null = lasso._null_fit(design, 1.0)
     lambdas = [lasso._lambda_max(design, null) * ratio for ratio in (1.0, 0.3, 0.1)]
-    seen: list[tuple[int, list[float]]] = []
+    seen: list[tuple[int, float, list[float]]] = []
     original = lasso._fit_path
 
     def record(
         training: lasso._Design, l2: float, penalties: list[float], start: lasso._Fit
     ) -> list[lasso._Fit]:
-        seen.append((training.size, list(penalties)))
+        seen.append((training.size, l2, list(penalties)))
         return original(training, l2, penalties, start)
 
     monkeypatch.setattr(lasso, "_fit_path", record)
@@ -931,6 +980,7 @@ def test_cross_validation_scales_the_penalty_to_each_fold(monkeypatch: pytest.Mo
     lasso._cross_validate(design, groups, design.size, 1.0, lambdas, 3, 0)
 
     assert len(seen) == 3
-    assert sum(size for size, _ in seen) == 2 * design.size
-    for size, penalties in seen:
+    assert sum(size for size, _, _ in seen) == 2 * design.size
+    for size, scaled_l2, penalties in seen:
+        assert scaled_l2 == pytest.approx(size / design.size)
         assert penalties == pytest.approx([penalty * size / design.size for penalty in lambdas])

@@ -180,15 +180,14 @@ uv run reasonese-analyze \
   --seed 0
 ```
 
-The feature-lasso section of `report.md` lists the contrasts that entered the fit in the order
-the penalty admitted them, with their coefficients at the cross-validated one-standard-error
-penalty. `--lasso-folds 0` skips cross-validation and reports the least penalized end of the
-path; `--lasso-path-length` sets how many penalties are fitted between the value that zeroes
-every feature and one thousandth of it. Folds are assigned by cell pair, so the two orderings
-of a study never straddle a fold, and `--seed` seeds the folds as well as the bootstrap.
-Cross-validation refits the path once per fold and dominates the lasso's time: about ten
-seconds at the two-model pilot size and about a minute and a half with every author and
-assistant selected.
+The feature-lasso section of `report.md` has one independent fit per evaluation assistant and
+lists the contrasts that entered each fit in the order the penalty admitted them, with their
+coefficients at the cross-validated one-standard-error penalty. `--lasso-folds 0` skips
+cross-validation and reports the least penalized end of each path; `--lasso-path-length` sets
+how many penalties are fitted between the value that zeroes every feature and one thousandth
+of it. Folds are assigned by cell pair within each assistant, so the two orderings of a study
+never straddle a fold, and `--seed` seeds the folds as well as the bootstrap. Cross-validation
+refits every assistant's path once per fold, so it dominates the lasso's analysis time.
 
 Inspect `report.md` first, then `diagnostics.json`. A disconnected comparison graph means the
 L2 penalty numerically places components on one list, but the data do not identify their

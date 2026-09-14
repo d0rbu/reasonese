@@ -40,7 +40,7 @@ from reasonese.instructions import (
     load_instruction_pairs,
 )
 from reasonese.judging import TraceFingerprint
-from reasonese.lasso import fit_feature_lasso
+from reasonese.lasso import fit_feature_lassos
 from reasonese.observations import (
     CellId,
     Observation,
@@ -111,9 +111,7 @@ def _pair_observations(
     rollouts: int = 2,
 ) -> tuple[Observation, ...]:
     first_specs = tuple(PromptSpec(pair.first, *condition) for condition in _FIRST_CONDITIONS)
-    second_specs = tuple(
-        PromptSpec(pair.second, *condition) for condition in _SECOND_CONDITIONS
-    )
+    second_specs = tuple(PromptSpec(pair.second, *condition) for condition in _SECOND_CONDITIONS)
     rows: list[Observation] = []
     for first in first_specs:
         for second in second_specs:
@@ -179,8 +177,7 @@ def _split_component_observations() -> tuple[Observation, ...]:
 
 def _all_equal_observations(completed: bool) -> tuple[Observation, ...]:
     return tuple(
-        replace(observation, completed=completed)
-        for observation in _synthetic_observations()
+        replace(observation, completed=completed) for observation in _synthetic_observations()
     )
 
 
@@ -282,9 +279,7 @@ def test_pair_memberships_reject_an_instruction_outside_the_bank() -> None:
 
 def test_pair_memberships_reject_a_trial_that_mixes_two_pairs() -> None:
     rows = _synthetic_observations()[:2]
-    other = _spec(
-        str(_pairs()[1].second), Framing.NORMAL, Channel.USER, Author.INKLING
-    )
+    other = _spec(str(_pairs()[1].second), Framing.NORMAL, Channel.USER, Author.INKLING)
     changed = replace(rows[1], spec=other, cell_id=cell_id(Cell(other, rows[1].assistant)))
     with pytest.raises(ValueError, match="different pairs"):
         pair_memberships((rows[0], changed), _pairs())
@@ -292,16 +287,13 @@ def test_pair_memberships_reject_a_trial_that_mixes_two_pairs() -> None:
 
 def test_pair_memberships_reject_a_trial_using_one_side_twice() -> None:
     rows = _synthetic_observations()[:2]
-    same_side = _spec(
-        str(_pairs()[0].first), Framing.SUBAGENT, Channel.USER, Author.INKLING
-    )
+    same_side = _spec(str(_pairs()[0].first), Framing.SUBAGENT, Channel.USER, Author.INKLING)
     duplicate = replace(
         rows[1], spec=same_side, cell_id=cell_id(Cell(same_side, rows[1].assistant))
     )
     memberships_source = (rows[0], duplicate)
     first_side = {
-        str(pair_memberships((row,), _pairs())[row.cell_id].side)
-        for row in memberships_source
+        str(pair_memberships((row,), _pairs())[row.cell_id].side) for row in memberships_source
     }
     assert first_side == {"first"}
     with pytest.raises(ValueError, match="repeats one side"):
@@ -407,9 +399,12 @@ def test_pair_exclusivity_separates_both_completed_from_neither_completed() -> N
     assert row["exactly_one"] == 12
     assert row["both_completed"] == 6
     assert row["neither_completed"] == 2
-    assert _count(row, "exactly_one") + _count(row, "both_completed") + _count(
-        row, "neither_completed"
-    ) == 20
+    assert (
+        _count(row, "exactly_one")
+        + _count(row, "both_completed")
+        + _count(row, "neither_completed")
+        == 20
+    )
     assert row["both_completed_rate"] == pytest.approx(6 / 20)
     assert row["neither_completed_rate"] == pytest.approx(2 / 20)
 
@@ -424,9 +419,7 @@ def test_pair_exclusivity_reports_one_row_per_pair() -> None:
     memberships = pair_memberships(observations, _pairs())
     table = build_pair_exclusivity(observations, memberships)
 
-    assert [row["pair"] for row in table] == sorted(
-        str(pair.pair_id) for pair in _pairs()[:2]
-    )
+    assert [row["pair"] for row in table] == sorted(str(pair.pair_id) for pair in _pairs()[:2])
     assert sum(_count(row, "trials") for row in table) == 40
 
 
@@ -526,7 +519,7 @@ def test_write_analysis_emits_complete_artifact_set(tmp_path: Path) -> None:
     )
     output = tmp_path / "analysis"
     observations = _synthetic_observations()
-    lasso = fit_feature_lasso(
+    lassos = fit_feature_lassos(
         observations,
         pair_memberships(observations, _pairs()),
         1.0,
@@ -534,7 +527,7 @@ def test_write_analysis_emits_complete_artifact_set(tmp_path: Path) -> None:
         path_length=5,
         seed=0,
     )
-    write_analysis(output, bundle, 1.0, _index(), lasso)
+    write_analysis(output, bundle, 1.0, _index(), lassos)
 
     expected = {
         "ranking.csv",
@@ -576,9 +569,11 @@ def test_write_analysis_emits_complete_artifact_set(tmp_path: Path) -> None:
     assert str(pair.pair_id) in report
     assert "reasonese-normal" in report
     assert "## Feature lasso" in report
-    assert "`first_position`" in report
+    assert "Position is excluded" in report
     diagnostics = json.loads((output / "diagnostics.json").read_text())
-    assert diagnostics["feature_lasso"]["comparisons"] == 20
+    feature_lassos = diagnostics["feature_lasso"]["assistants"]
+    assert list(feature_lassos) == [str(Assistant.QWEN3_8_2_4T)]
+    assert feature_lassos[str(Assistant.QWEN3_8_2_4T)]["comparisons"] == 20
 
 
 def test_analysis_cli_combines_inputs_and_prints_diagnostics(
@@ -611,7 +606,9 @@ def test_analysis_cli_combines_inputs_and_prints_diagnostics(
         == 0
     )
     summary = json.loads(capsys.readouterr().out)
-    assert isinstance(summary.pop("lasso_selected_features"), int)
+    selected = summary.pop("lasso_selected_features")
+    assert list(selected) == [str(Assistant.QWEN3_8_2_4T)]
+    assert isinstance(selected[str(Assistant.QWEN3_8_2_4T)], int)
     assert summary == {
         "both_completed_trials": 6,
         "cells": 5,
@@ -689,9 +686,7 @@ def test_vectorized_fit_matches_the_scalar_reference(l2: float) -> None:
     cell_ids = tuple(sorted({row.cell_id for row in observations}))
 
     fitted = analysis._fit_scores(cell_ids, comparisons, l2)
-    scores, errors, converged, iterations, objective = _reference_fit(
-        cell_ids, comparisons, l2
-    )
+    scores, errors, converged, iterations, objective = _reference_fit(cell_ids, comparisons, l2)
 
     assert fitted.converged is converged
     assert fitted.iterations == iterations
@@ -751,9 +746,7 @@ def test_tied_cells_rank_by_cell_id_and_ignore_last_bit_noise(
 
 
 def test_vectorized_sigmoid_matches_the_scalar_one_including_the_tails() -> None:
-    values = np.array(
-        [-800.0, -50.0, -1.0, -1e-12, 0.0, 1e-12, 1.0, 50.0, 800.0], dtype=np.float64
-    )
+    values = np.array([-800.0, -50.0, -1.0, -1e-12, 0.0, 1e-12, 1.0, 50.0, 800.0], dtype=np.float64)
     with np.errstate(over="raise", under="ignore"):
         vectorized = analysis._sigmoid_array(values)
     expected = np.array([analysis._sigmoid(float(value)) for value in values])
@@ -810,13 +803,9 @@ def test_skipping_diagnostics_keeps_the_same_scores() -> None:
 def test_fit_pins_blas_threads_and_restores_them(monkeypatch: pytest.MonkeyPatch) -> None:
     observations = _synthetic_observations()
     before = [(info["user_api"], info["num_threads"]) for info in threadpool_info()]
-    ambient = [
-        info["num_threads"] for info in threadpool_info() if info["user_api"] == "blas"
-    ]
+    ambient = [info["num_threads"] for info in threadpool_info() if info["user_api"] == "blas"]
     if not ambient or max(ambient) == 1:
-        pytest.skip(
-            "BLAS already runs single-threaded here, so pinning cannot be observed"
-        )
+        pytest.skip("BLAS already runs single-threaded here, so pinning cannot be observed")
 
     seen: list[list[int]] = []
     original = analysis._fit_scores
@@ -889,9 +878,7 @@ def test_component_check_fails_when_one_component_spans_two_pairs() -> None:
         fit,
         connected_components=(fit.connected_components[0], fit.connected_components[0]),
     )
-    assert (
-        analysis._components_match_pair_assistant(observations, duplicated, memberships) is False
-    )
+    assert analysis._components_match_pair_assistant(observations, duplicated, memberships) is False
 
 
 def test_report_helpers_handle_empty_tables_and_bad_values(tmp_path: Path) -> None:

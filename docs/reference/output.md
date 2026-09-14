@@ -104,25 +104,25 @@ receives one combined `observations.jsonl` ready for analysis.
 - `position_summary.csv`, `cell_position_effects.csv`, and `axis_position_effects.csv`;
 - `order_sensitivity.csv`: position-rate ranges and position/outcome correlations;
 - `regularization_sensitivity.csv`: scores and ranks under 0.1×, 1×, and 10× L2 penalties;
-- `lasso_path.csv`: one row per penalty on the feature-lasso path with its nonzero count,
-  training loss, cross-validated loss and standard error, and convergence;
-- `lasso_coefficients.csv`: every fitted feature's coefficient at every penalty;
-- `lasso_features.csv`: every candidate feature with its group, whether it was fitted, never
-  differed inside a trial, or aliased another column, how many comparisons it differs in, its
-  most correlated fitted feature, the penalty at which it entered, and its coefficients at the
-  selected and minimum-loss penalties;
-- `lasso_blocks.csv`: each `(pair, assistant)` block's side offset at the selected penalty and
+- `lasso_path.csv`: one row per assistant and penalty on its feature-lasso path, with the
+  nonzero count, training loss, cross-validated loss and standard error, and convergence;
+- `lasso_coefficients.csv`: every assistant's fitted-feature coefficient at every penalty;
+- `lasso_features.csv`: every assistant and candidate feature with its group, whether it was
+  fitted, never differed inside a trial, or aliased another column, how many comparisons it
+  differs in, its most correlated fitted feature, the penalty at which it entered, and its
+  coefficients at the selected and minimum-loss penalties;
+- `lasso_blocks.csv`: each assistant and pair's nuisance side offset at the selected penalty and
   the implied probability that the pair's first instruction wins at equal features;
 - `diagnostics.json`: trial integrity, comparison connectivity, whether each component is
   exactly one `(pair, assistant)` block, both- and neither-completed totals, per-cell position
-  balance, rank-stability summaries, and under `feature_lasso` the comparison and cell-pair
-  counts, screening counts, references, design rank, penalty path, cross-validation choices,
-  and selected features; and
+  balance, rank-stability summaries, and under `feature_lasso.assistants` each assistant's
+  comparison and cell-pair counts, screening counts, references, design rank, penalty path,
+  cross-validation choices, and selected features; and
 - `report.md`: a readable within-component ordering, axis table, feature-lasso entry order,
   stratum table, pair-exclusivity table, strongest order effects, and caveats.
 
-The lasso path and coefficient files are absent when no fitted feature is correlated with the
-outcome once the offsets alone are fitted, in which case the report says so.
+An assistant contributes no rows to the path and coefficient files when none of its fitted
+features is correlated with the outcome once the offsets alone are fitted; the report says so.
 
 Within a trial, completed-versus-incomplete yields a win; equal completion verdicts yield a
 0.5 tie. This retains all-true and all-false trials. Bootstrap sampling is clustered by trial.
