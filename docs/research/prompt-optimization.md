@@ -7,10 +7,10 @@ or write observations. The existing default authoring prompt is the `baseline` c
 repository also defines `reasonese-natural-v1`, a measured candidate that adds a short
 reasonese-only reminder to preserve concrete obligations in natural first-person planning prose.
 It also defines `semantic-preservation-v2`, a measured all-framing candidate that keeps supplied
-obligations explicit while leaving optional methods open. The unmeasured `constraint-scope-v3`
-candidate makes the scope of modifiers and optional examples explicit and instructs authors not
-to add methods, source requirements, or task substance while changing the requested voice. No
-candidate is adopted automatically.
+obligations explicit while leaving optional methods open. The `constraint-scope-v3` candidate was
+measured provisionally; it makes the scope of modifiers and optional examples explicit and
+instructs authors not to add methods, source requirements, or task substance while changing the
+requested voice. No candidate is adopted automatically.
 
 Each invocation requires a fresh output directory and one candidate name. The suite must contain
 at most 32 one-rollout studies, at most 64 unique inputs, and at most 128 probe scores, and must
@@ -86,14 +86,22 @@ only the local probe scores. The corrected overall results are:
 | baseline | 16/27 | 50/84 | 2/24 |
 | reasonese-natural-v1 | 15/27 | 42/84 | 1/24 |
 | semantic-preservation-v2 | 21/27 | 44/84 | 1/24 |
+| constraint-scope-v3 (provisional) | 22/27 | 47/84 | 3/24 |
 
 The recorded rule retains the baseline unless a candidate improves joint LLM/probe eligibility
-without losing LLM semantic compliance. Neither candidate passes, so the baseline is retained
-under that rule. No candidate is adopted, and no pilot or reserved confirmation run has launched.
-The baseline was selected for the pilot protocol with both Luna semantic compliance and the local
-probe retained as hard gates. V3 is unmeasured and does not alter that selection. The
-[measurement report](prompt-optimization-results.md) gives the corrected per-pair table, joint
-counts, compressed diagnostics, and historical full-context provenance.
+without losing LLM semantic compliance. Neither earlier candidate passes, so the baseline remains
+the selected prompt under that rule. V3 has an apparent joint increase, but its probe result is
+provisional because the fresh-process numerical discrepancy below remains unresolved. No
+candidate is adopted, and no pilot or reserved confirmation run has launched. Both Luna semantic
+compliance and the local probe remain hard gates. The [measurement report](prompt-optimization-results.md)
+gives the per-pair/judge table, reasonese and non-reasonese split, compressed diagnostics, manual
+review, artifact hashes, and historical full-context provenance.
+
+For V3, the reasonese target spans passed 8/12 and the non-reasonese enforced spans passed 39/72;
+Luna accepted 4/6 reasonese inputs. None of the six reasonese comparisons was jointly eligible.
+Manual review found 21 clear passes, four task-preservation failures, and two ambiguous cases
+among 27 visible authored messages. These are dependent diagnostics, and do not establish that
+author style alone caused the joint failures.
 
 The completed integrity diagnosis reproduced the repeated input exactly, but a same-length
 future-suffix control changed P(reasoning) from 0.155964352 to 0.209339758, with the first
@@ -103,6 +111,16 @@ isolated-row and strict-reduction checks matched exactly. For this case, the evi
 numerical batch sensitivity rather than logical future-token access. Segment-prefix capture uses
 one forward ending at each segment boundary. It removes dependence on external future suffixes,
 without claiming strict per-token causality within the segment.
+
+Two additional fresh-process controls later produced bit-exact activations at all 14 inspected
+layers and the same probe probability, 0.1398777069523443, although their selected cumsum tile
+differed (BLOCK_SIZE_H 4 versus 8). A bounded Triton recurrence control then identified the
+tested kernel configuration: 13 forwards completed without error; forcing only cumsum
+`BLOCK_SIZE_H=1` reproduced the historical first-anchor probability 0.14882805752522793, while
+`H=4`, `8`, `16`, `32`, and `64` all produced 0.1398777069523443. State-passing controls had no
+effect, and restoring the baseline configuration matched all layers exactly. This explains the
+observed runtime discrepancy for the tested input, but a stable production policy and fresh
+probe rescore are still pending, so V3 remains provisional.
 
 The fixed-parameter 298-forward integrity re-screen passed the existing native gate without fit,
 recalibration, or threshold selection. It retained the historical qualified NPZ and frozen CAL
