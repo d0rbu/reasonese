@@ -66,6 +66,26 @@ reasoning tokens also changed absolute token positions, so the intervention does
 context, position, or prose style. It does not justify excluding later reasoning tokens as a
 remedy, and it changed no fit, gate, qualification, or artifact status.
 
+A separate post hoc standardization diagnostic fit scaling statistics on the same 150 neutral
+training documents and evaluated all eight layer-13 lambda candidates on the same 50-document
+development split. All eight fits converged, and seven met the unchanged numeric neutral criteria
+on development data. Development-only selection chose lambda `100`, with 92.2731% token accuracy
+and 85.0063% minimum per-role recall. A separately frozen screen then applied only that candidate
+to the existing 12 native calibration conversations: reasoning recall was 31.4968%, final-output
+recall was 100%, and document-macro accuracy was 66.6015%. The diagnostic did not rescore neutral or
+native test data, performed no refit, and changed no gate; the calibration result was not treated as
+sufficient to proceed to qualification and produced no qualified model.
+
+The pinned upstream source at revision `ec333c40fd43fe991e1ebf66765051b6d7e35784`
+sets `SKIP_FIRST_N = 32` for nested-reasoning models and filters the rows produced through
+`label_nemotron3_content_roles` to `token_in_seg_ix >= SKIP_FIRST_N` before neutral probe fitting
+and development evaluation. Native projection retains full content segments. The exact notebook
+and `utils/role_assignments.py` hashes are recorded in the
+`paper-source-audit/receipt.json` and `paper-source-audit/role-assignments-receipt.json` evidence.
+The current trainer does not apply that first-32-content-token filter. The standardization
+diagnostic deliberately left this difference unchanged so that it isolated scaling; this is a
+documented method difference, not evidence that the filter caused either validation failure.
+
 The run therefore produced no QA-eligible Nemotron probe, and the pilot remains paused. The
 earlier diagnostic and expanded runs are not a paired intervention, so their difference does
 not identify a cause or show that the larger setup corrected the failure. Gemma evidence is
