@@ -75,18 +75,21 @@ The table is evidence for selecting a brief, not a claim that one wording is ind
 from a model's private reasoning or that message QA proves semantic equivalence. Review raw
 outputs and failures before changing any production default.
 
-The completed first development comparison rejected `reasonese-natural-v1`: the baseline had
-16/27 Luna passes, 46/84 enforced probe passes, and 1/24 jointly eligible studies, while v1 had
-15/27, 42/84, and 1/24. Across the six reasonese-framing development cells, Luna-only eligibility
-fell from 3/6 to 1/6. That v1 decision is retained as a historical report. The follow-up measured
-`semantic-preservation-v2`: the baseline had 16/27 Luna passes, 46/84 enforced probe passes, and
-1/24 jointly eligible studies, while v2 had 21/27, 38/84, and 1/24. Across the six
-reasonese-framing cells, v2 had 3/6 Luna passes, matching the baseline. Luna's v2 result is
-confirmed, while the probe-based comparison and any selection based on it remain provisional
-until the saved spans are re-scored with segment-prefix capture; no candidate is adopted and no
-pilot has been launched. Some manual objections involving the official CPython source and release
-date remain ambiguous and are not treated as plainly confirmed failures. The original contextual
-probe scores remain under re-score rather than evidence of a causal prompt or channel effect.
+The completed segment-prefix reprobe preserved all authored texts and Luna judgments and recomputed
+only the local probe scores. The corrected overall results are:
+
+| Version | Luna semantic compliance | Enforced probe compliance | Joint eligibility |
+|---|---:|---:|---:|
+| baseline | 16/27 | 50/84 | 2/24 |
+| reasonese-natural-v1 | 15/27 | 42/84 | 1/24 |
+| semantic-preservation-v2 | 21/27 | 44/84 | 1/24 |
+
+The recorded rule retains the baseline unless a candidate improves joint LLM/probe eligibility
+without losing LLM semantic compliance. Neither candidate passes, so the baseline is retained
+under that rule. No candidate is adopted, and no pilot or reserved confirmation run has launched.
+The next pilot protocol choice remains pending; no new rule or relaxed gate is assumed. The
+[measurement report](prompt-optimization-results.md) gives the corrected per-pair table, joint
+counts, compressed diagnostics, and historical full-context provenance.
 
 The completed integrity diagnosis reproduced the repeated input exactly, but a same-length
 future-suffix control changed P(reasoning) from 0.155964352 to 0.209339758, with the first
@@ -109,15 +112,17 @@ threshold 0.16399151054665906.
 
 Native TEST bootstrap AUC remained 1.0 with 95% interval [1.0, 1.0]. Because TEST was previously
 exposed, this is an integrity re-screen rather than a new untouched qualification. The neutral
-30/50 final specificity remains a diagnostic limitation. The v1 and v2 probe tables retain their
-original full-context measurements and remain provisional until corrected re-score. The report is
+30/50 final specificity remains a diagnostic limitation. Original full-context probe measurements
+remain historical provenance. The integrity report is
 `out/prompt-optimization-20260914/segment-prefix-integrity-rescreen.json` (SHA-256
 `cb6d7044a71479dd91017fa6c56296ebebe51e2237a455f7b1e957dae5133f99`); its receipt binds launcher
 SHA-256 `021826d35143e0be1c191c3c211a72e03ce017bf1e4d93e1d91f8833510ea186` to source commit
 `bacec0ea727a40834907c31727ad8b2e2d8d2d92`.
 
-The [measurement report](prompt-optimization-results.md) records completed comparisons,
-selection decisions, diagnostic limitations, and artifact provenance.
+The corrected 288-forward reprobe is under
+`out/prompt-optimization-20260914/segment-prefix-reprobe/`; its run-manifest SHA-256 is
+`16050a8cea4df23af9c82a4e6eca05b29d704bcb6004229c31a58fa1789c75a5`. It reused the saved author
+and Luna artifacts and made no provider calls.
 
 ## Frozen live design
 
