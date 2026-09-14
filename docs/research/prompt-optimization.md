@@ -82,6 +82,9 @@ fell from 3/6 to 1/6. `semantic-preservation-v2` is the bounded follow-up motiva
 observed preservation failures; it remains a candidate for the same development comparison and
 does not change the default or the reserved confirmation pair.
 
+The [measurement report](prompt-optimization-results.md) records completed comparisons,
+selection decisions, diagnostic limitations, and artifact provenance.
+
 ## Frozen live design
 
 The live comparison uses three development pairs—`prime-1234-bare-vs-table`,
