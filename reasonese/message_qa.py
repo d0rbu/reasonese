@@ -159,14 +159,16 @@ def parse_message_qa(message: GeneratedMessage, response: JsonObject) -> Message
 def check_messages(
     messages: tuple[GeneratedMessage, ...],
     client: OpenRouterClient,
+    *,
+    prefer_batch: bool = True,
 ) -> tuple[MessageQaVerdict, ...]:
-    """Audit messages independently in one GPT-5.6 Luna batch."""
+    """Audit messages independently through GPT-5.6 Luna."""
     if not messages:
         return ()
     responses = client.complete_many(
         JUDGE_ROUTE,
         tuple(message_qa_request(message) for message in messages),
-        prefer_batch=True,
+        prefer_batch=prefer_batch,
     )
     return tuple(
         parse_message_qa(message, response)

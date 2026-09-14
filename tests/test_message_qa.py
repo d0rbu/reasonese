@@ -26,6 +26,7 @@ from reasonese.message_qa import (
 from reasonese.message_qa_cache import YamlMessageQaCache
 from reasonese.openrouter import JsonObject, OpenRouterClient
 from reasonese.planning import PromptSpec
+from reasonese.routing import CollectionRouting
 
 
 def _message(
@@ -194,6 +195,43 @@ def test_check_messages_batches_independent_verdicts_in_input_order() -> None:
     assert payload["model"] == "openai/gpt-5.6-luna"
     assert len(payload["requests"]) == 2
     assert check_messages((), OpenRouterClient(FakeTransport([]))) == ()
+
+
+def test_check_messages_can_use_synchronous_transport() -> None:
+    message = _message()
+    transport = FakeTransport([_qa_chat(True, [])])
+
+    verdicts = check_messages(
+        (message,), OpenRouterClient(transport), prefer_batch=False
+    )
+
+    assert [verdict.complies for verdict in verdicts] == [True]
+    path, payload = transport.post_calls[0]
+    assert path == "/api/v1/chat/completions"
+    assert payload["model"] == "openai/gpt-5.6-luna"
+    assert "requests" not in payload
+
+
+def test_audit_messages_forwards_synchronous_transport_choice(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: list[bool] = []
+
+    def fake_check_messages(messages, client, *, prefer_batch=True):
+        seen.append(prefer_batch)
+        return tuple(_verdict(message) for message in messages)
+
+    monkeypatch.setattr("reasonese.check_messages.check_messages", fake_check_messages)
+    result = audit_messages(
+        (_message(),),
+        YamlMessageQaCache(tmp_path / "qa.yaml"),
+        OpenRouterClient(FakeTransport([])),
+        routing=CollectionRouting(allow_paid=True),
+        prefer_batch=False,
+    )
+
+    assert result.cache_hits == 0
+    assert seen == [False]
 
 
 def _verdict(

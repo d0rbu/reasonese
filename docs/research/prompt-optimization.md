@@ -46,6 +46,11 @@ reasonese-compare-prompts \
   --output out/prompt-optimization/comparison.json
 ```
 
+The optimization command prefers batch transport for both authoring and message QA. Pass
+`--no-batch` to use synchronous transport for both stages. Free author routes such as the
+registered Nemotron route are synchronous regardless of this flag; in that case the flag
+selects synchronous transport for the chargeable Luna message-QA requests.
+
 The flag is mandatory before any uncached work because Luna message QA is chargeable even when
 the model author and local probe use free routes. A provider failure is written to
 `failures.jsonl`; successful author and QA responses remain in the generated-message and QA YAML

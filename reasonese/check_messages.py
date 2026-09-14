@@ -1,4 +1,4 @@
-"""Audit cached materialized messages through GPT-5.6 Luna batch."""
+"""Audit cached materialized messages through GPT-5.6 Luna."""
 
 from __future__ import annotations
 
@@ -50,6 +50,7 @@ def audit_messages(
     client: OpenRouterClient | None,
     *,
     routing: CollectionRouting | None = None,
+    prefer_batch: bool = True,
 ) -> MessageQaRunResult:
     """Audit messages, judging only exact uncached text."""
     if not messages:
@@ -73,7 +74,7 @@ def audit_messages(
             routing.require_paid(f"{len(missing)} uncached message-QA verdicts")
         if client is None:
             raise ValueError("OPENROUTER_API_KEY is required for uncached message QA")
-        new_verdicts = check_messages(missing, client)
+        new_verdicts = check_messages(missing, client, prefer_batch=prefer_batch)
         qa_cache.put_many(new_verdicts)
         verdict_by_spec.update({verdict.spec: verdict for verdict in new_verdicts})
     return MessageQaRunResult(

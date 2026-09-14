@@ -378,6 +378,7 @@ def evaluate_prompt_brief(
             qa_cache,
             client,
             routing=routing,
+            prefer_batch=prefer_batch,
         )
         author_report = authoring_report(studies, qa_result.verdicts)
         author_report = _add_pair_ids(author_report, bound_pair_ids)
@@ -869,7 +870,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--user-messages", type=Path, default=Path("prompts/user"))
     parser.add_argument("--role-probes", type=Path, required=True)
     parser.add_argument("--probe-execution-device", default="cuda:0")
-    parser.add_argument("--no-batch", action="store_true")
+    parser.add_argument(
+        "--no-batch",
+        action="store_true",
+        help="use synchronous transport for authoring and message QA; free author routes are synchronous either way",
+    )
     add_route_arguments(parser)
     args = parser.parse_args(argv)
     try:

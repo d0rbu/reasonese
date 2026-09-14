@@ -120,7 +120,7 @@ def _fake_materialize(specs, client, cache, manual, *, prefer_batch, routing, au
     return tuple(_message(spec, authoring_brief.name) for spec in specs)
 
 
-def _fake_audit(messages, qa_cache, client, *, routing):
+def _fake_audit(messages, qa_cache, client, *, routing, prefer_batch=True):
     verdicts = tuple(
         MessageQaVerdict(message.spec, message.content, True, (), {"id": "qa"})
         for message in messages
@@ -290,7 +290,7 @@ def test_evaluation_records_candidate_requests_probe_orders_and_no_execution(
 def test_probe_still_scores_message_qa_failures_and_reports_combined_exclusion(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def one_failed_audit(messages, qa_cache, client, *, routing):
+    def one_failed_audit(messages, qa_cache, client, *, routing, prefer_batch=True):
         verdicts = tuple(
             MessageQaVerdict(
                 message.spec,
@@ -411,7 +411,7 @@ def test_compare_outputs_reports_pair_and_judge_denominators(
     candidate_dir = tmp_path / "candidate"
     _run(baseline_dir, monkeypatch, brief=BASELINE_AUTHORING_BRIEF)
 
-    def failed_audit(messages, qa_cache, client, *, routing):
+    def failed_audit(messages, qa_cache, client, *, routing, prefer_batch=True):
         verdicts = tuple(
             MessageQaVerdict(
                 message.spec,
