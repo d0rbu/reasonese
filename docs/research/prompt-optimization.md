@@ -68,3 +68,25 @@ descriptive counts.
 The table is evidence for selecting a brief, not a claim that one wording is indistinguishable
 from a model's private reasoning or that message QA proves semantic equivalence. Review raw
 outputs and failures before changing any production default.
+
+## Frozen live design
+
+The live comparison uses three development pairs—`prime-1234-bare-vs-table`,
+`word-counts-bash-vs-python`, and `cpython-version-search-vs-memory`—plus
+`everest-feet-spanish-vs-english` as a reserved confirmation pair. Each pair contributes one
+study for each of the eight target framings. The target channel rotates by pair and framing index;
+each study uses the fixed normal, user-channel opposite-side anchor. Both input orders are scored.
+This is a diagnostic comparison rather than a balanced factorial experiment.
+
+Each candidate version takes one stochastic author sample for each specification. The 32 studies
+produce 36 unique authored inputs per version, 128 probe spans, 112 enforced probe scores, and 16
+compressed descriptive scores. Specifications with unchanged non-reasonese framing or anchor
+guidance are independently resampled for each version, so those control texts may differ between
+versions. The comparison therefore does not establish a causal effect from a paired control.
+
+The existing Luna message judge and the adopted Nemotron role probe are fixed across versions.
+Selection uses only the three development pairs: retain the baseline unless the candidate improves
+joint LLM/probe eligibility without losing LLM semantic compliance, with every rejection inspected.
+The Everest confirmation pair is reported after that choice and cannot retune it. The comparison
+does not refit the probe; Gemma probe qualification remains pending, and the assistant during this
+comparison is Nemotron 3.5 Lightning.
