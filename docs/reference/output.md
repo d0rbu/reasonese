@@ -115,8 +115,9 @@ receives one combined `observations.jsonl` ready for analysis.
   the implied probability that the pair's first instruction wins at equal features;
 - `diagnostics.json`: trial integrity, comparison connectivity, whether each component is
   exactly one `(pair, assistant)` block, both- and neither-completed totals, per-cell position
-  balance, rank-stability summaries, and under `feature_lasso` the screening counts,
-  references, design rank, penalty path, cross-validation choices, and selected features; and
+  balance, rank-stability summaries, and under `feature_lasso` the comparison and cell-pair
+  counts, screening counts, references, design rank, penalty path, cross-validation choices,
+  and selected features; and
 - `report.md`: a readable within-component ordering, axis table, feature-lasso entry order,
   stratum table, pair-exclusivity table, strongest order effects, and caveats.
 

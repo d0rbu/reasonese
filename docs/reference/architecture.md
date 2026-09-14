@@ -241,9 +241,12 @@ zeroes every feature. Each point is solved by proximal Newton steps: the quadrat
 minimised by coordinate descent over a Gram matrix of the active features, with the offsets in
 closed form, and one pass over every column admits the features whose gradient violates the
 optimality condition. A backtracking line search on the penalized objective guards each step.
-K-fold cross-validation over comparisons refits the path per fold and picks the largest penalty
-within one standard error of the minimum held-out loss; that fit is the one reported. The
-offsets keep the ranking's L2 penalty, which bounds them under separation.
+K-fold cross-validation assigns folds by cell pair, so both orderings and every rollout of one
+study are held out together, refits the path per fold with the penalties scaled to the fold's
+share of the comparisons (the loss is a sum, so an unscaled penalty would bind harder on a
+smaller fold), and picks the largest penalty within one standard error of the minimum held-out
+loss; that fit is the one reported. The offsets keep the ranking's L2 penalty, which bounds
+them under separation.
 
 Collection routing is resolved in `openrouter.select_route` from invocation-local
 `routing.CollectionRouting`. Collection checks paid permission before cold assistant work and

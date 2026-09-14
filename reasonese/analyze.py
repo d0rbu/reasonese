@@ -96,7 +96,8 @@ def _lasso_lines(lasso: FeatureLasso) -> list[str]:
         "Columns are not standardized, so a feature that rarely differs inside a trial needs "
         "a larger effect to enter.",
         "",
-        f"- Comparisons: {lasso.comparisons}; blocks: {len(lasso.blocks)}",
+        f"- Comparisons: {lasso.comparisons} over {lasso.cell_pairs} distinct cell pairs; "
+        f"blocks: {len(lasso.blocks)}",
         f"- Candidate features: {len(lasso.features)} ({len(fitted)} fitted, "
         f"{len(never_differ)} never differ inside a trial, {len(aliased)} aliased)",
         f"- Held-out loss is the mean log loss per comparison; offsets alone give "
@@ -130,7 +131,8 @@ def _lasso_lines(lasso: FeatureLasso) -> list[str]:
         path_min = tables.path[validation.index_min]
         path_1se = tables.path[validation.index_1se]
         lines.append(
-            f"- {validation.folds}-fold cross-validation: held-out loss "
+            f"- {validation.folds}-fold cross-validation, folds assigned by cell pair and "
+            "penalties scaled to each fold's size: held-out loss "
             f"{_format_float(validation.mean_loss[0])} with offsets only, "
             f"{_format_float(path_min['cv_mean_loss'])} at lambda_min "
             f"({path_min['nonzero']} features), "

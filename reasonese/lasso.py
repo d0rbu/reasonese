@@ -118,9 +118,12 @@ class FeatureLasso:
     the offsets alone are fitted. ``design_rank`` below the number of fitted
     columns means the columns are linearly dependent, so the fitted
     probabilities are unique but the coefficients that produce them are not.
+    ``cell_pairs`` counts the distinct unordered cell pairs compared; both
+    orderings and every rollout of one pair share a cross-validation fold.
     """
 
     comparisons: int
+    cell_pairs: int
     references: dict[str, str]
     features: tuple[LassoFeature, ...]
     fitted: tuple[str, ...]
@@ -360,6 +363,8 @@ def _screen(
 @dataclass(frozen=True, slots=True)
 class _Assembled:
     design: _Design
+    groups: NDArray[np.intp]
+    group_count: int
     references: dict[str, str]
     features: tuple[LassoFeature, ...]
     fitted: tuple[str, ...]
@@ -407,6 +412,11 @@ def _assemble(
     differences = candidates.matrix[first_rows] - candidates.matrix[second_rows]
     features, fitted = _screen(candidates, differences)
     block_sizes = Counter(keys)
+    # Comparisons list their cells in one canonical order, so the cell pair is
+    # the same for both orderings and every rollout of one study.
+    pair_keys = [(comparison.first, comparison.second) for comparison in comparisons]
+    pair_position = {key: position for position, key in enumerate(dict.fromkeys(pair_keys))}
+    groups = np.fromiter((pair_position[key] for key in pair_keys), dtype=np.intp, count=count)
     return _Assembled(
         _Design(
             outcomes,
@@ -415,6 +425,8 @@ def _assemble(
             len(block_keys),
             np.asfortranarray(differences[:, list(fitted)]),
         ),
+        groups,
+        len(pair_position),
         candidates.references,
         features,
         tuple(candidates.names[column] for column in fitted),
@@ -638,10 +650,18 @@ def _lambda_max(design: _Design, null: _Fit) -> float:
 
 
 def _fit_path(design: _Design, l2: float, lambdas: Sequence[float], null: _Fit) -> list[_Fit]:
-    """Warm-start down the path; the first point is the offsets-only fit by definition."""
-    fits = [null]
-    for penalty in lambdas[1:]:
-        fits.append(_fit_penalty(design, fits[-1].offsets, fits[-1].coefficients, l2, penalty))
+    """Warm-start down the path from the offsets-only fit.
+
+    On the full data the first penalty is ``lambda_max``, where the offsets-only
+    fit is already optimal and the solve returns at once. A cross-validation
+    fold can have a larger ``lambda_max`` of its own, so its first point is
+    solved rather than assumed.
+    """
+    fits: list[_Fit] = []
+    current = null
+    for penalty in lambdas:
+        current = _fit_penalty(design, current.offsets, current.coefficients, l2, penalty)
+        fits.append(current)
     return fits
 
 
@@ -650,17 +670,39 @@ def _mean_loss(design: _Design, fit: _Fit) -> float:
     return _loss(eta, design.outcomes) / design.size
 
 
-def _cross_validate(
-    design: _Design, l2: float, lambdas: Sequence[float], folds: int, seed: int
-) -> LassoCrossValidation:
-    """Refit the path without each fold of comparisons and score the held-out loss."""
+def _fold_assignment(
+    groups: NDArray[np.intp], group_count: int, folds: int, seed: int
+) -> NDArray[np.intp]:
+    """Assign whole groups to folds, so one study never straddles a fold."""
     generator = np.random.default_rng(seed)
-    assignment = generator.permutation(design.size) % folds
+    group_fold = generator.permutation(group_count) % folds
+    return group_fold[groups]
+
+
+def _cross_validate(
+    design: _Design,
+    groups: NDArray[np.intp],
+    group_count: int,
+    l2: float,
+    lambdas: Sequence[float],
+    folds: int,
+    seed: int,
+) -> LassoCrossValidation:
+    """Refit the path without each fold of cell pairs and score the held-out loss.
+
+    The loss is a sum over comparisons, so a penalty tuned to the full data
+    would bind harder on a smaller fold. Each fold's penalties are scaled by
+    its share of the comparisons, which keeps the per-comparison penalty the
+    same and makes the chosen penalty transfer back to the full fit.
+    """
+    assignment = _fold_assignment(groups, group_count, folds, seed)
     losses = np.empty((folds, len(lambdas)), dtype=np.float64)
     for fold in range(folds):
         training = design.rows(np.flatnonzero(assignment != fold))
         held_out = design.rows(np.flatnonzero(assignment == fold))
-        fits = _fit_path(training, l2, lambdas, _null_fit(training, l2))
+        share = training.size / design.size
+        scaled = [penalty * share for penalty in lambdas]
+        fits = _fit_path(training, l2, scaled, _null_fit(training, l2))
         losses[fold] = [_mean_loss(held_out, fit) for fit in fits]
     mean = losses.mean(axis=0)
     standard_error = losses.std(axis=0, ddof=1) / math.sqrt(folds)
@@ -706,8 +748,8 @@ def fit_feature_lasso(
         raise ValueError("lasso path length must be at least two")
     assembled = _assemble(observations, memberships)
     design = assembled.design
-    if folds > design.size:
-        raise ValueError("lasso folds cannot exceed the number of comparisons")
+    if folds > assembled.group_count:
+        raise ValueError("lasso folds cannot exceed the number of distinct cell pairs")
 
     with threadpool_limits(limits=1, user_api="blas"):
         null = _null_fit(design, l2)
@@ -718,7 +760,11 @@ def fit_feature_lasso(
             lambdas = tuple(float(value) for value in lambda_max * ratios)
         fits = _fit_path(design, l2, lambdas, null) if lambdas else []
         cross_validation = (
-            _cross_validate(design, l2, lambdas, folds, seed) if lambdas and folds else None
+            _cross_validate(
+                design, assembled.groups, assembled.group_count, l2, lambdas, folds, seed
+            )
+            if lambdas and folds
+            else None
         )
 
     selected: int | None = None
@@ -726,6 +772,7 @@ def fit_feature_lasso(
         selected = cross_validation.index_1se if cross_validation else len(lambdas) - 1
     return FeatureLasso(
         design.size,
+        assembled.group_count,
         assembled.references,
         assembled.features,
         assembled.fitted,
@@ -870,6 +917,7 @@ def lasso_diagnostics(result: FeatureLasso) -> dict[str, object]:
         }
     return {
         "comparisons": result.comparisons,
+        "cell_pairs": result.cell_pairs,
         "blocks": len(result.blocks),
         "candidate_features": len(result.features),
         "fitted_features": statuses[_STATUS_FITTED],

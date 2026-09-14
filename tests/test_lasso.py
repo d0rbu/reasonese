@@ -410,6 +410,7 @@ def test_assembly_orients_every_comparison_and_block() -> None:
     position = assembled.fitted.index("first_position")
     assert set(design.features[:, position].tolist()) == {-1.0, 1.0}
     assert design.features.flags.f_contiguous
+    assert assembled.group_count == len(set(assembled.groups.tolist())) <= design.size
 
 
 # --------------------------------------------------------------------------
@@ -533,7 +534,8 @@ def test_the_warm_started_path_is_monotone_in_penalty_and_loss() -> None:
 
     fits = lasso._fit_path(design, 1.0, lambdas, null)
 
-    assert fits[0] is null
+    assert not np.any(fits[0].coefficients)
+    assert fits[0].offsets == pytest.approx(null.offsets, abs=1e-8)
     assert all(fit.converged for fit in fits)
     losses = [lasso._mean_loss(design, fit) for fit in fits]
     assert losses == sorted(losses, reverse=True)
@@ -713,6 +715,8 @@ def test_tables_and_diagnostics_agree_with_the_path() -> None:
     assert diagnostics["fitted_features"] == len(result.fitted)
     assert diagnostics["candidate_features"] == len(result.features)
     assert diagnostics["design_rank"] == result.design_rank
+    assert diagnostics["cell_pairs"] == result.cell_pairs
+    assert 1 <= result.cell_pairs <= result.comparisons
     assert result.selected is not None
     assert diagnostics["selected"] == {
         "lambda_index": result.selected,
@@ -760,7 +764,7 @@ def test_invalid_settings_are_rejected() -> None:
         fit_feature_lasso(observations, memberships, 1.0, folds=1, path_length=5, seed=0)
     with pytest.raises(ValueError, match="path length"):
         fit_feature_lasso(observations, memberships, 1.0, folds=0, path_length=1, seed=0)
-    with pytest.raises(ValueError, match="cannot exceed the number of comparisons"):
+    with pytest.raises(ValueError, match="cannot exceed the number of distinct cell pairs"):
         fit_feature_lasso(observations, memberships, 1.0, folds=5, path_length=5, seed=0)
 
 
@@ -874,3 +878,59 @@ def test_analysis_cli_reports_an_empty_path_when_every_trial_ties(
     assert not (output / "lasso_coefficients.csv").exists()
     assert (output / "lasso_features.csv").is_file()
     assert (output / "lasso_blocks.csv").is_file()
+
+
+def _mirrored_pairings(count: int) -> tuple[Observation, ...]:
+    """``count`` distinct cell pairs, each run in both orders, as the real design does."""
+    pair = _pairs()[0]
+    assistant = Assistant.GEMMA_4_31B_IT
+    second = PromptSpec(pair.second, Framing.NORMAL, Channel.USER, Author.USER)
+    rows: list[Observation] = []
+    for index, framing in enumerate(list(Framing)[:count]):
+        first = PromptSpec(pair.first, framing, Channel.USER, Author.GEMMA_4_31B_IT)
+        for order, specs in enumerate(((first, second), (second, first))):
+            trial = TrialId.parse(f"pairing-{index}-order-{order}")
+            rows.append(_observation(trial, specs[0], assistant, 1, index % 2 == 0))
+            rows.append(_observation(trial, specs[1], assistant, 2, index % 2 == 1))
+    return tuple(rows)
+
+
+def test_folds_keep_both_orderings_of_a_cell_pair_together() -> None:
+    observations = _mirrored_pairings(6)
+    assembled = lasso._assemble(observations, pair_memberships(observations, _pairs()))
+
+    assert assembled.design.size == 12
+    assert assembled.group_count == 6
+    groups = assembled.groups.tolist()
+    # Comparisons are built in trial order: the two orderings of one pairing are adjacent.
+    assert groups[0::2] == groups[1::2]
+    assert len(set(groups)) == 6
+
+    assignment = lasso._fold_assignment(assembled.groups, assembled.group_count, 3, seed=4)
+    assert assignment.tolist()[0::2] == assignment.tolist()[1::2]
+    assert set(assignment.tolist()) == {0, 1, 2}
+    again = lasso._fold_assignment(assembled.groups, assembled.group_count, 3, seed=4)
+    assert again.tolist() == assignment.tolist()
+
+
+def test_cross_validation_scales_the_penalty_to_each_fold(monkeypatch: pytest.MonkeyPatch) -> None:
+    design = _random_design(9, rows=300)
+    null = lasso._null_fit(design, 1.0)
+    lambdas = [lasso._lambda_max(design, null) * ratio for ratio in (1.0, 0.3, 0.1)]
+    seen: list[tuple[int, list[float]]] = []
+    original = lasso._fit_path
+
+    def record(
+        training: lasso._Design, l2: float, penalties: list[float], start: lasso._Fit
+    ) -> list[lasso._Fit]:
+        seen.append((training.size, list(penalties)))
+        return original(training, l2, penalties, start)
+
+    monkeypatch.setattr(lasso, "_fit_path", record)
+    groups = np.arange(design.size, dtype=np.intp)
+    lasso._cross_validate(design, groups, design.size, 1.0, lambdas, 3, 0)
+
+    assert len(seen) == 3
+    assert sum(size for size, _ in seen) == 2 * design.size
+    for size, penalties in seen:
+        assert penalties == pytest.approx([penalty * size / design.size for penalty in lambdas])
