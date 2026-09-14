@@ -428,6 +428,37 @@ def test_preflight_rejects_checkpoint_manifest_mismatch(
         LocalProbeQaScorer(config, cache).preflight((Assistant.NEMOTRON_3_5_LIGHTNING,))
 
 
+def test_preflight_uses_extraction_provenance_for_checkpoint_depth(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config, cache, runtime_sha256 = _scorer_files(tmp_path)
+    loaded_layers: list[int] = []
+    _patch_runtime(monkeypatch, runtime_sha256)
+    original_load = local_module.load_prefix_model
+
+    def record_load(*args: Any, max_layer: int, **kwargs: Any) -> object:
+        loaded_layers.append(max_layer)
+        return original_load(*args, max_layer=max_layer, **kwargs)
+
+    monkeypatch.setattr(local_module, "load_prefix_model", record_load)
+    probe_path = tmp_path / "probe.npz"
+    probe = load_role_probe(probe_path)
+    restricted = replace(
+        probe,
+        provenance=replace(probe.provenance, layer_indices=(13, 26)),
+        training=replace(probe.training, layer_indices=(13,)),
+        selected_layer_index=13,
+        development_candidates=tuple(
+            replace(candidate, layer_index=13) for candidate in probe.development_candidates
+        ),
+    )
+    save_role_probe(restricted, probe_path)
+
+    LocalProbeQaScorer(config, cache).preflight((Assistant.NEMOTRON_3_5_LIGHTNING,))
+
+    assert loaded_layers == [13]
+
+
 def test_preflight_rejects_probe_pipeline_mismatch(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

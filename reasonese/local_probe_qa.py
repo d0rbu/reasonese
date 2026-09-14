@@ -289,7 +289,7 @@ class LocalProbeQaScorer:
                 "adapter": bundle.adapter.name,
                 "model_id": bundle.adapter.model_id,
                 "revision": bundle.adapter.model_revision,
-                "max_layer": max(probe.training.layer_indices),
+                "max_layer": max(probe.provenance.layer_indices),
                 "weights_sha256": probe.provenance.weights_sha256,
                 "weights_hash_kind": probe.provenance.weights_hash_kind,
             }

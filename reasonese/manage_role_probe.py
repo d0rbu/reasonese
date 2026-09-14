@@ -11,6 +11,8 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 from reasonese.axes import Assistant
 from reasonese.native_probe_activations import (
     extract_native_activations,
@@ -23,6 +25,8 @@ from reasonese.probe_statistics import (
     MIN_DOCUMENT_MACRO_ACCURACY,
     MIN_ROLE_ACCURACY,
     MIN_TEST_AUC,
+    MIN_THRESHOLD_FINAL_SPECIFICITY,
+    MIN_THRESHOLD_REASONING_SENSITIVITY,
 )
 from reasonese.role_probe_extraction import (
     FROZEN_NEUTRAL_FILLER_LENGTH_DISTRIBUTION,
@@ -39,7 +43,14 @@ from reasonese.role_probe_extraction import (
     validate_prefix_checkpoint_identity,
 )
 from reasonese.role_probes import (
+    SAVED_STANDARDIZED_PARAMETERS,
+    SEGMENT_MEAN_REASONING_PROBABILITY,
+    TOKEN_AND_SEGMENT_GATES,
+    ProbeCandidateMetrics,
     ProbeTrainingConfig,
+    SavedProbeAdoption,
+    _metrics_from,
+    adopt_saved_probe_parameters,
     load_role_probe,
     optimizer_config_from_runtime,
     qualify_role_probe,
@@ -87,6 +98,15 @@ def _require_new_output(path: Path) -> None:
         raise FileExistsError(f"refusing to overwrite probe artifact: {path}")
 
 
+def _array_sha256(value: np.ndarray) -> str:
+    array = np.ascontiguousarray(value)
+    digest = hashlib.sha256()
+    digest.update(array.dtype.str.encode())
+    digest.update(json.dumps(array.shape, separators=(",", ":")).encode())
+    digest.update(array.tobytes())
+    return digest.hexdigest()
+
+
 def _partition_document_ids(path: Path, split: str) -> set[str]:
     records = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(records, list):
@@ -104,6 +124,7 @@ def _partition_document_ids(path: Path, split: str) -> set[str]:
 def _protocol_training_config(
     protocol: dict[str, Any], adapter_name: str, *, protocol_sha256: str | None = None
 ) -> ProbeTrainingConfig:
+    qualification_policy = protocol.get("qualification_policy", TOKEN_AND_SEGMENT_GATES)
     try:
         model = protocol["models"][_ADAPTER_PROTOCOL_KEYS[adapter_name]]
         split = protocol["neutral_split"]
@@ -128,7 +149,8 @@ def _protocol_training_config(
             or type(content_tokens) is not int
             or content_tokens <= 1
             or not isinstance(layers, list)
-            or len(layers) < 2
+            or len(layers)
+            < (1 if qualification_policy == SEGMENT_MEAN_REASONING_PROBABILITY else 2)
             or any(type(layer) is not int or layer < 0 for layer in layers)
             or len(set(layers)) != len(layers)
             or layers != sorted(layers)
@@ -216,6 +238,7 @@ def _protocol_training_config(
         train_fraction=train_fraction,
         validation_fraction=validation_fraction,
         seed=seed,
+        qualification_policy=qualification_policy,
     )
 
 
@@ -230,14 +253,34 @@ def _validate_frozen_protocol(
         "test": 12,
     }:
         raise ValueError("probe protocol must retain the frozen 12/12 native split")
-    if protocol.get("native_gate") != {
+    legacy_gate = {
         "required_roles": ["reasoning", "assistant"],
         "minimum_role_accuracy": MIN_ROLE_ACCURACY,
         "minimum_document_macro_accuracy": MIN_DOCUMENT_MACRO_ACCURACY,
         "reasoning_vs_final_segment_auc": MIN_TEST_AUC,
         "auc_bootstrap_lower_95_bound_must_exceed": MIN_AUC_BOOTSTRAP_LOWER,
-    }:
+    }
+    segment_gate = {
+        "required_segments": ["reasoning", "assistant"],
+        "reasoning_vs_final_segment_auc": MIN_TEST_AUC,
+        "auc_bootstrap_lower_95_bound_must_exceed": MIN_AUC_BOOTSTRAP_LOWER,
+        "heldout_reasoning_sensitivity_at_calibrated_threshold": (
+            MIN_THRESHOLD_REASONING_SENSITIVITY
+        ),
+        "heldout_final_specificity_at_calibrated_threshold": MIN_THRESHOLD_FINAL_SPECIFICITY,
+    }
+    expected_gate = (
+        segment_gate
+        if config.qualification_policy == SEGMENT_MEAN_REASONING_PROBABILITY
+        else legacy_gate
+    )
+    if protocol.get("native_gate") != expected_gate:
         raise ValueError("probe protocol does not match the frozen native gates")
+    if (
+        config.qualification_policy == SEGMENT_MEAN_REASONING_PROBABILITY
+        and protocol.get("native_token_metrics") != "diagnostic only"
+    ):
+        raise ValueError("segment qualification must mark native token metrics diagnostic only")
     return config
 
 
@@ -293,6 +336,155 @@ def _train(args: argparse.Namespace) -> None:
     )
 
 
+def _adopt_standardized(args: argparse.Namespace) -> None:
+    _require_new_output(args.output)
+    reference = load_role_probe(args.reference_probe)
+    protocol = _json_object(args.protocol)
+    config = _validate_frozen_protocol(
+        protocol,
+        reference.provenance.native_template_adapter,
+        protocol_sha256=_sha256(args.protocol),
+    )
+    if config.qualification_policy != SEGMENT_MEAN_REASONING_PROBABILITY:
+        raise ValueError("saved standardized parameters require segment qualification")
+    report = _json_object(args.diagnostic)
+    reference_sha256 = _sha256(args.reference_probe)
+    manifest_sha256 = _sha256(args.activations / "manifest.json")
+    if (
+        report.get("status") != "diagnostic-only-standardized-train-development-grid"
+        or report.get("baseline_probe_sha256") != reference_sha256
+        or report.get("neutral_activation_manifest_sha256") != manifest_sha256
+        or report.get("optimizer_runtime_sha256") != config.optimizer.runtime_sha256
+        or report.get("held_out_test_rows_scored") is not False
+        or report.get("native_rows_scored") is not False
+        or report.get("refit_performed") is not False
+        or report.get("probe_artifact_written") is not False
+        or report.get("failed_candidates") != 0
+        or report.get("failures") != []
+    ):
+        raise ValueError("saved standardized diagnostic provenance is not adoptable")
+    scaler = report.get("scaler")
+    candidates = report.get("candidates")
+    if not isinstance(scaler, dict) or not isinstance(candidates, list):
+        raise ValueError("saved standardized diagnostic is incomplete")
+    if scaler.get("fit_documents") != len(reference.split.train):
+        raise ValueError("saved scaler fit count does not match the TRAIN split")
+    try:
+        parsed_candidates = tuple(
+            ProbeCandidateMetrics(
+                layer_index=candidate["layer"],
+                regularization_lambda=candidate["lambda"],
+                metrics=_metrics_from(candidate["development_metrics"]),
+            )
+            for candidate in candidates
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError("invalid saved standardized candidate grid") from error
+    coordinates = tuple(
+        (candidate.layer_index, candidate.regularization_lambda) for candidate in parsed_candidates
+    )
+    expected = tuple(
+        (layer, regularization)
+        for layer in config.layer_indices
+        for regularization in config.lambda_grid
+    )
+    if coordinates != expected or report.get("successful_candidates") != len(expected):
+        raise ValueError("saved standardized candidates do not match the frozen grid")
+    selected = max(
+        parsed_candidates,
+        key=lambda candidate: (
+            candidate.metrics.accuracy,
+            -candidate.metrics.negative_log_likelihood,
+            candidate.regularization_lambda,
+            -candidate.layer_index,
+        ),
+    )
+    selected_record = candidates[parsed_candidates.index(selected)]
+    if selected_record.get("diagnostic_parameters") != args.parameters.name or selected_record.get(
+        "diagnostic_parameters_sha256"
+    ) != _sha256(args.parameters):
+        raise ValueError("saved parameters are not the DEV-selected candidate")
+    try:
+        with np.load(args.parameters, allow_pickle=False) as archive:
+            expected_members = {
+                "raw_coefficients",
+                "raw_bias",
+                "standardized_coefficients",
+                "standardized_bias",
+                "mean",
+                "scale",
+            }
+            if set(archive.files) != expected_members:
+                raise ValueError("invalid saved standardized parameter members")
+            arrays = {name: np.asarray(archive[name]) for name in expected_members}
+    except (OSError, ValueError) as error:
+        raise ValueError("invalid saved standardized parameter archive") from error
+    coefficients = arrays["raw_coefficients"]
+    intercepts = arrays["raw_bias"]
+    mean = arrays["mean"]
+    scale = arrays["scale"]
+    expected_shape = (len(reference.provenance.roles), reference.provenance.hidden_size)
+    if (
+        coefficients.shape != expected_shape
+        or intercepts.shape != (expected_shape[0],)
+        or arrays["standardized_coefficients"].shape != expected_shape
+        or arrays["standardized_bias"].shape != (expected_shape[0],)
+        or mean.shape != (expected_shape[1],)
+        or scale.shape != (expected_shape[1],)
+        or any(not np.issubdtype(array.dtype, np.floating) for array in arrays.values())
+        or any(not np.all(np.isfinite(array)) for array in arrays.values())
+        or np.any(scale <= 0)
+    ):
+        raise ValueError("saved standardized parameters have invalid arrays")
+    if (
+        _array_sha256(coefficients) != selected_record.get("raw_coefficients_sha256")
+        or _array_sha256(intercepts) != selected_record.get("raw_intercepts_sha256")
+        or _array_sha256(mean) != scaler.get("mean_sha256")
+        or _array_sha256(scale) != scaler.get("scale_sha256")
+    ):
+        raise ValueError("saved standardized parameter hashes do not match the diagnostic")
+    reconstructed_coefficients = arrays["standardized_coefficients"] / scale[np.newaxis, :]
+    reconstructed_intercepts = arrays["standardized_bias"] - coefficients @ mean
+    if not np.allclose(
+        coefficients, reconstructed_coefficients, rtol=1e-12, atol=1e-12
+    ) or not np.allclose(intercepts, reconstructed_intercepts, rtol=1e-12, atol=1e-12):
+        raise ValueError("saved raw-space parameters do not match the training standardization")
+    dataset = load_activation_dataset(args.activations)
+    adopted = adopt_saved_probe_parameters(
+        reference,
+        dataset,
+        config,
+        parsed_candidates,
+        coefficients,
+        intercepts,
+        SavedProbeAdoption(
+            method=SAVED_STANDARDIZED_PARAMETERS,
+            fit_document_count=len(reference.split.train),
+            source_probe_sha256=reference_sha256,
+            source_report_sha256=_sha256(args.diagnostic),
+            source_parameters_sha256=_sha256(args.parameters),
+            source_activation_manifest_sha256=manifest_sha256,
+            training_mean_sha256=_array_sha256(mean),
+            training_scale_sha256=_array_sha256(scale),
+        ),
+    )
+    save_role_probe(adopted, args.output)
+    print(
+        json.dumps(
+            {
+                "output": str(args.output),
+                "fit_performed": False,
+                "qualification_policy": adopted.training.qualification_policy,
+                "selected_layer": adopted.selected_layer_index,
+                "selected_lambda": adopted.regularization_lambda,
+                "neutral_token_diagnostics_meet_historical_gates": adopted.neutral_valid,
+                "qa_eligible": adopted.qa_eligible,
+            },
+            sort_keys=True,
+        )
+    )
+
+
 def _qualify(args: argparse.Namespace) -> None:
     _require_new_output(args.output)
     protocol = _json_object(args.protocol)
@@ -332,7 +524,12 @@ def _qualify(args: argparse.Namespace) -> None:
                 "qa_eligible": qualified.qa_eligible,
                 "calibration_usable": qualified.qualification.calibration.usable,
                 "calibration_threshold": qualified.qualification.calibration.threshold,
-                "native_test_passed": qualified.qualification.test.passed,
+                "native_test_passed": (
+                    qualified.qualification.segment_passed
+                    if frozen_config.qualification_policy == SEGMENT_MEAN_REASONING_PROBABILITY
+                    else qualified.qualification.passed
+                ),
+                "native_test_token_and_segment_diagnostic_passed": (qualified.qualification.passed),
                 "native_test_auc": qualified.qualification.test.bootstrap_auc.auc,
                 "native_test_auc_lower_95": qualified.qualification.test.bootstrap_auc.lower_95,
                 "native_test_threshold_reasoning_sensitivity": (
@@ -432,6 +629,17 @@ def build_parser() -> argparse.ArgumentParser:
     qualify.add_argument("--protocol", type=Path, required=True)
     qualify.add_argument("--output", type=Path, required=True)
     qualify.set_defaults(run=_qualify)
+
+    adopt = subcommands.add_parser(
+        "adopt-standardized", help="adopt one saved DEV-selected standardized fit"
+    )
+    adopt.add_argument("--reference-probe", type=Path, required=True)
+    adopt.add_argument("--activations", type=Path, required=True)
+    adopt.add_argument("--diagnostic", type=Path, required=True)
+    adopt.add_argument("--parameters", type=Path, required=True)
+    adopt.add_argument("--protocol", type=Path, required=True)
+    adopt.add_argument("--output", type=Path, required=True)
+    adopt.set_defaults(run=_adopt_standardized)
 
     extract = subcommands.add_parser(
         "extract-native", help="replay one frozen native dialogue partition"

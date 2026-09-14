@@ -9,8 +9,9 @@ each content token. The implementation follows the controlled construction in
 ## Scientific status
 
 The training and artifact code is an instrument, not evidence that any particular model has a
-usable role direction. A probe is eligible for instruction QA only after it passes both validity
-checks from Appendix G:
+usable role direction. A probe is eligible for instruction QA only after it passes the validity
+checks required by its explicitly recorded qualification policy. The legacy policy requires both
+validity checks from Appendix G:
 
 1. held-out accuracy on neutral text rendered under native role wrappers; and
 2. zero-shot role identification on untouched, model-native conversational traces that were not
@@ -20,11 +21,17 @@ Acceptance thresholds belong to a frozen project protocol. The paper does not pr
 numerical cutoffs, so reports must identify them as project choices. Synthetic unit tests
 establish implementation behavior only. They do not qualify a model probe.
 
+The current Nemotron adoption uses the post hoc `segment mean reasoning probability` policy. It
+retains the native segment AUC, bootstrap, sensitivity, and specificity gates while treating
+neutral and native token-level metrics as diagnostics. The amendment and its provenance are
+recorded in the [Nemotron adoption report](../research/nemotron-probe-adoption.md); it adopts
+saved TRAIN-only parameters and does not fit a new probe.
+
 Local open-weight activations also do not establish exact parity with an OpenRouter deployment
 unless the hosted checkpoint, quantization, tokenizer, and template are all independently shown
 to match. Probe reports must preserve that limitation.
 
-### Current Nemotron result (September 13, 2026)
+### Previous expanded Nemotron result (September 13, 2026)
 
 The expanded Nemotron run used 250 neutral documents, a 1,024-token cap, and candidate
 layers 13, 20, and 26. Twenty-two of 24 layer/lambda candidates completed; layer 26 failed
@@ -106,11 +113,32 @@ The current trainer does not apply that first-32-content-token filter. The stand
 diagnostic deliberately left this difference unchanged so that it isolated scaling; this is a
 documented method difference, not evidence that the filter caused either validation failure.
 
-The run therefore produced no QA-eligible Nemotron probe, and the pilot remains paused. The
-earlier diagnostic and expanded runs are not a paired intervention, so their difference does
-not identify a cause or show that the larger setup corrected the failure. Gemma evidence is
-also incomplete at two of 24 native dialogues; no further provider calls are planned without
-user direction.
+The original expanded run produced no QA-eligible probe under the legacy token-and-segment
+policy. Its earlier diagnostics and expanded run are not a paired intervention, so their
+difference does not identify a cause or show that the larger setup corrected the failure. Gemma
+evidence is also incomplete at two of 24 native dialogues; no further provider calls are planned
+without user direction.
+
+The current adopted Nemotron artifact uses the saved standardized layer-13 parameters selected
+by the existing neutral development grid at lambda `100`. The source fit standardized activations
+using means and scales fitted on the 150-document TRAIN split, then converted the saved weights
+back to raw activation space. Adoption checked the source probe, diagnostic report, parameter
+archive, activation manifest, optimizer runtime, and scaler hashes; it performed no fit or refit.
+The amended protocol retains 250 neutral documents capped at 1,024 content tokens, with 150 TRAIN,
+50 development, and 50 TEST documents.
+
+On the 12 native TEST conversations, the adopted probe reached reasoning sensitivity 11/12
+(91.67%), final-output specificity 12/12 (100%), pooled segment AUC 1.0, and a paired-bootstrap
+lower 95% AUC bound of 1.0. It therefore passes the amended native segment policy. The frozen
+calibration threshold is `0.16399151054665906`. Neutral TEST segment AUC was 0.9716, with 50/50
+reasoning segments and 29/50 final segments below the threshold; those neutral segment results
+remain descriptive. Native and neutral token metrics remain diagnostics under this policy,
+including the adopted probe's 25.6115% native reasoning-token recall and 79.3890% neutral
+final-output recall.
+
+The adopted artifact is eligible for Nemotron instruction QA under the amended policy. Collection
+must still use the exact artifact and its bundle provenance, and Gemma remains pending. The
+ignored evidence directory is `out/role-probe-20260913/expanded/adopted-standardized-layer13/`.
 
 ## Controlled training data
 
@@ -336,6 +364,27 @@ uv run reasonese-role-probe train \
   --protocol out/role-probe-research/protocol.json \
   --output out/role-probe-research/nemotron-neutral-probe.npz
 ```
+
+An explicitly amended protocol can adopt a previously saved standardized TRAIN-only fit. The
+adoption command validates the diagnostic report, DEV-selected candidate, parameter archive,
+activation-manifest identity, optimizer runtime, scaler hashes, and reference split before scoring
+the neutral TEST diagnostics. It never invokes the optimizer or refits the parameters:
+
+```bash
+uv run reasonese-role-probe adopt-standardized \
+  --reference-probe out/role-probe-20260913/expanded/nemotron-neutral-probe.npz \
+  --activations out/role-probe-20260913/expanded/neutral-nemotron \
+  --diagnostic out/role-probe-20260913/expanded/nemotron-standardization-diagnostic.json \
+  --parameters out/role-probe-20260913/expanded/nemotron-standardization-diagnostic-parameters/layer-13-lambda-100.npz \
+  --protocol out/role-probe-20260913/expanded/adopted-standardized-layer13/protocol.json \
+  --output out/role-probe-20260913/expanded/adopted-standardized-layer13/nemotron-neutral-adopted.npz
+```
+
+The adopted artifact records the source hashes and the `segment mean reasoning probability`
+policy. Native qualification still runs separately with `qualify`; its calibration threshold is
+selected from native CAL and then applied once to native TEST. A legacy artifact without an
+explicit policy retains the token-and-segment gates and cannot be silently requalified under the
+amended policy.
 
 `extract-native` replays exactly one of the 12-conversation frozen partitions. It reads all raw
 dialogue files but selects only records assigned to the requested partition, verifies the original

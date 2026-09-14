@@ -56,6 +56,102 @@ def _write_protocol(tmp_path: Path) -> Path:
     return path
 
 
+def _adoption_fixture(tmp_path: Path) -> tuple[argparse.Namespace, SimpleNamespace, dict[str, Any]]:
+    protocol = _segment_protocol()
+    protocol_path = tmp_path / "segment-protocol.json"
+    protocol_path.write_text(json.dumps(protocol), encoding="utf-8")
+    activations = tmp_path / "activations"
+    activations.mkdir()
+    (activations / "manifest.json").write_text("{}", encoding="utf-8")
+    reference_path = tmp_path / "reference.npz"
+    reference_path.write_bytes(b"reference probe")
+    parameters = tmp_path / "layer-13-lambda-100.npz"
+    roles = tuple(str(role) for role in ProbeRole)
+    hidden_size = 3
+    coefficients = np.arange(len(roles) * hidden_size, dtype=np.float64).reshape(
+        len(roles), hidden_size
+    )
+    intercepts = np.arange(len(roles), dtype=np.float64)
+    mean = np.asarray([0.5, 1.5, 2.5], dtype=np.float64)
+    scale = np.asarray([1.5, 2.5, 3.5], dtype=np.float64)
+    standardized_coefficients = coefficients * scale[np.newaxis, :]
+    standardized_bias = intercepts + coefficients @ mean
+    with parameters.open("wb") as handle:
+        np.savez(
+            handle,
+            raw_coefficients=coefficients,
+            raw_bias=intercepts,
+            standardized_coefficients=standardized_coefficients,
+            standardized_bias=standardized_bias,
+            mean=mean,
+            scale=scale,
+        )
+    metrics = {
+        "accuracy": 0.8,
+        "document_accuracy": 0.8,
+        "negative_log_likelihood": 0.5,
+        "per_role_accuracy": [[role, 0.8] for role in roles],
+        "per_role_document_accuracy": [[role, 0.8] for role in roles],
+        "confusion_matrix": [[1 if row == col else 0 for col in range(len(roles))] for row in range(len(roles))],
+        "token_count": 100,
+        "document_count": 50,
+    }
+    candidates = []
+    for regularization in (1e-4, 1e-3, 1e-2, 1e-1, 1.0, 10.0, 100.0, 1000.0):
+        candidate = {
+            "layer": 13,
+            "lambda": regularization,
+            "development_metrics": dict(metrics),
+        }
+        if regularization == 100.0:
+            candidate["development_metrics"] = {**metrics, "accuracy": 0.99}
+            candidate["diagnostic_parameters"] = parameters.name
+            candidate["diagnostic_parameters_sha256"] = manage._sha256(parameters)
+            candidate["raw_coefficients_sha256"] = manage._array_sha256(coefficients)
+            candidate["raw_intercepts_sha256"] = manage._array_sha256(intercepts)
+        candidates.append(candidate)
+    report = {
+        "status": "diagnostic-only-standardized-train-development-grid",
+        "baseline_probe_sha256": manage._sha256(reference_path),
+        "neutral_activation_manifest_sha256": manage._sha256(activations / "manifest.json"),
+        "optimizer_runtime_sha256": manage.optimizer_config_from_runtime(
+            protocol["optimizer"]
+        ).runtime_sha256,
+        "held_out_test_rows_scored": False,
+        "native_rows_scored": False,
+        "refit_performed": False,
+        "probe_artifact_written": False,
+        "failed_candidates": 0,
+        "failures": [],
+        "scaler": {
+            "fit_documents": 3,
+            "mean_sha256": manage._array_sha256(mean),
+            "scale_sha256": manage._array_sha256(scale),
+        },
+        "candidates": candidates,
+        "successful_candidates": len(candidates),
+    }
+    diagnostic_path = tmp_path / "diagnostic.json"
+    diagnostic_path.write_text(json.dumps(report), encoding="utf-8")
+    reference = SimpleNamespace(
+        provenance=SimpleNamespace(
+            native_template_adapter=NEMOTRON_ADAPTER.name,
+            roles=roles,
+            hidden_size=hidden_size,
+        ),
+        split=SimpleNamespace(train=("a", "b", "c")),
+    )
+    args = argparse.Namespace(
+        reference_probe=reference_path,
+        activations=activations,
+        diagnostic=diagnostic_path,
+        parameters=parameters,
+        protocol=protocol_path,
+        output=tmp_path / "adopted.npz",
+    )
+    return args, reference, report
+
+
 def _expanded_protocol() -> dict[str, Any]:
     protocol = _protocol()
     protocol["neutral_validation_documents"] = 250
@@ -79,6 +175,25 @@ def _expanded_protocol() -> dict[str, Any]:
             "revision": manage.GEMMA_ADAPTER.model_revision,
             "candidate_layers": [15, 23, 30],
         },
+    }
+    return protocol
+
+
+def _segment_protocol() -> dict[str, Any]:
+    protocol = _expanded_protocol()
+    protocol["qualification_policy"] = manage.SEGMENT_MEAN_REASONING_PROBABILITY
+    protocol["native_token_metrics"] = "diagnostic only"
+    protocol["models"]["nemotron"]["candidate_layers"] = [13]
+    protocol["native_gate"] = {
+        "required_segments": ["reasoning", "assistant"],
+        "reasoning_vs_final_segment_auc": manage.MIN_TEST_AUC,
+        "auc_bootstrap_lower_95_bound_must_exceed": manage.MIN_AUC_BOOTSTRAP_LOWER,
+        "heldout_reasoning_sensitivity_at_calibrated_threshold": (
+            manage.MIN_THRESHOLD_REASONING_SENSITIVITY
+        ),
+        "heldout_final_specificity_at_calibrated_threshold": (
+            manage.MIN_THRESHOLD_FINAL_SPECIFICITY
+        ),
     }
     return protocol
 
@@ -124,6 +239,18 @@ def test_frozen_protocol_accepts_both_pinned_adapters_and_rejects_drift() -> Non
         invalid = _expanded_protocol()
         invalid["models"]["nemotron"]["candidate_layers"] = invalid_layers
         with pytest.raises(ValueError, match="invalid document or layer search"):
+            manage._validate_frozen_protocol(invalid, NEMOTRON_ADAPTER.name)
+
+    segment = manage._validate_frozen_protocol(_segment_protocol(), NEMOTRON_ADAPTER.name)
+    assert segment.layer_indices == (13,)
+    assert segment.qualification_policy == manage.SEGMENT_MEAN_REASONING_PROBABILITY
+    for field, value in (
+        ("native_token_metrics", "gating"),
+        ("qualification_policy", "unknown"),
+    ):
+        invalid = _segment_protocol()
+        invalid[field] = value
+        with pytest.raises(ValueError):
             manage._validate_frozen_protocol(invalid, NEMOTRON_ADAPTER.name)
     for field in ("neutral_validation_documents", "neutral_max_content_tokens"):
         invalid = _expanded_protocol()
@@ -353,6 +480,64 @@ def test_train_rejects_expanded_dataset_identity_before_fitting(
     assert fit_calls == []
 
 
+def test_adopt_standardized_validates_saved_provenance_and_reports(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    args, reference, report = _adoption_fixture(tmp_path)
+    adopted = SimpleNamespace(
+        training=SimpleNamespace(qualification_policy=manage.SEGMENT_MEAN_REASONING_PROBABILITY),
+        selected_layer_index=13,
+        regularization_lambda=100.0,
+        neutral_valid=False,
+        qa_eligible=True,
+    )
+    captured: dict[str, Any] = {}
+    monkeypatch.setattr(manage, "load_role_probe", lambda _path: reference)
+    monkeypatch.setattr(manage, "load_activation_dataset", lambda _path: object())
+    monkeypatch.setattr(
+        manage,
+        "adopt_saved_probe_parameters",
+        lambda *values: captured.update(values=values) or adopted,
+    )
+    monkeypatch.setattr(
+        manage, "save_role_probe", lambda value, path: captured.update(saved=(value, path))
+    )
+
+    manage._adopt_standardized(args)
+
+    output = json.loads(capsys.readouterr().out)
+    assert output == {
+        "fit_performed": False,
+        "neutral_token_diagnostics_meet_historical_gates": False,
+        "output": str(args.output),
+        "qa_eligible": True,
+        "qualification_policy": manage.SEGMENT_MEAN_REASONING_PROBABILITY,
+        "selected_lambda": 100.0,
+        "selected_layer": 13,
+    }
+    assert captured["saved"] == (adopted, args.output)
+    adoption = captured["values"][-1]
+    assert adoption.method == manage.SAVED_STANDARDIZED_PARAMETERS
+    assert adoption.fit_document_count == 3
+    assert report["successful_candidates"] == 8
+
+
+def test_adopt_standardized_rejects_malformed_parameter_archive(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    args, reference, _ = _adoption_fixture(tmp_path)
+    with args.parameters.open("wb") as handle:
+        np.savez(handle, raw_coefficients=np.zeros((5, 3)))
+    report = manage._json_object(args.diagnostic)
+    report["candidates"][6]["diagnostic_parameters_sha256"] = manage._sha256(args.parameters)
+    args.diagnostic.write_text(json.dumps(report), encoding="utf-8")
+    monkeypatch.setattr(manage, "load_role_probe", lambda _path: reference)
+    with pytest.raises(ValueError, match="invalid saved standardized parameter archive"):
+        manage._adopt_standardized(args)
+
+
 def test_qualify_binds_partitions_and_reports(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -385,6 +570,8 @@ def test_qualify_binds_partitions_and_reports(
     qualification = SimpleNamespace(
         threshold_reasoning_sensitivity=0.9,
         threshold_final_specificity=1.0,
+        passed=True,
+        segment_passed=True,
         calibration=SimpleNamespace(usable=True, threshold=0.7),
         test=SimpleNamespace(
             passed=True,

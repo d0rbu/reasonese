@@ -22,10 +22,12 @@ from reasonese.role_probes import (
     ClassificationMetrics,
     ProbeTrainingConfig,
     RoleProbe,
+    SavedProbeAdoption,
     _fit_parameters,
     _parameters,
     _predict_parameters,
     activation_dataset_fingerprint,
+    adopt_saved_probe_parameters,
     load_role_probe,
     optimizer_config_from_runtime,
     project_role,
@@ -345,6 +347,139 @@ def test_training_selects_only_on_grouped_neutral_development_data() -> None:
         assert set(dataset.roles[rows]) == set(_ROLES)
 
 
+def test_saved_parameters_are_adopted_without_refitting(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    dataset = _dataset()
+    reference = train_role_probe(dataset, _training_config())
+    source_probe = tmp_path / "reference.npz"
+    save_role_probe(reference, source_probe)
+    adoption = SavedProbeAdoption(
+        method=role_probes.SAVED_STANDARDIZED_PARAMETERS,
+        fit_document_count=len(reference.split.train),
+        source_probe_sha256=role_probes._path_sha256(source_probe),
+        source_report_sha256="1" * 64,
+        source_parameters_sha256="2" * 64,
+        source_activation_manifest_sha256="3" * 64,
+        training_mean_sha256="4" * 64,
+        training_scale_sha256="5" * 64,
+    )
+    config = replace(
+        reference.training,
+        qualification_policy=role_probes.SEGMENT_MEAN_REASONING_PROBABILITY,
+    )
+    monkeypatch.setattr(
+        role_probes,
+        "_fit_parameters",
+        lambda *_args, **_kwargs: pytest.fail("adoption must not fit"),
+    )
+    adopted = adopt_saved_probe_parameters(
+        reference,
+        dataset,
+        config,
+        reference.development_candidates,
+        reference.coefficients,
+        reference.intercepts,
+        adoption,
+    )
+    assert adopted.saved_adoption == adoption
+    assert adopted.selected_layer_index == reference.selected_layer_index
+    assert adopted.regularization_lambda == reference.regularization_lambda
+    assert adopted.neutral_test_metrics == reference.neutral_test_metrics
+
+    output = tmp_path / "adopted.npz"
+    save_role_probe(adopted, output)
+    assert load_role_probe(output).saved_adoption == adoption
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"train_fraction": 0.6},
+        {"validation_fraction": 0.2},
+        {"seed": 1},
+        {"expected_document_count": 21},
+        {"maximum_content_tokens_per_document": 127},
+        {
+            "neutral_target_source_sha256": "a" * 64,
+            "neutral_filler_source_sha256": "b" * 64,
+        },
+        {"optimizer": role_probes.sklearn_optimizer_config(max_iterations=501)},
+    ],
+)
+def test_saved_parameter_adoption_rejects_reference_training_drift_before_test_scoring(
+    monkeypatch: pytest.MonkeyPatch, changes: dict[str, object]
+) -> None:
+    dataset = _dataset()
+    reference = train_role_probe(dataset, _training_config())
+    config = replace(
+        reference.training,
+        qualification_policy=role_probes.SEGMENT_MEAN_REASONING_PROBABILITY,
+        **changes,
+    )
+    monkeypatch.setattr(
+        role_probes,
+        "_predict_parameters",
+        lambda *_args, **_kwargs: pytest.fail("TEST must not be scored after protocol drift"),
+    )
+    with pytest.raises(ValueError, match="immutable reference training settings"):
+        adopt_saved_probe_parameters(
+            reference,
+            dataset,
+            config,
+            reference.development_candidates,
+            reference.coefficients,
+            reference.intercepts,
+            SavedProbeAdoption(
+                method=role_probes.SAVED_STANDARDIZED_PARAMETERS,
+                fit_document_count=len(reference.split.train),
+                source_probe_sha256="0" * 64,
+                source_report_sha256="1" * 64,
+                source_parameters_sha256="2" * 64,
+                source_activation_manifest_sha256="3" * 64,
+                training_mean_sha256="4" * 64,
+                training_scale_sha256="5" * 64,
+            ),
+        )
+
+
+def test_segment_policy_keeps_token_metrics_diagnostic() -> None:
+    dataset = _dataset()
+    legacy = _qualify(train_role_probe(dataset, _training_config()))
+    assert legacy.qualification is not None
+    metrics = legacy.qualification.test_metrics
+    poor_roles = tuple((role, 0.25) for role, _ in metrics.per_role_accuracy)
+    poor_metrics = replace(
+        metrics,
+        accuracy=0.25,
+        document_accuracy=0.25,
+        per_role_accuracy=poor_roles,
+        per_role_document_accuracy=poor_roles,
+    )
+    poor_test = replace(
+        legacy.qualification.test,
+        minimum_role_accuracy=0.25,
+        document_macro_accuracy=0.25,
+    )
+    qualification = replace(
+        legacy.qualification,
+        test_metrics=poor_metrics,
+        test=poor_test,
+    )
+    assert not qualification.passed
+    assert qualification.segment_passed
+    assert not replace(legacy, qualification=qualification).qa_eligible
+    segment = replace(
+        legacy,
+        training=replace(
+            legacy.training,
+            qualification_policy=role_probes.SEGMENT_MEAN_REASONING_PROBABILITY,
+        ),
+        qualification=qualification,
+    )
+    assert segment.qa_eligible
+
+
 def test_training_jointly_selects_layer_and_lambda_without_reading_test_candidates(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -377,9 +512,7 @@ def test_training_jointly_selects_layer_and_lambda_without_reading_test_candidat
         dtype: object,
         order: str,
     ) -> np.ndarray:
-        result = original_materialize(
-            source, rows, layer_offset, dtype=dtype, order=order
-        )
+        result = original_materialize(source, rows, layer_offset, dtype=dtype, order=order)
         np.testing.assert_array_equal(result, source.activations[rows, layer_offset])
         materializations.append((layer_offset, len(rows), result.dtype.name, order))
         return result
@@ -494,7 +627,10 @@ def test_all_candidate_convergence_failures_are_fatal_and_logged(
     with caplog.at_level("ERROR"), pytest.raises(RuntimeError, match="all role probe candidates"):
         train_role_probe(_dataset(layers=(3, 7)), replace(_training_config(), layer_indices=(3, 7)))
     assert calls == 4
-    assert sum(message.startswith("Excluding role probe candidate") for message in caplog.messages) == 4
+    assert (
+        sum(message.startswith("Excluding role probe candidate") for message in caplog.messages)
+        == 4
+    )
 
 
 def test_selected_refit_convergence_failure_remains_fatal(
@@ -744,9 +880,7 @@ def test_cuml_fit_enforces_layout_memory_solver_and_result_boundaries(
             if solver_message:
                 print(solver_message)
             self.classes_ = np.arange(3)
-            self.coef_ = np.full(
-                (3, x.shape[1]), np.nan if nonfinite else 0.0, dtype=np.float32
-            )
+            self.coef_ = np.full((3, x.shape[1]), np.nan if nonfinite else 0.0, dtype=np.float32)
             self.intercept_ = np.zeros(3, dtype=np.float32)
             self.n_iter_ = np.asarray([expected_iterations])
 
@@ -799,9 +933,7 @@ def test_cuml_fit_enforces_layout_memory_solver_and_result_boundaries(
         return original_import(name)
 
     monkeypatch.setattr(role_probes.importlib, "import_module", import_module)
-    config = replace(
-        _training_config(), optimizer=_cuml_optimizer_config(tolerance=1e-3)
-    )
+    config = replace(_training_config(), optimizer=_cuml_optimizer_config(tolerance=1e-3))
     if error is not None:
         expected_error = (
             role_probes.ProbeConvergenceError if solver_message else (RuntimeError, MemoryError)
@@ -891,9 +1023,7 @@ def test_cuml_runtime_identity_is_reconstructed_and_checked(
     modules["cuml.linear_model.logistic_regression"] = SimpleNamespace(__file__=None)
     with pytest.raises(ValueError, match="implementation is not hashable"):
         role_probes.cuml_optimizer_config()
-    modules["cuml.linear_model.logistic_regression"] = SimpleNamespace(
-        __file__=str(logistic_path)
-    )
+    modules["cuml.linear_model.logistic_regression"] = SimpleNamespace(__file__=str(logistic_path))
     monkeypatch.setattr(
         role_probes.importlib.metadata,
         "distribution",
@@ -934,13 +1064,9 @@ def test_cuml_qn_matches_sklearn_reference_when_explicitly_enabled() -> None:
     y = np.argmax(logits, axis=1).astype(np.int64)
     regularization = 0.1
     sklearn_parameters = _fit_parameters(x, y, regularization, _training_config(), 5)
-    cuml_config = replace(
-        _training_config(), optimizer=role_probes.cuml_optimizer_config()
-    )
+    cuml_config = replace(_training_config(), optimizer=role_probes.cuml_optimizer_config())
     cuml_parameters = _fit_parameters(x, y, regularization, cuml_config, 5)
-    sklearn_probabilities = _predict_parameters(
-        sklearn_parameters[0], sklearn_parameters[1], x
-    )
+    sklearn_probabilities = _predict_parameters(sklearn_parameters[0], sklearn_parameters[1], x)
     cuml_probabilities = _predict_parameters(cuml_parameters[0], cuml_parameters[1], x)
     np.testing.assert_allclose(cuml_probabilities, sklearn_probabilities, rtol=5e-4, atol=5e-4)
     np.testing.assert_array_equal(
@@ -957,9 +1083,7 @@ def test_cuml_qn_matches_sklearn_reference_when_explicitly_enabled() -> None:
         np.tile(x, (2, 1)), np.tile(y, 2), regularization * 2, cuml_config, 5
     )
     duplicated_probabilities = _predict_parameters(duplicated[0], duplicated[1], x)
-    np.testing.assert_allclose(
-        duplicated_probabilities, cuml_probabilities, rtol=5e-4, atol=5e-4
-    )
+    np.testing.assert_allclose(duplicated_probabilities, cuml_probabilities, rtol=5e-4, atol=5e-4)
     duplicated_objective = _multinomial_objective(
         duplicated[0],
         duplicated[1],
@@ -1212,9 +1336,7 @@ def test_existing_all_success_artifact_loads_with_no_failed_candidates(tmp_path:
         intercepts = archive["intercepts"].copy()
     metadata = envelope["probe"]
     assert metadata.pop("failed_candidates") == []
-    envelope["fingerprint"] = role_probes._artifact_fingerprint(
-        metadata, coefficients, intercepts
-    )
+    envelope["fingerprint"] = role_probes._artifact_fingerprint(metadata, coefficients, intercepts)
     with path.open("wb") as handle:
         np.savez_compressed(
             handle,
@@ -1235,9 +1357,7 @@ def test_artifact_rejects_mismatched_native_test_document_count(tmp_path: Path) 
         intercepts = archive["intercepts"].copy()
     metadata = envelope["probe"]
     metadata["qualification"]["test_metrics"]["document_count"] = 1
-    envelope["fingerprint"] = role_probes._artifact_fingerprint(
-        metadata, coefficients, intercepts
-    )
+    envelope["fingerprint"] = role_probes._artifact_fingerprint(metadata, coefficients, intercepts)
     with path.open("wb") as handle:
         np.savez_compressed(
             handle,

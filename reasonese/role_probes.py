@@ -48,6 +48,9 @@ from reasonese.probe_statistics import (
 PAIRED_NEUTRAL = "paired-neutral-role-wrappers"
 UNTOUCHED_CONVERSATIONS = "untouched-native-conversations"
 CONTENT_TOKENS_ONLY = "content-tokens-only"
+TOKEN_AND_SEGMENT_GATES = "token and segment gates"
+SEGMENT_MEAN_REASONING_PROBABILITY = "segment mean reasoning probability"
+SAVED_STANDARDIZED_PARAMETERS = "standardized on TRAIN and converted to raw activation space"
 _ARTIFACT_FORMAT = "reasonese-activation-role-probe-v2"
 logger = logging.getLogger(__name__)
 
@@ -673,6 +676,7 @@ class ProbeTrainingConfig:
     train_fraction: float = 0.8
     validation_fraction: float = 0.1
     seed: int = 0
+    qualification_policy: str = TOKEN_AND_SEGMENT_GATES
 
     def __post_init__(self) -> None:
         if (
@@ -730,6 +734,11 @@ class ProbeTrainingConfig:
             raise ValueError("training split fractions must be finite and positive")
         if type(self.seed) is not int:
             raise ValueError("training seed must be an integer")
+        if self.qualification_policy not in {
+            TOKEN_AND_SEGMENT_GATES,
+            SEGMENT_MEAN_REASONING_PROBABILITY,
+        }:
+            raise ValueError("unsupported qualification_policy")
 
 
 @beartype
@@ -881,6 +890,50 @@ class NativeProbeQualification:
             and specificity >= MIN_THRESHOLD_FINAL_SPECIFICITY
         )
 
+    @property
+    def segment_passed(self) -> bool:
+        """Return segment-only qualification without token-classification gates."""
+        sensitivity = self.threshold_reasoning_sensitivity
+        specificity = self.threshold_final_specificity
+        return bool(
+            self.calibration.usable
+            and self.test.segment_passed
+            and sensitivity is not None
+            and sensitivity >= MIN_THRESHOLD_REASONING_SENSITIVITY
+            and specificity is not None
+            and specificity >= MIN_THRESHOLD_FINAL_SPECIFICITY
+        )
+
+
+@beartype
+@dataclass(frozen=True, slots=True)
+class SavedProbeAdoption:
+    """Identity of saved TRAIN-only parameters adopted without refitting."""
+
+    method: str
+    fit_document_count: int
+    source_probe_sha256: str
+    source_report_sha256: str
+    source_parameters_sha256: str
+    source_activation_manifest_sha256: str
+    training_mean_sha256: str
+    training_scale_sha256: str
+
+    def __post_init__(self) -> None:
+        if self.method != SAVED_STANDARDIZED_PARAMETERS:
+            raise ValueError("unsupported saved-parameter adoption method")
+        if type(self.fit_document_count) is not int or self.fit_document_count <= 0:
+            raise ValueError("fit_document_count must be a positive integer")
+        for name in (
+            "source_probe_sha256",
+            "source_report_sha256",
+            "source_parameters_sha256",
+            "source_activation_manifest_sha256",
+            "training_mean_sha256",
+            "training_scale_sha256",
+        ):
+            _sha256(cast(str, getattr(self, name)), name)
+
 
 @beartype
 @dataclass(frozen=True, slots=True)
@@ -900,6 +953,7 @@ class RoleProbe:
     neutral_test_metrics: ClassificationMetrics
     qualification: NativeProbeQualification | None = None
     failed_candidates: tuple[ProbeCandidateFailure, ...] = ()
+    saved_adoption: SavedProbeAdoption | None = None
 
     def __post_init__(self) -> None:
         expected = (len(self.provenance.roles), self.provenance.hidden_size)
@@ -992,6 +1046,11 @@ class RoleProbe:
         )
         if selected is None or selected.metrics != self.validation_metrics:
             raise ValueError("selected candidate must match the stored validation metrics")
+        if self.saved_adoption is not None:
+            if self.training.qualification_policy != SEGMENT_MEAN_REASONING_PROBABILITY:
+                raise ValueError("saved parameter adoption requires segment qualification")
+            if self.saved_adoption.fit_document_count != len(self.split.train):
+                raise ValueError("saved parameter fit count must match the TRAIN split")
         if self.qualification is not None:
             measured = ("reasoning", "assistant")
             metrics = self.qualification.test_metrics
@@ -1018,7 +1077,11 @@ class RoleProbe:
 
     @property
     def qa_eligible(self) -> bool:
-        return self.neutral_valid and self.qualification is not None and self.qualification.passed
+        if self.qualification is None:
+            return False
+        if self.training.qualification_policy == SEGMENT_MEAN_REASONING_PROBABILITY:
+            return self.qualification.segment_passed
+        return self.neutral_valid and self.qualification.passed
 
 
 def _select_rows(dataset: ActivationDataset, documents: tuple[str, ...]) -> Array:
@@ -1190,8 +1253,7 @@ def _fit(x: Array, y: Array, regularization: float, config: ProbeTrainingConfig)
     )
     if matched_failure is not None:
         raise ProbeConvergenceError(
-            f"cuML QN reported a fitting failure for lambda={regularization:g}: "
-            f"{matched_failure}"
+            f"cuML QN reported a fitting failure for lambda={regularization:g}: {matched_failure}"
         )
     return classifier
 
@@ -1329,9 +1391,7 @@ def train_role_probe(dataset: ActivationDataset, config: ProbeTrainingConfig) ->
                     )
                 )
                 continue
-            probabilities = _predict_parameters(
-                coefficients, intercepts, validation_matrix
-            )
+            probabilities = _predict_parameters(coefficients, intercepts, validation_matrix)
             if not np.all(np.isfinite(probabilities)):
                 raise RuntimeError("probe candidate produced non-finite development probabilities")
             metrics = _metrics(
@@ -1505,6 +1565,93 @@ def _neutral_content_signatures(dataset: ActivationDataset) -> tuple[str, ...]:
             _content_signature(dataset.content_token_id[_rows(dataset, str(document), role)])
             for document in np.unique(dataset.document_ids)
         )
+    )
+
+
+@beartype
+def adopt_saved_probe_parameters(
+    reference_probe: RoleProbe,
+    neutral_dataset: ActivationDataset,
+    config: ProbeTrainingConfig,
+    development_candidates: tuple[ProbeCandidateMetrics, ...],
+    coefficients: Array,
+    intercepts: Array,
+    adoption: SavedProbeAdoption,
+) -> RoleProbe:
+    """Adopt one DEV-selected TRAIN-only fit and measure neutral TEST diagnostics.
+
+    This path never calls an optimizer and never refits on development data.
+    The caller must validate the source report and parameter-file byte identities.
+    """
+    if config.qualification_policy != SEGMENT_MEAN_REASONING_PROBABILITY:
+        raise ValueError("saved parameter adoption requires segment qualification")
+    reference_equivalent = replace(
+        config,
+        layer_indices=reference_probe.training.layer_indices,
+        protocol_sha256=reference_probe.training.protocol_sha256,
+        qualification_policy=reference_probe.training.qualification_policy,
+    )
+    if reference_equivalent != reference_probe.training:
+        raise ValueError("adoption protocol changes immutable reference training settings")
+    if any(layer not in reference_probe.training.layer_indices for layer in config.layer_indices):
+        raise ValueError("adoption layers must be restricted from the reference candidate grid")
+    if neutral_dataset.provenance.dataset_kind != PAIRED_NEUTRAL:
+        raise ValueError("saved parameter adoption requires paired neutral activations")
+    if not _same_pipeline(reference_probe.provenance, neutral_dataset.provenance):
+        raise ValueError("neutral activations do not match the reference probe pipeline")
+    documents = {str(value) for value in neutral_dataset.document_ids.tolist()}
+    split_documents = set(
+        reference_probe.split.train + reference_probe.split.validation + reference_probe.split.test
+    )
+    if documents != split_documents:
+        raise ValueError("neutral activations do not match the reference document split")
+    if _neutral_content_signatures(neutral_dataset) != reference_probe.neutral_content_signatures:
+        raise ValueError("neutral activations do not match the reference document content")
+    if (
+        config.expected_document_count is not None
+        and len(documents) != config.expected_document_count
+    ):
+        raise ValueError("neutral activation document count does not match adoption protocol")
+    if config.neutral_target_source_sha256 is not None and (
+        neutral_dataset.provenance.source_sha256 != config.neutral_target_source_sha256
+        or neutral_dataset.provenance.filler_source_sha256 != config.neutral_filler_source_sha256
+    ):
+        raise ValueError("neutral activation sources do not match adoption protocol")
+    selected = max(
+        development_candidates,
+        key=lambda candidate: (
+            candidate.metrics.accuracy,
+            -candidate.metrics.negative_log_likelihood,
+            candidate.regularization_lambda,
+            -candidate.layer_index,
+        ),
+        default=None,
+    )
+    if selected is None:
+        raise ValueError("saved parameter adoption requires development candidates")
+    layer_offset = neutral_dataset.provenance.layer_indices.index(selected.layer_index)
+    test_rows = _select_rows(neutral_dataset, reference_probe.split.test)
+    test_metrics = _metrics(
+        _predict_parameters(
+            coefficients, intercepts, neutral_dataset.activations[test_rows, layer_offset]
+        ),
+        _labels(neutral_dataset, test_rows),
+        neutral_dataset.provenance.roles,
+        neutral_dataset.document_ids[test_rows],
+    )
+    return RoleProbe(
+        provenance=neutral_dataset.provenance,
+        training=config,
+        split=reference_probe.split,
+        selected_layer_index=selected.layer_index,
+        regularization_lambda=selected.regularization_lambda,
+        development_candidates=development_candidates,
+        neutral_content_signatures=reference_probe.neutral_content_signatures,
+        coefficients=coefficients,
+        intercepts=intercepts,
+        validation_metrics=selected.metrics,
+        neutral_test_metrics=test_metrics,
+        saved_adoption=adoption,
     )
 
 
@@ -1708,9 +1855,10 @@ def _probe_from(metadata: dict[str, Any], coefficients: Array, intercepts: Array
         for candidate in metadata["development_candidates"]
     )
     failed_candidates = tuple(
-        ProbeCandidateFailure(**candidate)
-        for candidate in metadata.get("failed_candidates", ())
+        ProbeCandidateFailure(**candidate) for candidate in metadata.get("failed_candidates", ())
     )
+    saved_adoption = metadata.get("saved_adoption")
+    parsed_adoption = None if saved_adoption is None else SavedProbeAdoption(**saved_adoption)
     neutral_content_signatures = tuple(metadata["neutral_content_signatures"])
     split = {name: tuple(value) for name, value in metadata["split"].items()}
     qualification = metadata["qualification"]
@@ -1765,6 +1913,7 @@ def _probe_from(metadata: dict[str, Any], coefficients: Array, intercepts: Array
         neutral_test_metrics=_metrics_from(metadata["neutral_test_metrics"]),
         failed_candidates=failed_candidates,
         qualification=parsed_qualification,
+        saved_adoption=parsed_adoption,
     )
 
 

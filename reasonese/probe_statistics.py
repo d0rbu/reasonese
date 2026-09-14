@@ -202,12 +202,20 @@ class NativeQualification:
             raise ValueError("bootstrap AUC does not match the native scores")
 
     @property
+    def segment_passed(self) -> bool:
+        """Return whether the untouched segment scores pass the rank gates."""
+        return bool(
+            self.bootstrap_auc.auc >= MIN_TEST_AUC
+            and self.bootstrap_auc.lower_95 > MIN_AUC_BOOTSTRAP_LOWER
+        )
+
+    @property
     def passed(self) -> bool:
+        """Return the legacy token-and-segment qualification result."""
         return bool(
             self.minimum_role_accuracy >= MIN_ROLE_ACCURACY
             and self.document_macro_accuracy >= MIN_DOCUMENT_MACRO_ACCURACY
-            and self.bootstrap_auc.auc >= MIN_TEST_AUC
-            and self.bootstrap_auc.lower_95 > MIN_AUC_BOOTSTRAP_LOWER
+            and self.segment_passed
         )
 
 
