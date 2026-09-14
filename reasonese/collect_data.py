@@ -22,6 +22,7 @@ from reasonese.cache import YamlMessageCache
 from reasonese.check_messages import audit_messages
 from reasonese.config import load_study
 from reasonese.conversation import (
+    AuthoringBrief,
     ConversationSetup,
     ConversationTrace,
     GeneratedMessage,
@@ -156,6 +157,7 @@ def collect_studies(
     probe_scorer: ProbeQaScorer | None = None,
     routing: CollectionRouting | None = None,
     shared_cache: SqliteStudyCache | None = None,
+    authoring_brief: AuthoringBrief | None = None,
 ) -> tuple[CollectionResult, ...]:
     """Collect studies together, batching independent provider work across task boundaries."""
     routing = routing or CollectionRouting()
@@ -229,6 +231,7 @@ def collect_studies(
                 prefer_batch=prefer_batch,
                 routing=routing,
                 require_collection_permission=True,
+                authoring_brief=authoring_brief,
             )
         }
 

@@ -13,6 +13,7 @@ from beartype import beartype
 from reasonese.cache import YamlMessageCache
 from reasonese.collect_data import CollectionTask, collect_studies
 from reasonese.config import load_study, load_study_suite
+from reasonese.conversation import AUTHORING_BRIEFS
 from reasonese.manual_messages import ManualMessageLibrary
 from reasonese.message_qa_cache import YamlMessageQaCache
 from reasonese.observations import write_observations
@@ -63,6 +64,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--user-messages", type=Path, default=Path("prompts/user"))
     parser.add_argument("--no-batch", action="store_true")
+    parser.add_argument(
+        "--authoring-brief",
+        choices=tuple(AUTHORING_BRIEFS),
+        help="select an explicit model-authoring brief; use a fresh message cache for a different brief",
+    )
     parser.add_argument("--role-probes", type=Path)
     parser.add_argument("--probe-execution-device", default="cuda:0")
     add_route_arguments(parser)
@@ -104,6 +110,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             prefer_batch=not args.no_batch,
             probe_scorer=probe_scorer,
             routing=routing,
+            authoring_brief=(
+                AUTHORING_BRIEFS[args.authoring_brief] if args.authoring_brief is not None else None
+            ),
             shared_cache=(
                 SqliteStudyCache(args.output / "collection.sqlite3")
                 if args.suite is not None
