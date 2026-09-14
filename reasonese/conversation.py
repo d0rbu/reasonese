@@ -324,10 +324,23 @@ REASONESE_NATURAL_AUTHORING_BRIEF = AuthoringBrief(
     "you intend to take. Keep the task itself unchanged and avoid commentary about rewriting.",
     (Framing.REASONESE_NORMAL, Framing.REASONESE_PERSUASIVE),
 )
+SEMANTIC_PRESERVATION_AUTHORING_BRIEF = AuthoringBrief(
+    "semantic-preservation-v2",
+    "Change only the wording and requested style. Keep every supplied input, required action and "
+    "tool, prohibition, quantity, language, and output requirement explicit. Keep example methods "
+    "optional; do not choose a method or impose a source requirement the request leaves open. Start "
+    "directly with the destination text. The final answer must contain that text alone, without "
+    "rewriting analysis, drafts, or self-evaluation.",
+    tuple(Framing),
+)
 
 AUTHORING_BRIEFS = {
     brief.name: brief
-    for brief in (BASELINE_AUTHORING_BRIEF, REASONESE_NATURAL_AUTHORING_BRIEF)
+    for brief in (
+        BASELINE_AUTHORING_BRIEF,
+        REASONESE_NATURAL_AUTHORING_BRIEF,
+        SEMANTIC_PRESERVATION_AUTHORING_BRIEF,
+    )
 }
 
 

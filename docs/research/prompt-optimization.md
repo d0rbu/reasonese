@@ -6,7 +6,8 @@ It stops after probe QA. It does not execute an assistant, execute tools, submit
 or write observations. The existing default authoring prompt is the `baseline` candidate; the
 repository also defines `reasonese-natural-v1`, a measured candidate that adds a short
 reasonese-only reminder to preserve concrete obligations in natural first-person planning prose.
-The candidate is never adopted automatically.
+It also defines `semantic-preservation-v2`, a measured all-framing candidate that keeps supplied
+obligations explicit while leaving optional methods open. Neither candidate is adopted automatically.
 
 Each invocation requires a fresh output directory and one candidate name. The suite must contain
 at most 32 one-rollout studies, at most 64 unique inputs, and at most 128 probe scores, and must
@@ -73,6 +74,13 @@ denominators, missing records, and compressed descriptive counts.
 The table is evidence for selecting a brief, not a claim that one wording is indistinguishable
 from a model's private reasoning or that message QA proves semantic equivalence. Review raw
 outputs and failures before changing any production default.
+
+The completed first development comparison rejected `reasonese-natural-v1`: the baseline had
+16/27 Luna passes, 46/84 enforced probe passes, and 1/24 jointly eligible studies, while v1 had
+15/27, 42/84, and 1/24. Across the six reasonese-framing development cells, Luna-only eligibility
+fell from 3/6 to 1/6. `semantic-preservation-v2` is the bounded follow-up motivated by those
+observed preservation failures; it remains a candidate for the same development comparison and
+does not change the default or the reserved confirmation pair.
 
 ## Frozen live design
 

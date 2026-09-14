@@ -15,6 +15,7 @@ from reasonese.conversation import (
     AUTHORING_BRIEFS,
     BASELINE_AUTHORING_BRIEF,
     REASONESE_NATURAL_AUTHORING_BRIEF,
+    SEMANTIC_PRESERVATION_AUTHORING_BRIEF,
     GeneratedMessage,
     GeneratedText,
     authoring_instructions,
@@ -162,7 +163,11 @@ def test_briefs_are_immutable_and_candidate_does_not_change_controls() -> None:
     assert authoring_instructions(spec, brief=REASONESE_NATURAL_AUTHORING_BRIEF) != authoring_instructions(spec)
     assert authoring_request(_spec(2, Framing.COMPRESSED_NORMAL, Channel.USER), brief=REASONESE_NATURAL_AUTHORING_BRIEF) == authoring_request(_spec(2, Framing.COMPRESSED_NORMAL, Channel.USER))
     assert REASONESE_NATURAL_AUTHORING_BRIEF.fingerprint == REASONESE_NATURAL_AUTHORING_BRIEF.fingerprint
-    assert set(AUTHORING_BRIEFS) == {"baseline", "reasonese-natural-v1"}
+    assert set(AUTHORING_BRIEFS) == {
+        "baseline",
+        "reasonese-natural-v1",
+        "semantic-preservation-v2",
+    }
     with pytest.raises(ValueError, match="name"):
         type(BASELINE_AUTHORING_BRIEF)("", "")
     message = _message(spec)
@@ -172,6 +177,21 @@ def test_briefs_are_immutable_and_candidate_does_not_change_controls() -> None:
     assert baseline_qa == candidate_qa
     assert message_qa_rubric_fingerprint()
     assert candidate_author != baseline_qa
+
+
+def test_semantic_preservation_v2_covers_all_framings_and_keeps_qa_fixed() -> None:
+    candidate = SEMANTIC_PRESERVATION_AUTHORING_BRIEF
+    assert candidate.framings == tuple(Framing)
+    for number, framing in enumerate(Framing):
+        spec = _spec(100 + number, framing, Channel.USER)
+        baseline_request = authoring_request(spec, brief=BASELINE_AUTHORING_BRIEF)
+        candidate_request = authoring_request(spec, brief=candidate)
+        assert baseline_request != candidate_request
+        assert candidate.guidance in candidate_request["messages"][0]["content"]
+
+        qa_evidence = json.loads(message_qa_request(_message(spec))["messages"][1]["content"])
+        assert qa_evidence["exact_authoring_instructions"] == authoring_instructions(spec)
+        assert candidate.guidance not in qa_evidence["exact_authoring_instructions"]
 
 
 @pytest.mark.parametrize(
