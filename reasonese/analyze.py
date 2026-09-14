@@ -1,4 +1,4 @@
-"""Write Bradley-Terry, axis, and order-effect analyses for collected data."""
+"""Write Bradley-Terry, feature-lasso, axis, and order-effect analyses for collected data."""
 
 from __future__ import annotations
 
@@ -10,11 +10,25 @@ from pathlib import Path
 
 from beartype import beartype
 
-from reasonese.analysis import AnalysisBundle, RankedCell, TableRow, analyze_observations
+from reasonese.analysis import (
+    AnalysisBundle,
+    RankedCell,
+    TableRow,
+    analyze_observations,
+    pair_memberships,
+)
 from reasonese.instructions import (
     PairMembership,
     instruction_index,
     load_instruction_pairs,
+)
+from reasonese.lasso import (
+    PATH_MIN_RATIO,
+    FeatureLasso,
+    fit_feature_lassos,
+    lasso_diagnostics,
+    lasso_tables,
+    selected_features,
 )
 from reasonese.observations import Observation, load_observations
 
@@ -61,11 +75,120 @@ def _format_float(value: object) -> str:
     return f"{float(value):.4f}"
 
 
+def _lasso_lines(lasso: FeatureLasso) -> list[str]:
+    """Render the feature-lasso section: what was fitted, what entered, and when."""
+    references = lasso.references
+    tables = lasso_tables(lasso)
+    fitted = [row for row in tables.features if row["status"] == "fitted"]
+    never_differ = [row for row in tables.features if row["status"] == "never differs"]
+    aliased = [row for row in tables.features if row["status"] == "aliased"]
+    lines = [
+        "",
+        f"### {lasso.assistant}",
+        "",
+        "This evaluation assistant is fitted independently. Every cell's strength is a pair-side "
+        "offset plus a sparse sum of feature effects. Feature coefficients carry an L1 penalty, "
+        "so a feature stays at zero until the comparisons support it; the offsets keep the L2 "
+        "penalty. Features are treatment contrasts against "
+        f"`{references['framing']}` framing, the `{references['channel']}` channel, the "
+        f"`{references['author']}` author, all three two-way interactions, and the "
+        "framing-by-channel-by-author interaction. Position is excluded because both delivery "
+        "orders are measured symmetrically. Columns are not standardized, so a feature that "
+        "rarely differs inside a trial needs a larger effect to enter.",
+        "",
+        f"- Comparisons: {lasso.comparisons} over {lasso.cell_pairs} distinct cell pairs; "
+        f"blocks: {len(lasso.blocks)}",
+        f"- Candidate features: {len(lasso.features)} ({len(fitted)} fitted, "
+        f"{len(never_differ)} never differ inside a trial, {len(aliased)} aliased)",
+        f"- Held-out loss is the mean log loss per comparison; offsets alone give "
+        f"{_format_float(lasso.null_loss)} on the training data.",
+    ]
+    if lasso.design_rank < len(fitted):
+        lines.append(
+            f"- The fitted columns have rank {lasso.design_rank}, so they are linearly "
+            "dependent: the fitted probabilities are unique but the coefficients are not, "
+            "and the entry order can depend on the solver's path."
+        )
+    if not lasso.lambdas:
+        lines.append(
+            "- No penalty path was fitted: no fitted feature is correlated with the outcome "
+            "once the offsets alone are fitted."
+        )
+        return lines
+
+    lines.append(
+        f"- Penalty path: {len(lasso.lambdas)} values from lambda_max = "
+        f"{lasso.lambda_max:.4f} down to {PATH_MIN_RATIO:g} lambda_max."
+    )
+    validation = lasso.cross_validation
+    selected = lasso.selected
+    if validation is None or selected is None:
+        lines.append(
+            "- No cross-validation was run; the coefficients below are from the least "
+            "penalized end of the path."
+        )
+    else:
+        path_min = tables.path[validation.index_min]
+        path_1se = tables.path[validation.index_1se]
+        lines.append(
+            f"- {validation.folds}-fold cross-validation, folds assigned by cell pair and "
+            "penalties scaled to each fold's size: held-out loss "
+            f"{_format_float(validation.mean_loss[0])} with offsets only, "
+            f"{_format_float(path_min['cv_mean_loss'])} at lambda_min "
+            f"({path_min['nonzero']} features), "
+            f"{_format_float(path_1se['cv_mean_loss'])} at lambda_1se "
+            f"({path_1se['nonzero']} features). The coefficients below are at lambda_1se, "
+            "the largest penalty within one standard error of the minimum."
+        )
+    if not all(lasso.converged):
+        lines.append("- At least one path point did not converge; see `lasso_path.csv`.")
+    lines.extend(
+        [
+            "",
+            "| Feature | Group | Enters at lambda/lambda_max | Coefficient (selected) | "
+            "Coefficient (lambda_min) | Differs in |",
+            "|---|---|---:|---:|---:|---:|",
+        ]
+    )
+    entered = sorted(
+        (row for row in fitted if row["entry_index"] is not None),
+        key=lambda row: (int(str(row["entry_index"])), str(row["feature"])),
+    )
+    for row in entered:
+        lines.append(
+            f"| `{row['feature']}` | {row['group']} | "
+            f"{_format_float(row['entry_lambda_ratio'])} | "
+            f"{_format_float(row['coefficient_selected'])} | "
+            f"{_format_float(row['coefficient_cv_min'])} | "
+            f"{row['differing_comparisons']} |"
+        )
+    missing = [str(row["feature"]) for row in fitted if row["entry_index"] is None]
+    if missing:
+        lines.extend(["", "Never enters: " + ", ".join(f"`{name}`" for name in missing) + "."])
+    if aliased:
+        pairs = ", ".join(
+            f"`{row['feature']}` = {'-' if row['alias_sign'] == -1 else ''}`{row['alias_of']}`"
+            for row in aliased
+        )
+        lines.extend(["", f"Aliased, identical inside every trial: {pairs}."])
+    lines.extend(
+        [
+            "",
+            "Lasso coefficients are shrunk toward zero and carry no standard errors. Read the "
+            "entry order and the cross-validation curve as a guide to which contrasts deserve "
+            "a closer look, not as tests. `lasso_features.csv` lists every candidate, and "
+            "`lasso_blocks.csv` gives the nuisance pair-side offsets.",
+        ]
+    )
+    return lines
+
+
 def _write_report(
     path: Path,
     bundle: AnalysisBundle,
     l2: float,
     index: dict[str, PairMembership],
+    lassos: tuple[FeatureLasso, ...],
 ) -> None:
     lines = [
         "# reasonese analysis",
@@ -128,6 +251,18 @@ def _write_report(
             f"{_format_float(row['completion_rate'])} | "
             f"{_format_float(row['mean_bt_score'])} |"
         )
+
+    lines.extend(
+        [
+            "",
+            "## Feature lasso",
+            "",
+            "A separate sparse Bradley-Terry feature model is fitted for each evaluation "
+            "assistant. Assistant is matchup metadata and is never a feature.",
+        ]
+    )
+    for lasso in lassos:
+        lines.extend(_lasso_lines(lasso))
 
     lines.extend(
         [
@@ -196,8 +331,9 @@ def _write_report(
             "## Artifacts",
             "",
             "See the CSV files for the complete axis contrasts, cell-by-position results, "
-            "axis-by-position results, and regularization sensitivity. `diagnostics.json` "
-            "contains comparison connectivity and per-cell position balance.",
+            "axis-by-position results, regularization sensitivity, and the full lasso path. "
+            "`diagnostics.json` contains comparison connectivity, per-cell position balance, "
+            "and the lasso's screening and cross-validation summary.",
             "",
         ]
     )
@@ -210,6 +346,7 @@ def write_analysis(
     bundle: AnalysisBundle,
     l2: float,
     index: dict[str, PairMembership],
+    lassos: tuple[FeatureLasso, ...],
 ) -> None:
     """Write all analysis tables, diagnostics, and a readable report."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -232,11 +369,30 @@ def write_analysis(
         output_dir / "regularization_sensitivity.csv",
         bundle.regularization_sensitivity,
     )
+    tables = tuple(lasso_tables(lasso) for lasso in lassos)
+    _write_csv(output_dir / "lasso_path.csv", tuple(row for table in tables for row in table.path))
+    _write_csv(
+        output_dir / "lasso_coefficients.csv",
+        tuple(row for table in tables for row in table.coefficients),
+    )
+    _write_csv(
+        output_dir / "lasso_features.csv",
+        tuple(row for table in tables for row in table.features),
+    )
+    _write_csv(
+        output_dir / "lasso_blocks.csv", tuple(row for table in tables for row in table.blocks)
+    )
+    diagnostics = {
+        **bundle.diagnostics,
+        "feature_lasso": {
+            "assistants": {lasso.assistant: lasso_diagnostics(lasso) for lasso in lassos}
+        },
+    }
     (output_dir / "diagnostics.json").write_text(
-        json.dumps(bundle.diagnostics, indent=2, sort_keys=True) + "\n",
+        json.dumps(diagnostics, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
-    _write_report(output_dir / "report.md", bundle, l2, index)
+    _write_report(output_dir / "report.md", bundle, l2, index, lassos)
 
 
 @beartype
@@ -248,6 +404,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--l2", type=float, default=1.0)
     parser.add_argument("--bootstrap-samples", type=int, default=200)
+    parser.add_argument("--lasso-folds", type=int, default=5)
+    parser.add_argument("--lasso-path-length", type=int, default=40)
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args(argv)
 
@@ -267,7 +425,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             bootstrap_samples=args.bootstrap_samples,
             seed=args.seed,
         )
-        write_analysis(args.output, bundle, args.l2, index)
+        lassos = fit_feature_lassos(
+            observations,
+            pair_memberships(observations, pairs),
+            args.l2,
+            folds=args.lasso_folds,
+            path_length=args.lasso_path_length,
+            seed=args.seed,
+        )
+        write_analysis(args.output, bundle, args.l2, index, lassos)
     except (OSError, TypeError, ValueError) as error:
         parser.error(str(error))
 
@@ -280,6 +446,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "components_match_pair_assistant": bundle.diagnostics[
                     "components_match_pair_assistant"
                 ],
+                "lasso_selected_features": {
+                    lasso.assistant: (
+                        None if lasso.selected is None else len(selected_features(lasso))
+                    )
+                    for lasso in lassos
+                },
                 "neither_completed_trials": bundle.diagnostics["neither_completed_trials"],
                 "observations": len(observations),
                 "output": str(args.output),
