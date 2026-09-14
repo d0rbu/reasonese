@@ -43,6 +43,7 @@
 | `reasonese/manage_role_probe.py` | Frozen two-stage probe training and qualification utility |
 | `tests/test_role_probe_extraction.py` | Native-template controls, prefix equivalence, batching, and artifact contracts |
 | `docs/reference/role-probes.md` | Role-probe method, provenance, validity gates, and scientific limits |
+| `docs/research/nemotron-probe-adoption.md` | Saved standardized Nemotron adoption, amended segment qualification, and held-out screens |
 | `reasonese/message_qa_cache.py` | Exact-text-keyed readable QA cache |
 | `reasonese/check_messages.py` | Fail-closed QA gate and `reasonese-check-messages` utility |
 | `reasonese/runner.py` | Cache-aware conversation execution |
