@@ -24,6 +24,42 @@ Local open-weight activations also do not establish exact parity with an OpenRou
 unless the hosted checkpoint, quantization, tokenizer, and template are all independently shown
 to match. Probe reports must preserve that limitation.
 
+### Current Nemotron result (September 13, 2026)
+
+The expanded Nemotron run used 250 neutral documents, a 1,024-token cap, and candidate
+layers 13, 20, and 26. Twenty-two of 24 layer/lambda candidates completed; layer 26 failed
+with explicit convergence errors at lambda `0.01` and `100`. Development selection chose
+layer 13 and lambda `0.001`. On the held-out neutral split, token accuracy was 90.3856%, but
+reasoning recall was 87.0986% and assistant/final-output recall was 79.6390%. The latter is
+below the unchanged 85% per-role gate, so neutral validation failed.
+
+On 12 untouched native test conversations, reasoning recall was 22.8668%, final-output
+recall was 100%, and document-macro accuracy was 56.7335%. AUC of conversation-average
+segment scores was 1.0, and the calibration threshold accepted 11 of 12 reasoning segments
+while rejecting all 12 final segments. Those ranking and threshold results do not compensate
+for the failed native per-role and document-macro gates.
+
+A separate calibration-only control measured mean unconditional `P(reasoning)` under three
+renderings of the same 12 intact conversations:
+
+| Rendering | Reasoning segment | Final segment |
+| --- | ---: | ---: |
+| Native roles | 0.335528 | 0.00000494696 |
+| Entire conversation under a tool role | 0.530172 | 0.0372404 |
+| Raw text without role tags | 0.449161 | 0.0182800 |
+
+The reasoning-versus-final distinction persisted without the correct native wrappers. The
+control preserves source text and source order, but wrapper changes also alter absolute token
+positions and causal context, so it does not isolate prose style. It is descriptive only:
+intact conversation segments are not authored instructions, and the result does not establish
+instruction-style indistinguishability or change any gate.
+
+The run therefore produced no QA-eligible Nemotron probe, and the pilot remains paused. The
+earlier diagnostic and expanded runs are not a paired intervention, so their difference does
+not identify a cause or show that the larger setup corrected the failure. Gemma evidence is
+also incomplete at two of 24 native dialogues; no further provider calls are planned without
+user direction.
+
 ## Controlled training data
 
 Each neutral base document is rendered five times with the exact target checkpoint's native role
