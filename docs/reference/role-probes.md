@@ -85,6 +85,17 @@ recall was 100%, and document-macro accuracy was 66.6015%. The diagnostic did no
 native test data, performed no refit, and changed no gate; the calibration result was not treated as
 sufficient to proceed to qualification and produced no qualified model.
 
+A subsequent diagnostic excluded the first 32 content tokens of each neutral training role
+segment and refit the same standardized layer-13 pipeline. All eight candidates converged;
+six met the unchanged numeric criteria on full-content development data. Full-content
+development selection chose lambda `10` (92.1848% overall accuracy and 85.0786% minimum
+per-role recall). A separately frozen screen on the same 12 native calibration conversations
+still failed: reasoning recall was 30.7162%, final-output recall was 100%, and document-macro
+accuracy was 66.2338%. All eight stored all-content baselines were rescored on identical full
+and filtered development rows; their full-content metrics reproduced the earlier results.
+The exclusion did not improve native transfer in these calibration screens. No test activations
+were used for fitting, selection, or scoring, and no production training rule or gate changed.
+
 The pinned upstream source at revision `ec333c40fd43fe991e1ebf66765051b6d7e35784`
 sets `SKIP_FIRST_N = 32` for nested-reasoning models and filters the rows produced through
 `label_nemotron3_content_roles` to `token_in_seg_ix >= SKIP_FIRST_N` before neutral probe fitting
