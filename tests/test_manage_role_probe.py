@@ -92,7 +92,9 @@ def _adoption_fixture(tmp_path: Path) -> tuple[argparse.Namespace, SimpleNamespa
         "negative_log_likelihood": 0.5,
         "per_role_accuracy": [[role, 0.8] for role in roles],
         "per_role_document_accuracy": [[role, 0.8] for role in roles],
-        "confusion_matrix": [[1 if row == col else 0 for col in range(len(roles))] for row in range(len(roles))],
+        "confusion_matrix": [
+            [1 if row == col else 0 for col in range(len(roles))] for row in range(len(roles))
+        ],
         "token_count": 100,
         "document_count": 50,
     }
@@ -542,6 +544,11 @@ def test_adopt_standardized_rejects_malformed_parameter_archive(
     ("mutation", "message"),
     [
         ("report", "saved standardized diagnostic provenance"),
+        ("policy", "require segment qualification"),
+        ("incomplete", "diagnostic is incomplete"),
+        ("fit-count", "scaler fit count"),
+        ("candidate", "invalid saved standardized candidate grid"),
+        ("grid", "candidates do not match the frozen grid"),
         ("selection", "DEV-selected candidate"),
         ("parameter-hash", "saved standardized parameter hashes"),
         ("scale", "saved standardized parameters have invalid arrays"),
@@ -557,8 +564,23 @@ def test_adopt_standardized_rejects_integrity_tampering_before_activation_load(
 ) -> None:
     args, reference, _ = _adoption_fixture(tmp_path)
     report = manage._json_object(args.diagnostic)
-    if mutation == "report":
+    if mutation == "policy":
+        protocol = _expanded_protocol()
+        args.protocol.write_text(json.dumps(protocol), encoding="utf-8")
+    elif mutation == "report":
         report["refit_performed"] = True
+        args.diagnostic.write_text(json.dumps(report), encoding="utf-8")
+    elif mutation == "incomplete":
+        report["candidates"] = {}
+        args.diagnostic.write_text(json.dumps(report), encoding="utf-8")
+    elif mutation == "fit-count":
+        report["scaler"]["fit_documents"] += 1
+        args.diagnostic.write_text(json.dumps(report), encoding="utf-8")
+    elif mutation == "candidate":
+        del report["candidates"][0]["development_metrics"]["accuracy"]
+        args.diagnostic.write_text(json.dumps(report), encoding="utf-8")
+    elif mutation == "grid":
+        report["successful_candidates"] -= 1
         args.diagnostic.write_text(json.dumps(report), encoding="utf-8")
     elif mutation == "selection":
         report["candidates"][6]["diagnostic_parameters"] = "other.npz"
@@ -577,9 +599,7 @@ def test_adopt_standardized_rejects_integrity_tampering_before_activation_load(
             arrays["standardized_bias"][0] += 1.0
         with args.parameters.open("wb") as handle:
             np.savez(handle, **arrays)
-        report["candidates"][6]["diagnostic_parameters_sha256"] = manage._sha256(
-            args.parameters
-        )
+        report["candidates"][6]["diagnostic_parameters_sha256"] = manage._sha256(args.parameters)
         args.diagnostic.write_text(json.dumps(report), encoding="utf-8")
     else:
         protocol = manage._json_object(args.protocol)

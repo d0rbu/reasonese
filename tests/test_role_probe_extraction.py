@@ -1652,7 +1652,12 @@ def test_native_prefix_batch_matches_unbatched() -> None:
             token_positions=positions,
             layers=(0, 1),
         )
-        assert np.array_equal(batched, singles)
+        assert batched.shape == singles.shape
+        assert batched.dtype == singles.dtype == np.float32
+        assert batched.flags.c_contiguous
+        # CPU attention kernels may change reduction order with batch shape. This tight
+        # float32 roundoff tolerance still detects layout and padding errors.
+        np.testing.assert_allclose(batched, singles, rtol=1e-6, atol=1e-6, equal_nan=False)
 
 
 def test_nemotron_dispatch_audit_rejects_the_naive_mamba_path(

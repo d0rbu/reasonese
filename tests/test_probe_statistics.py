@@ -21,6 +21,7 @@ from reasonese.probe_statistics import (
     NativeQualification,
     PairedBootstrapAuc,
     PairedSegmentScores,
+    ThresholdCalibration,
     calibrate_reasoning_threshold,
     classify_reasoning,
     paired_bootstrap_auc,
@@ -266,3 +267,58 @@ def test_bootstrap_configuration_cannot_be_changed() -> None:
         PairedBootstrapAuc(1.0, 1.0, 1.0, EXPECTED_CONVERSATIONS, replicates=100)
     with pytest.raises(ValueError, match="quantile"):
         PairedBootstrapAuc(1.0, 1.0, 1.0, EXPECTED_CONVERSATIONS, quantile_method="nearest")
+
+
+def test_statistical_evidence_objects_reject_malformed_persisted_values() -> None:
+    scores = _scores()
+    with pytest.raises(ValueError, match="contain conversations"):
+        PairedSegmentScores(CALIBRATION_SPLIT, (), (), ())
+    with pytest.raises(ValueError, match="conversation_id"):
+        replace(scores, conversation_ids=("",) + scores.conversation_ids[1:])
+
+    bootstrap = PairedBootstrapAuc(0.9, 0.6, 1.0, EXPECTED_CONVERSATIONS)
+    with pytest.raises(ValueError, match="between zero and one"):
+        replace(bootstrap, auc=float("nan"))
+    with pytest.raises(ValueError, match="lower bound"):
+        replace(bootstrap, lower_95=0.95, upper_95=0.9)
+    with pytest.raises(ValueError, match="at least one conversation"):
+        replace(bootstrap, conversation_count=0)
+
+    calibration = calibrate_reasoning_threshold(scores)
+    with pytest.raises(ValueError, match="fingerprint"):
+        replace(calibration, calibration_fingerprint="not-a-digest")
+    with pytest.raises(ValueError, match="candidate_count"):
+        replace(calibration, candidate_count=0)
+    with pytest.raises(ValueError, match="between zero and one"):
+        replace(calibration, balanced_accuracy=1.1)
+    with pytest.raises(ValueError, match="contain a threshold"):
+        replace(calibration, threshold=None)
+    with pytest.raises(ValueError, match="threshold must be finite"):
+        replace(calibration, threshold=float("inf"))
+    with pytest.raises(ValueError, match="operating-point metrics"):
+        replace(calibration, reasoning_sensitivity=None)
+    with pytest.raises(ValueError, match="cannot contain a threshold"):
+        ThresholdCalibration(
+            calibration_fingerprint=scores.fingerprint,
+            threshold=0.5,
+            calibration_auc=0.5,
+            balanced_accuracy=None,
+            reasoning_sensitivity=None,
+            final_specificity=None,
+            candidate_count=1,
+            usable=False,
+        )
+
+    qualification = qualify_native_test(
+        replace(scores, split=TEST_SPLIT),
+        minimum_role_accuracy=0.9,
+        document_macro_accuracy=0.9,
+    )
+    with pytest.raises(ValueError, match="same conversations"):
+        replace(
+            qualification,
+            bootstrap_auc=replace(
+                qualification.bootstrap_auc,
+                conversation_count=EXPECTED_CONVERSATIONS - 1,
+            ),
+        )
