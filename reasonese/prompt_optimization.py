@@ -148,10 +148,11 @@ def _probe_identity(path: Path) -> dict[str, object]:
     """Record probe configuration and artifact identity without loading checkpoints."""
     if not path.is_file():
         raise ValueError(f"role-probe bundle does not exist: {path}")
-    from reasonese.local_probe_qa import load_probe_bundles
+    from reasonese.local_probe_qa import CAPTURE_POLICY, load_probe_bundles
 
     bundles = load_probe_bundles(path)
     return {
+        "capture_policy": CAPTURE_POLICY,
         "config": {"path": str(path.resolve()), "sha256": _sha256(path)},
         "bundles": [
             {

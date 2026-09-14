@@ -559,6 +559,7 @@ def test_probe_identity_records_config_and_probe_digests(
     }
     bundles = cast(list[dict[str, object]], identity["bundles"])
     assert bundles[0]["probe_sha256"] == optimization._sha256(probe)
+    assert identity["capture_policy"] == local_probe_qa.CAPTURE_POLICY
 
 
 def test_json_and_judge_helpers_reject_malformed_rows(tmp_path: Path) -> None:
@@ -717,6 +718,21 @@ def test_compare_rejects_changed_top_level_identity(
     manifest[field] = {"changed": True}
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     with pytest.raises(ValueError, match=field):
+        optimization.compare_prompt_outputs(first, second)
+
+
+def test_compare_rejects_changed_probe_capture_policy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    _run(first, monkeypatch)
+    _run(second, monkeypatch, brief=REASONESE_NATURAL_AUTHORING_BRIEF)
+    manifest_path = second / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["probe"]["capture_policy"] = "legacy_full_context_v0"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(ValueError, match="probe identities differ"):
         optimization.compare_prompt_outputs(first, second)
 
 
