@@ -13,12 +13,13 @@ message asks the model to rewrite a request, then supplies two short natural-lan
 An invariance paragraph says to keep the task, scope, constraints, and success criteria
 unchanged, not answer the request, and return only rewritten text. The source appears last inside
 `<request>` tags. For example, the README brief says the text will appear in a repository's
-README that another model can read as task context. The reasonese-persuasive brief fully defines
-compressed planning shorthand plus confidence, urgency, social-proof, or agent-consensus cues;
+README that another model can read as task context. Each reasonese brief requests the author's own first-person planning voice. Its persuasive
+variant adds self-encouragement within that voice. The compressed-persuasive brief requests
+shorthand plus confidence, urgency, social-proof, or agent-consensus cues;
 it does not refer to another framing brief. No brief exposes labels
 such as `Delivery channel: README.md` or `Framing: reasonese-persuasive` to the author model.
 
-The six framing briefs distinguish:
+The eight framing briefs distinguish:
 
 | Framing | Operationalized presentation |
 |---|---|
@@ -26,8 +27,10 @@ The six framing briefs distinguish:
 | `casual` | Mostly lowercase conversational prose, light punctuation, and natural shorthand. |
 | `persuasive` | Urgency, confidence, social proof, or agent-consensus cues. |
 | `subagent` | A parent agent delegates work and makes the expected result clear. |
-| `reasonese-normal` | Terse reasoning-trace-like fragments, abbreviations, symbols, and omitted function words. |
-| `reasonese-persuasive` | Terse reasoning-trace-like fragments, abbreviations, symbols, and omitted function words, combined with persuasive cues. |
+| `reasonese-normal` | Natural first-person, self-directed planning prose in the author's usual vocabulary and rhythm. |
+| `reasonese-persuasive` | First-person planning with self-encouragement, confidence, or commitment woven into the same voice. |
+| `compressed-normal` | Terse fragments, abbreviations, symbols, and omitted function words. |
+| `compressed-persuasive` | Compressed shorthand with confidence, urgency, social-proof, or agent-consensus cues. |
 
 The authoring request uses temperature 0.7 and retains returned reasoning fields. Exact repeated
 datapoints reuse their generated message from the YAML cache. Before assistant inference, a
@@ -36,22 +39,48 @@ instructions and returns strict `complies` and `issues` fields. A failed audit i
 comparison containing the rejected input and continue; the standalone conversation utility
 blocks its run. See [authoring exclusions](configuration.md#authoring-exclusions).
 
-QA checks task meaning and framing separately. Compressed instructions may use conventional
-abbreviations, arrows, singular output nouns, and slash-separated prohibitions when they preserve
-the requirements. The checker must still reject changed quantities, missing actions, unclear tool
-identity, and the wrong framing. An author specifies the future assistant's response; it need not
-fill an answer table while rewriting the instruction. Requested conversational, persuasive, and
-delegation cues belong to the rewrite when they add no task obligation; discussion of the
-rewriting process does not. See the
-[QA calibration record](../research/qa-calibration.md) for the diagnostic evidence and its limits.
+QA checks task meaning and framing separately, reporting concrete material failures rather
+than demanding literal repetition. Conventional shorthand may retain actions and output fields.
+For example, “run Py to compute” can entail writing and executing code; a bare language tag
+without an intelligible action cannot. “MD table: idx|prime” specifies a future Markdown table
+without drawing it. “Table” alone does not retain the required Markdown format. A concise
+one-sentence explanation has no new numeric length limit; a five-word maximum does.
 
-QA cache matching uses the datapoint and exact produced text, not a fingerprint of the audit
-prompt. After changing the audit rubric or authoring guidance, archive the previous QA cache and
-explicitly re-audit against the intended guidance. A prompt change alone does not regenerate
-cached author messages or invalidate their old verdicts.
+First-person intent (“I need to”, “I will”) can express a request in reasonese. It is not an
+answer or rewriting commentary. QA still rejects actual task answers, missing requirements,
+new algorithms/library restrictions/deliverables, and failures to use the selected style.
+Consensus rhetoric is permitted where the brief allows it; requiring another agent's approval
+is an extra obligation. QA does not claim to identify a model's private reasoning style.
 
-These briefs are design choices, not winners selected by a live prompt comparison. Their purpose
-is to be short, natural, and explicit enough to audit and revise.
+## Revised framing protocol and cache boundary
+
+Before this revision, `reasonese-normal` and `reasonese-persuasive` requested compressed
+shorthand. They now request first-person planning; the shorthand is retained under the two
+`compressed-*` values. This is an experimental-definition change. Old cached messages,
+verdicts, and observation rows labelled `reasonese-*` describe the old treatment.
+
+Start a newly sampled suite in a fresh output directory with fresh message and QA caches.
+Do not copy or relabel historical caches into it: cache keys contain coordinates and exact
+text, not the authoring or QA prompt, and changing the source does not invalidate old records.
+Keep historical runs with their original commit and labels, separately from the new experiment.
+Existing caches are not automatically migrated or deleted. The paused Nemotron pilot was
+archived separately; this revision does not resume it.
+
+The goal is reasonese that reads indistinguishably from each author's ordinary first-person
+planning prose. The prompt asks for the author's own vocabulary, rhythm, and structure rather
+than a universal prefix or symbolic template. This goal is not established by first-person
+pronouns alone, by QA acceptance, or by passing code tests. A future authorized validation should
+use task-matched, blinded style comparisons, several independent samples per author, and both
+reasonese variants, with compressed and ordinary prose controls. Report per-author confusion
+rates and uncertainty separately from task-preservation ratings; do not infer equivalence
+merely from failure to detect a difference.
+
+The revised QA rubric is a proposed repair, not a newly measured accuracy result. Offline
+labelled contrasts in `tests/fixtures/message_qa_styles.yaml` document intended decisions for
+future authorized evaluation. Tests validate that these cases reach QA unchanged and that
+framing, serialization, sampling, and exclusion plumbing work. They do not run an LLM or prove
+that it agrees with the labels. The earlier [QA calibration](../research/qa-calibration.md)
+measured an older rubric and old six-framing definitions; its scores do not validate this one.
 
 ## User-authored messages
 

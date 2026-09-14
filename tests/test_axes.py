@@ -20,6 +20,8 @@ def test_axis_values_are_their_display_strings() -> None:
         "subagent",
         "reasonese-normal",
         "reasonese-persuasive",
+        "compressed-normal",
+        "compressed-persuasive",
     ]
     assert list(Channel) == ["system prompt", "user message", "README.md"]
     assert list(Author) == [

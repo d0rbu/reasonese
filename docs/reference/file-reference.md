@@ -34,6 +34,16 @@
 | `tests/test_collection_failure_recovery.py` | Failure persistence, batch isolation, and cache-only resume tests |
 | `reasonese/cache.py` | Readable message and trace caches |
 | `reasonese/message_qa.py` | Independent materialized-message compliance judgments |
+| `reasonese/local_probe_qa.py` | Qualified local activation-probe scorer, preflight, and readable exact-context cache |
+| `reasonese/role_probes.py` | Grouped activation-role probe training, qualification, scoring, and portable artifacts |
+| `reasonese/role_probe_extraction.py` | Exact native role rendering, prefix-only model loading, activation capture, and dataset artifacts |
+| `reasonese/extract_role_activations.py` | Local BF16 role-activation extraction utility |
+| `reasonese/probe_rendering.py` | Exact native-template rendering and measured-span recovery for probe scoring |
+| `reasonese/native_probe_activations.py` | Untouched native-dialogue extraction and checksummed activation artifacts |
+| `reasonese/manage_role_probe.py` | Frozen two-stage probe training and qualification utility |
+| `tests/test_role_probe_extraction.py` | Native-template controls, prefix equivalence, batching, and artifact contracts |
+| `docs/reference/role-probes.md` | Role-probe method, provenance, validity gates, and scientific limits |
+| `docs/research/nemotron-probe-adoption.md` | Saved standardized Nemotron adoption, amended segment qualification, and held-out screens |
 | `reasonese/message_qa_cache.py` | Exact-text-keyed readable QA cache |
 | `reasonese/check_messages.py` | Fail-closed QA gate and `reasonese-check-messages` utility |
 | `reasonese/runner.py` | Cache-aware conversation execution |
@@ -42,6 +52,8 @@
 | `reasonese/study.py` | Cell, study, and permutation/rollout trial types |
 | `reasonese/observations.py` | Flat analysis-ready observation records |
 | `reasonese/authoring_report.py` | Unique-input QA failures, excluded comparison graph, and axis denominators |
+| `scripts/download_probe_prefix.py` | Pinned, range-only prefix-checkpoint downloader for local role-probe research |
+| `tests/test_download_probe_prefix.py` | Offline selection, byte-range, resume, and artifact-integrity contracts |
 | `tests/test_authoring_exclusions.py` | Exclusion accounting, whole-comparison filtering, cache replay, CLI, and retained-output parity |
 | `reasonese/collect_data.py` | Resumable study collector and utility |
 | `reasonese/collect_studies.py` | Cross-study batched collection utility |
@@ -60,6 +72,8 @@
 | `tests/test_openrouter.py` | Provider-client contract tests |
 | `tests/test_cache_runner_cli.py` | Cache, execution, and CLI tests |
 | `tests/test_judging.py` | Verdict, judgment-cache, and judge-utility tests |
+| `tests/fixtures/message_qa_styles.yaml` | Labelled style/task-preservation contrasts for future authorized QA calibration |
+| `tests/test_framing_styles.py` | Distinct framing briefs, exact QA fixture delivery, and model-only constraints |
 | `tests/test_message_qa.py` | Message-QA prompt, parsing, cache, and utility tests |
 | `tests/test_study_orchestration.py` | Permutation balance, collection, and resume tests |
 | `tests/test_sampling.py` | Sparse-design stratification, degree, connectivity, and reproducibility tests |
@@ -67,3 +81,9 @@
 | `tests/test_instructions.py` | Pair loading, audit parsing, cache, scaffolding, and curation-utility tests |
 
 Generated files belong under ignored directories such as `out/`.
+The prefix downloader writes an atomic `.receipt` sidecar beside every completed or partial
+shard and auxiliary file. A resume verifies each completed source range, keeps those verified
+ranges, and truncates any unreceipted suffix before refetching it; that suffix can be large after
+a process interruption. A completed legacy checkpoint may migrate from its persisted full-file
+manifest checksum, while a legacy partial file without a receipt is rejected rather than trusted
+by size alone.

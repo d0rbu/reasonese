@@ -38,7 +38,7 @@ def _pair(pair_id: str, first: str, second: str) -> InstructionPair:
 
 def test_specs_per_instruction_is_a_non_negative_integer() -> None:
     count = specs_per_instruction()
-    assert count == 117
+    assert count == 153
     assert isinstance(count, Natural)
 
 
@@ -77,7 +77,7 @@ def test_plan_requires_unique_instructions() -> None:
 
 def test_prompt_spec_rejects_model_only_framings_for_the_user_author() -> None:
     instruction = Instruction.parse("Write a program.")
-    for framing in (Framing.SUBAGENT, Framing.REASONESE_NORMAL, Framing.REASONESE_PERSUASIVE):
+    for framing in set(Framing) - {Framing.NORMAL, Framing.CASUAL, Framing.PERSUASIVE}:
         with pytest.raises(ValueError, match="user author does not write"):
             PromptSpec(instruction, framing, Channel.USER, Author.USER)
         assert PromptSpec(instruction, framing, Channel.USER, Author.INKLING).framing is framing
@@ -102,7 +102,7 @@ def test_pair_specs_enumerate_both_sides_of_the_real_bank() -> None:
             }
 
     every_spec = [spec for item in pair_specs for spec in item.first + item.second]
-    assert len(every_spec) == 24 * 2 * 117
+    assert len(every_spec) == 24 * 2 * 153
     assert len(set(every_spec)) == len(every_spec)
 
 

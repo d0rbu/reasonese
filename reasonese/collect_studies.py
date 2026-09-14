@@ -63,10 +63,23 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--user-messages", type=Path, default=Path("prompts/user"))
     parser.add_argument("--no-batch", action="store_true")
+    parser.add_argument("--role-probes", type=Path)
+    parser.add_argument("--probe-execution-device", default="cuda:0")
     add_route_arguments(parser)
     args = parser.parse_args(argv)
 
     try:
+        probe_scorer = None
+        if args.role_probes is not None:
+            try:
+                from reasonese.local_probe_qa import LocalProbeQaScorer
+            except ImportError as error:
+                raise RuntimeError("local role-probe QA requires the 'probes' extra") from error
+            probe_scorer = LocalProbeQaScorer(
+                args.role_probes,
+                args.output / "probe_qa_cache.json",
+                execution_device=args.probe_execution_device,
+            )
         routing = routing_from_arguments(args)
         if args.suite is None:
             study_paths = tuple(args.study)
@@ -89,6 +102,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             YamlMessageCache(args.output / "generated_messages.yaml"),
             YamlMessageQaCache(args.output / "message_qa.yaml"),
             prefer_batch=not args.no_batch,
+            probe_scorer=probe_scorer,
             routing=routing,
             shared_cache=(
                 SqliteStudyCache(args.output / "collection.sqlite3")
@@ -107,8 +121,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     study_summaries = [
         {
             "cells": len(task.study.inputs),
-            "excluded_comparisons": int(bool(result.excluded_inputs)),
-            "excluded_trials": len(build_trials(task.study)) if result.excluded_inputs else 0,
+            "excluded_comparisons": int(
+                bool(
+                    result.excluded_inputs
+                    or any(row.complies is False for row in result.probe_qa_verdicts)
+                )
+            ),
+            "excluded_trials": (
+                len(build_trials(task.study))
+                if result.excluded_inputs
+                or any(row.complies is False for row in result.probe_qa_verdicts)
+                else 0
+            ),
             "judgment_cache_hits": int(result.judgment_cache_hits),
             "observations": len(result.observations),
             "output": str(task.output_dir),
@@ -124,6 +148,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         "excluded_comparisons": sum(item["excluded_comparisons"] for item in study_summaries),
         "excluded_trials": sum(item["excluded_trials"] for item in study_summaries),
         "observations": sum(item["observations"] for item in study_summaries),
+        "probe_qa_report": (
+            str(args.output / "probe_qa_report.json") if args.role_probes is not None else None
+        ),
         "output": str(args.output),
         "studies": study_summaries,
         "trials": sum(item["trials"] for item in study_summaries),

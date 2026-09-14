@@ -26,6 +26,8 @@ class Framing(StrEnum):
     SUBAGENT = "subagent"
     REASONESE_NORMAL = "reasonese-normal"
     REASONESE_PERSUASIVE = "reasonese-persuasive"
+    COMPRESSED_NORMAL = "compressed-normal"
+    COMPRESSED_PERSUASIVE = "compressed-persuasive"
 
 
 class Channel(StrEnum):

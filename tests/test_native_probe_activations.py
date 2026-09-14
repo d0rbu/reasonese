@@ -1,0 +1,535 @@
+"""Untouched native-dialogue extraction and artifact tests."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from collections.abc import Callable
+from dataclasses import replace
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pytest
+
+import reasonese.native_probe_activations as native_module
+from reasonese.axes import Assistant
+from reasonese.native_probe_activations import (
+    NativeDialogue,
+    extract_native_activations,
+    load_native_activation_dataset,
+    load_native_dialogues,
+    save_native_activation_dataset,
+)
+from reasonese.role_probe_extraction import ExtractionIdentity
+from reasonese.role_probes import activation_dataset_fingerprint
+from reasonese.scheduling import ProviderRequestError
+from tests.test_probe_rendering import _tokenizer_and_adapter
+
+
+def _dialogues(split: str = "calibration") -> tuple[NativeDialogue, ...]:
+    return tuple(
+        NativeDialogue(
+            f"dialogue-{split}-{index:02d}",
+            split,
+            f"Question number {index}?",
+            f"I will reason about question {index}.",
+            f"The final answer is {index}.",
+            f"native-{index:02d}.json",
+            f"{index + 1:064x}",
+            "nvidia/nemotron-3.5-lightning:free",
+            "Nvidia",
+            "nvidia/nemotron-3.5-lightning:free",
+            "OpenAssistant/oasst1",
+            "revision",
+            f"{index + 100:064x}",
+        )
+        for index in range(12)
+    )
+
+
+def _identity() -> ExtractionIdentity:
+    runtime = {"runtime": "test"}
+    runtime_sha = hashlib.sha256(
+        json.dumps(runtime, separators=(",", ":"), sort_keys=True).encode()
+    ).hexdigest()
+    return ExtractionIdentity(
+        weights_sha256="a" * 64,
+        weights_hash_kind="prefix-checkpoint-files-sha256-v1",
+        tokenizer_id="test/tokenizer",
+        tokenizer_revision="tokenizer-revision",
+        source_name="native-json",
+        model_dtype="bfloat16",
+        transformers_version="test",
+        torch_version="test",
+        runtime_sha256=runtime_sha,
+        runtime=runtime,
+    )
+
+
+def _extracted_dataset(monkeypatch: pytest.MonkeyPatch):
+    tokenizer, adapter = _tokenizer_and_adapter()
+    monkeypatch.setattr(
+        native_module,
+        "capture_token_activations",
+        lambda model, adapter, *, input_ids, token_positions, layers: np.zeros(
+            (len(token_positions), len(layers), 5), dtype=np.float32
+        ),
+    )
+    return extract_native_activations(
+        object(), tokenizer, adapter, _dialogues(), layers=(7,), identity=_identity()
+    )
+
+
+def _refresh_artifact_digest(output: Path, name: str) -> None:
+    manifest_path = output / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["files"][name] = hashlib.sha256((output / name).read_bytes()).hexdigest()
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+
+def _write_dialogue_sources(tmp_path: Path) -> tuple[tuple[Path, ...], Path]:
+    partitions = []
+    paths = []
+    for index in range(24):
+        split = "calibration" if index % 2 == 0 else "test"
+        source_id = f"oasst-{index:02d}"
+        text = f"Human prompt {index}"
+        partitions.append(
+            {
+                "index": index,
+                "source_id": source_id,
+                "normalized_prompt_sha256": hashlib.sha256(
+                    " ".join(text.lower().split()).encode()
+                ).hexdigest(),
+                "split": split,
+            }
+        )
+        path = tmp_path / f"native-{index:02d}.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "assistant": str(Assistant.NEMOTRON_3_5_LIGHTNING),
+                    "route": "nvidia/nemotron-3.5-lightning:free",
+                    "prompt": {
+                        "id": source_id,
+                        "split": split,
+                        "text": text,
+                        "source": "OpenAssistant/oasst1",
+                        "revision": "revision",
+                    },
+                    "request": {
+                        "messages": [{"role": "user", "content": text}],
+                        "temperature": 0.7,
+                        "reasoning": {"enabled": True, "exclude": False},
+                    },
+                    "response": {
+                        "id": f"response-{index}",
+                        "model": "nvidia/nemotron-3.5-lightning:free",
+                        "provider": "Nvidia",
+                        "choices": [
+                            {
+                                "finish_reason": "stop",
+                                "message": {
+                                    "reasoning": f"Reasoning {index}\n",
+                                    "content": f"Final {index}",
+                                },
+                            }
+                        ],
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        paths.append(path)
+    partition_path = tmp_path / "partitions.json"
+    partition_path.write_text(json.dumps(partitions), encoding="utf-8")
+    return tuple(paths), partition_path
+
+
+def test_native_dialogue_loader_selects_one_frozen_partition(tmp_path: Path) -> None:
+    paths, partitions = _write_dialogue_sources(tmp_path)
+    dialogues = load_native_dialogues(
+        paths,
+        assistant=Assistant.NEMOTRON_3_5_LIGHTNING,
+        split="calibration",
+        prompt_partitions=partitions,
+    )
+    assert len(dialogues) == 12
+    assert {row.split for row in dialogues} == {"calibration"}
+    assert {row.document_id for row in dialogues} == {
+        f"oasst-{index:02d}" for index in range(0, 24, 2)
+    }
+    assert all(row.reasoning.endswith("\n") for row in dialogues)
+
+
+@pytest.mark.parametrize(
+    ("changes", "message"),
+    [
+        ({"split": "development"}, "split must be calibration or test"),
+        ({"document_id": " padded "}, "document_id must be non-empty and trimmed"),
+        ({"reasoning": " \n"}, "reasoning must contain non-whitespace text"),
+        ({"source_sha256": "not-a-digest"}, "source_sha256 must be a SHA-256 digest"),
+    ],
+)
+def test_native_dialogue_value_object_rejects_invalid_identity_and_text(
+    changes: dict[str, str], message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        replace(_dialogues()[0], **changes)
+
+
+def test_native_dialogue_loader_rejects_changed_request(tmp_path: Path) -> None:
+    paths, partitions = _write_dialogue_sources(tmp_path)
+    changed = json.loads(paths[0].read_text(encoding="utf-8"))
+    changed["request"]["temperature"] = 0
+    paths[0].write_text(json.dumps(changed), encoding="utf-8")
+    with pytest.raises(ValueError, match="request does not match frozen protocol"):
+        load_native_dialogues(
+            paths,
+            assistant=Assistant.NEMOTRON_3_5_LIGHTNING,
+            split="calibration",
+            prompt_partitions=partitions,
+        )
+
+
+def test_native_dialogue_loader_rejects_changed_prompt_and_provider_error(
+    tmp_path: Path,
+) -> None:
+    paths, partitions = _write_dialogue_sources(tmp_path)
+    changed = json.loads(paths[0].read_text(encoding="utf-8"))
+    changed["prompt"]["text"] += " changed"
+    changed["request"]["messages"][0]["content"] += " changed"
+    paths[0].write_text(json.dumps(changed), encoding="utf-8")
+    with pytest.raises(ValueError, match="prompt text differs"):
+        load_native_dialogues(
+            paths,
+            assistant=Assistant.NEMOTRON_3_5_LIGHTNING,
+            split="calibration",
+            prompt_partitions=partitions,
+        )
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        (lambda raw: raw.update({"assistant": "Gemma 4 31B IT"}), "assistant mismatch"),
+        (lambda raw: raw.update({"prompt": "not-an-object"}), "dialogue objects"),
+        (lambda raw: raw["prompt"].update({"split": "test"}), "partition metadata"),
+        (lambda raw: raw.update({"route": "paid/route"}), "source identity"),
+        (
+            lambda raw: raw["response"]["choices"][0]["message"].pop("reasoning"),
+            "lacks reasoning or final",
+        ),
+        (
+            lambda raw: raw["response"]["choices"][0]["message"].update({"reasoning": 3}),
+            "spans must be text",
+        ),
+    ],
+)
+def test_native_dialogue_loader_rejects_identity_and_span_corruption(
+    tmp_path: Path, mutation: Callable[[dict[str, Any]], None], message: str
+) -> None:
+    paths, partitions = _write_dialogue_sources(tmp_path)
+    raw = json.loads(paths[0].read_text(encoding="utf-8"))
+    mutation(raw)
+    paths[0].write_text(json.dumps(raw), encoding="utf-8")
+    with pytest.raises(ValueError, match=message):
+        load_native_dialogues(
+            paths,
+            assistant=Assistant.NEMOTRON_3_5_LIGHTNING,
+            split="calibration",
+            prompt_partitions=partitions,
+        )
+
+
+@pytest.mark.parametrize(
+    ("partitions_value", "message"),
+    [
+        ({"not": "a list"}, "must be a list"),
+        ([{"source_id": "incomplete"}], "partition record"),
+        ([], "frozen 12/12"),
+    ],
+)
+def test_native_dialogue_loader_rejects_malformed_partition_contract(
+    tmp_path: Path, partitions_value: object, message: str
+) -> None:
+    paths, partitions = _write_dialogue_sources(tmp_path)
+    partitions.write_text(json.dumps(partitions_value), encoding="utf-8")
+    with pytest.raises(ValueError, match=message):
+        load_native_dialogues(
+            paths,
+            assistant=Assistant.NEMOTRON_3_5_LIGHTNING,
+            split="calibration",
+            prompt_partitions=partitions,
+        )
+
+
+@pytest.mark.parametrize("corruption", ["duplicate", "digest"])
+def test_native_dialogue_loader_rejects_duplicate_ids_and_invalid_partition_digests(
+    tmp_path: Path, corruption: str
+) -> None:
+    paths, partitions_path = _write_dialogue_sources(tmp_path)
+    partitions = json.loads(partitions_path.read_text(encoding="utf-8"))
+    if corruption == "duplicate":
+        partitions[1]["source_id"] = partitions[0]["source_id"]
+    else:
+        partitions[0]["normalized_prompt_sha256"] = "invalid"
+    partitions_path.write_text(json.dumps(partitions), encoding="utf-8")
+    with pytest.raises(ValueError, match="distinct strings|invalid prompt digest"):
+        load_native_dialogues(
+            paths,
+            assistant=Assistant.NEMOTRON_3_5_LIGHTNING,
+            split="calibration",
+            prompt_partitions=partitions_path,
+        )
+
+    paths, partitions = _write_dialogue_sources(tmp_path)
+    failed = json.loads(paths[0].read_text(encoding="utf-8"))
+    failed["response"]["choices"][0]["finish_reason"] = "error"
+    paths[0].write_text(json.dumps(failed), encoding="utf-8")
+    with pytest.raises(ProviderRequestError, match="finish reason is error"):
+        load_native_dialogues(
+            paths,
+            assistant=Assistant.NEMOTRON_3_5_LIGHTNING,
+            split="calibration",
+            prompt_partitions=partitions,
+        )
+
+
+def test_native_extraction_replays_both_segments_and_round_trips(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tokenizer, adapter = _tokenizer_and_adapter()
+
+    def capture(
+        model: object,
+        adapter: object,
+        *,
+        input_ids: tuple[int, ...],
+        token_positions: tuple[int, ...],
+        layers: tuple[int, ...],
+    ) -> np.ndarray:
+        rows = len(token_positions)
+        values = np.zeros((rows, len(layers), 5), dtype=np.float32)
+        values[:, :, 0] = np.asarray(token_positions)[:, None]
+        return values
+
+    monkeypatch.setattr(native_module, "capture_token_activations", capture)
+    dataset = extract_native_activations(
+        object(),
+        tokenizer,
+        adapter,
+        _dialogues(),
+        layers=(3, 7),
+        identity=_identity(),
+    )
+    assert set(dataset.roles) == {"reasoning", "assistant"}
+    assert len(set(dataset.document_ids)) == 12
+    assert dataset.provenance.activation_dtype == "float32"
+    assert dataset.provenance.masked_control_tokens > 0
+
+    output = tmp_path / "native-activations"
+    save_native_activation_dataset(dataset, output)
+    loaded = load_native_activation_dataset(output)
+    assert activation_dataset_fingerprint(loaded) == activation_dataset_fingerprint(dataset)
+
+
+def test_native_writer_canonicalizes_valid_integer_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tokenizer, adapter = _tokenizer_and_adapter()
+    monkeypatch.setattr(
+        native_module,
+        "capture_token_activations",
+        lambda model, adapter, *, input_ids, token_positions, layers: np.zeros(
+            (len(token_positions), len(layers), 5), dtype=np.float32
+        ),
+    )
+    dataset = extract_native_activations(
+        object(), tokenizer, adapter, _dialogues(), layers=(7,), identity=_identity()
+    )
+    dataset = replace(
+        dataset,
+        content_token_index=dataset.content_token_index.astype(np.int64),
+        content_token_id=dataset.content_token_id.astype(np.int64),
+        sequence_token_index=dataset.sequence_token_index.astype(np.int64),
+    )
+    output = tmp_path / "native-activations"
+    save_native_activation_dataset(dataset, output)
+    loaded = load_native_activation_dataset(output)
+    assert loaded.content_token_id.dtype == np.int32
+    assert np.array_equal(loaded.content_token_id, dataset.content_token_id)
+
+
+def test_native_extraction_rejects_protocol_and_capture_mismatches(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tokenizer, adapter = _tokenizer_and_adapter()
+    with pytest.raises(ValueError, match="float32"):
+        extract_native_activations(
+            object(),
+            tokenizer,
+            adapter,
+            _dialogues(),
+            layers=(7,),
+            identity=_identity(),
+            activation_dtype="float16",
+        )
+    mixed = _dialogues()[:-1] + (replace(_dialogues()[-1], split="test"),)
+    with pytest.raises(ValueError, match="one non-empty frozen split"):
+        extract_native_activations(
+            object(), tokenizer, adapter, mixed, layers=(7,), identity=_identity()
+        )
+    monkeypatch.setattr(
+        native_module,
+        "capture_token_activations",
+        lambda *args, **kwargs: np.zeros((1, 1, 5), dtype=np.float32),
+    )
+    with pytest.raises(ValueError, match="wrong token count"):
+        extract_native_activations(
+            object(), tokenizer, adapter, _dialogues(), layers=(7,), identity=_identity()
+        )
+
+
+def test_native_writer_refuses_overflow_and_existing_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    dataset = _extracted_dataset(monkeypatch)
+    output = tmp_path / "native-activations"
+    save_native_activation_dataset(dataset, output)
+    with pytest.raises(FileExistsError, match="refusing to overwrite"):
+        save_native_activation_dataset(dataset, output)
+
+    overflow = replace(
+        dataset,
+        content_token_id=np.full_like(dataset.content_token_id, 2**31, dtype=np.int64),
+    )
+    with pytest.raises(ValueError, match="cannot be represented as int32"):
+        save_native_activation_dataset(overflow, tmp_path / "overflow")
+
+
+@pytest.mark.parametrize(
+    ("name", "values", "message"),
+    [
+        ("role.npy", np.asarray([255], dtype=np.uint8), "invalid dtypes or codes"),
+        ("document_index.npy", np.asarray([999], dtype=np.int32), "invalid dtypes or codes"),
+        ("content_token_id.npy", np.asarray([1], dtype=np.int64), "invalid dtypes or codes"),
+    ],
+)
+def test_native_loader_rejects_metadata_dtype_and_code_corruption(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    name: str,
+    values: np.ndarray,
+    message: str,
+) -> None:
+    output = tmp_path / "native-activations"
+    save_native_activation_dataset(_extracted_dataset(monkeypatch), output)
+    original = np.load(output / name, allow_pickle=False)
+    replacement = np.resize(values, original.shape)
+    np.save(output / name, replacement, allow_pickle=False)
+    _refresh_artifact_digest(output, name)
+    with pytest.raises(ValueError, match=message):
+        load_native_activation_dataset(output)
+
+
+def test_native_artifact_checksum_rejects_mutated_array(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tokenizer, adapter = _tokenizer_and_adapter()
+    monkeypatch.setattr(
+        native_module,
+        "capture_token_activations",
+        lambda model, adapter, *, input_ids, token_positions, layers: np.zeros(
+            (len(token_positions), len(layers), 5), dtype=np.float32
+        ),
+    )
+    dataset = extract_native_activations(
+        object(), tokenizer, adapter, _dialogues(), layers=(7,), identity=_identity()
+    )
+    output = tmp_path / "native-activations"
+    save_native_activation_dataset(dataset, output)
+    with (output / "role.npy").open("ab") as handle:
+        handle.write(b"tamper")
+    with pytest.raises(ValueError, match="checksum mismatch"):
+        load_native_activation_dataset(output)
+
+
+@pytest.mark.parametrize(
+    ("corruption", "message"),
+    [
+        ("format", "invalid native activation artifact manifest"),
+        ("file-list", "file manifest is incomplete"),
+        ("document-count", "document count does not match"),
+        ("rows", "manifest rows must be positive"),
+        ("provenance", "lacks provenance"),
+        ("extra-file", "contains unexpected files"),
+    ],
+)
+def test_native_loader_rejects_manifest_and_directory_corruption(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    corruption: str,
+    message: str,
+) -> None:
+    output = tmp_path / "native-activations"
+    save_native_activation_dataset(_extracted_dataset(monkeypatch), output)
+    manifest_path = output / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if corruption == "format":
+        manifest["format_version"] = 2
+    elif corruption == "file-list":
+        manifest["files"].pop("role.npy")
+    elif corruption == "document-count":
+        manifest["documents"] += 1
+    elif corruption == "rows":
+        manifest["rows"] = 0
+    elif corruption == "provenance":
+        manifest["provenance"] = None
+    else:
+        (output / "unexpected.txt").write_text("unexpected", encoding="utf-8")
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(ValueError, match=message):
+        load_native_activation_dataset(output)
+
+
+@pytest.mark.parametrize("corruption", ["json", "mapping"])
+def test_native_loader_rejects_corrupt_document_mapping(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, corruption: str
+) -> None:
+    output = tmp_path / "native-activations"
+    save_native_activation_dataset(_extracted_dataset(monkeypatch), output)
+    documents = output / "documents.jsonl"
+    if corruption == "json":
+        documents.write_text("{", encoding="utf-8")
+    else:
+        records = [json.loads(line) for line in documents.read_text(encoding="utf-8").splitlines()]
+        records[0]["document_index"] = 3
+        documents.write_text(
+            "".join(json.dumps(record) + "\n" for record in records), encoding="utf-8"
+        )
+    _refresh_artifact_digest(output, "documents.jsonl")
+    with pytest.raises(ValueError, match="invalid native activation document mapping"):
+        load_native_activation_dataset(output)
+
+
+@pytest.mark.parametrize("corruption", ["invalid-npy", "wrong-rows"])
+def test_native_loader_rejects_corrupt_activation_array(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, corruption: str
+) -> None:
+    output = tmp_path / "native-activations"
+    save_native_activation_dataset(_extracted_dataset(monkeypatch), output)
+    activations = output / "activations.npy"
+    if corruption == "invalid-npy":
+        activations.write_bytes(b"not-numpy")
+        message = "invalid native activation array"
+    else:
+        values = np.load(activations, allow_pickle=False)
+        np.save(activations, values[:-1], allow_pickle=False)
+        message = "manifest row count"
+    _refresh_artifact_digest(output, "activations.npy")
+    with pytest.raises(ValueError, match=message):
+        load_native_activation_dataset(output)
