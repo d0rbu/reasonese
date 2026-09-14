@@ -66,6 +66,15 @@ reasoning tokens also changed absolute token positions, so the intervention does
 context, position, or prose style. It does not justify excluding later reasoning tokens as a
 remedy, and it changed no fit, gate, qualification, or artifact status.
 
+A third calibration-only intervention removed the exact user turn while retaining the native empty
+system envelope and assistant/reasoning wrappers. All 5,545 reasoning and final content tokens in
+the same three fixed conversations were preserved exactly. Removing the user turn did not rescue
+reasoning recognition: per-conversation recall remained at or below 25.81% with the original probe
+and 31.45% with the development-selected standardized probe, while final-output recall remained
+100% in every condition. This intervention changes preceding context and absolute positions
+together, so three calibration examples do not show that user context never matters. It read no
+test activation rows and changed no fit, selection, gate, qualification, or artifact status.
+
 A separate post hoc standardization diagnostic fit scaling statistics on the same 150 neutral
 training documents and evaluated all eight layer-13 lambda candidates on the same 50-document
 development split. All eight fits converged, and seven met the unchanged numeric neutral criteria
