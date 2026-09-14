@@ -101,9 +101,9 @@ def _scorer_files(tmp_path: Path) -> tuple[Path, Path, str]:
 
 def _patch_runtime(
     monkeypatch: pytest.MonkeyPatch, runtime_sha256: str
-) -> tuple[list[object], list[tuple[int, ...]]]:
+) -> tuple[list[object], list[tuple[tuple[int, ...], tuple[int, ...]]]]:
     loaded: list[object] = []
-    captured: list[tuple[int, ...]] = []
+    captured: list[tuple[tuple[int, ...], tuple[int, ...]]] = []
     transformer_module = SimpleNamespace(
         AutoTokenizer=SimpleNamespace(from_pretrained=lambda *args, **kwargs: object())
     )
@@ -156,7 +156,7 @@ def _patch_runtime(
         token_positions: tuple[int, ...],
         layers: tuple[int, ...],
     ) -> np.ndarray:
-        captured.append(token_positions)
+        captured.append((input_ids, token_positions))
         values = np.zeros((len(token_positions), 1, 5), dtype=np.float32)
         values[:, 0, 0] = 0.1
         return values
@@ -165,7 +165,7 @@ def _patch_runtime(
     return loaded, captured
 
 
-def test_local_scorer_preflights_groups_contexts_and_reuses_exact_cache(
+def test_local_scorer_captures_target_prefixes_and_reuses_exact_cache(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config, cache, runtime_sha256 = _scorer_files(tmp_path)
@@ -176,7 +176,12 @@ def test_local_scorer_preflights_groups_contexts_and_reuses_exact_cache(
 
     assert len(verdicts) == 4
     assert len(loaded) == 2
-    assert captured == [(1, 2, 7, 8), (1, 2, 7, 8)]
+    assert captured == [
+        (tuple(range(3)), (1, 2)),
+        (tuple(range(9)), (7, 8)),
+        (tuple(range(3)), (1, 2)),
+        (tuple(range(9)), (7, 8)),
+    ]
     assert len({row.context_fingerprint for row in verdicts}) == 4
     assert all(len(row.role_probabilities) == 5 for row in verdicts)
     assert "OpenRouter" in scorer.limitations[0]
@@ -186,7 +191,82 @@ def test_local_scorer_preflights_groups_contexts_and_reuses_exact_cache(
 
     assert scorer.check(requests) == verdicts
     assert len(loaded) == 2
-    assert len(captured) == 2
+    assert len(captured) == 4
+
+
+def test_local_scorer_invalidates_old_full_context_cache_and_hits_new_prefix_cache(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config, cache, runtime_sha256 = _scorer_files(tmp_path)
+    _, captured = _patch_runtime(monkeypatch, runtime_sha256)
+    _, requests = _requests()
+    request = requests[0]
+
+    initial_scorer = LocalProbeQaScorer(config, cache, execution_device="cpu")
+    initial_scorer.check((request,))
+    raw = json.loads(cache.read_text(encoding="utf-8"))
+    current_key, record = next(iter(raw["records"].items()))
+    prepared = initial_scorer._prepared[request.setup.matchup.assistant]
+    context = local_module.render_collector_probe_context(
+        object(), prepared.bundle.adapter, request.setup, request.position
+    )
+    legacy_key = local_module._canonical_sha256(
+        {
+            "probe_sha256": prepared.probe_sha256,
+            "runtime_sha256": prepared.probe.provenance.runtime_sha256,
+            "weights_sha256": prepared.probe.provenance.weights_sha256,
+            "adapter": prepared.bundle.adapter.name,
+            "assistant": str(request.setup.matchup.assistant),
+            "study_id": request.study_id,
+            "permutation": request.permutation,
+            "position": request.position,
+            "render_config_sha256": context.render_config_sha256,
+            "input_ids": context.input_ids,
+            "token_positions": context.token_positions[0],
+            "content_token_ids": context.content_token_ids[0],
+        }
+    )
+    assert legacy_key != current_key
+
+    # A pre-fix full-context record must miss under the explicit prefix policy.
+    cache.write_text(
+        json.dumps({"format_version": 1, "records": {legacy_key: record}}),
+        encoding="utf-8",
+    )
+    captured.clear()
+    scorer = LocalProbeQaScorer(config, cache, execution_device="cpu")
+    scorer.check((request,))
+    assert len(captured) == 1
+
+    # The newly written prefix record is reusable on the next check.
+    captured.clear()
+    scorer.check((request,))
+    assert captured == []
+
+
+def test_target_prefix_drops_only_external_future_and_preserves_span_positions() -> None:
+    before = RenderedProbeContext(
+        (10, 11, 12, 13, 40, 41), ((2, 3),), ((12, 13),), "a" * 64
+    )
+    after = RenderedProbeContext(
+        (10, 11, 12, 13, 90, 91, 92), ((2, 3),), ((12, 13),), "a" * 64
+    )
+
+    first = LocalProbeQaScorer._target_prefix(before)
+    second = LocalProbeQaScorer._target_prefix(after)
+
+    assert first.input_ids == second.input_ids == (10, 11, 12, 13)
+    assert first.token_positions == second.token_positions == ((2, 3),)
+    assert first.content_token_ids == second.content_token_ids == ((12, 13),)
+
+
+def test_target_prefix_rejects_multiple_measured_spans() -> None:
+    context = RenderedProbeContext(
+        (10, 11, 12, 13, 14), ((1,), (3,)), ((11,), (13,)), "a" * 64
+    )
+
+    with pytest.raises(ValueError, match="exactly one measured span"):
+        LocalProbeQaScorer._target_prefix(context)
 
 
 def test_local_scorer_keeps_compressed_scores_descriptive(
@@ -242,11 +322,11 @@ def test_local_scorer_rejects_capture_shape_layer_or_dtype_mismatch(
         LocalProbeQaScorer(config, cache, execution_device="cpu").check(requests)
 
 
-def test_local_scorer_rejects_position_spans_rendered_in_different_contexts(
+def test_local_scorer_uses_identical_prefix_for_different_future_suffixes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config, cache, runtime_sha256 = _scorer_files(tmp_path)
-    _patch_runtime(monkeypatch, runtime_sha256)
+    _, captured = _patch_runtime(monkeypatch, runtime_sha256)
 
     def mismatched_render(tokenizer: object, adapter: object, setup: object, position: int):
         input_ids = tuple(range(12 + position))
@@ -260,8 +340,10 @@ def test_local_scorer_rejects_position_spans_rendered_in_different_contexts(
 
     monkeypatch.setattr(local_module, "render_collector_probe_context", mismatched_render)
     _, requests = _requests()
-    with pytest.raises(ValueError, match="rendered different contexts"):
-        LocalProbeQaScorer(config, cache, execution_device="cpu").check(requests)
+    verdicts = LocalProbeQaScorer(config, cache, execution_device="cpu").check(requests)
+    assert len(verdicts) == 4
+    assert {input_ids for input_ids, _ in captured} == {(0, 1, 2),}
+    assert {positions for _, positions in captured} == {(1, 2),}
 
 
 def test_local_scorer_requires_a_bundle_for_every_assistant(

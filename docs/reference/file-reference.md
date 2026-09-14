@@ -36,7 +36,7 @@
 | `tests/test_collection_failure_recovery.py` | Failure persistence, batch isolation, and cache-only resume tests |
 | `reasonese/cache.py` | Readable message and trace caches |
 | `reasonese/message_qa.py` | Independent materialized-message compliance judgments |
-| `reasonese/local_probe_qa.py` | Qualified local activation-probe scorer, preflight, and readable exact-context cache |
+| `reasonese/local_probe_qa.py` | Qualified local activation-probe scorer, per-target prefix capture, preflight, and readable cache |
 | `reasonese/role_probes.py` | Grouped activation-role probe training, qualification, scoring, and portable artifacts |
 | `reasonese/role_probe_extraction.py` | Exact native role rendering, prefix-only model loading, activation capture, and dataset artifacts |
 | `reasonese/extract_role_activations.py` | Local BF16 role-activation extraction utility |

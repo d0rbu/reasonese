@@ -23,7 +23,11 @@ from reasonese.probe_qa import (
     ProbeQaVerdict,
     probe_expectation,
 )
-from reasonese.probe_rendering import SERVER_TOOL_LIMITATION, render_collector_probe_context
+from reasonese.probe_rendering import (
+    SERVER_TOOL_LIMITATION,
+    RenderedProbeContext,
+    render_collector_probe_context,
+)
 from reasonese.role_probe_extraction import (
     NATIVE_ADAPTERS,
     NativeTemplateAdapter,
@@ -36,6 +40,7 @@ from reasonese.role_probe_extraction import (
 from reasonese.role_probes import RoleProbe, load_role_probe, project_role
 
 _FORMAT_VERSION = 1
+CAPTURE_POLICY = "segment_prefix_capture_v1"
 _ASSISTANT_ADAPTERS = {
     Assistant.NEMOTRON_3_5_LIGHTNING: "nemotron-3.5-lightning-native-v1",
     Assistant.GEMMA_4_31B_IT: "gemma-4-31b-native-v1",
@@ -336,6 +341,21 @@ class LocalProbeQaScorer:
             torch.cuda.empty_cache()
 
     @staticmethod
+    def _target_prefix(context: RenderedProbeContext) -> RenderedProbeContext:
+        """Keep context through the scored span, omitting only later suffix tokens."""
+        if len(context.token_positions) != 1:
+            raise ValueError("collector probe context must contain exactly one measured span")
+        positions = context.token_positions[0]
+        last_position = positions[-1]
+        return RenderedProbeContext(
+            context.input_ids[: last_position + 1],
+            (positions,),
+            (context.content_token_ids[0],),
+            context.render_config_sha256,
+            context.masked_boundary_tokens,
+        )
+
+    @staticmethod
     def _context_key(
         prepared: _PreparedBundle,
         request: ProbeQaRequest,
@@ -346,6 +366,7 @@ class LocalProbeQaScorer:
     ) -> str:
         return _canonical_sha256(
             {
+                "capture_policy": CAPTURE_POLICY,
                 "probe_sha256": prepared.probe_sha256,
                 "runtime_sha256": prepared.probe.provenance.runtime_sha256,
                 "weights_sha256": prepared.probe.provenance.weights_sha256,
@@ -355,7 +376,7 @@ class LocalProbeQaScorer:
                 "permutation": request.permutation,
                 "position": request.position,
                 "render_config_sha256": render_config_sha256,
-                "input_ids": input_ids,
+                "prefix_input_ids": input_ids,
                 "token_positions": positions,
                 "content_token_ids": content_ids,
             }
@@ -384,7 +405,7 @@ class LocalProbeQaScorer:
         tokenizer = transformers.AutoTokenizer.from_pretrained(
             prepared.bundle.checkpoint, local_files_only=True, use_fast=True
         )
-        rendered: dict[ProbeQaRequest, Any] = {}
+        rendered: dict[ProbeQaRequest, RenderedProbeContext] = {}
         keys: dict[ProbeQaRequest, str] = {}
         missing: list[ProbeQaRequest] = []
         for request in requests:
@@ -394,14 +415,15 @@ class LocalProbeQaScorer:
                 request.setup,
                 request.position,
             )
-            rendered[request] = context
+            prefix = self._target_prefix(context)
+            rendered[request] = prefix
             key = self._context_key(
                 prepared,
                 request,
-                context.input_ids,
-                context.token_positions[0],
-                context.content_token_ids[0],
-                context.render_config_sha256,
+                prefix.input_ids,
+                prefix.token_positions[0],
+                prefix.content_token_ids[0],
+                prefix.render_config_sha256,
             )
             keys[request] = key
             cached = self.cache.verdict(key, request, prepared.probe)
@@ -414,23 +436,13 @@ class LocalProbeQaScorer:
 
         model = self._load_validated_model(prepared)
         try:
-            by_context: dict[tuple[str, int], list[ProbeQaRequest]] = defaultdict(list)
             for request in missing:
-                by_context[(request.study_id, request.permutation)].append(request)
-            for unsorted_requests in by_context.values():
-                context_requests = sorted(unsorted_requests, key=lambda request: request.position)
-                contexts = [rendered[request] for request in context_requests]
-                if len({context.input_ids for context in contexts}) != 1:
-                    raise ValueError(
-                        "target spans in one ordered setup rendered different contexts"
-                    )
-                positions = tuple(
-                    position for context in contexts for position in context.token_positions[0]
-                )
+                context = rendered[request]
+                positions = context.token_positions[0]
                 captured = capture_token_activations(
                     model,
                     prepared.bundle.adapter,
-                    input_ids=contexts[0].input_ids,
+                    input_ids=context.input_ids,
                     token_positions=positions,
                     layers=(prepared.probe.selected_layer_index,),
                 )
@@ -441,34 +453,28 @@ class LocalProbeQaScorer:
                     or captured.dtype.name != prepared.probe.provenance.activation_dtype
                 ):
                     raise ValueError("local role-probe capture returned an invalid shape")
-                cursor = 0
-                for request, context in zip(context_requests, contexts, strict=True):
-                    count = len(context.token_positions[0])
-                    activations = np.asarray(captured[cursor : cursor + count, 0])
-                    projection = project_role(
-                        prepared.probe,
-                        activations,
-                        provenance=prepared.probe.provenance,
-                        layer_index=prepared.probe.selected_layer_index,
-                    )
-                    complies, issue = _decision(
-                        request, prepared.probe, projection.mean_reasoning_probability
-                    )
-                    verdict = ProbeQaVerdict(
-                        request,
-                        keys[request],
-                        tuple(zip(projection.roles, projection.mean_probabilities, strict=True)),
-                        projection.mean_reasoning_probability,
-                        probe_expectation(request.spec),
-                        complies,
-                        issue,
-                        context.masked_boundary_tokens,
-                    )
-                    verdicts[request] = verdict
-                    self.cache.put(verdict)
-                    cursor += count
-                if cursor != captured.shape[0]:
-                    raise ValueError("captured activations did not map to every target span")
+                activations = np.asarray(captured[:, 0])
+                projection = project_role(
+                    prepared.probe,
+                    activations,
+                    provenance=prepared.probe.provenance,
+                    layer_index=prepared.probe.selected_layer_index,
+                )
+                complies, issue = _decision(
+                    request, prepared.probe, projection.mean_reasoning_probability
+                )
+                verdict = ProbeQaVerdict(
+                    request,
+                    keys[request],
+                    tuple(zip(projection.roles, projection.mean_probabilities, strict=True)),
+                    projection.mean_reasoning_probability,
+                    probe_expectation(request.spec),
+                    complies,
+                    issue,
+                    context.masked_boundary_tokens,
+                )
+                verdicts[request] = verdict
+                self.cache.put(verdict)
         finally:
             del model
             self._release_device_cache()
