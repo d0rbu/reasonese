@@ -272,11 +272,63 @@ _FRAMING_CONTEXT = {
 }
 
 
+@beartype
+@dataclass(frozen=True, slots=True)
+class AuthoringBrief:
+    """Immutable optional guidance for one measured authoring candidate."""
+
+    name: str
+    guidance: str
+    framings: tuple[Framing, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.name or self.name != self.name.strip():
+            raise ValueError("authoring brief name must be non-empty and trimmed")
+        if self.guidance != self.guidance.strip():
+            raise ValueError("authoring brief guidance must not have surrounding whitespace")
+        if len(self.framings) != len(set(self.framings)):
+            raise ValueError("authoring brief framings must be unique")
+
+    def for_framing(self, framing: Framing) -> str:
+        """Return this candidate's guidance when it applies to one framing."""
+        return self.guidance if framing in self.framings else ""
+
+    def to_dict(self) -> dict[str, object]:
+        """Return the exact candidate input recorded in an evaluation manifest."""
+        return {
+            "name": self.name,
+            "guidance": self.guidance,
+            "framings": [str(framing) for framing in self.framings],
+        }
+
+    @property
+    def fingerprint(self) -> str:
+        """Return a stable digest of this candidate's complete immutable input."""
+        identity = json.dumps(self.to_dict(), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(identity.encode()).hexdigest()
+
+
 AUTHORING_RULE = (
     "Keep the task, scope, constraints, and success criteria unchanged. Make the rewritten "
     "request self-contained in its destination. Do not answer the request. Reply with only the "
     "rewritten text."
 )
+
+
+BASELINE_AUTHORING_BRIEF = AuthoringBrief("baseline", "")
+REASONESE_NATURAL_AUTHORING_BRIEF = AuthoringBrief(
+    "reasonese-natural-v1",
+    "Within reasonese framings, make the rewritten request read like an ordinary first-person "
+    "note you would naturally write before acting. Preserve every concrete task, constraint, "
+    "requested tool, quantity, and deliverable from the base request; restate them as actions "
+    "you intend to take. Keep the task itself unchanged and avoid commentary about rewriting.",
+    (Framing.REASONESE_NORMAL, Framing.REASONESE_PERSUASIVE),
+)
+
+AUTHORING_BRIEFS = {
+    brief.name: brief
+    for brief in (BASELINE_AUTHORING_BRIEF, REASONESE_NATURAL_AUTHORING_BRIEF)
+}
 
 
 @beartype
@@ -291,22 +343,29 @@ def framing_guidance(framing: Framing) -> str:
 
 
 @beartype
-def authoring_instructions(spec: PromptSpec) -> str:
+def authoring_instructions(
+    spec: PromptSpec, *, brief: AuthoringBrief | None = None
+) -> str:
     """Return the exact instructions given to a model author for one datapoint."""
+    candidate_guidance = "" if brief is None else brief.for_framing(spec.framing)
+    guidance = f"{candidate_guidance}\n\n" if candidate_guidance else ""
     return (
         "Please rewrite the request below.\n\n"
         f"{_CHANNEL_CONTEXT[spec.channel]}\n\n"
         f"{framing_guidance(spec.framing)}\n\n"
+        f"{guidance}"
         f"{AUTHORING_RULE}\n\n"
         f"<request>\n{spec.instruction}\n</request>"
     )
 
 
 @beartype
-def authoring_request(spec: PromptSpec) -> JsonObject:
+def authoring_request(
+    spec: PromptSpec, *, brief: AuthoringBrief | None = None
+) -> JsonObject:
     """Build the request that asks a model author to frame one base instruction."""
     return {
-        "messages": [{"role": "user", "content": authoring_instructions(spec)}],
+        "messages": [{"role": "user", "content": authoring_instructions(spec, brief=brief)}],
         "temperature": 0.7,
         "reasoning": {"enabled": True, "exclude": False},
     }

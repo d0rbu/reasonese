@@ -53,6 +53,9 @@ matchup -> authored messages -> independent message QA -> conversation -> assist
   over fresh requests within each model, under that model's adaptive limit. A lock protects the
   shared tool-runtime pool, while each conversation advances its own history sequentially.
 - `reasonese.run_conversation` is the standalone conversation utility.
+- `reasonese.prompt_optimization` evaluates one immutable authoring brief through model authoring,
+  the fixed Luna message-QA rubric, and local probe QA, then stops before assistant execution;
+  its comparison command reports pair- and judge-level before/after denominators.
 
 The utilities have separate console entry points. There is no package-level dispatcher
 or shared command switch.

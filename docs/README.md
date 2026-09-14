@@ -4,6 +4,7 @@
 
 - [`research/axes.md`](research/axes.md): the four axis definitions
 - [`research/agenda.md`](research/agenda.md): current scope and deferred questions
+- [`research/prompt-optimization.md`](research/prompt-optimization.md): bounded authoring-brief comparisons
 
 ## Reference
 

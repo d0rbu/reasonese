@@ -17,12 +17,14 @@
 | `reasonese/io.py` | JSONL writer |
 | `reasonese/matchup.py` | Strongly typed matchup invariants and serialization |
 | `reasonese/conversation.py` | Authoring requests and channel rendering |
+| `reasonese/prompt_optimization.py` | Bounded authoring-brief evaluation, fixed-rubric reports, and offline comparison table |
 | `reasonese/manual_messages.py` | Filesystem-backed user-authored variants |
 | `prompts/user/` | Editable manual variants organized by base instruction |
 | `reasonese/write_variants.py` | Blinded local editor for hand-written user variants |
 | `reasonese/tools.py` | Bounded assistant tool definitions and local execution |
 | `docs/reference/prompt-generation.md` | Exact prompts, framing guidance, and current limitations |
 | `docs/research/qa-calibration.md` | Message-QA rubric calibration evidence and limitations |
+| `docs/research/prompt-optimization.md` | Bounded baseline/candidate authoring comparison and report contracts |
 | `reasonese/routing.py` | Collection route preference, paid opt-in, and invocation summaries |
 | `tests/test_routes.py` | Routing, provenance, billing, and fingerprint compatibility contracts |
 | `reasonese/openrouter.py` | Provider transport, scheduled completions, and overlapping grouped batches |
