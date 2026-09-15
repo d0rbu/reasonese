@@ -25,6 +25,7 @@
 | `docs/reference/prompt-generation.md` | Exact prompts, framing guidance, and current limitations |
 | `docs/research/qa-calibration.md` | Message-QA rubric calibration evidence and limitations |
 | `docs/research/prompt-optimization.md` | Bounded baseline/candidate authoring comparison and report contracts |
+| `docs/research/pilot-qa-recovery.md` | Trial-local tool failures, high-effort QA, framing-cutoff calibration, and recovery evidence |
 | `reasonese/routing.py` | Collection route preference, paid opt-in, and invocation summaries |
 | `tests/test_routes.py` | Routing, provenance, billing, and fingerprint compatibility contracts |
 | `reasonese/openrouter.py` | Provider transport, scheduled completions, and overlapping grouped batches |

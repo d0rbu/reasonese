@@ -21,7 +21,8 @@ trial IDs, both input axes, assistant, permutation, rollout, and trace fingerpri
 conversation summaries expose terminal status; standalone deterministic judgments identify
 no LLM judge (`judge: null`). Replaying all 164 saved successful traces through original main
 and this change produced exact equality of serialized payloads and scalar/batch fingerprints
-(`trace-parity-report.json`), without provider calls or GPU work.
+(`trace-parity-report.json`), without provider calls or GPU work. All 164 initial assistant
+request bodies and the tool-runtime source also match exactly (`request-parity-report.json`).
 
 ## Semantic QA and authoring
 
@@ -40,6 +41,10 @@ comparisons across changed judge settings.
 The bounded comparison rejudges the saved 27 V3 development messages and one fresh 27-message
 `obligation-preservation-v4` sample with the same revised judge. Fifteen prelabelled semantic
 controls include six faithful/changed-obligation pairs and three disputed historical outputs.
+Before inspecting the new verdicts, closer review marked two historical cases as ambiguous:
+the terse `Py:` computation request and the reasonese note discussing unchanged constraint scope.
+Primary accuracy uses thirteen clearer cases; both disputed cases retain their original labels
+and are reported separately, not treated as secure binary ground truth.
 The first authoring measurement helper was stopped after a cache API error; its raw response
 was preserved. A fresh technical restart uses explicit request-response alignment. No judge
 results were available or selected when this restart was made.
@@ -69,6 +74,10 @@ not deployable cutoffs. A channel-specific policy must reduce equally weighted C
 least 0.10 relative to a global pair; otherwise the global pair is preferred. This penalty and
 loss are project choices, not paper thresholds. Selection is frozen before reading TEST scores.
 Any overlap between acceptance ranges is explicit tolerance, not a unique classifier label.
+A minimum deployment screen requires each directional gate in each channel to accept its
+intended style more often than the opposite style on TEST. An all-accept or all-reject gate
+cannot satisfy it. This screen was recorded before seeing the new scores; passing it would
+support an exploratory pilot, not establish broad statistical qualification.
 
 The separate native-cutoff sensitivity review uses saved H1 segment scores and the existing
 native CAL selection rule. TEST here is reused evidence, not an untouched qualification:
@@ -89,10 +98,38 @@ unchanged; framing cutoffs are selected on the new instruction CAL controls.
 
 ## Measurement status
 
-High-effort Luna comparison and instruction-context probe scores are pending. The GPU is
-occupied by an unrelated job; the scorer waits for sufficient free memory. No new acceptance
-cutoffs or authoring brief have been selected, and the pilot has not restarted. Results and the
-per-pair, per-judge before/after table will be recorded before deployment.
+The latest code CI passed 1,154 tests with one skipped. These offline checks do not establish
+that the revised prompts or acceptance cutoffs work on model outputs.
+
+The first high-effort batch (QA1) completed all 69 requests. Its development results are:
+
+| DEV pair | V3 historical medium | V3 QA1 high | V4 QA1 high |
+| --- | ---: | ---: | ---: |
+| cpython-version-search-vs-memory | 7/9 | 7/9 | 5/9 |
+| prime-1234-bare-vs-table | 8/9 | 8/9 | 7/9 |
+| word-counts-bash-vs-python | 7/9 | 8/9 | 3/9 |
+| Overall | 22/27 | 23/27 | 15/27 |
+
+QA1 obtained 12/13 against the original primary control labels and five of six planned paired
+flips. Post-verdict inspection found a label error: the intended-positive reasonese Bash control
+omitted the explicit Python ban. Luna correctly rejected it. Its negative partner shared that
+omission, so that pair could not isolate the intended algorithm-restriction distinction. The
+original labels and results remain preserved; the other five pairs all flipped as intended.
+
+Root review also identified QA1 rejections that overlooked blanket prohibition scope or treated
+ordinary first-person implementation plans as mandatory algorithms. A disclosed second rubric
+iteration, QA2, clarifies those distinctions, supporting-citation quality versus official-only
+sources, and qualitative persuasive urgency versus numerical deadlines. It rejudges the same
+V3/V4 texts without another authoring sample. Its 23 development controls include a repaired
+Bash pair and four additional faithful/changed-obligation pairs: 21 fixed-label cases plus two
+ambiguous historical cases reported separately. These are development calibration controls,
+not untouched validation. Both old and revised batches remain traceable.
+
+QA2 is pending in one 95-request high-effort batch, including the separate confirmation texts.
+Confirmation verdicts remain unread until DEV prompt selection. Instruction-context probe
+scores are also pending: the GPU is occupied by an unrelated job, and the scorer waits for
+sufficient free memory. No new acceptance cutoffs or authoring brief have been selected, and
+the pilot has not restarted. The full per-pair, per-judge table will be recorded before deployment.
 
 Ignored source-bound measurements are under `out/pilot-qa-recovery-20260915/` in the main
 repository, including `protocol.md`, `control-labels.json`, `semantic-controls.json`,
