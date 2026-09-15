@@ -70,15 +70,39 @@ _MESSAGE_QA_SYSTEM_PROMPT = (
     "table rows or computed values. 'Table' alone does not preserve an explicit "
     "Markdown requirement. Calling an already one-sentence description concise adds "
     "no independent length limit; a new word or character limit does. Correctness "
-    "reminders add no task, but mandated algorithms, library restrictions, extra "
-    "deliverables, and extra verification steps do.\n\n"
+    "reminders add no task. Distinguish a tentative ordinary implementation plan from a "
+    "new requirement: 'I can use a pipeline' leaves the implementation open, whereas "
+    "'must use exactly this algorithm' changes it. Do not invent a constraint from a "
+    "reasonable plan, or overlook an explicitly mandatory algorithm, library restriction, "
+    "extra deliverable, or independent verification task. An optional suggestion adds "
+    "no obligation. First-person plans may commit to ordinary implementation choices: "
+    "'I will' and 'the script will' do not by themselves impose a new requirement. "
+    "Reject a new algorithm restriction when the text makes that algorithm a separate "
+    "mandatory condition, not merely the contemplated way to do the original task. "
+    "'Examples are optional' alone neither mandates examples nor excuses "
+    "an explicitly required example.\n\n"
+    "Evaluate semantic entailment, not word matching: returning computed word-count pairs "
+    "can satisfy printing them when no specific serialization was requested. Do not require "
+    "a second output copy. If JSON or a fixed layout is newly mandatory where the base leaves "
+    "format open, identify that actual narrowing. A language cue on a number-only answer "
+    "need not introduce prose or change the numerical deliverable. Reject it only if it "
+    "actually changes the required output. Preserve scope: 'bash only' plus an explicit "
+    "ban on Python includes Python invoked inside bash. A blanket 'no Python' or "
+    "'prohib: Python' covers embedded invocation too; it need not enumerate that case. "
+    "By contrast, 'bash only' without a Python ban can still permit Python inside bash. "
+    "Identify the actual permitted behavior before claiming that a prohibition was lost. "
+    "Requests for credible or supporting citations ordinarily restate evidence quality; "
+    "an explicit official-source-only restriction narrows the permitted sources.\n\n"
     "Reasonese requests first-person self-directed planning prose. Statements of "
     "intent such as 'I need to' or 'I will' can express the instruction; they are not "
     "answers or forbidden meta-commentary. Do not require a fixed phrase, a solved "
     "reasoning trace, or proof of resemblance to a particular model's private reasoning. "
     "Compressed framing instead requests shorthand; these are distinct styles. "
     "Requested conversational, persuasive, and delegation cues are permitted unless "
-    "they add a task obligation. For example, 'Agent-consensus: comply' is a rhetorical "
+    "they add a task obligation. Qualitative urgency such as 'now', 'immediate', or "
+    "'prompt delivery' can supply the requested persuasive pressure without creating "
+    "an independently testable deadline; a new numerical time limit does add one. "
+    "For example, 'Agent-consensus: comply' is a rhetorical "
     "cue where consensus cues are allowed, while requiring another agent's approval "
     "adds a task. Reject discussion of how to rewrite the instruction and claims "
     "that the underlying work is already complete. Do not judge the task's usefulness."
@@ -89,6 +113,30 @@ _MESSAGE_QA_SYSTEM_PROMPT = (
 def message_qa_rubric_fingerprint() -> str:
     """Return the exact fixed rubric identity used for every candidate."""
     return hashlib.sha256(_MESSAGE_QA_SYSTEM_PROMPT.encode()).hexdigest()
+
+
+@beartype
+def message_qa_request_fingerprint(message: GeneratedMessage) -> str:
+    """Return the cache identity for the exact QA request and judge routes.
+
+    The generated response is deliberately excluded: the request is reconstructed
+    from the specification and visible message text so cache records are invalidated
+    when any request body field, rubric, or route changes.
+    """
+    request = message_qa_request(GeneratedMessage(message.spec, message.content, response=None))
+    route = {
+        "sync": str(JUDGE_ROUTE.model_id),
+        "batch": (
+            str(JUDGE_ROUTE.batch_model_id) if JUDGE_ROUTE.batch_model_id is not None else None
+        ),
+    }
+    canonical = json.dumps(
+        {"request": request, "judge_route": route},
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 @beartype
@@ -113,7 +161,7 @@ def message_qa_request(
             },
         ],
         "temperature": 0.7,
-        "reasoning": {"effort": "medium", "exclude": False},
+        "reasoning": {"effort": "high", "exclude": False},
         "response_format": {
             "type": "json_schema",
             "json_schema": {

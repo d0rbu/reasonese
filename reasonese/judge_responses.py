@@ -42,7 +42,7 @@ def run_judge(
     cached = judgment_cache.get(trace)
     if cached is not None:
         return JudgeRunResult(cached, True)
-    if client is None:
+    if client is None and trace.terminal_status == "completed":
         raise ValueError("OPENROUTER_API_KEY is required for an uncached judgment")
     judgment = judge_trace(trace, client)
     judgment_cache.put(judgment)
@@ -73,7 +73,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "cache_hit": result.cache_hit,
                 "completed": [verdict.completed for verdict in result.judgment.verdicts],
                 "judgment_cache": str(args.judgment_cache),
-                "judge": "openai/gpt-5.6-luna:batch",
+                "judge": (
+                    "openai/gpt-5.6-luna:batch"
+                    if result.judgment.verdicts[0].response is not None else None
+                ),
             },
             sort_keys=True,
         )

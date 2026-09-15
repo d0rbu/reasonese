@@ -468,3 +468,21 @@ uv run reasonese-collect-studies \
   --output out/pilot \
   --role-probes out/role-probe-research/probe-bundles.json
 ```
+
+### Instruction-framing acceptance cutoffs
+
+Native reasoning/final qualification and instruction-framing acceptance address different
+populations. An explicitly calibrated bundle may supply `framing_thresholds`, containing all
+three channel keys (`system prompt`, `user message`, `README.md`). Each channel maps to two
+finite probabilities: `reasoning_minimum` and `nonreasoning_maximum`. Reasonese passes at or
+above its minimum; non-reasonese passes strictly below its maximum. Compressed framings remain
+descriptive regardless of these values. Equal pairs across channels implement a global policy;
+channel-specific values require a documented calibration justification.
+
+The ranges may overlap: that overlap means tolerance for either intended style, not a unique
+role classification. Omission retains the qualified probe's historical single threshold.
+These cutoffs do not modify the NPZ, refit coefficients, or bypass native qualification.
+The complete cutoff map is bound into each probe-cache context fingerprint and the bundle
+configuration identity. Warm decisions are checked against both their saved probability and
+the applicable cutoff. Freeze a selection rule and CAL-only cutoffs before examining TEST;
+report false exclusions and wrong-style acceptance, including channel/order breakdowns.

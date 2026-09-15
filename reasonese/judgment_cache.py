@@ -18,6 +18,7 @@ from reasonese.judging import (
     _instruction_verdict_from_validated,
     _judgment_from_validated,
     trace_fingerprint,
+    validate_trace_judgment,
 )
 from reasonese.matchup import (
     Matchup,
@@ -30,7 +31,9 @@ from reasonese.openrouter import JsonObject
 from reasonese.planning import PromptSpec
 
 
-def _response(raw: object) -> JsonObject:
+def _response(raw: object) -> JsonObject | None:
+    if raw is None:
+        return None
     if not isinstance(raw, dict):
         raise ValueError("cached judge response must be a mapping")
     return cast(JsonObject, raw)
@@ -51,7 +54,7 @@ def judgment_from_dict(
 def _judgment_fields(
     raw: object,
     expected_matchup: Matchup | None,
-) -> tuple[Matchup, TraceFingerprint, tuple[tuple[PromptSpec, bool, JsonObject], ...]]:
+) -> tuple[Matchup, TraceFingerprint, tuple[tuple[PromptSpec, bool, JsonObject | None], ...]]:
     if not isinstance(raw, dict):
         raise ValueError("cached judgment must be a mapping")
     data = cast(dict[str, Any], raw)
@@ -66,7 +69,7 @@ def _judgment_fields(
         if data["matchup"] != matchup_to_dict(expected_matchup):
             raise ValueError("cached judgment matchup does not match expected trial")
         matchup = expected_matchup
-    fields: list[tuple[PromptSpec, bool, JsonObject]] = []
+    fields: list[tuple[PromptSpec, bool, JsonObject | None]] = []
     for index, raw_verdict in enumerate(raw_verdicts):
         if not isinstance(raw_verdict, dict):
             raise ValueError("cached instruction verdict must be a mapping")
@@ -85,6 +88,9 @@ def _judgment_fields(
             if verdict["input"] != prompt_spec_to_dict(spec):
                 raise ValueError("cached judgment input does not match expected trial")
         fields.append((spec, completed, _response(verdict["response"])))
+    absent = [response is None for _, _, response in fields]
+    if any(absent) and (not all(absent) or any(completed for _, completed, _ in fields)):
+        raise ValueError("deterministic failure verdicts must both be false with null responses")
     return (
         matchup,
         TraceFingerprint.parse(data["trace_fingerprint"]),
@@ -152,7 +158,7 @@ class YamlJudgmentCache:
 
     def get(self, trace: ConversationTrace) -> Judgment | None:
         fingerprint = trace_fingerprint(trace)
-        return next(
+        result = next(
             (
                 judgment
                 for judgment in self.load()
@@ -161,6 +167,10 @@ class YamlJudgmentCache:
             ),
             None,
         )
+
+        if result is not None:
+            validate_trace_judgment(trace, result)
+        return result
 
     def put(self, judgment: Judgment) -> None:
         self.put_many((judgment,))

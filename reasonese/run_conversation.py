@@ -68,6 +68,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "message_qa_cache": str(args.message_qa_cache),
                 "messages": len(cached.setup.messages),
                 "response_id": cached.response.get("id"),
+                **({"terminal_status": cached.terminal_status}
+                   if cached.terminal_status != "completed" else {}),
                 "trace_cache": str(args.trace_cache),
             }
             print(json.dumps(result, sort_keys=True))
@@ -100,6 +102,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "message_qa_cache": str(args.message_qa_cache),
                 "messages": len(run.trace.setup.messages),
                 "response_id": run.trace.response.get("id"),
+                **({"terminal_status": run.trace.terminal_status}
+                   if run.trace.terminal_status != "completed" else {}),
                 "trace_cache": str(args.trace_cache),
             },
             sort_keys=True,

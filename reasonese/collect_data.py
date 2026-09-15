@@ -33,8 +33,10 @@ from reasonese.judging import (
     Judgment,
     fingerprint_traces,
     judge_fingerprinted_traces,
+    validate_trace_judgment,
 )
 from reasonese.manual_messages import ManualMessageLibrary, ManualMessageSnapshot
+from reasonese.matchup import prompt_spec_to_dict
 from reasonese.message_qa import MessageQaVerdict
 from reasonese.message_qa_cache import YamlMessageQaCache
 from reasonese.observations import Observation, observations_from_trials, write_observations
@@ -94,6 +96,7 @@ class CollectionResult:
     judgment_cache_hits: Natural
     excluded_inputs: tuple[MessageQaVerdict, ...] = ()
     probe_qa_verdicts: tuple[ProbeQaVerdict, ...] = ()
+    failed_trials: Natural = Natural.parse(0)
 
 
 def _prepare_task(
@@ -458,6 +461,7 @@ def collect_studies(
             ):
                 missing_judgments.append((state_index, trial, trace))
             else:
+                validate_trace_judgment(trace.trace, cached)
                 state.judgments[str(trial.trial_id)] = cached
                 state.judgment_hits += 1
 
@@ -466,9 +470,13 @@ def collect_studies(
             f"{len(missing_judgments)} uncached judgments (including any changed trace fingerprints)",
             file=sys.stderr,
         )
-        routing.require_paid(f"{len(missing_judgments)} uncached judgments")
-        if client is None:
-            raise ValueError("OPENROUTER_API_KEY is required for uncached judgments")
+        provider_count = sum(
+            trace.trace.terminal_status == "completed" for _, _, trace in missing_judgments
+        )
+        if provider_count:
+            routing.require_paid(f"{provider_count} uncached judgments")
+            if client is None:
+                raise ValueError("OPENROUTER_API_KEY is required for uncached judgments")
         new_judgments = judge_fingerprinted_traces(
             tuple(trace for _, _, trace in missing_judgments),
             client,
@@ -492,6 +500,30 @@ def collect_studies(
     results: list[CollectionResult] = []
     for state in states:
         traces = tuple(state.traces[str(trial.trial_id)] for trial in state.trials)
+        failures = [
+            {
+                "trial_id": str(trial.trial_id),
+                "reason": trace.trace.terminal_status,
+                "trace_fingerprint": str(trace.fingerprint),
+                "assistant": str(trial.matchup.assistant),
+                "inputs": [prompt_spec_to_dict(spec) for spec in trial.matchup.inputs],
+                "permutation": int(trial.permutation),
+                "rollout": int(trial.rollout),
+            }
+            for trial, trace in zip(state.trials, traces, strict=True)
+            if trace.trace.terminal_status != "completed"
+        ]
+        (state.task.output_dir / "trial_failures.json").write_text(
+            json.dumps(
+                {
+                    "attempted_trials": len(state.trials),
+                    "failed_trials": len(failures),
+                    "failures": failures,
+                },
+                indent=2,
+            ) + "\n",
+            encoding="utf-8",
+        )
         observations = observations_from_trials(
             state.trials,
             traces,
@@ -506,6 +538,7 @@ def collect_studies(
                 Natural.parse(state.judgment_hits),
                 state.excluded_inputs,
                 state.probe_qa_verdicts,
+                Natural.parse(len(failures)),
             )
         )
     return tuple(results)
@@ -605,6 +638,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     else None
                 ),
                 "judgment_cache_hits": int(result.judgment_cache_hits),
+                "failed_trials": int(result.failed_trials),
                 "observations": len(result.observations),
                 "output": str(args.output),
                 "trace_cache_hits": int(result.trace_cache_hits),

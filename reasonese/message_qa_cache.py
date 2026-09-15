@@ -11,16 +11,21 @@ from beartype import beartype
 
 from reasonese.conversation import GeneratedMessage, GeneratedText
 from reasonese.matchup import prompt_spec_from_dict, prompt_spec_to_dict
-from reasonese.message_qa import MessageQaVerdict, QaIssue
+from reasonese.message_qa import (
+    MessageQaVerdict,
+    QaIssue,
+    message_qa_request_fingerprint,
+)
 from reasonese.openrouter import JsonObject
 
 
-def _verdict_from_dict(raw: object) -> MessageQaVerdict:
+def _verdict_from_dict(raw: object) -> tuple[MessageQaVerdict, str | None]:
     if not isinstance(raw, dict):
         raise ValueError("cached message QA verdict must be a mapping")
     data = cast(dict[str, Any], raw)
-    expected = {"input", "content", "complies", "issues", "response"}
-    if set(data) != expected:
+    required = {"input", "content", "complies", "issues", "response"}
+    allowed = required | {"request_fingerprint"}
+    if not required <= set(data) or not set(data) <= allowed:
         raise ValueError("cached message QA verdict has invalid fields")
     complies = data["complies"]
     raw_issues = data["issues"]
@@ -31,13 +36,23 @@ def _verdict_from_dict(raw: object) -> MessageQaVerdict:
         raise ValueError("cached message QA issues field must be a list")
     if not isinstance(response, dict):
         raise ValueError("cached message QA response must be a mapping")
-    return MessageQaVerdict(
+    verdict = MessageQaVerdict(
         prompt_spec_from_dict(data["input"]),
         GeneratedText.parse(data["content"]),
         complies,
         tuple(QaIssue.parse(issue) for issue in raw_issues),
         cast(JsonObject, response),
     )
+    if "request_fingerprint" not in data:
+        return verdict, None
+    request_fingerprint = data["request_fingerprint"]
+    if (
+        not isinstance(request_fingerprint, str)
+        or len(request_fingerprint) != 64
+        or any(character not in "0123456789abcdef" for character in request_fingerprint)
+    ):
+        raise ValueError("cached message QA request_fingerprint must be a SHA-256 hex digest")
+    return verdict, request_fingerprint
 
 
 @beartype
@@ -48,6 +63,9 @@ def _verdict_to_dict(verdict: MessageQaVerdict) -> dict[str, object]:
         "complies": verdict.complies,
         "issues": [str(issue) for issue in verdict.issues],
         "response": verdict.response,
+        "request_fingerprint": message_qa_request_fingerprint(
+            GeneratedMessage(verdict.spec, verdict.content, response=None)
+        ),
     }
 
 
@@ -70,7 +88,14 @@ class YamlMessageQaCache:
         raw_verdicts = raw["message_qa"]
         if not isinstance(raw_verdicts, list):
             raise ValueError(f"{self.path} must contain one 'message_qa' list")
-        return tuple(_verdict_from_dict(item) for item in raw_verdicts)
+        current: list[MessageQaVerdict] = []
+        for item in raw_verdicts:
+            verdict, request_fingerprint = _verdict_from_dict(item)
+            if request_fingerprint == message_qa_request_fingerprint(
+                GeneratedMessage(verdict.spec, verdict.content, response=None)
+            ):
+                current.append(verdict)
+        return tuple(current)
 
     @beartype
     def get(self, message: GeneratedMessage) -> MessageQaVerdict | None:
