@@ -125,10 +125,33 @@ Bash pair and four additional faithful/changed-obligation pairs: 21 fixed-label 
 ambiguous historical cases reported separately. These are development calibration controls,
 not untouched validation. Both old and revised batches remain traceable.
 
-QA2 is pending in one 95-request high-effort batch, including the separate confirmation texts.
-Confirmation verdicts remain unread until DEV prompt selection. Instruction-context probe
-scores are also pending: the GPU is occupied by an unrelated job, and the scorer waits for
-sufficient free memory. No new acceptance cutoffs or authoring brief have been selected, and
+The 95-request QA2 batch completed with these results:
+
+| Set / pair | V3 QA2 high | V4 QA2 high |
+| --- | ---: | ---: |
+| development / cpython-version-search-vs-memory | 6/9 | 6/9 |
+| development / prime-1234-bare-vs-table | 8/9 | 8/9 |
+| development / word-counts-bash-vs-python | 8/9 | 4/9 |
+| development / Overall | 22/27 | 18/27 |
+| confirmation / everest-feet-spanish-vs-english | 7/9 | 4/9 |
+| confirmation / Overall | 7/9 | 4/9 |
+| Both sets total | 29/36 | 22/36 |
+
+QA2's fixed development controls scored 20/21, with nine of ten expected paired flips. It
+incorrectly accepted the negative prime-table control that omitted the required 1235th-prime
+row. That error is retained and reported; these are calibration results, not evidence of
+perfect judging or untouched qualification.
+
+V4 fails the necessary Luna nondecrease condition (18 < 22). The recorded conjunction therefore
+retains V3 regardless of the pending joint probe counts. `development-prompt-selection.json`
+froze that conclusion before confirmation verdicts were opened. Confirmation also favors V3,
+but it did not affect selection. A new pilot seed preserves the exact 192 prior instructions
+and 164 successful traces, with no old QA or probe verdicts copied. Every delivered setup was
+checked against its saved messages and current manual variants; current gates will reassess
+eligibility before those traces can contribute observations.
+
+Instruction-context probe scores remain pending: the GPU is occupied by an unrelated job, and
+the scorer waits for sufficient free memory. No new acceptance cutoffs have been selected, and
 the pilot has not restarted. The full per-pair, per-judge table will be recorded before deployment.
 
 Ignored source-bound measurements are under `out/pilot-qa-recovery-20260915/` in the main
