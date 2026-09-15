@@ -51,7 +51,11 @@ class InstructionVerdict:
 
     spec: PromptSpec
     completed: bool
-    response: JsonObject
+    response: JsonObject | None
+
+    def __post_init__(self) -> None:
+        if self.response is None and self.completed:
+            raise ValueError("a deterministic failure verdict cannot be completed")
 
 
 def _is_verdicts(value: tuple[InstructionVerdict, ...]) -> bool:
@@ -78,12 +82,14 @@ class Judgment:
     def __post_init__(self) -> None:
         if tuple(verdict.spec for verdict in self.verdicts) != self.matchup.inputs:
             raise ValueError("judgment verdicts must follow the matchup input order")
+        if len({verdict.response is None for verdict in self.verdicts}) != 1:
+            raise ValueError("deterministic failure verdicts must cover both inputs")
 
 
 def _instruction_verdict_from_validated(
     spec: PromptSpec,
     completed: bool,
-    response: JsonObject,
+    response: JsonObject | None,
 ) -> InstructionVerdict:
     verdict = object.__new__(InstructionVerdict)
     object.__setattr__(verdict, "spec", spec)
@@ -125,6 +131,10 @@ def trace_fingerprint(trace: ConversationTrace) -> TraceFingerprint:
                 for step in trace.tool_steps
             ],
             "response": fingerprint_response(trace.response),
+            **(
+                {"terminal_status": trace.terminal_status}
+                if trace.terminal_status != "completed" else {}
+            ),
         },
         sort_keys=True,
         separators=(",", ":"),
@@ -187,9 +197,13 @@ def fingerprint_traces(
             separators=(",", ":"),
             ensure_ascii=False,
         )
+        terminal_json = (
+            ',"terminal_status":"tool_limit_exhausted"'
+            if trace.terminal_status == "tool_limit_exhausted" else ""
+        )
         canonical = (
             f'{{"conversation":{conversation_json},"matchup":{matchup_json},'
-            f'"response":{response_json},"tool_steps":{tool_steps_json}}}'
+            f'"response":{response_json}{terminal_json},"tool_steps":{tool_steps_json}}}'
         )
         fingerprint = TraceFingerprint.parse(hashlib.sha256(canonical.encode()).hexdigest())
         fingerprinted.append(_fingerprinted_trace_from_validated(trace, fingerprint))
@@ -234,6 +248,8 @@ def _response_evidence(response: JsonObject) -> str:
 @beartype
 def judge_request(trace: ConversationTrace, index: int) -> JsonObject:
     """Build one independent strict-JSON completion judgment request."""
+    if trace.terminal_status != "completed":
+        raise ValueError("terminal failures do not have provider judgment requests")
     return _judge_request(
         trace,
         index,
@@ -311,6 +327,8 @@ def judge_requests_for_traces(
     """Build one flat request batch with shared evidence work inside each trace."""
     requests: list[JsonObject] = []
     for trace in traces:
+        if trace.terminal_status != "completed":
+            continue
         escaped_conversation = html.escape(_visible_conversation(trace))
         response_evidence = _response_evidence(trace.response)
         requests.extend(
@@ -336,14 +354,14 @@ def parse_completed(response: JsonObject) -> bool:
 
 
 @beartype
-def judge_trace(trace: ConversationTrace, client: OpenRouterClient) -> Judgment:
+def judge_trace(trace: ConversationTrace, client: OpenRouterClient | None) -> Judgment:
     """Judge every input independently in one GPT-5.6 Luna batch."""
     return judge_traces((trace,), client)[0]
 
 
 @beartype
 def judge_traces(
-    traces: tuple[ConversationTrace, ...], client: OpenRouterClient
+    traces: tuple[ConversationTrace, ...], client: OpenRouterClient | None
 ) -> tuple[Judgment, ...]:
     """Judge multiple traces in one flattened GPT-5.6 Luna batch."""
     return judge_fingerprinted_traces(fingerprint_traces(traces), client)
@@ -351,20 +369,28 @@ def judge_traces(
 
 @beartype
 def judge_fingerprinted_traces(
-    traces: tuple[FingerprintedTrace, ...], client: OpenRouterClient
+    traces: tuple[FingerprintedTrace, ...], client: OpenRouterClient | None
 ) -> tuple[Judgment, ...]:
     """Judge pre-fingerprinted traces in one flattened GPT-5.6 Luna batch."""
     if not traces:
         return ()
-    responses = client.complete_many(
-        JUDGE_ROUTE,
-        judge_requests_for_traces(tuple(item.trace for item in traces)),
-        prefer_batch=True,
+    requests = judge_requests_for_traces(tuple(item.trace for item in traces))
+    if requests and client is None:
+        raise ValueError("a client is required for completed trace judgments")
+    responses = (
+        client.complete_many(JUDGE_ROUTE, requests, prefer_batch=True)
+        if requests and client is not None else ()
     )
     judgments: list[Judgment] = []
     response_index = 0
     for item in traces:
         trace = item.trace
+        if trace.terminal_status == "tool_limit_exhausted":
+            verdicts = InstructionVerdicts.parse(
+                tuple(InstructionVerdict(spec, False, None) for spec in trace.setup.matchup.inputs)
+            )
+            judgments.append(Judgment(trace.setup.matchup, item.fingerprint, verdicts))
+            continue
         count = len(trace.setup.matchup.inputs)
         trace_responses = responses[response_index : response_index + count]
         response_index += count
@@ -380,3 +406,14 @@ def judge_fingerprinted_traces(
         )
         judgments.append(_judgment_from_validated(trace.setup.matchup, item.fingerprint, verdicts))
     return tuple(judgments)
+
+
+@beartype
+def validate_trace_judgment(trace: ConversationTrace, judgment: Judgment) -> None:
+    """Reject cache or join records whose judgment source contradicts termination."""
+    failed = trace.terminal_status == "tool_limit_exhausted"
+    if any(
+        (verdict.response is None) != failed or (failed and verdict.completed)
+        for verdict in judgment.verdicts
+    ):
+        raise ValueError("judgment source must match the trace terminal status")

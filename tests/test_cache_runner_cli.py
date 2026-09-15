@@ -10,6 +10,7 @@ import yaml
 from reasonese.axes import Assistant, Author, Channel, Framing, Instruction, author_framings
 from reasonese.cache import YamlMessageCache, YamlTraceCache, trace_to_dict, traces_from_dicts
 from reasonese.conversation import (
+    MAX_LOCAL_TOOL_STEPS,
     ConversationSetup,
     ConversationTrace,
     GeneratedMessage,
@@ -20,6 +21,7 @@ from reasonese.conversation import (
     ToolStep,
     construct_conversation,
 )
+from reasonese.judging import fingerprint_traces, trace_fingerprint
 from reasonese.manual_messages import ManualMessageLibrary
 from reasonese.matchup import Matchup, make_matchup, matchup_to_dict
 from reasonese.message_qa_cache import YamlMessageQaCache
@@ -924,21 +926,112 @@ def test_tool_runtime_closes_when_a_continuation_fails(
     assert TrackingToolRuntime.exited == 1
 
 
-def test_run_matchup_fails_when_assistant_exceeds_local_tool_step_limit(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+def test_run_matchup_records_terminal_tool_limit_and_warm_cache_reuses_it(
+    tmp_path: Path,
 ) -> None:
     matchup = _matchup(_spec("System.", Channel.SYSTEM), _spec("User.", Channel.USER))
-    monkeypatch.setattr("reasonese.runner._MAX_LOCAL_TOOL_STEPS", 0)
-    with pytest.raises(RuntimeError, match="exceeded 0"):
-        run_matchup(
-            matchup,
-            OpenRouterClient(FakeTransport([_qa_batch(2), _tool_chat()])),
-            YamlMessageCache(tmp_path / "messages.yaml"),
-            YamlTraceCache(tmp_path / "traces.yaml"),
-            YamlMessageQaCache(tmp_path / "message-qa.yaml"),
-            _manual_library(tmp_path, matchup.inputs),
-            routing=CollectionRouting(RoutePreference.BATCH, True), prefer_batch=False,
-        )
+    terminal_response = _tool_chat()
+    transport = FakeTransport(
+        [
+            _qa_batch(2),
+            *[_tool_chat() for _ in range(MAX_LOCAL_TOOL_STEPS)],
+            terminal_response,
+        ]
+    )
+    message_cache = YamlMessageCache(tmp_path / "messages.yaml")
+    trace_cache = YamlTraceCache(tmp_path / "traces.yaml")
+    qa_cache = YamlMessageQaCache(tmp_path / "message-qa.yaml")
+    manual = _manual_library(tmp_path, matchup.inputs)
+
+    first = run_matchup(
+        matchup,
+        OpenRouterClient(transport),
+        message_cache,
+        trace_cache,
+        qa_cache,
+        manual,
+        routing=CollectionRouting(RoutePreference.BATCH, True),
+        prefer_batch=False,
+    )
+    second = run_matchup(
+        matchup,
+        OpenRouterClient(transport),
+        message_cache,
+        trace_cache,
+        qa_cache,
+        manual,
+        routing=CollectionRouting(RoutePreference.BATCH, True),
+        prefer_batch=False,
+    )
+
+    assert first.cache_hit is False
+    assert first.trace.terminal_status == "tool_limit_exhausted"
+    assert len(first.trace.tool_steps) == MAX_LOCAL_TOOL_STEPS
+    assert first.trace.response == terminal_response
+    assert second.cache_hit is True
+    assert second.trace == first.trace
+    assert len(transport.post_calls) == MAX_LOCAL_TOOL_STEPS + 2
+    raw = trace_to_dict(first.trace)
+    assert raw["terminal_status"] == "tool_limit_exhausted"
+    assert traces_from_dicts((raw,), (matchup,)) == (first.trace,)
+    assert trace_fingerprint(first.trace) == fingerprint_traces((first.trace,))[0].fingerprint
+
+
+def test_run_matchup_allows_success_immediately_after_eight_tool_rounds(tmp_path: Path) -> None:
+    matchup = _matchup(_spec("System.", Channel.SYSTEM), _spec("User.", Channel.USER))
+    transport = FakeTransport(
+        [
+            _qa_batch(2),
+            *[_tool_chat() for _ in range(MAX_LOCAL_TOOL_STEPS)],
+            _chat("completed after eight", "final-after-eight"),
+        ]
+    )
+
+    result = run_matchup(
+        matchup,
+        OpenRouterClient(transport),
+        YamlMessageCache(tmp_path / "messages.yaml"),
+        YamlTraceCache(tmp_path / "traces.yaml"),
+        YamlMessageQaCache(tmp_path / "message-qa.yaml"),
+        _manual_library(tmp_path, matchup.inputs),
+        routing=CollectionRouting(RoutePreference.BATCH, True),
+        prefer_batch=False,
+    )
+
+    assert result.trace.terminal_status == "completed"
+    assert len(result.trace.tool_steps) == MAX_LOCAL_TOOL_STEPS
+    assert result.trace.response["id"] == "final-after-eight"
+    assert len(transport.post_calls) == MAX_LOCAL_TOOL_STEPS + 2
+    assert "terminal_status" not in trace_to_dict(result.trace)
+    assert trace_fingerprint(result.trace) == fingerprint_traces((result.trace,))[0].fingerprint
+
+
+def test_terminal_trace_cache_rejects_missing_status_and_wrong_step_count(tmp_path: Path) -> None:
+    matchup = _matchup(_spec("System.", Channel.SYSTEM), _spec("User.", Channel.USER))
+    generated = tuple(
+        GeneratedMessage(spec, GeneratedText.parse(str(spec.instruction)), None)
+        for spec in matchup.inputs
+    )
+    setup = construct_conversation(matchup, generated)
+    step = ToolStep(
+        _tool_chat(),
+        (ToolResult(ToolCallId.parse("live-call"), GeneratedText.parse("System.")),),
+    )
+    trace = ConversationTrace(
+        setup, _tool_chat(), (step,) * MAX_LOCAL_TOOL_STEPS, None, "tool_limit_exhausted"
+    )
+    raw = trace_to_dict(trace)
+
+    missing_status = dict(raw)
+    missing_status.pop("terminal_status")
+    with pytest.raises(ValueError, match="cannot exceed the local tool budget"):
+        traces_from_dicts((missing_status,), (matchup,))
+    short_steps = dict(raw)
+    raw_steps = raw["tool_steps"]
+    assert isinstance(raw_steps, list)
+    short_steps["tool_steps"] = raw_steps[:-1]
+    with pytest.raises(ValueError, match="exactly eight"):
+        traces_from_dicts((short_steps,), (matchup,))
 
 
 def test_run_matchup_stops_before_assistant_when_message_qa_fails(tmp_path: Path) -> None:

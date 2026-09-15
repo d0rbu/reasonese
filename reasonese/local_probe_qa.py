@@ -6,6 +6,7 @@ import gc
 import hashlib
 import importlib
 import json
+import math
 import os
 import sys
 import tempfile
@@ -18,7 +19,7 @@ from typing import Any, cast
 import numpy as np
 from beartype import beartype
 
-from reasonese.axes import Assistant
+from reasonese.axes import Assistant, Channel
 from reasonese.probe_qa import (
     ProbeExpectation,
     ProbeQaRequest,
@@ -149,6 +150,22 @@ def _json_object(path: Path) -> dict[str, Any]:
 
 @beartype
 @dataclass(frozen=True, slots=True)
+class FramingThresholds:
+    """Separate acceptance cutoffs; overlap is tolerance, not a unique role label."""
+
+    reasoning_minimum: float
+    nonreasoning_maximum: float
+
+    def __post_init__(self) -> None:
+        if any(
+            not math.isfinite(value) or not 0 <= value <= 1
+            for value in (self.reasoning_minimum, self.nonreasoning_maximum)
+        ):
+            raise ValueError("framing thresholds must be finite probabilities")
+
+
+@beartype
+@dataclass(frozen=True, slots=True)
 class ProbeBundle:
     """One assistant's qualified probe and exact local prefix checkpoint."""
 
@@ -156,6 +173,26 @@ class ProbeBundle:
     adapter: NativeTemplateAdapter
     checkpoint: Path
     probe_path: Path
+    framing_thresholds: tuple[tuple[Channel, FramingThresholds], ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.framing_thresholds and (
+            len(self.framing_thresholds) != len(Channel)
+            or {channel for channel, _ in self.framing_thresholds} != set(Channel)
+        ):
+            raise ValueError("framing thresholds must cover each channel exactly once")
+
+    def thresholds_for(self, channel: Channel) -> FramingThresholds | None:
+        return dict(self.framing_thresholds).get(channel)
+
+    def threshold_identity(self) -> dict[str, object]:
+        return {
+            str(channel): {
+                "reasoning_minimum": cutoffs.reasoning_minimum,
+                "nonreasoning_maximum": cutoffs.nonreasoning_maximum,
+            }
+            for channel, cutoffs in self.framing_thresholds
+        }
 
 
 def load_probe_bundles(path: Path) -> tuple[ProbeBundle, ...]:
@@ -165,12 +202,11 @@ def load_probe_bundles(path: Path) -> tuple[ProbeBundle, ...]:
         raise ValueError("role-probe config must contain only a bundles list")
     bundles: list[ProbeBundle] = []
     for value in raw["bundles"]:
-        if not isinstance(value, dict) or set(value) != {
-            "assistant",
-            "adapter",
-            "checkpoint",
-            "probe",
-        }:
+        required = {"assistant", "adapter", "checkpoint", "probe"}
+        if (
+            not isinstance(value, dict) or not required <= set(value)
+            or set(value) - required - {"framing_thresholds"}
+        ):
             raise ValueError("invalid role-probe bundle record")
         try:
             assistant = Assistant(value["assistant"])
@@ -185,12 +221,32 @@ def load_probe_bundles(path: Path) -> tuple[ProbeBundle, ...]:
         probe = value["probe"]
         if not isinstance(checkpoint, str) or not isinstance(probe, str):
             raise ValueError("role-probe bundle paths must be strings")
+        thresholds: list[tuple[Channel, FramingThresholds]] = []
+        if "framing_thresholds" in value:
+            raw_thresholds = value["framing_thresholds"]
+            if not isinstance(raw_thresholds, dict) or set(raw_thresholds) != set(Channel):
+                raise ValueError("framing thresholds must cover every channel")
+            for channel in Channel:
+                raw_pair = raw_thresholds[str(channel)]
+                if not isinstance(raw_pair, dict) or set(raw_pair) != {
+                    "reasoning_minimum", "nonreasoning_maximum"
+                }:
+                    raise ValueError("invalid framing threshold pair")
+                if any(type(v) not in (int, float) for v in raw_pair.values()):
+                    raise ValueError("framing thresholds must be numeric probabilities")
+                thresholds.append(
+                    (channel, FramingThresholds(
+                        float(raw_pair["reasoning_minimum"]),
+                        float(raw_pair["nonreasoning_maximum"]),
+                    ))
+                )
         bundles.append(
             ProbeBundle(
                 assistant,
                 adapter,
                 (path.parent / checkpoint).resolve(),
                 (path.parent / probe).resolve(),
+                tuple(thresholds),
             )
         )
     if not bundles or len({bundle.assistant for bundle in bundles}) != len(bundles):
@@ -223,7 +279,10 @@ class _VerdictCache:
             raise ValueError("invalid local probe-QA cache records")
         self.records = cast(dict[str, dict[str, Any]], records)
 
-    def verdict(self, key: str, request: ProbeQaRequest, probe: RoleProbe) -> ProbeQaVerdict | None:
+    def verdict(
+        self, key: str, request: ProbeQaRequest, probe: RoleProbe,
+        thresholds: FramingThresholds | None = None,
+    ) -> ProbeQaVerdict | None:
         raw = self.records.get(key)
         if raw is None:
             return None
@@ -251,7 +310,7 @@ class _VerdictCache:
             raise ValueError("invalid cached probe decision")
         if tuple(role for role, _ in probabilities) != probe.provenance.roles:
             raise ValueError("cached role probabilities do not match the qualified probe")
-        expected_complies, expected_issue = _decision(request, probe, reasoning)
+        expected_complies, expected_issue = _decision(request, probe, reasoning, thresholds)
         if (complies, issue) != (expected_complies, expected_issue):
             raise ValueError("cached probe decision does not match its probability and threshold")
         return ProbeQaVerdict(
@@ -312,7 +371,8 @@ def _validate_probe(bundle: ProbeBundle, probe: RoleProbe) -> None:
 
 
 def _decision(
-    request: ProbeQaRequest, probe: RoleProbe, reasoning_probability: float
+    request: ProbeQaRequest, probe: RoleProbe, reasoning_probability: float,
+    thresholds: FramingThresholds | None = None,
 ) -> tuple[bool | None, str | None]:
     expectation = probe_expectation(request.spec)
     if expectation is ProbeExpectation.DESCRIPTIVE:
@@ -321,6 +381,12 @@ def _decision(
     threshold = probe.qualification.calibration.threshold
     if threshold is None:
         raise ValueError("QA-eligible role probe has no calibration threshold")
+    if thresholds is not None:
+        threshold = (
+            thresholds.reasoning_minimum
+            if expectation is ProbeExpectation.REASONING
+            else thresholds.nonreasoning_maximum
+        )
     classified_reasoning = reasoning_probability >= threshold
     complies = (
         classified_reasoning
@@ -441,6 +507,10 @@ class LocalProbeQaScorer:
         return _canonical_sha256(
             {
                 "capture_policy": CAPTURE_POLICY,
+                **(
+                    {"framing_thresholds": prepared.bundle.threshold_identity()}
+                    if prepared.bundle.framing_thresholds else {}
+                ),
                 "probe_sha256": prepared.probe_sha256,
                 "runtime_sha256": prepared.probe.provenance.runtime_sha256,
                 "weights_sha256": prepared.probe.provenance.weights_sha256,
@@ -500,7 +570,9 @@ class LocalProbeQaScorer:
                 prefix.render_config_sha256,
             )
             keys[request] = key
-            cached = self.cache.verdict(key, request, prepared.probe)
+            cached = self.cache.verdict(
+                key, request, prepared.probe, prepared.bundle.thresholds_for(request.spec.channel)
+            )
             if cached is None:
                 missing.append(request)
             else:
@@ -538,7 +610,8 @@ class LocalProbeQaScorer:
                         layer_index=prepared.probe.selected_layer_index,
                     )
                     complies, issue = _decision(
-                        request, prepared.probe, projection.mean_reasoning_probability
+                        request, prepared.probe, projection.mean_reasoning_probability,
+                        prepared.bundle.thresholds_for(request.spec.channel),
                     )
                     verdict = ProbeQaVerdict(
                         request,

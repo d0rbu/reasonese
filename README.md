@@ -141,6 +141,11 @@ verdicts and appears `r` times at each position. The collector runs uncached ass
 through per-model adaptive concurrency (up to eight in-flight requests per model by default): as soon as one response requests a local tool,
 its continuation is submitted without waiting for slower peer responses. It batches judge work,
 resumes from per-rollout caches, and writes flat analysis-ready rows to `observations.jsonl`.
+After eight executed local tool rounds, a further tool request ends only that trial. Its raw
+response is saved with `terminal_status: tool_limit_exhausted`; its calls are not executed.
+Both completion outcomes are false, with no paid response-judge call or fabricated answer.
+`trial_failures.json` records these attempts separately from comparisons excluded by QA.
+A resumed collection reuses those terminal failures.
 Each model has its own admission queue and cooldown, and ready tool continuations receive that
 model's freed slots before fresh requests. A rate-limited model does not consume another model's
 capacity. Local tool processing uses that model's workers, so a slow tool also leaves other

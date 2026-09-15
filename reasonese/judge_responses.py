@@ -42,7 +42,7 @@ def run_judge(
     cached = judgment_cache.get(trace)
     if cached is not None:
         return JudgeRunResult(cached, True)
-    if client is None:
+    if client is None and trace.terminal_status == "completed":
         raise ValueError("OPENROUTER_API_KEY is required for an uncached judgment")
     judgment = judge_trace(trace, client)
     judgment_cache.put(judgment)

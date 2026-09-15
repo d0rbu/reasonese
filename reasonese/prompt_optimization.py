@@ -23,13 +23,15 @@ from reasonese.conversation import (
     AUTHORING_BRIEFS,
     AuthoringBrief,
     ConversationSetup,
+    GeneratedMessage,
+    GeneratedText,
     authoring_request,
     construct_conversation,
 )
 from reasonese.instructions import load_instruction_pairs, pair_to_dict
 from reasonese.manual_messages import ManualMessageLibrary
 from reasonese.matchup import prompt_spec_to_dict
-from reasonese.message_qa import message_qa_rubric_fingerprint
+from reasonese.message_qa import message_qa_request_fingerprint, message_qa_rubric_fingerprint
 from reasonese.message_qa_cache import YamlMessageQaCache
 from reasonese.openrouter import OpenRouterClient, RequestsTransport
 from reasonese.planning import PromptSpec
@@ -308,6 +310,12 @@ def evaluate_prompt_brief(
         "probe": probe_identity,
         "message_qa": {
             "rubric_sha256": message_qa_rubric_fingerprint(),
+            "request_policy_fingerprints": [
+                message_qa_request_fingerprint(
+                    GeneratedMessage(spec, GeneratedText.parse("Compared instruction text."), None)
+                )
+                for spec in specs
+            ],
             "cache": "message_qa.yaml",
         },
         "limits": {
@@ -722,6 +730,8 @@ def compare_prompt_outputs(
     candidate_qa = candidate.get("message_qa")
     if not isinstance(baseline_qa, dict) or not isinstance(candidate_qa, dict):
         raise ValueError("prompt manifests lack message-QA identity")
+    if baseline_qa.get("request_policy_fingerprints") != candidate_qa.get("request_policy_fingerprints"):
+        raise ValueError("message-QA request policies differ between compared runs")
     if baseline_qa.get("rubric_sha256") != candidate_qa.get("rubric_sha256"):
         raise ValueError("baseline and candidate message-QA rubrics differ")
     baseline_candidate = baseline.get("candidate")

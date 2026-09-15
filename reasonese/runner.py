@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from contextlib import ExitStack
 from dataclasses import dataclass
@@ -13,6 +14,7 @@ from reasonese.axes import Author
 from reasonese.cache import YamlMessageCache, YamlTraceCache
 from reasonese.check_messages import audit_messages, require_compliant_messages
 from reasonese.conversation import (
+    MAX_LOCAL_TOOL_STEPS,
     AuthoringBrief,
     ConversationSetup,
     ConversationTrace,
@@ -46,8 +48,6 @@ from reasonese.tools import (
     assistant_message_from_response,
     tool_calls_from_response,
 )
-
-_MAX_LOCAL_TOOL_STEPS = 8
 
 
 def _assistant_request(messages: list[JsonObject]) -> JsonObject:
@@ -268,13 +268,25 @@ def run_assistant_groups(
     def receive(key: tuple[int, int], response: JsonObject) -> ScheduledRequest[JsonObject] | None:
         group_index, setup_index = key
         calls = tool_calls_from_response(response)
-        if not calls:
-            response_content(response)
+        exhausted = bool(calls) and len(steps[key]) == MAX_LOCAL_TOOL_STEPS
+        if not calls or exhausted:
+            if exhausted:
+                logging.getLogger(__name__).warning(
+                    "Assistant attempt reached %d local tool rounds: model=%s setup=%d; "
+                    "retaining terminal response %s without executing its calls",
+                    MAX_LOCAL_TOOL_STEPS,
+                    groups[group_index].route.model_id,
+                    setup_index,
+                    response.get("id"),
+                )
+            else:
+                response_content(response)
             trace = ConversationTrace(
                 groups[group_index].setups[setup_index],
                 response,
                 tuple(steps[key]),
                 RouteProvenance(groups[group_index].route.model_id, CompletionTransport.SYNC),
+                "tool_limit_exhausted" if exhausted else "completed",
             )
             with runtime_lock:
                 completed[key] = trace
@@ -284,8 +296,6 @@ def run_assistant_groups(
             if on_trace is not None:
                 on_trace(group_index, setup_index, trace)
             return None
-        if len(steps[key]) == _MAX_LOCAL_TOOL_STEPS:
-            raise RuntimeError(f"assistant exceeded {_MAX_LOCAL_TOOL_STEPS} local tool-call steps")
         runtime = runtime_for(key)
         results = tuple(runtime.execute(call) for call in calls)
         steps[key].append(ToolStep(response, results))

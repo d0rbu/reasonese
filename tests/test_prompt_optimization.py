@@ -8,6 +8,7 @@ from typing import cast
 import pytest
 from phantom.interval import Natural
 
+import reasonese.message_qa as message_qa_module
 import reasonese.prompt_optimization as optimization
 from reasonese.axes import Assistant, Author, Channel, Framing, Instruction
 from reasonese.check_messages import MessageQaRunResult
@@ -169,6 +170,7 @@ def test_briefs_are_immutable_and_candidate_does_not_change_controls() -> None:
         "reasonese-natural-v1",
         "semantic-preservation-v2",
         "constraint-scope-v3",
+        "obligation-preservation-v4",
     }
     with pytest.raises(ValueError, match="name"):
         type(BASELINE_AUTHORING_BRIEF)("", "")
@@ -490,6 +492,56 @@ def test_compare_outputs_reports_pair_and_judge_denominators(
         "baseline": {"pilot-pair": 4},
         "candidate": {"pilot-pair": 4},
     }
+
+
+def test_compare_accepts_matching_or_both_legacy_message_qa_policies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline = tmp_path / "baseline"
+    candidate = tmp_path / "candidate"
+    _run(baseline, monkeypatch)
+    _run(candidate, monkeypatch, brief=REASONESE_NATURAL_AUTHORING_BRIEF)
+
+    baseline_manifest = json.loads((baseline / "manifest.json").read_text())
+    candidate_manifest = json.loads((candidate / "manifest.json").read_text())
+    assert baseline_manifest["message_qa"]["request_policy_fingerprints"]
+    assert (
+        baseline_manifest["message_qa"]["request_policy_fingerprints"]
+        == candidate_manifest["message_qa"]["request_policy_fingerprints"]
+    )
+    optimization.compare_prompt_outputs(baseline, candidate)
+
+    baseline_manifest["message_qa"].pop("request_policy_fingerprints")
+    candidate_manifest["message_qa"].pop("request_policy_fingerprints")
+    (baseline / "manifest.json").write_text(json.dumps(baseline_manifest))
+    (candidate / "manifest.json").write_text(json.dumps(candidate_manifest))
+    optimization.compare_prompt_outputs(baseline, candidate)
+
+
+def test_compare_rejects_changed_message_qa_effort_with_unchanged_rubric(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline = tmp_path / "baseline"
+    candidate = tmp_path / "candidate"
+    _run(baseline, monkeypatch)
+    original_request = message_qa_module.message_qa_request
+
+    def low_effort_request(message: GeneratedMessage) -> dict[str, object]:
+        request = original_request(message)
+        return {**request, "reasoning": {"effort": "low", "exclude": False}}
+
+    monkeypatch.setattr(message_qa_module, "message_qa_request", low_effort_request)
+    _run(candidate, monkeypatch, brief=REASONESE_NATURAL_AUTHORING_BRIEF)
+
+    baseline_manifest = json.loads((baseline / "manifest.json").read_text())
+    candidate_manifest = json.loads((candidate / "manifest.json").read_text())
+    assert baseline_manifest["message_qa"]["rubric_sha256"] == candidate_manifest["message_qa"]["rubric_sha256"]
+    assert (
+        baseline_manifest["message_qa"]["request_policy_fingerprints"]
+        != candidate_manifest["message_qa"]["request_policy_fingerprints"]
+    )
+    with pytest.raises(ValueError, match="request policies differ"):
+        optimization.compare_prompt_outputs(baseline, candidate)
 
 
 def test_comparison_markdown_uses_na_for_empty_pass_denominator() -> None:

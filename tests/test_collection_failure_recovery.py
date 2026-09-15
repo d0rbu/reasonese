@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections import Counter
 from pathlib import Path
 from threading import Event, Lock
@@ -65,6 +66,66 @@ class RecoveringCollectionTransport:
 
     def get_json(self, path: str) -> JsonObject:
         raise AssertionError(path)
+
+
+def test_collection_records_terminal_tool_failures_without_judge_requests(tmp_path: Path) -> None:
+    study = _study()
+    task = CollectionTask(study, tmp_path / "terminal")
+
+    class TerminalToolTransport:
+        def __init__(self) -> None:
+            self.batch_schemas: list[str] = []
+            self.assistant_requests = 0
+
+        def post_json(self, path: str, body: JsonObject) -> JsonObject:
+            if path == "/api/beta/batches":
+                schema = body["requests"][0]["body"]["response_format"]["json_schema"]["name"]
+                self.batch_schemas.append(schema)
+                assert schema == "message_compliance_verdict"
+                return _message_qa_batch(len(body["requests"]))
+            self.assistant_requests += 1
+            return _tool_chat()
+
+        def get_json(self, path: str) -> JsonObject:
+            raise AssertionError(path)
+
+    transport = TerminalToolTransport()
+    manual = _manual_library(tmp_path, study)
+    result = collect_studies(
+        (task,),
+        OpenRouterClient(transport),
+        manual,
+        YamlMessageCache(tmp_path / "messages.yaml"),
+        YamlMessageQaCache(tmp_path / "message-qa.yaml"),
+        prefer_batch=False,
+        routing=CollectionRouting(RoutePreference.FREE, True),
+    )[0]
+
+    receipt = json.loads((task.output_dir / "trial_failures.json").read_text())
+    assert result.failed_trials == 2
+    assert len(result.observations) == 4
+    assert all(not observation.completed for observation in result.observations)
+    assert transport.batch_schemas == ["message_compliance_verdict"]
+    assert transport.assistant_requests == 18
+    assert receipt["attempted_trials"] == 2
+    assert receipt["failed_trials"] == 2
+    assert {failure["reason"] for failure in receipt["failures"]} == {"tool_limit_exhausted"}
+
+    warm = collect_studies(
+        (task,),
+        None,
+        manual,
+        YamlMessageCache(tmp_path / "messages.yaml"),
+        YamlMessageQaCache(tmp_path / "message-qa.yaml"),
+        prefer_batch=False,
+        routing=CollectionRouting(RoutePreference.FREE, False),
+    )[0]
+    assert warm.trace_cache_hits == 2
+    assert warm.judgment_cache_hits == 2
+    assert warm.failed_trials == 2
+    assert all(not observation.completed for observation in warm.observations)
+    assert transport.batch_schemas == ["message_compliance_verdict"]
+    assert transport.assistant_requests == 18
 
 
 @pytest.mark.parametrize("shared", [False, True])

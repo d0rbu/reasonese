@@ -44,7 +44,7 @@
 - Message-QA verdicts contain a real boolean; pass has no issues and failure has at least one.
 - Exact message changes invalidate QA, and any false verdict blocks assistant inference without
   automatic regeneration.
-- The message-QA route is `openai/gpt-5.6-luna:batch` with medium reasoning.
+- The message-QA route is `openai/gpt-5.6-luna:batch` with high reasoning.
 - Trace caches preserve the complete raw assistant response, including reasoning fields.
 - A complete trace-cache hit performs no provider call and needs no API key once its exact
   messages also have cached passing QA.

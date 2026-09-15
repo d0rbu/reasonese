@@ -21,12 +21,15 @@ from reasonese.message_qa import (
     QaIssue,
     check_messages,
     message_qa_request,
+    message_qa_request_fingerprint,
     parse_message_qa,
 )
 from reasonese.message_qa_cache import YamlMessageQaCache
-from reasonese.openrouter import JsonObject, OpenRouterClient
+from reasonese.openrouter import JsonObject, ModelRoute, OpenRouterClient, OpenRouterModelId
 from reasonese.planning import PromptSpec
 from reasonese.routing import CollectionRouting
+
+_DISPUTED_CASES = yaml.safe_load(Path("tests/fixtures/message_qa_disputed_cases.yaml").read_text())
 
 
 def _message(
@@ -107,7 +110,7 @@ def test_message_qa_request_quotes_exact_datapoint_instructions_and_candidate() 
     assert evidence["exact_authoring_instructions"] == authoring_instructions(message.spec)
     assert evidence["produced_message"] == message.content
     assert request["temperature"] == 0.7
-    assert request["reasoning"] == {"effort": "medium", "exclude": False}
+    assert request["reasoning"] == {"effort": "high", "exclude": False}
     schema = request["response_format"]["json_schema"]
     assert schema["strict"] is True
     assert set(schema["schema"]["properties"]) == {"complies", "issues"}
@@ -189,7 +192,9 @@ def test_check_messages_batches_independent_verdicts_in_input_order() -> None:
     verdicts = check_messages(messages, OpenRouterClient(transport))
 
     assert [verdict.complies for verdict in verdicts] == [True, False]
-    assert tuple(verdict.spec for verdict in verdicts) == tuple(message.spec for message in messages)
+    assert tuple(verdict.spec for verdict in verdicts) == tuple(
+        message.spec for message in messages
+    )
     path, payload = transport.post_calls[0]
     assert path == "/api/beta/batches"
     assert payload["model"] == "openai/gpt-5.6-luna"
@@ -201,9 +206,7 @@ def test_check_messages_can_use_synchronous_transport() -> None:
     message = _message()
     transport = FakeTransport([_qa_chat(True, [])])
 
-    verdicts = check_messages(
-        (message,), OpenRouterClient(transport), prefer_batch=False
-    )
+    verdicts = check_messages((message,), OpenRouterClient(transport), prefer_batch=False)
 
     assert [verdict.complies for verdict in verdicts] == [True]
     path, payload = transport.post_calls[0]
@@ -266,6 +269,108 @@ def test_message_qa_cache_round_trips_and_replaces_changed_text(tmp_path: Path) 
     changed_verdict = cache.get(changed)
     assert changed_verdict is not None
     assert changed_verdict.issues == ("Changed scope.",)
+    record = yaml.safe_load(path.read_text())["message_qa"][0]
+    assert record["request_fingerprint"] == message_qa_request_fingerprint(changed)
+
+
+def test_message_qa_cache_treats_missing_or_stale_fingerprints_as_misses(
+    tmp_path: Path,
+) -> None:
+    message = _message()
+    path = tmp_path / "message_qa.yaml"
+    cache = YamlMessageQaCache(path)
+    cache.put_many((_verdict(message),))
+
+    for fingerprint in (None, "0" * 64):
+        raw = yaml.safe_load(path.read_text())
+        if fingerprint is None:
+            del raw["message_qa"][0]["request_fingerprint"]
+        else:
+            raw["message_qa"][0]["request_fingerprint"] = fingerprint
+        path.write_text(yaml.safe_dump(raw))
+        assert cache.load() == ()
+        assert cache.get(message) is None
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda request: request["reasoning"].update(effort="medium"),
+        lambda request: request["messages"][0].update(
+            content=request["messages"][0]["content"] + " changed"
+        ),
+        lambda request: request["messages"][1].update(
+            content=request["messages"][1]["content"] + " changed"
+        ),
+        lambda request: request.update(temperature=0.6),
+        lambda request: request["response_format"]["json_schema"]["schema"]["properties"][
+            "complies"
+        ].update(description="changed"),
+    ],
+    ids=("effort", "rubric", "authoring-guidance", "body", "schema"),
+)
+def test_message_qa_cache_fingerprint_binds_every_request_field(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutate,
+) -> None:
+    message = _message()
+    path = tmp_path / "message_qa.yaml"
+    cache = YamlMessageQaCache(path)
+    cache.put_many((_verdict(message),))
+    original_request = message_qa_request
+
+    def changed_request(candidate: GeneratedMessage):
+        request = json.loads(json.dumps(original_request(candidate)))
+        mutate(request)
+        return request
+
+    monkeypatch.setattr("reasonese.message_qa.message_qa_request", changed_request)
+    assert cache.load() == ()
+    assert cache.get(message) is None
+
+
+def test_message_qa_request_fingerprint_binds_both_judge_route_slugs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    message = _message()
+    original = message_qa_request_fingerprint(message)
+    monkeypatch.setattr(
+        "reasonese.message_qa.JUDGE_ROUTE",
+        ModelRoute(
+            OpenRouterModelId("openai/alternate-luna"),
+            OpenRouterModelId("openai/alternate-luna:batch"),
+        ),
+    )
+
+    assert message_qa_request_fingerprint(message) != original
+
+
+def test_message_qa_cache_rejects_malformed_request_fingerprint(tmp_path: Path) -> None:
+    message = _message()
+    path = tmp_path / "message_qa.yaml"
+    cache = YamlMessageQaCache(path)
+    cache.put_many((_verdict(message),))
+    raw = yaml.safe_load(path.read_text())
+    raw["message_qa"][0]["request_fingerprint"] = 123
+    path.write_text(yaml.safe_dump(raw))
+
+    with pytest.raises(ValueError, match="request_fingerprint"):
+        cache.load()
+
+
+def test_disputed_message_qa_fixtures_keep_parent_adjudication_separate() -> None:
+    assert set(_DISPUTED_CASES) == {"source", "cases"}
+    assert len(_DISPUTED_CASES["source"]["sha256"]) == 64
+    cases = _DISPUTED_CASES["cases"]
+    assert len({case["id"] for case in cases}) == len(cases)
+    for case in cases:
+        assert case["label"] == "parent-adjudication"
+        assert set(case["spec"]) == {"instruction", "framing", "channel", "author"}
+        negative = case["true_negative"]
+        assert negative["expected"] is False
+        assert negative["content"] != case["observed_content"]
+        assert negative["mutation"].strip()
 
 
 @pytest.mark.parametrize(
@@ -366,9 +471,12 @@ def test_check_messages_cli_passes_all_compliant_messages(
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
     monkeypatch.setattr("reasonese.check_messages.RequestsTransport", lambda key: transport)
 
-    assert check_messages_cli(
-        ["--message-cache", str(message_path), "--qa-cache", str(tmp_path / "qa.yaml")]
-    ) == 0
+    assert (
+        check_messages_cli(
+            ["--message-cache", str(message_path), "--qa-cache", str(tmp_path / "qa.yaml")]
+        )
+        == 0
+    )
 
 
 def test_check_messages_cli_reports_empty_cache_or_uncached_missing_key(
@@ -400,6 +508,7 @@ def test_message_qa_cache_rejects_bad_field_types(tmp_path: Path) -> None:
         ("complies", 1, "must be a boolean"),
         ("issues", "bad", "must be a list"),
         ("response", [], "must be a mapping"),
+        ("request_fingerprint", None, "request_fingerprint"),
     ):
         changed = yaml.safe_load(path.read_text())
         changed["message_qa"][0][field] = value

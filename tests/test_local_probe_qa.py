@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import sys
 from contextlib import contextmanager, nullcontext
 from dataclasses import replace
@@ -14,8 +15,12 @@ import numpy as np
 import pytest
 
 import reasonese.local_probe_qa as local_module
-from reasonese.axes import Assistant, Framing
-from reasonese.local_probe_qa import LocalProbeQaScorer
+from reasonese.axes import Assistant, Channel, Framing
+from reasonese.local_probe_qa import (
+    FramingThresholds,
+    LocalProbeQaScorer,
+    load_probe_bundles,
+)
 from reasonese.probe_rendering import RenderedProbeContext
 from reasonese.role_probe_extraction import EXTRACTION_PROTOCOL, NEMOTRON_ADAPTER, ProbeRole
 from reasonese.role_probes import load_role_probe, save_role_probe, train_role_probe
@@ -99,6 +104,198 @@ def _scorer_files(tmp_path: Path) -> tuple[Path, Path, str]:
         encoding="utf-8",
     )
     return config, tmp_path / "probe-cache.json", runtime_sha256
+
+
+def _threshold_payload(
+    reasoning_minimum: float = 0.4,
+    nonreasoning_maximum: float = 0.6,
+) -> dict[str, dict[str, float]]:
+    return {
+        str(channel): {
+            "reasoning_minimum": reasoning_minimum,
+            "nonreasoning_maximum": nonreasoning_maximum,
+        }
+        for channel in Channel
+    }
+
+
+def _add_thresholds(config: Path, payload: object) -> None:
+    raw = json.loads(config.read_text(encoding="utf-8"))
+    raw["bundles"][0]["framing_thresholds"] = payload
+    config.write_text(json.dumps(raw), encoding="utf-8")
+
+
+def test_framing_thresholds_accept_probability_boundaries_and_overlap() -> None:
+    assert FramingThresholds(0.0, 1.0) == FramingThresholds(0.0, 1.0)
+    assert FramingThresholds(0.4, 0.6).reasoning_minimum == 0.4
+
+
+def test_probe_bundle_thresholds_cover_channels_with_independent_directions(
+    tmp_path: Path,
+) -> None:
+    config, _, _ = _scorer_files(tmp_path)
+    payload = _threshold_payload()
+    payload[str(Channel.SYSTEM)] = {
+        "reasoning_minimum": 0.91,
+        "nonreasoning_maximum": 0.13,
+    }
+    _add_thresholds(config, payload)
+
+    bundle = load_probe_bundles(config)[0]
+    assert bundle.thresholds_for(Channel.USER) == FramingThresholds(0.4, 0.6)
+    assert bundle.thresholds_for(Channel.SYSTEM) == FramingThresholds(0.91, 0.13)
+    assert bundle.thresholds_for(Channel.README) == FramingThresholds(0.4, 0.6)
+    assert set(bundle.threshold_identity()) == {str(channel) for channel in Channel}
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        (lambda payload: payload.pop(str(Channel.SYSTEM)), "cover every channel"),
+        (
+            lambda payload: payload.update(
+                unknown={"reasoning_minimum": 0.4, "nonreasoning_maximum": 0.6}
+            ),
+            "cover every channel",
+        ),
+        (
+            lambda payload: payload[str(Channel.SYSTEM)].pop("nonreasoning_maximum"),
+            "invalid framing threshold pair",
+        ),
+        (
+            lambda payload: payload[str(Channel.SYSTEM)].update(extra=0.5),
+            "invalid framing threshold pair",
+        ),
+        (
+            lambda payload: payload[str(Channel.SYSTEM)].update(reasoning_minimum=True),
+            "numeric probabilities",
+        ),
+        (
+            lambda payload: payload[str(Channel.SYSTEM)].update(reasoning_minimum=math.nan),
+            "finite probabilities",
+        ),
+        (
+            lambda payload: payload[str(Channel.SYSTEM)].update(reasoning_minimum=math.inf),
+            "finite probabilities",
+        ),
+        (
+            lambda payload: payload[str(Channel.SYSTEM)].update(reasoning_minimum=-0.01),
+            "finite probabilities",
+        ),
+        (
+            lambda payload: payload[str(Channel.SYSTEM)].update(reasoning_minimum=1.01),
+            "finite probabilities",
+        ),
+    ],
+    ids=(
+        "missing-channel",
+        "extra-channel",
+        "missing-cutoff",
+        "extra-cutoff",
+        "bool",
+        "nan",
+        "infinite",
+        "below-zero",
+        "above-one",
+    ),
+)
+def test_probe_bundle_threshold_config_rejects_malformed_values(
+    tmp_path: Path, mutation, message: str
+) -> None:
+    config, _, _ = _scorer_files(tmp_path)
+    payload = _threshold_payload()
+    mutation(payload)
+    _add_thresholds(config, payload)
+
+    with pytest.raises(ValueError, match=message):
+        load_probe_bundles(config)
+
+
+def test_default_probe_bundle_preserves_historical_threshold_behavior(tmp_path: Path) -> None:
+    config, _, _ = _scorer_files(tmp_path)
+
+    bundle = load_probe_bundles(config)[0]
+    assert bundle.framing_thresholds == ()
+    assert bundle.thresholds_for(Channel.USER) is None
+    assert bundle.threshold_identity() == {}
+
+
+def test_framing_thresholds_use_exact_reasoning_and_nonreasoning_boundaries(
+    tmp_path: Path,
+) -> None:
+    config, _, _ = _scorer_files(tmp_path)
+    probe = load_role_probe(tmp_path / "probe.npz")
+    _, requests = _requests()
+    thresholds = FramingThresholds(0.4, 0.6)
+
+    assert local_module._decision(requests[0], probe, 0.4, thresholds) == (True, None)
+    assert (
+        local_module._decision(requests[0], probe, math.nextafter(0.4, 0.0), thresholds)[0] is False
+    )
+    assert local_module._decision(requests[1], probe, math.nextafter(0.6, 0.0), thresholds) == (
+        True,
+        None,
+    )
+    assert local_module._decision(requests[1], probe, 0.6, thresholds)[0] is False
+    assert config.exists()
+
+
+def test_compressed_decision_remains_descriptive_under_framing_thresholds(
+    tmp_path: Path,
+) -> None:
+    config, _, _ = _scorer_files(tmp_path)
+    probe = load_role_probe(tmp_path / "probe.npz")
+    _, requests = _requests(Framing.COMPRESSED_NORMAL)
+    compressed = next(row for row in requests if row.spec.framing is Framing.COMPRESSED_NORMAL)
+    thresholds = FramingThresholds(0.0, 1.0)
+
+    for probability in (0.0, 0.5, 1.0):
+        assert local_module._decision(compressed, probe, probability, thresholds) == (None, None)
+    assert config.exists()
+
+
+def test_framing_thresholds_change_context_cache_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config, cache, runtime_sha256 = _scorer_files(tmp_path)
+    _add_thresholds(config, _threshold_payload(0.4, 0.6))
+    _, captured = _patch_runtime(monkeypatch, runtime_sha256)
+    _, requests = _requests()
+    request = requests[0]
+
+    first = LocalProbeQaScorer(config, cache, execution_device="cpu")
+    first.check((request,))
+    first_key = next(iter(json.loads(cache.read_text(encoding="utf-8"))["records"]))
+
+    _add_thresholds(config, _threshold_payload(0.8, 0.2))
+    second = LocalProbeQaScorer(config, cache, execution_device="cpu")
+    second.check((request,))
+    keys = set(json.loads(cache.read_text(encoding="utf-8"))["records"])
+
+    assert len(captured) == 2
+    assert first_key in keys
+    assert len(keys) == 2
+
+
+def test_warm_cache_rejects_a_decision_under_changed_thresholds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config, cache, runtime_sha256 = _scorer_files(tmp_path)
+    _patch_runtime(monkeypatch, runtime_sha256)
+    _, requests = _requests()
+    request = requests[0]
+    scorer = LocalProbeQaScorer(config, cache, execution_device="cpu")
+    scorer.check((request,))
+    prepared = scorer._prepared[request.setup.matchup.assistant]
+    key = next(iter(json.loads(cache.read_text(encoding="utf-8"))["records"]))
+
+    with pytest.raises(ValueError, match="does not match its probability and threshold"):
+        local_module._VerdictCache(cache).verdict(
+            key,
+            request,
+            prepared.probe,
+            FramingThresholds(0.0, 0.5),
+        )
 
 
 def _patch_runtime(
@@ -283,9 +480,7 @@ class _FakeAutotuner:
         self.nargs = {"prior": True}
 
 
-def _patch_cumsum_runtime(
-    monkeypatch: pytest.MonkeyPatch, tuner: _FakeAutotuner
-) -> object:
+def _patch_cumsum_runtime(monkeypatch: pytest.MonkeyPatch, tuner: _FakeAutotuner) -> object:
     root = "_mamba_ssm_cuda_test"
     combined_module_name = f"{root}.ops.triton.ssd_combined"
     state_module_name = f"{root}.ops.triton.ssd_chunk_state"
@@ -391,12 +586,8 @@ def test_cumsum_pin_does_not_touch_cpu_or_other_adapters(
 
 
 def test_target_prefix_drops_only_external_future_and_preserves_span_positions() -> None:
-    before = RenderedProbeContext(
-        (10, 11, 12, 13, 40, 41), ((2, 3),), ((12, 13),), "a" * 64
-    )
-    after = RenderedProbeContext(
-        (10, 11, 12, 13, 90, 91, 92), ((2, 3),), ((12, 13),), "a" * 64
-    )
+    before = RenderedProbeContext((10, 11, 12, 13, 40, 41), ((2, 3),), ((12, 13),), "a" * 64)
+    after = RenderedProbeContext((10, 11, 12, 13, 90, 91, 92), ((2, 3),), ((12, 13),), "a" * 64)
 
     first = LocalProbeQaScorer._target_prefix(before)
     second = LocalProbeQaScorer._target_prefix(after)
@@ -407,9 +598,7 @@ def test_target_prefix_drops_only_external_future_and_preserves_span_positions()
 
 
 def test_target_prefix_rejects_multiple_measured_spans() -> None:
-    context = RenderedProbeContext(
-        (10, 11, 12, 13, 14), ((1,), (3,)), ((11,), (13,)), "a" * 64
-    )
+    context = RenderedProbeContext((10, 11, 12, 13, 14), ((1,), (3,)), ((11,), (13,)), "a" * 64)
 
     with pytest.raises(ValueError, match="exactly one measured span"):
         LocalProbeQaScorer._target_prefix(context)
@@ -488,8 +677,12 @@ def test_local_scorer_uses_identical_prefix_for_different_future_suffixes(
     _, requests = _requests()
     verdicts = LocalProbeQaScorer(config, cache, execution_device="cpu").check(requests)
     assert len(verdicts) == 4
-    assert {input_ids for input_ids, _ in captured} == {(0, 1, 2),}
-    assert {positions for _, positions in captured} == {(1, 2),}
+    assert {input_ids for input_ids, _ in captured} == {
+        (0, 1, 2),
+    }
+    assert {positions for _, positions in captured} == {
+        (1, 2),
+    }
 
 
 def test_local_scorer_requires_a_bundle_for_every_assistant(

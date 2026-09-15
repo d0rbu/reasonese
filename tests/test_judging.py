@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import cast
 from xml.etree import ElementTree
 
 import pytest
@@ -11,6 +12,7 @@ import reasonese.judging as judging_module
 from reasonese.axes import Assistant, Author, Channel, Framing, Instruction
 from reasonese.cache import YamlTraceCache
 from reasonese.conversation import (
+    MAX_LOCAL_TOOL_STEPS,
     ConversationTrace,
     GeneratedMessage,
     GeneratedText,
@@ -27,6 +29,7 @@ from reasonese.judging import (
     Judgment,
     TraceFingerprint,
     fingerprint_traces,
+    judge_fingerprinted_traces,
     judge_request,
     judge_requests,
     judge_requests_for_traces,
@@ -41,8 +44,10 @@ from reasonese.judgment_cache import (
     judgments_from_dicts,
 )
 from reasonese.matchup import make_matchup, matchup_to_dict
+from reasonese.observations import observations_from_trials
 from reasonese.openrouter import JsonObject, OpenRouterClient
 from reasonese.planning import PromptSpec
+from reasonese.study import PositiveInteger, Trial, TrialId
 
 
 def _spec(text: str, channel: Channel) -> PromptSpec:
@@ -71,6 +76,39 @@ def _trace(answer: str = "Paris and 4.") -> ConversationTrace:
         GeneratedMessage(spec, GeneratedText.parse(str(spec.instruction)), None) for spec in specs
     )
     return ConversationTrace(construct_conversation(matchup, messages), _chat(answer))
+
+
+
+def _terminal_trace() -> ConversationTrace:
+    base = _trace()
+    tool_response: JsonObject = {
+        "id": "terminal-tool-response",
+        "choices": [
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "terminal-call",
+                            "type": "function",
+                            "function": {"name": "read_file", "arguments": '{"path":"README.md"}'},
+                        }
+                    ],
+                }
+            }
+        ],
+    }
+    step = ToolStep(
+        tool_response,
+        (ToolResult(ToolCallId.parse("terminal-call"), GeneratedText.parse("context")),),
+    )
+    return ConversationTrace(
+        base.setup,
+        tool_response,
+        (step,) * MAX_LOCAL_TOOL_STEPS,
+        terminal_status="tool_limit_exhausted",
+    )
 
 
 def _judge_chat(completed: object, response_id: str) -> JsonObject:
@@ -393,10 +431,106 @@ def test_judgment_cache_round_trips_raw_responses_and_replaces_same_trace(
 
     assert cache.load() == (replacement,)
     assert cache.get(trace) == replacement
-    assert cache.load()[0].verdicts[0].response["choices"][0]["message"]["reasoning"] == (
+    loaded_response = cache.load()[0].verdicts[0].response
+    assert loaded_response is not None
+    assert loaded_response["choices"][0]["message"]["reasoning"] == (
         "raw judge reasoning"
     )
     assert cache.get(_trace("changed")) is None
+
+
+
+def test_terminal_judgment_cache_round_trips_and_rejects_provider_like_verdicts(
+    tmp_path: Path,
+) -> None:
+    trace = _terminal_trace()
+    judgment = judge_fingerprinted_traces(fingerprint_traces((trace,)), None)[0]
+    cache = YamlJudgmentCache(tmp_path / "judgments.yaml")
+
+    cache.put(judgment)
+
+    assert cache.get(trace) == judgment
+    assert [verdict.completed for verdict in judgment.verdicts] == [False, False]
+    assert [verdict.response for verdict in judgment.verdicts] == [None, None]
+    raw = judgment_to_dict(judgment)
+    assert judgment_from_dict(raw, trace.setup.matchup) == judgment
+    raw_verdicts = cast(list[dict[str, object]], raw["verdicts"])
+    malformed = {**raw, "verdicts": [dict(verdict) for verdict in raw_verdicts]}
+    malformed["verdicts"][0]["response"] = _judge_chat(False, "impossible-provider")
+    with pytest.raises(ValueError, match="deterministic failure"):
+        judgment_from_dict(malformed, trace.setup.matchup)
+
+
+def test_terminal_judgments_skip_provider_and_keep_mixed_batches_aligned() -> None:
+    terminal = _terminal_trace()
+    completed = _trace()
+    transport = FakeTransport([_completed_batch((True, False))])
+
+    all_failed = judge_fingerprinted_traces(fingerprint_traces((terminal,)), None)
+    mixed = judge_fingerprinted_traces(
+        fingerprint_traces((terminal, completed)), OpenRouterClient(transport)
+    )
+
+    assert len(all_failed) == 1
+    assert [verdict.response for verdict in all_failed[0].verdicts] == [None, None]
+    assert len(transport.post_calls) == 1
+    assert len(transport.post_calls[0][1]["requests"]) == 2
+    assert [verdict.completed for verdict in mixed[0].verdicts] == [False, False]
+    assert [verdict.response for verdict in mixed[0].verdicts] == [None, None]
+    assert [verdict.completed for verdict in mixed[1].verdicts] == [True, False]
+    completed_responses = [verdict.response for verdict in mixed[1].verdicts]
+    assert all(response is not None for response in completed_responses)
+    assert [response["id"] for response in completed_responses if response is not None] == [
+        "judge-0",
+        "judge-1",
+    ]
+
+
+def test_terminal_and_completed_observations_join_in_input_and_trial_order() -> None:
+    terminal = _terminal_trace()
+    completed = _trace("A completed answer.")
+    trials = (
+        Trial(
+            TrialId.parse("failed"),
+            terminal.setup.matchup,
+            PositiveInteger.parse(1),
+            PositiveInteger.parse(1),
+        ),
+        Trial(
+            TrialId.parse("completed"),
+            completed.setup.matchup,
+            PositiveInteger.parse(1),
+            PositiveInteger.parse(2),
+        ),
+    )
+    judgments = judge_fingerprinted_traces(
+        fingerprint_traces((terminal, completed)),
+        OpenRouterClient(FakeTransport([_completed_batch((True, False))])),
+    )
+
+    observations = observations_from_trials(
+        trials, fingerprint_traces((terminal, completed)), judgments
+    )
+
+    assert [observation.trial_id for observation in observations] == [
+        TrialId.parse("failed"),
+        TrialId.parse("failed"),
+        TrialId.parse("completed"),
+        TrialId.parse("completed"),
+    ]
+    assert [observation.completed for observation in observations] == [False, False, True, False]
+    assert [observation.judge_response_id for observation in observations] == [
+        None,
+        None,
+        "judge-0",
+        "judge-1",
+    ]
+    assert [observation.assistant_response_id for observation in observations] == [
+        "terminal-tool-response",
+        "terminal-tool-response",
+        "assistant-1",
+        "assistant-1",
+    ]
 
 
 def test_batched_judgment_parser_matches_checked_parser_and_validates_lengths() -> None:

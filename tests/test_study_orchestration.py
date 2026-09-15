@@ -491,6 +491,7 @@ def test_observations_preserve_missing_provider_ids() -> None:
     trace = ConversationTrace(trace.setup, {"choices": trace.response["choices"]})
     judgment = _judgment_for_trace(trace, (True, True))
     verdict = judgment.verdicts[0]
+    assert verdict.response is not None
     verdicts = InstructionVerdicts.parse(
         (
             InstructionVerdict(
@@ -1093,6 +1094,7 @@ def test_collect_studies_cli_forwards_selected_authoring_brief(
         return (
             SimpleNamespace(
                 excluded_inputs=(),
+                failed_trials=0,
                 judgment_cache_hits=0,
                 observations=(),
                 probe_qa_verdicts=(),

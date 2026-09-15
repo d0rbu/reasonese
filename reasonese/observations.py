@@ -13,7 +13,12 @@ from phantom import Phantom
 
 from reasonese.axes import Assistant, Author, Channel, Framing, Instruction
 from reasonese.conversation import ConversationTrace
-from reasonese.judging import FingerprintedTrace, Judgment, TraceFingerprint
+from reasonese.judging import (
+    FingerprintedTrace,
+    Judgment,
+    TraceFingerprint,
+    validate_trace_judgment,
+)
 from reasonese.matchup import prompt_spec_to_dict
 from reasonese.openrouter import JsonObject
 from reasonese.planning import PromptSpec
@@ -90,7 +95,9 @@ def cell_id(cell: Cell) -> CellId:
     return CellId.parse(hashlib.sha256(canonical.encode()).hexdigest()[:16])
 
 
-def _response_id(response: JsonObject) -> str | None:
+def _response_id(response: JsonObject | None) -> str | None:
+    if response is None:
+        return None
     response_id = response.get("id")
     return response_id if isinstance(response_id, str) else None
 
@@ -123,6 +130,7 @@ def _observations_from_trial(
         raise ValueError("judgment matchup must equal the trial matchup")
     if judgment.trace_fingerprint != fingerprinted.fingerprint:
         raise ValueError("judgment fingerprint must equal the concrete trial trace")
+    validate_trace_judgment(trace, judgment)
     return tuple(
         _observation_from_validated(
             trial.trial_id,

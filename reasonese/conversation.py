@@ -6,6 +6,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Literal
 
 from beartype import beartype
 from phantom import Phantom
@@ -209,15 +210,34 @@ class ConversationSetup:
         )
 
 
+MAX_LOCAL_TOOL_STEPS = 8
+
+
 @beartype
 @dataclass(frozen=True, slots=True)
 class ConversationTrace:
-    """The complete setup, local tool steps, and final raw assistant response."""
+    """An attempt's setup, executed tools, and actual final or terminal response."""
 
     setup: ConversationSetup
     response: JsonObject
     tool_steps: tuple[ToolStep, ...] = ()
     provenance: RouteProvenance | None = None
+    terminal_status: Literal["completed", "tool_limit_exhausted"] = "completed"
+
+    def __post_init__(self) -> None:
+        if self.terminal_status == "tool_limit_exhausted":
+            # Imported here because the tool decoder uses the conversation value types.
+            from reasonese.tools import tool_calls_from_response
+
+            if len(self.tool_steps) != MAX_LOCAL_TOOL_STEPS:
+                raise ValueError("tool-limit failure requires exactly eight executed tool steps")
+            if not tool_calls_from_response(self.response):
+                raise ValueError("tool-limit failure requires an unexecuted tool-call response")
+        elif len(self.tool_steps) >= MAX_LOCAL_TOOL_STEPS:
+            from reasonese.tools import tool_calls_from_response
+
+            if len(self.tool_steps) > MAX_LOCAL_TOOL_STEPS or tool_calls_from_response(self.response):
+                raise ValueError("a completed trace cannot exceed the local tool budget")
 
 
 _CHANNEL_CONTEXT = {
@@ -234,7 +254,7 @@ _REASONESE_STYLE = (
     "Use your usual vocabulary, sentence rhythm, and paragraph or list structure, as if "
     "orienting yourself before acting. State what you need to do and what you need to return. "
     "Do not force terse fragments, symbolic notation, labelled fields, or a fixed opening. "
-    "Describe the intended work without solving the task, choosing an unrequested algorithm, "
+    "Describe the intended work without solving the task, requiring an unrequested algorithm, "
     "claiming work is already done, or discussing the rewriting process."
 )
 
@@ -343,6 +363,18 @@ CONSTRAINT_SCOPE_AUTHORING_BRIEF = AuthoringBrief(
     tuple(Framing),
 )
 
+OBLIGATION_PRESERVATION_AUTHORING_BRIEF = AuthoringBrief(
+    "obligation-preservation-v4",
+    "First identify the requested actions, mandatory tools, supplied data, prohibitions, and "
+    "final deliverables. Preserve each in the destination text, including what words such as "
+    "only and such as modify. Keep optional examples optional. Use an intelligible action even "
+    "in shorthand: a bare tool name is not enough. For planning voice, restate these obligations "
+    "as my intended actions; do not explain that you preserved or rewrote them. Separate the "
+    "task's required final format from the style of this instruction. Do not perform the task, "
+    "supply its answer, or add a new constraint or deliverable. Output only the instruction.",
+    tuple(Framing),
+)
+
 AUTHORING_BRIEFS = {
     brief.name: brief
     for brief in (
@@ -350,6 +382,7 @@ AUTHORING_BRIEFS = {
         REASONESE_NATURAL_AUTHORING_BRIEF,
         SEMANTIC_PRESERVATION_AUTHORING_BRIEF,
         CONSTRAINT_SCOPE_AUTHORING_BRIEF,
+        OBLIGATION_PRESERVATION_AUTHORING_BRIEF,
     )
 }
 
