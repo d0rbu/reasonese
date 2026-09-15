@@ -686,6 +686,44 @@ def test_judge_cli_runs_batch_then_warm_cache_without_key(
     assert len(transport.post_calls) == 1
 
 
+def test_judge_cli_caches_terminal_failure_without_an_api_key(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    trace = _terminal_trace()
+    trace_path = tmp_path / "traces.yaml"
+    matchup_path = tmp_path / "matchup.yaml"
+    judgment_path = tmp_path / "judgments.yaml"
+    YamlTraceCache(trace_path).put(trace)
+    matchup_path.write_text(yaml.safe_dump(matchup_to_dict(trace.setup.matchup), sort_keys=False))
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    args = [
+        "--matchup",
+        str(matchup_path),
+        "--trace-cache",
+        str(trace_path),
+        "--judgment-cache",
+        str(judgment_path),
+    ]
+
+    assert judge_responses(args) == 0
+    cold = json.loads(capsys.readouterr().out)
+    assert judge_responses(args) == 0
+    warm = json.loads(capsys.readouterr().out)
+
+    assert cold == {
+        "cache_hit": False,
+        "completed": [False, False],
+        "judge": None,
+        "judgment_cache": str(judgment_path),
+    }
+    assert warm == {**cold, "cache_hit": True}
+    cached = YamlJudgmentCache(judgment_path).get(trace)
+    assert cached is not None
+    assert [verdict.response for verdict in cached.verdicts] == [None, None]
+
+
 def test_judge_cli_reports_uncached_missing_key(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

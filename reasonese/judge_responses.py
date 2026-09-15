@@ -73,7 +73,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "cache_hit": result.cache_hit,
                 "completed": [verdict.completed for verdict in result.judgment.verdicts],
                 "judgment_cache": str(args.judgment_cache),
-                "judge": "openai/gpt-5.6-luna:batch",
+                "judge": (
+                    "openai/gpt-5.6-luna:batch"
+                    if result.judgment.verdicts[0].response is not None else None
+                ),
             },
             sort_keys=True,
         )

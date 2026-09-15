@@ -1107,10 +1107,63 @@ def test_run_conversation_cli_executes_and_warm_cache_needs_no_key(
 
     assert cold_summary["cache_hit"] is False
     assert cold_summary["response_id"] == "live-id"
+    assert "terminal_status" not in cold_summary
     assert warm_summary["cache_hit"] is True
     assert warm_summary["messages"] == 2
+    assert "terminal_status" not in warm_summary
     assert cold_summary["message_qa_cache"] == str(message_qa_cache)
     assert len(transport.post_calls) == 2
+
+
+def test_run_conversation_cli_reports_cached_terminal_status_without_key(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    matchup_path = tmp_path / "matchup.yaml"
+    message_cache = YamlMessageCache(tmp_path / "messages.yaml")
+    qa_cache = YamlMessageQaCache(tmp_path / "message-qa.yaml")
+    trace_cache = YamlTraceCache(tmp_path / "traces.yaml")
+    _write_matchup(matchup_path)
+    matchup = _matchup(_spec("System task.", Channel.SYSTEM), _spec("User task.", Channel.USER))
+    manual = _manual_library(tmp_path, matchup.inputs)
+    transport = FakeTransport(
+        [_qa_batch(2), *[_tool_chat() for _ in range(MAX_LOCAL_TOOL_STEPS + 1)]]
+    )
+    run_matchup(
+        matchup,
+        OpenRouterClient(transport),
+        message_cache,
+        trace_cache,
+        qa_cache,
+        manual,
+        routing=CollectionRouting(RoutePreference.FREE, True),
+        prefer_batch=False,
+    )
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    args = [
+        "--route",
+        "free",
+        "--matchup",
+        str(matchup_path),
+        "--message-cache",
+        str(message_cache.path),
+        "--message-qa-cache",
+        str(qa_cache.path),
+        "--trace-cache",
+        str(trace_cache.path),
+        "--user-messages",
+        str(manual.root),
+        "--no-batch",
+    ]
+
+    assert run_conversation(args) == 0
+    summary = json.loads(capsys.readouterr().out)
+
+    assert summary["cache_hit"] is True
+    assert summary["terminal_status"] == "tool_limit_exhausted"
+    assert summary["response_id"] == "tool-response"
+    assert len(transport.post_calls) == MAX_LOCAL_TOOL_STEPS + 2
 
 
 def test_run_conversation_cli_requires_key_for_uncached_matchup(

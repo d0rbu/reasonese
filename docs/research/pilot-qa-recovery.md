@@ -17,7 +17,11 @@ attempt. The actual tool-bearing response and eight executed steps are retained.
 outcomes are false, with null judge responses and no provider judgment. The failed attempt
 remains in the analysis population. Resuming reuses its terminal trace and judgments. Successful
 traces keep their previous serialization and fingerprints. Per-study failure receipts include
-trial IDs, both input axes, assistant, permutation, rollout, and trace fingerprints.
+trial IDs, both input axes, assistant, permutation, rollout, and trace fingerprints. Standalone
+conversation summaries expose terminal status; standalone deterministic judgments identify
+no LLM judge (`judge: null`). Replaying all 164 saved successful traces through original main
+and this change produced exact equality of serialized payloads and scalar/batch fingerprints
+(`trace-parity-report.json`), without provider calls or GPU work.
 
 ## Semantic QA and authoring
 
@@ -39,6 +43,12 @@ controls include six faithful/changed-obligation pairs and three disputed histor
 The first authoring measurement helper was stopped after a cache API error; its raw response
 was preserved. A fresh technical restart uses explicit request-response alignment. No judge
 results were available or selected when this restart was made.
+
+V3 remains the incumbent. V4 is selected only with strictly more jointly eligible DEV comparisons
+and no reduction in Luna-compliant inputs under identical revised QA. Ties retain V3. The
+existing fourth-pair confirmation set separately measures the same V4 brief: nine author inputs
+and eighteen high-effort batch QA requests across V3/V4. Those results are excluded from prompt
+selection and prompt editing. This is still one prompt revision, not another search round.
 
 ## Probe calibration design
 
