@@ -73,12 +73,14 @@ The OpenRouter key exists only at the transport boundary. Cache keys are structu
 coordinates. Raw intermediate tool-call responses, local results, and the final provider
 response are retained so reasoning and provider metadata are not discarded.
 
-Message QA uses GPT-5.6 Luna batch with medium reasoning and a strict `{complies, issues}` schema.
+Message QA uses GPT-5.6 Luna batch with high reasoning and a strict `{complies, issues}` schema.
 It quotes the exact output of `authoring_instructions(spec)` and the candidate as data. A false
 verdict prevents assistant inference for that input but never triggers automatic regeneration.
 Study collectors exclude each entire comparison containing a rejected input and continue with
 the remaining comparisons; the standalone conversation utility still fails closed. Exact content
-changes invalidate the verdict. This is an LLM quality-control judgment, not a proof of semantic
+changes invalidate the verdict. The cache also fingerprints the full QA request and judge routes;
+changes to the rubric, reasoning effort, framing guidance, or schema invalidate older verdicts.
+Legacy records without that fingerprint are cache misses. This is an LLM quality-control judgment, not a proof of semantic
 equivalence.
 
 The judging flow is:

@@ -166,3 +166,10 @@ Gemma 4 31B uses the same deterministic `call_` plus 24-hexadecimal-character RE
 convention. This is a harness choice covered offline; live provider acceptance has not been
 verified. Free routes use the same prompts, tool definitions, and transcript construction as
 paid routes. Token pricing alone does not make this tool-enabled harness free to execute.
+
+The optional `obligation-preservation-v4` authoring brief asks the author to identify required
+actions, tools, data, prohibitions, and deliverables, preserve modifier scope, retain an
+intelligible action in shorthand, and omit rewriting commentary. It is a measured candidate,
+not an automatic replacement for an earlier selected brief. Message QA uses Luna at high
+reasoning with batch pricing. Its rubric distinguishes material added obligations from
+optional suggestions, ordinary tentative plans, and equivalent ways of requesting output.

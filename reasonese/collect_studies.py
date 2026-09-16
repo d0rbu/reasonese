@@ -143,6 +143,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 else 0
             ),
             "judgment_cache_hits": int(result.judgment_cache_hits),
+            "failed_trials": int(result.failed_trials),
             "observations": len(result.observations),
             "output": str(task.output_dir),
             "study": str(path),

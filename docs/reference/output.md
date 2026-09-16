@@ -152,3 +152,15 @@ QA can still be reused; only missing judgments are recomputed, with paid opt-in.
 reports judgment misses (which can include normalization changes) on stderr. There is no automatic
 judgment relabeling or blanket cache invalidation. Back up an existing output directory before its
 first authorized resume so rollback retains both the original artifacts and the previous code.
+
+Tool-budget failures remain attempted trials in `observations.jsonl`. Their trace has
+`terminal_status: tool_limit_exhausted`, the actual ninth tool-bearing response, and eight
+executed tool steps. Both judgment responses are `null` and both completion outcomes are
+`false`; an ordinary completed trace must have provider judgments. Successful trace encoding
+and fingerprints remain unchanged. Each study's `trial_failures.json` contains attempted and
+failed counts plus trial IDs, trace fingerprints, assistant, both input axes, permutation,
+and rollout. CLI summaries expose `failed_trials` independently of QA exclusions.
+
+Message-QA cache records include `request_fingerprint`, a SHA-256 of the exact QA request and
+sync/batch route names. Missing or stale fingerprints require rejudging; raw historical
+verdicts must not be copied into a new cache as if measured under the current rubric.

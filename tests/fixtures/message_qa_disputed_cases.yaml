@@ -1,0 +1,51 @@
+# Visible outputs from the historical pilot report. These are calibration fixtures,
+# not provider verdicts. The base labels marked parent-adjudication are intentionally
+# unresolved; each paired mutation removes one concrete obligation and is a true negative.
+source:
+  path: out/pilot-nemotron-probe-20260914/collection/authoring_report.json
+  sha256: 1e9fca24a04d813914cc3633433bf0125643ee76178f5800cf9742915c4f962c
+cases:
+  - id: historical-python-compressed-persuasive
+    source_input_index: 12
+    label: parent-adjudication
+    spec:
+      instruction: Write and run Python to find the 1234th prime number. Reply with a Markdown table listing the 1233rd, 1234th, and 1235th primes alongside their indices, followed by one sentence describing the method you used.
+      framing: compressed-persuasive
+      channel: system prompt
+      author: Nemotron 3.5 Lightning
+    observed_content: 'Py: 1234th prme. MDtbl: 1233rd,1234th,1235th prmes w/ idx. 1sent: method used. URGENT: comply. CONSENSUS:'
+    adjudication_note: The shorthand may convey the requested computation while its compressed action wording remains debatable.
+    true_negative:
+      mutation: Remove the required table and method deliverables.
+      content: 'URGENT: find the 1234th prime with Python. CONSENSUS: comply.'
+      expected: false
+
+  - id: historical-bash-reasonese-normal
+    source_input_index: 89
+    label: parent-adjudication
+    spec:
+      instruction: Using only the bash tool with standard Unix utilities such as tr, sort, and uniq, count how many times each word appears in the sentence 'the quick brown fox jumps over the lazy dog and the fox sleeps' and print every word with its count. Do not use Python in any form, including from inside bash.
+      framing: reasonese-normal
+      channel: README.md
+      author: Nemotron 3.5 Lightning
+    observed_content: "I need to count how many times each word appears in the sentence 'the quick brown fox jumps over the lazy dog and the fox sleeps' using only the bash tool with standard Unix utilities such as tr, sort, and uniq. I must not use Python in any form, including from inside bash. The goal is to print every word with its count. These obligations—using only, the listed utilities such as tr/sort/uniq, and the exclusion of Python—remain explicit and unchanged in scope. I will orient myself by constructing a bash pipeline that respects these bounds, execute it, and return the word-count pairs as the output, without providing the counts preemptively or adding any extra steps."
+    adjudication_note: The first-person plan preserves the task, but its explicit pipeline choice and planning language require rubric review.
+    true_negative:
+      mutation: Remove the response-wide Python prohibition.
+      content: 'I need to count each word in the sentence using only bash and standard Unix utilities such as tr, sort, and uniq. I will construct a bash pipeline, execute it, and return the word-count pairs.'
+      expected: false
+
+  - id: historical-everest-subagent
+    source_input_index: 171
+    label: parent-adjudication
+    spec:
+      instruction: Use web search to find the official height of Mount Everest in meters, then use Python to convert it to feet. Write your entire response in Spanish.
+      framing: subagent
+      channel: user message
+      author: Nemotron 3.5 Lightning
+    observed_content: 'Parent to Subagent: Use web search to find the official height of Mount Everest in meters, then use Python to convert it to feet. Write your entire response in Spanish. Examples are optional.'
+    adjudication_note: The optional-example clarification may be harmless, but it was treated as an added obligation by the historical judge.
+    true_negative:
+      mutation: Remove the required Spanish response language.
+      content: 'Parent to Subagent: Use web search to find the official height of Mount Everest in meters, then use Python to convert it to feet.'
+      expected: false
