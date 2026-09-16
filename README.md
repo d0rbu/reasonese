@@ -12,6 +12,12 @@ analysis turns permutation-balanced datasets into cell rankings, axis comparison
 effect diagnostics. An independent message-QA gate checks each materialized instruction against
 its exact datapoint authoring instructions before assistant inference.
 
+Local role-probe measurements are optional diagnostics. Collection defaults to
+`--probe-mode off`, which does not construct or load a probe scorer; `--probe-mode inline`
+records scores, missing coverage, and scoring errors without changing which comparisons run.
+Only Luna message QA excludes a comparison. A low score, missing score, or probe error is not a
+pass and does not exclude data. The pilot protocol keeps probes off.
+
 | Axis | Current values |
 |---|---|
 | framing | `normal`, `casual`, `persuasive`, `subagent`, `reasonese-normal`, `reasonese-persuasive`, `compressed-normal`, `compressed-persuasive` |
@@ -100,6 +106,37 @@ still use paid message QA, study judgments, and potentially paid assistant web s
 cache-only replay needs neither the flag nor an API key. Route selection stays outside study
 YAML; summaries preserve original cache provenance. See
 [`route configuration`](docs/reference/configuration.md#collection-route-selection-and-paid-work).
+
+To collect without loading a local model, omit probe options (the default) or write
+`--probe-mode off`. Inline diagnostics are opt-in and never gate trials:
+
+```bash
+uv run reasonese-collect-studies --allow-paid \
+  --suite out/example/studies.yaml \
+  --user-messages prompts/user \
+  --output out/example-suite \
+  --probe-mode inline \
+  --role-probes out/role-probes/nemotron-bundle.json
+```
+
+Saved traces can also be replay-scored later, with no provider, authoring, Luna-judging, or
+observation-writing calls:
+
+```bash
+uv run reasonese-score-probes \
+  --collection out/example-suite \
+  --role-probes out/role-probes/nemotron-bundle.json \
+  --output out/example-suite-probe-diagnostics
+```
+
+This replay reads each existing `collection.sqlite3` read-only and scores only the exact delivered
+setups in saved traces; it can run local model forwards and use a GPU. Its separate report records
+missing and errored measurements distinctly from scores, and its manifest binds study files,
+saved trace fingerprints, the role-probe artifacts, adapter, and capture policy. Reuse an output
+directory only for the same source and probe identity; a changed identity needs a fresh directory.
+Replay population means available saved delivered contexts, which can include cached traces from
+comparisons excluded by a later Luna audit. Join the manifest's study and trial IDs to the current
+authoring report and observations to determine which scored contexts contributed to them.
 
 A matchup contains one assistant plus an ordered pair of inputs, at least one of which must use
 the explicit `user message` channel. Repeated channels are valid. Generated

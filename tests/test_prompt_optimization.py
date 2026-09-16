@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
@@ -31,7 +32,13 @@ from reasonese.message_qa import (
     message_qa_rubric_fingerprint,
 )
 from reasonese.planning import PromptSpec
-from reasonese.probe_qa import ProbeExpectation, ProbeQaRequest, ProbeQaVerdict, probe_expectation
+from reasonese.probe_qa import (
+    ProbeExpectation,
+    ProbeQaMode,
+    ProbeQaRequest,
+    ProbeQaVerdict,
+    probe_expectation,
+)
 from reasonese.routing import CollectionRouting
 from reasonese.study import Study, make_study
 
@@ -138,11 +145,12 @@ def _run(
     brief=BASELINE_AUTHORING_BRIEF,
     audit=_fake_audit,
     probe: _Probe | None = None,
+    mode: ProbeQaMode = ProbeQaMode.INLINE,
 ):
     studies = _studies()
     monkeypatch.setattr(optimization, "materialize_specs", _fake_materialize)
     monkeypatch.setattr(optimization, "audit_messages", audit)
-    scorer = probe or _Probe()
+    scorer = (probe or _Probe()) if mode is ProbeQaMode.INLINE else None
     return optimization.evaluate_prompt_brief(
         studies,
         brief=brief,
@@ -150,11 +158,12 @@ def _run(
         client=None,
         manual_messages=ManualMessageLibrary(tmp_path / "manual"),
         probe_scorer=scorer,
+        probe_mode=mode,
         assistant=Assistant.NEMOTRON_3_5_LIGHTNING,
         authors=(Author.NEMOTRON_3_5_LIGHTNING,),
         pair_ids=_pair_ids(studies),
         pair_identity=_pair_identity(),
-        probe_identity={"config": "probe"},
+        probe_identity={"config": "probe"} if mode is ProbeQaMode.INLINE else None,
         routing=CollectionRouting(allow_paid=True),
     )
 
@@ -324,7 +333,7 @@ def test_evaluation_records_candidate_requests_probe_orders_and_no_execution(
     assert probe.preflighted == (Assistant.NEMOTRON_3_5_LIGHTNING,)
     assert report["counts"]["scores"] == 32
     assert report["counts"]["descriptive_scores"] == 4
-    assert report["combined_eligible_studies"] == 8
+    assert report["message_qa_eligible_studies"] == 8
     assert manifest["stages"]["assistant_execution"] is False
     assert manifest["stages"]["response_judging"] is False
     assert manifest["stages"]["tool_calls"] is False
@@ -351,7 +360,7 @@ def test_probe_still_scores_message_qa_failures_and_reports_combined_exclusion(
     report = json.loads((tmp_path / "probe_qa_report.json").read_text())
     assert len(probe.requests) == 32
     assert report["message_qa_excluded_studies"]
-    assert report["combined_eligible_studies"] < 8
+    assert report["message_qa_eligible_studies"] < 8
     assert report["counts"]["scores"] == 32
 
 
@@ -376,6 +385,8 @@ def test_probe_report_keeps_reused_anchor_contexts_distinct(
         client=None,
         manual_messages=ManualMessageLibrary(tmp_path / "manual"),
         probe_scorer=_Probe(),
+        probe_mode=ProbeQaMode.INLINE,
+        probe_identity={"config": "probe"},
         assistant=Assistant.NEMOTRON_3_5_LIGHTNING,
         authors=(Author.NEMOTRON_3_5_LIGHTNING,),
         pair_ids={str(spec.instruction): "pilot-pair" for study in studies for spec in study.inputs},
@@ -404,6 +415,8 @@ def test_paid_guard_runs_before_materialization_and_failure_is_preserved(
             client=None,
             manual_messages=ManualMessageLibrary(tmp_path / "manual"),
             probe_scorer=_Probe(),
+            probe_mode=ProbeQaMode.INLINE,
+            probe_identity={"config": "probe"},
             assistant=Assistant.NEMOTRON_3_5_LIGHTNING,
             authors=(Author.NEMOTRON_3_5_LIGHTNING,),
             pair_ids=_pair_ids(_studies()),
@@ -415,25 +428,21 @@ def test_paid_guard_runs_before_materialization_and_failure_is_preserved(
     assert json.loads((tmp_path / "manifest.json").read_text())["status"] == "failed"
 
 
-def test_probe_preflight_runs_before_materialization_and_is_recorded(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+def test_probe_preflight_failure_is_diagnostic_after_message_qa(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     class FailingProbe(_Probe):
         def preflight(self, assistants: tuple[Assistant, ...]) -> None:
-            raise RuntimeError("invalid probe bundle")
+            raise RuntimeError("GPU unavailable")
 
-    called = False
-
-    def unexpected(*args, **kwargs):
-        nonlocal called
-        called = True
-        raise AssertionError("authoring must wait for probe preflight")
-
-    monkeypatch.setattr(optimization, "materialize_specs", unexpected)
-    with pytest.raises(RuntimeError, match="invalid probe"):
-        _run(tmp_path, monkeypatch, probe=FailingProbe())
-    assert not called
-    assert "probe_preflight" in (tmp_path / "failures.jsonl").read_text()
+    summary = _run(tmp_path, monkeypatch, probe=FailingProbe())
+    report = json.loads((tmp_path / "probe_qa_report.json").read_text())
+    assert summary["message_qa"]["complies"] == 16
+    assert summary["message_qa_eligible_studies"] == 8
+    assert report["counts"]["error_requests"] == 32
+    assert report["counts"]["scores"] == 0
+    assert json.loads((tmp_path / "manifest.json").read_text())["status"] == "completed"
+    assert any(record.exc_info for record in caplog.records)
 
 
 def test_candidate_directory_must_be_fresh(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -478,7 +487,7 @@ def test_compare_outputs_reports_pair_and_judge_denominators(
     assert qa_candidate["pass_numerator"] == 15
     assert qa_baseline["pass_denominator"] == 16
     markdown = cast(str, comparison["markdown"])
-    assert "passed/eligible" in markdown
+    assert "passed/assessed" in markdown
     assert "16/16 (100.0%)" in markdown
     assert "15/16 (93.8%)" in markdown
     assert "| Overall |" in markdown
@@ -623,6 +632,7 @@ def test_probe_identity_records_config_and_probe_digests(
         adapter=SimpleNamespace(name="role-probe"),
         checkpoint=tmp_path / "checkpoint",
         probe_path=probe,
+        threshold_identity=lambda: {},
     )
     monkeypatch.setattr(local_probe_qa, "load_probe_bundles", lambda path: (bundle,))
     identity = optimization._probe_identity(config)
@@ -767,13 +777,13 @@ def test_evaluation_records_probe_report_failures_and_setup_failures(
     assert "exactly two ordered setups" in (tmp_path / "setup" / "failures.jsonl").read_text()
     monkeypatch.setattr(optimization, "build_trials", original_build_trials)
 
-    def missing_comparisons(*args, **kwargs):
-        return {"counts": {}, "scores": []}
+    def report_failure(*args, **kwargs):
+        raise OSError("diagnostic report storage failed")
 
-    monkeypatch.setattr(optimization, "probe_qa_report", missing_comparisons)
-    with pytest.raises(ValueError, match="comparison rows"):
+    monkeypatch.setattr(optimization, "probe_qa_report", report_failure)
+    with pytest.raises(OSError, match="storage failed"):
         _run(tmp_path / "report", monkeypatch)
-    assert "probe report lacks comparison rows" in (
+    assert "diagnostic report storage failed" in (
         tmp_path / "report" / "failures.jsonl"
     ).read_text()
 
@@ -965,3 +975,178 @@ def test_compare_main_reports_invalid_input(tmp_path: Path) -> None:
         optimization.compare_main(
             ["--baseline", str(tmp_path / "missing-a"), "--candidate", str(tmp_path / "missing-b")]
         )
+
+
+def test_prompt_off_mode_reports_unmeasured_and_compares_without_probe(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, candidate = tmp_path / "before", tmp_path / "after"
+    _run(baseline, monkeypatch, mode=ProbeQaMode.OFF)
+    _run(candidate, monkeypatch, mode=ProbeQaMode.OFF, brief=REASONESE_NATURAL_AUTHORING_BRIEF)
+    manifest = json.loads((baseline / "manifest.json").read_text())
+    assert manifest["eligibility_policy"] == "message_qa_only"
+    assert manifest["probe_mode"] == "off"
+    assert manifest["stages"]["probe_qa"] is False
+    assert manifest["work"]["probe_qa_requests"] == 0
+    comparison = optimization.compare_prompt_outputs(baseline, candidate)
+    overall = cast(dict[str, dict[str, dict[str, int]]], comparison["overall"])
+    for side in ("baseline", "candidate"):
+        counts = overall[side]["probe"]
+        assert counts == {"pass_numerator": 0, "pass_denominator": 0,
+                          "missing": 32, "descriptive": 0, "errors": 0}
+    assert comparison["historical_joint_eligibility"] is None
+
+
+def test_all_probe_reference_mismatches_keep_prompt_eligibility(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class MismatchedProbe(_Probe):
+        def check(self, requests):
+            return tuple(
+                replace(row, complies=False, issue="outside reference")
+                if row.complies is not None else row
+                for row in super().check(requests)
+            )
+
+    summary = _run(tmp_path, monkeypatch, probe=MismatchedProbe())
+    assert summary["message_qa_eligible_studies"] == 8
+    assert summary["probe_qa"]["reference_mismatches"] == 28
+
+
+def test_probe_error_comparison_counts_errors_without_passes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class FailedProbe(_Probe):
+        def check(self, requests):
+            raise RuntimeError("scoring failed")
+
+    baseline, candidate = tmp_path / "before", tmp_path / "after"
+    _run(baseline, monkeypatch)
+    _run(candidate, monkeypatch, probe=FailedProbe(), brief=REASONESE_NATURAL_AUTHORING_BRIEF)
+    comparison = optimization.compare_prompt_outputs(baseline, candidate)
+    overall = cast(dict[str, dict[str, dict[str, int]]], comparison["overall"])
+    counts = overall["candidate"]["probe"]
+    assert counts == {"pass_numerator": 0, "pass_denominator": 0,
+                      "missing": 0, "descriptive": 0, "errors": 32}
+    assert overall["candidate"]["message_qa"]["pass_numerator"] == 16
+
+
+def test_comparison_preserves_historical_policy_and_rejects_mixed_policies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, candidate = tmp_path / "before", tmp_path / "after"
+    _run(baseline, monkeypatch)
+    _run(candidate, monkeypatch, brief=REASONESE_NATURAL_AUTHORING_BRIEF)
+    for directory, count in ((baseline, 3), (candidate, 1)):
+        path = directory / "manifest.json"
+        manifest = json.loads(path.read_text())
+        manifest.pop("eligibility_policy")
+        manifest.pop("probe_mode")
+        path.write_text(json.dumps(manifest))
+        report_path = directory / "probe_qa_report.json"
+        report = json.loads(report_path.read_text())
+        report["combined_eligible_studies"] = count
+        report_path.write_text(json.dumps(report))
+        if directory == baseline:
+            with pytest.raises(ValueError, match="eligibility policies differ"):
+                optimization.compare_prompt_outputs(baseline, candidate)
+    comparison = optimization.compare_prompt_outputs(baseline, candidate)
+    assert comparison["eligibility_policy"] == "legacy_message_and_probe"
+    assert comparison["historical_joint_eligibility"] == {"baseline": 3, "candidate": 1}
+
+
+def test_comparison_rejects_overlapping_probe_score_and_missing_coordinate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, candidate = tmp_path / "before", tmp_path / "after"
+    _run(baseline, monkeypatch)
+    _run(candidate, monkeypatch, brief=REASONESE_NATURAL_AUTHORING_BRIEF)
+    path = candidate / "probe_qa_report.json"
+    report = json.loads(path.read_text())
+    report["missing"] = [dict(report["scores"][0], reason="missing")]
+    path.write_text(json.dumps(report))
+    with pytest.raises(ValueError, match="duplicates"):
+        optimization.compare_prompt_outputs(baseline, candidate)
+
+
+def test_default_prompt_cli_does_not_import_or_construct_probe(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import builtins
+
+    original_import = builtins.__import__
+
+    def guarded_import(name, *args, **kwargs):
+        if name == "reasonese.local_probe_qa":
+            raise AssertionError("off-mode CLI must not import the local probe stack")
+        return original_import(name, *args, **kwargs)
+
+    seen = {}
+    def evaluate(studies, **kwargs):
+        seen.update(kwargs)
+        return {"candidate": kwargs["brief"].name}
+
+    monkeypatch.setattr(builtins, "__import__", guarded_import)
+    monkeypatch.setattr(optimization, "load_study_suite", lambda path: _studies())
+    monkeypatch.setattr(optimization, "_pair_identity", lambda path: (_pair_ids(_studies()), {}))
+    monkeypatch.setattr(optimization, "evaluate_prompt_brief", evaluate)
+    assert optimization.main([
+        "--pairs", str(tmp_path / "pairs.yaml"), "--suite", str(tmp_path / "suite.yaml"),
+        "--output", str(tmp_path / "out"), "--brief", "baseline",
+    ]) == 0
+    assert seen["probe_mode"] is ProbeQaMode.OFF
+    assert seen["probe_scorer"] is None
+    assert seen["probe_identity"] is None
+
+
+@pytest.mark.parametrize("mode,scorer", [(ProbeQaMode.OFF, _Probe()), (ProbeQaMode.INLINE, None)])
+def test_prompt_modes_reject_conflicting_scorers_before_output(
+    tmp_path: Path, mode: ProbeQaMode, scorer: _Probe | None
+) -> None:
+    with pytest.raises(ValueError, match="mode"):
+        optimization.evaluate_prompt_brief(
+            _studies(), brief=BASELINE_AUTHORING_BRIEF, output=tmp_path / "unused", client=None,
+            manual_messages=ManualMessageLibrary(tmp_path / "manual"),
+            probe_scorer=scorer, probe_mode=mode, assistant=Assistant.NEMOTRON_3_5_LIGHTNING,
+            authors=(Author.NEMOTRON_3_5_LIGHTNING,),
+        )
+    assert not (tmp_path / "unused").exists()
+
+
+@pytest.mark.parametrize("change", ["no_policy", "missing_list", "non_object", "no_reason", "gap"])
+def test_diagnostic_comparison_rejects_malformed_coverage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: str
+) -> None:
+    baseline, candidate = tmp_path / "before", tmp_path / "after"
+    _run(baseline, monkeypatch, mode=ProbeQaMode.OFF)
+    _run(candidate, monkeypatch, mode=ProbeQaMode.OFF, brief=REASONESE_NATURAL_AUTHORING_BRIEF)
+    path = candidate / "probe_qa_report.json"
+    report = json.loads(path.read_text())
+    if change == "no_policy":
+        report.pop("eligibility_policy")
+    elif change == "missing_list":
+        report.pop("missing")
+    elif change == "non_object":
+        report["missing"][0] = "invalid"
+    elif change == "no_reason":
+        report["missing"][0].pop("reason")
+    else:
+        report["missing"].pop()
+    path.write_text(json.dumps(report))
+    with pytest.raises(ValueError):
+        optimization.compare_prompt_outputs(baseline, candidate)
+
+
+@pytest.mark.parametrize("identity", [None, {}])
+def test_inline_prompt_requires_explicit_probe_identity(
+    tmp_path: Path, identity: dict[str, object] | None
+) -> None:
+    with pytest.raises(ValueError, match="nonempty probe identity"):
+        optimization.evaluate_prompt_brief(
+            _studies(), brief=BASELINE_AUTHORING_BRIEF, output=tmp_path / "unused", client=None,
+            manual_messages=ManualMessageLibrary(tmp_path / "manual"),
+            probe_scorer=_Probe(), probe_mode=ProbeQaMode.INLINE, probe_identity=identity,
+            assistant=Assistant.NEMOTRON_3_5_LIGHTNING,
+            authors=(Author.NEMOTRON_3_5_LIGHTNING,),
+        )
+    assert not (tmp_path / "unused").exists()

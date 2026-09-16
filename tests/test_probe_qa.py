@@ -11,12 +11,15 @@ from reasonese.conversation import GeneratedMessage, GeneratedText, construct_co
 from reasonese.planning import PromptSpec
 from reasonese.probe_qa import (
     ProbeExpectation,
+    ProbeQaDiagnosticIssue,
+    ProbeQaIssueKind,
     ProbeQaRequest,
     ProbeQaVerdict,
     check_probe_qa,
     probe_expectation,
     probe_qa_report,
     probe_qa_requests,
+    resolve_probe_mode,
 )
 from reasonese.study import Study, build_trials, make_study
 
@@ -232,46 +235,61 @@ def test_scorer_results_are_realigned_and_must_be_complete() -> None:
     with pytest.raises(ValueError, match="duplicated or unexpected"):
         check_probe_qa(DuplicateScorer(), requests)
 
+    class DuplicateFingerprintScorer:
+        def preflight(self, assistants: tuple[Assistant, ...]) -> None:
+            pass
 
-def test_report_counts_order_and_axis_failures_and_excludes_whole_comparison() -> None:
+        def check(self, requests: tuple[ProbeQaRequest, ...]) -> tuple[ProbeQaVerdict, ...]:
+            return tuple(replace(_verdict(row), context_fingerprint="same") for row in requests)
+
+    with pytest.raises(ValueError, match="duplicated context fingerprints"):
+        check_probe_qa(DuplicateFingerprintScorer(), requests)
+
+
+def test_probe_mode_is_off_without_bundle_and_respects_explicit_conflicts(tmp_path) -> None:
+    from reasonese.probe_qa import ProbeQaMode
+
+    config = tmp_path / "probe.json"
+    assert resolve_probe_mode(None, None) is ProbeQaMode.OFF
+    assert resolve_probe_mode(None, config) is ProbeQaMode.INLINE
+    assert resolve_probe_mode(ProbeQaMode.OFF, None) is ProbeQaMode.OFF
+    assert resolve_probe_mode(ProbeQaMode.INLINE, config) is ProbeQaMode.INLINE
+    with pytest.raises(ValueError, match="cannot be used with.*off"):
+        resolve_probe_mode(ProbeQaMode.OFF, config)
+    with pytest.raises(ValueError, match="requires --role-probes"):
+        resolve_probe_mode(ProbeQaMode.INLINE, None)
+
+
+def test_report_counts_measurements_without_exclusion_semantics() -> None:
     study, requests = _requests()
     verdicts = tuple(
         _verdict(request, complies=index != 3) for index, request in enumerate(requests)
     )
     report = probe_qa_report((study,), verdicts)
     assert report["counts"] == {
+        "planned_requests": 4,
         "scores": 4,
-        "enforced_scores": 4,
+        "directional_scores": 4,
         "descriptive_scores": 0,
-        "failed_scores": 1,
+        "reference_mismatches": 1,
+        "missing_requests": 0,
+        "error_requests": 0,
+        "coverage": 1.0,
         "masked_boundary_tokens": 0,
-        "planned_comparisons": 1,
-        "excluded_comparisons": 1,
-        "planned_trials": 6,
-        "excluded_trials": 6,
     }
-    assert report["comparisons"][0]["excluded"] is True
-    assert report["comparisons"][0]["failed_requests"] == [
-        {
-            "permutation": 2,
-            "position": 2,
-            "framing": "reasonese-normal",
-            "channel": "user message",
-            "author": "Nemotron 3.5 Lightning",
-            "reasoning_probability": 0.9,
-            "issue": "reasoning probability missed the preregistered gate",
-        }
-    ]
+    assert not report["missing"]
+    assert not report["errors"]
+    assert "comparisons" not in report
     orders = {row["order"]: row for row in report["scores_by_axis"]["order"]}
-    assert orders["1"]["failed_scores"] == 0
-    assert orders["2"]["failed_scores"] == 1
+    assert orders["1"]["reference_mismatches"] == 0
+    assert orders["2"]["reference_mismatches"] == 1
     models = report["scores_by_axis"]["assistant"]
     assert models == [
         {
             "assistant": "Nemotron 3.5 Lightning",
             "scores": 4,
-            "enforced_scores": 4,
-            "failed_scores": 1,
+            "directional_scores": 4,
+            "reference_mismatches": 1,
             "masked_boundary_tokens": 0,
         }
     ]
@@ -280,8 +298,32 @@ def test_report_counts_order_and_axis_failures_and_excludes_whole_comparison() -
 def test_report_rejects_duplicate_requests_even_when_four_rows_are_supplied() -> None:
     study, requests = _requests()
     duplicate = _verdict(requests[0])
-    with pytest.raises(ValueError, match="four distinct requests"):
+    with pytest.raises(ValueError, match="distinct fingerprints"):
         probe_qa_report((study,), (duplicate,) * 4)
+
+
+def test_report_separates_missing_and_error_coordinates_from_scores() -> None:
+    study, requests = _requests()
+    verdict = _verdict(requests[0])
+    issues = (
+        ProbeQaDiagnosticIssue(
+            requests[1].study_id, 1, 2, ProbeQaIssueKind.MISSING, "no saved span"
+        ),
+        ProbeQaDiagnosticIssue(
+            requests[2].study_id, 2, 1, ProbeQaIssueKind.ERROR, "scorer failed"
+        ),
+        ProbeQaDiagnosticIssue(
+            requests[3].study_id, 2, 2, ProbeQaIssueKind.MISSING, "no saved span"
+        ),
+    )
+    report = probe_qa_report((study,), (verdict,), issues)
+    assert report["counts"]["planned_requests"] == 4
+    assert report["counts"]["scores"] == 1
+    assert report["counts"]["missing_requests"] == 2
+    assert report["counts"]["error_requests"] == 1
+    assert report["counts"]["coverage"] == 0.25
+    assert report["missing"][0]["reason"] == "no saved span"
+    assert report["errors"][0]["reason"] == "scorer failed"
 
 
 def test_report_rejects_unknown_studies_reused_fingerprints_and_split_setups() -> None:

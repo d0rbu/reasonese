@@ -1,5 +1,12 @@
 # Nemotron segment-probe adoption
 
+## Current-use note — September 16, 2026
+
+The artifact and native-qualification evidence below remain unchanged. Current collection treats
+its instruction-context scores as optional diagnostics: Luna message QA remains the hard gate,
+probe mode defaults off, and the pilot runs with probe mode off. No coefficient, threshold, or
+prompt was changed by this policy update.
+
 On September 13, 2026, the project adopted the saved standardized Nemotron layer-13 probe
 for instruction QA. This is an explicit post hoc protocol amendment authorized after review
 of the previous probe results. It changes the qualification criterion; it is not a new fit

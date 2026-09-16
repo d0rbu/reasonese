@@ -38,6 +38,8 @@
 | `reasonese/cache.py` | Readable message and trace caches |
 | `reasonese/message_qa.py` | Independent materialized-message compliance judgments |
 | `reasonese/local_probe_qa.py` | Qualified local activation-probe scorer, per-target prefix capture, preflight, and readable cache |
+| `reasonese/probe_qa.py` | Shared inline/replay request validation, diagnostic scoring, and coverage reports |
+| `reasonese/probe_posthoc.py` | `reasonese-score-probes` replay over saved trace setups with separate identity-bound output |
 | `reasonese/role_probes.py` | Grouped activation-role probe training, qualification, scoring, and portable artifacts |
 | `reasonese/role_probe_extraction.py` | Exact native role rendering, prefix-only model loading, activation capture, and dataset artifacts |
 | `reasonese/extract_role_activations.py` | Local BF16 role-activation extraction utility |
@@ -60,6 +62,7 @@
 | `tests/test_authoring_exclusions.py` | Exclusion accounting, whole-comparison filtering, cache replay, CLI, and retained-output parity |
 | `reasonese/collect_data.py` | Resumable study collector and utility |
 | `reasonese/collect_studies.py` | Cross-study batched collection utility |
+| `tests/test_probe_posthoc.py` | Replay parity, saved-context provenance, missing coverage, identity, and read-only source contracts |
 | `reasonese/sample_studies.py` | Sampled study-suite planning utility |
 | `reasonese/analysis.py` | Bradley-Terry, axis, position, and diagnostic analyses |
 | `reasonese/lasso.py` | Sparse feature effects over within-trial comparisons: penalty path, cross-validation, screening |

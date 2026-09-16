@@ -36,10 +36,14 @@ from reasonese.message_qa_cache import YamlMessageQaCache
 from reasonese.openrouter import OpenRouterClient, RequestsTransport
 from reasonese.planning import PromptSpec
 from reasonese.probe_qa import (
+    ProbeQaDiagnosticIssue,
+    ProbeQaIssueKind,
+    ProbeQaMode,
     ProbeQaScorer,
-    check_probe_qa,
     probe_qa_report,
     probe_qa_requests,
+    resolve_probe_mode,
+    score_probe_qa_diagnostics,
 )
 from reasonese.routing import CollectionRouting, add_route_arguments, routing_from_arguments
 from reasonese.runner import materialize_specs
@@ -148,25 +152,9 @@ def _validate_suite(
 @beartype
 def _probe_identity(path: Path) -> dict[str, object]:
     """Record probe configuration and artifact identity without loading checkpoints."""
-    if not path.is_file():
-        raise ValueError(f"role-probe bundle does not exist: {path}")
-    from reasonese.local_probe_qa import CAPTURE_POLICY, load_probe_bundles
+    from reasonese.local_probe_qa import probe_bundle_identity
 
-    bundles = load_probe_bundles(path)
-    return {
-        "capture_policy": CAPTURE_POLICY,
-        "config": {"path": str(path.resolve()), "sha256": _sha256(path)},
-        "bundles": [
-            {
-                "assistant": str(bundle.assistant),
-                "adapter": bundle.adapter.name,
-                "checkpoint": str(bundle.checkpoint),
-                "probe": str(bundle.probe_path),
-                "probe_sha256": _sha256(bundle.probe_path),
-            }
-            for bundle in bundles
-        ],
-    }
+    return probe_bundle_identity(path)
 
 
 @beartype
@@ -228,14 +216,15 @@ def _add_pair_ids(
                 instruction = row.get("instruction")
                 if isinstance(instruction, str):
                     row["pair_id"] = pair_ids[instruction]
-    scores = report.get("scores")
-    if isinstance(scores, list):
-        for raw_row in scores:
-            if isinstance(raw_row, dict):
-                row = cast(dict[str, object], raw_row)
-                instruction = row.get("instruction")
-                if isinstance(instruction, str):
-                    row["pair_id"] = pair_ids[instruction]
+    for section in ("scores", "missing", "errors"):
+        rows = report.get(section)
+        if isinstance(rows, list):
+            for raw_row in rows:
+                if isinstance(raw_row, dict):
+                    row = cast(dict[str, object], raw_row)
+                    instruction = row.get("instruction")
+                    if isinstance(instruction, str):
+                        row["pair_id"] = pair_ids[instruction]
     comparisons = report.get("comparisons")
     if isinstance(comparisons, list):
         for raw_row in comparisons:
@@ -266,7 +255,8 @@ def evaluate_prompt_brief(
     output: Path,
     client: OpenRouterClient | None,
     manual_messages: ManualMessageLibrary,
-    probe_scorer: ProbeQaScorer,
+    probe_scorer: ProbeQaScorer | None = None,
+    probe_mode: ProbeQaMode = ProbeQaMode.OFF,
     assistant: Assistant,
     authors: tuple[Author, ...],
     suite_path: Path | None = None,
@@ -276,7 +266,13 @@ def evaluate_prompt_brief(
     prefer_batch: bool = True,
     routing: CollectionRouting | None = None,
 ) -> dict[str, object]:
-    """Evaluate one immutable brief through authoring, message QA, and probe QA only."""
+    """Evaluate an immutable brief with hard message QA and optional probe diagnostics."""
+    if probe_mode is ProbeQaMode.OFF and (probe_scorer is not None or probe_identity is not None):
+        raise ValueError("off mode cannot receive a probe scorer or probe identity")
+    if probe_mode is ProbeQaMode.INLINE and probe_scorer is None:
+        raise ValueError("inline mode requires a probe scorer")
+    if probe_mode is ProbeQaMode.INLINE and not probe_identity:
+        raise ValueError("inline mode requires an explicit nonempty probe identity")
     if output.exists():
         if not output.is_dir():
             raise ValueError(f"prompt optimization output is not a directory: {output}")
@@ -289,6 +285,8 @@ def evaluate_prompt_brief(
     _validate_study_pair_ids(studies, bound_pair_ids)
     if probe_identity is None:
         probe_identity = {"provided": False}
+    if probe_mode is ProbeQaMode.OFF:
+        counts["probe_qa_requests"] = 0
     manifest: dict[str, object] = {
         "format_version": _FORMAT_VERSION,
         "status": "running",
@@ -308,6 +306,8 @@ def evaluate_prompt_brief(
         },
         "instruction_pairs": pair_identity,
         "probe": probe_identity,
+        "probe_mode": str(probe_mode),
+        "eligibility_policy": "message_qa_only",
         "message_qa": {
             "rubric_sha256": message_qa_rubric_fingerprint(),
             "request_policy_fingerprints": [
@@ -328,7 +328,7 @@ def evaluate_prompt_brief(
         "stages": {
             "authoring": True,
             "message_qa": True,
-            "probe_qa": True,
+            "probe_qa": probe_mode is ProbeQaMode.INLINE,
             "assistant_execution": False,
             "response_judging": False,
             "tool_calls": False,
@@ -368,9 +368,6 @@ def evaluate_prompt_brief(
     try:
         # Luna QA is fixed and chargeable; this guard runs before any uncached author call.
         routing.require_paid("uncached prompt optimization authoring and fixed Luna message QA")
-        # Validate/load the local probe before spending on authoring or Luna QA.
-        stage = "probe_preflight"
-        probe_scorer.preflight((assistant,))
         stage = "authoring"
         generated = materialize_specs(
             specs,
@@ -393,55 +390,56 @@ def evaluate_prompt_brief(
         author_report = _add_pair_ids(author_report, bound_pair_ids)
         _write_json(output / "authoring_report.json", author_report)
         by_spec = {verdict.spec: verdict for verdict in qa_result.verdicts}
-        # Probe scores remain measured for every successfully materialized study,
-        # including text that message QA rejected.  The two gates have separate
-        # denominators; a rejected author input is reported as combined ineligible.
+        # Diagnostic coverage is separate from message-QA eligibility, including
+        # rejected but materialized inputs. No probe decision selects a comparison.
         active_studies = studies
         excluded_studies = tuple(
             study_fingerprint(study)
             for study in studies
             if not all(by_spec[spec].complies for spec in study.inputs)
         )
-        setups: list[tuple[ConversationSetup, ConversationSetup]] = []
-        for study in active_studies:
+        stage = "probe_diagnostics"
+        if probe_mode is ProbeQaMode.INLINE:
+            assert probe_scorer is not None
             by_message = {message.spec: message for message in generated}
-            ordered = tuple(
-                construct_conversation(
-                    trial.matchup,
-                    tuple(by_message[spec] for spec in trial.matchup.inputs),
+            setups: list[tuple[ConversationSetup, ConversationSetup]] = []
+            for study in active_studies:
+                ordered = tuple(
+                    construct_conversation(
+                        trial.matchup,
+                        tuple(by_message[spec] for spec in trial.matchup.inputs),
+                    )
+                    for trial in build_trials(study)
+                    if int(trial.rollout) == 1
                 )
-                for trial in build_trials(study)
-                if int(trial.rollout) == 1
+                if len(ordered) != 2:
+                    raise ValueError("prompt optimization requires exactly two ordered setups")
+                setups.append((ordered[0], ordered[1]))
+            requests = tuple(
+                request
+                for study, setup in zip(active_studies, setups, strict=True)
+                for request in probe_qa_requests(study, setup)
             )
-            if len(ordered) != 2:
-                raise ValueError("prompt optimization requires exactly two ordered setups")
-            setups.append((ordered[0], ordered[1]))
-        requests = tuple(
-            request
-            for study, setup in zip(active_studies, setups, strict=True)
-            for request in probe_qa_requests(study, setup)
-        )
-        stage = "probe_qa"
-        probe_verdicts = check_probe_qa(probe_scorer, requests)
+            probe_verdicts, probe_issues = score_probe_qa_diagnostics(probe_scorer, requests)
+        else:
+            probe_verdicts = ()
+            probe_issues = tuple(
+                ProbeQaDiagnosticIssue(
+                    study_fingerprint(study), permutation, position,
+                    ProbeQaIssueKind.MISSING, "probe scoring disabled",
+                )
+                for study in active_studies
+                for permutation in (1, 2)
+                for position in (1, 2)
+            )
         probe_report = _add_pair_ids(
-            probe_qa_report(active_studies, probe_verdicts), bound_pair_ids
+            probe_qa_report(active_studies, probe_verdicts, probe_issues), bound_pair_ids
         )
+        probe_report["mode"] = str(probe_mode)
+        probe_report["eligibility_policy"] = "message_qa_only"
         probe_report["planned_studies"] = len(studies)
-        probe_report["probe_active_studies"] = len(active_studies)
         probe_report["message_qa_excluded_studies"] = list(excluded_studies)
-        raw_comparisons = probe_report.get("comparisons")
-        if not isinstance(raw_comparisons, list):
-            raise ValueError("probe report lacks comparison rows")
-        probe_failed = {
-            cast(dict[str, object], row)["study_id"]
-            for row in raw_comparisons
-            if isinstance(row, dict) and cast(dict[str, object], row).get("excluded") is True
-        }
-        probe_report["combined_eligible_studies"] = sum(
-            all(by_spec[spec].complies for spec in study.inputs)
-            and study_fingerprint(study) not in probe_failed
-            for study in studies
-        )
+        probe_report["message_qa_eligible_studies"] = len(studies) - len(excluded_studies)
         _write_json(output / "probe_qa_report.json", probe_report)
         summary = {
             "candidate": brief.name,
@@ -453,6 +451,9 @@ def evaluate_prompt_brief(
                 "failed": sum(not verdict.complies for verdict in qa_result.verdicts),
             },
             "probe_qa": probe_report["counts"],
+            "probe_mode": str(probe_mode),
+            "eligibility_policy": "message_qa_only",
+            "message_qa_eligible_studies": len(studies) - len(excluded_studies),
             "message_qa_excluded_studies": list(excluded_studies),
             "assistant_execution": {"trials": 0, "performed": False},
         }
@@ -526,6 +527,55 @@ def _judge_rows(
             raise ValueError(f"{output / filename} contains duplicate judge coordinates")
         result[key] = row.get("complies")
     return result
+
+
+@beartype
+def _probe_issue_coordinates(
+    output: Path,
+    scored: set[tuple[str, str]],
+    expected: set[tuple[str, str]],
+    *,
+    diagnostic: bool,
+) -> tuple[set[tuple[str, str]], set[tuple[str, str]]]:
+    """Require each probe coordinate to be scored, explicitly missing, or an error."""
+    report = _read_json(output / "probe_qa_report.json")
+    missing: set[tuple[str, str]] = set()
+    errors: set[tuple[str, str]] = set()
+    covered = set(scored)
+    if diagnostic:
+        if report.get("eligibility_policy") != "message_qa_only":
+            raise ValueError("probe report eligibility policy differs from its manifest")
+        for name, destination in (("missing", missing), ("errors", errors)):
+            rows = report.get(name)
+            if not isinstance(rows, list):
+                raise ValueError(f"diagnostic probe report lacks {name} coordinates")
+            for row in rows:
+                if not isinstance(row, dict):
+                    raise ValueError("diagnostic probe issue rows must be objects")
+                data = cast(dict[str, object], row)
+                if not isinstance(data.get("reason"), str) or not data["reason"]:
+                    raise ValueError("diagnostic probe issue must explain the missing score")
+                key = _coordinate_key(data, output / "probe_qa_report.json")
+                if key in covered:
+                    raise ValueError("probe report duplicates a scored or unavailable coordinate")
+                destination.add(key)
+                covered.add(key)
+    if covered != expected:
+        raise ValueError("probe-QA report coordinates do not match the planned spans")
+    return missing, errors
+
+
+def _probe_totals(
+    rows: dict[tuple[str, str], object],
+    pair_id: str,
+    expected: set[tuple[str, str]],
+    errors: set[tuple[str, str]],
+) -> dict[str, int]:
+    totals = _judge_totals(rows, pair_id, expected, allow_descriptive=True)
+    error_count = sum(key[0] == pair_id for key in errors)
+    totals["missing"] -= error_count
+    totals["errors"] = error_count
+    return totals
 
 
 @beartype
@@ -694,7 +744,7 @@ def _format_comparison_markdown(
 
     lines = [
         "| Instruction pair | Judge | "
-        f"{baseline_name} passed/eligible (rate) | {candidate_name} passed/eligible (rate) |",
+        f"{baseline_name} passed/assessed (rate) | {candidate_name} passed/assessed (rate) |",
         "|---|---|---:|---:|",
     ]
     for row in rows:
@@ -711,6 +761,11 @@ def _format_comparison_markdown(
             f"| Overall | {judge} | "
             f"{format_cell(baseline)} | {format_cell(candidate)} |"
         )
+    lines.extend([
+        "",
+        "Probe pass counts mean reference-threshold matches, not collection eligibility. "
+        "Missing and error measurements are reported separately and never count as passes.",
+    ])
     return "\n".join(lines) + "\n"
 
 
@@ -723,7 +778,18 @@ def compare_prompt_outputs(
     candidate = _read_json(candidate_output / "manifest.json")
     if baseline.get("status") != "completed" or candidate.get("status") != "completed":
         raise ValueError("prompt comparison requires completed baseline and candidate manifests")
-    for field in ("suite", "assistant", "routing", "probe", "instruction_pairs"):
+    baseline_policy = baseline.get("eligibility_policy", "legacy_message_and_probe")
+    candidate_policy = candidate.get("eligibility_policy", "legacy_message_and_probe")
+    if not isinstance(baseline_policy, str) or baseline_policy not in {"message_qa_only", "legacy_message_and_probe"}:
+        raise ValueError("baseline eligibility policy is invalid")
+    if candidate_policy != baseline_policy:
+        raise ValueError("baseline and candidate eligibility policies differ")
+    diagnostic = baseline_policy == "message_qa_only"
+    if diagnostic:
+        for manifest in (baseline, candidate):
+            if not isinstance(manifest.get("probe_mode"), str) or manifest["probe_mode"] not in {"off", "inline"}:
+                raise ValueError("diagnostic prompt manifest lacks a valid probe mode")
+    for field in ("suite", "assistant", "routing", "probe", "probe_mode", "instruction_pairs"):
         if baseline.get(field) != candidate.get(field):
             raise ValueError(f"baseline and candidate {field} identities differ")
     baseline_qa = baseline.get("message_qa")
@@ -761,8 +827,12 @@ def compare_prompt_outputs(
         raise ValueError("message-QA report coordinates do not match the planned inputs")
     if expected_probe_baseline != expected_probe_candidate:
         raise ValueError("baseline and candidate probe-QA coordinates differ")
-    if set(probe_baseline) != expected_probe_baseline or set(probe_candidate) != expected_probe_candidate:
-        raise ValueError("probe-QA report coordinates do not match the planned spans")
+    _, probe_errors_baseline = _probe_issue_coordinates(
+        baseline_output, set(probe_baseline), expected_probe_baseline, diagnostic=diagnostic
+    )
+    _, probe_errors_candidate = _probe_issue_coordinates(
+        candidate_output, set(probe_candidate), expected_probe_candidate, diagnostic=diagnostic
+    )
     all_pairs = sorted(
         {
             pair_id
@@ -781,18 +851,12 @@ def compare_prompt_outputs(
                 if judge.startswith("message-QA")
                 else expected_probe_baseline
             )
-            before_values = _judge_totals(
-                before,
-                pair_id,
-                expected,
-                allow_descriptive=judge.startswith("Nemotron"),
-            )
-            after_values = _judge_totals(
-                after,
-                pair_id,
-                expected,
-                allow_descriptive=judge.startswith("Nemotron"),
-            )
+            if judge.startswith("Nemotron"):
+                before_values = _probe_totals(before, pair_id, expected, probe_errors_baseline)
+                after_values = _probe_totals(after, pair_id, expected, probe_errors_candidate)
+            else:
+                before_values = _judge_totals(before, pair_id, expected, allow_descriptive=False)
+                after_values = _judge_totals(after, pair_id, expected, allow_descriptive=False)
             result_row: dict[str, object] = {
                 "pair_id": pair_id,
                 "judge": judge,
@@ -823,11 +887,9 @@ def compare_prompt_outputs(
                 all_expected(expected_qa_baseline),
                 allow_descriptive=False,
             ),
-            "probe": _judge_totals(
-                all_rows(probe_baseline),
-                "__all__",
-                all_expected(expected_probe_baseline),
-                allow_descriptive=True,
+            "probe": _probe_totals(
+                all_rows(probe_baseline), "__all__", all_expected(expected_probe_baseline),
+                all_expected(probe_errors_baseline),
             ),
         },
         "candidate": {
@@ -837,11 +899,9 @@ def compare_prompt_outputs(
                 all_expected(expected_qa_baseline),
                 allow_descriptive=False,
             ),
-            "probe": _judge_totals(
-                all_rows(probe_candidate),
-                "__all__",
-                all_expected(expected_probe_baseline),
-                allow_descriptive=True,
+            "probe": _probe_totals(
+                all_rows(probe_candidate), "__all__", all_expected(expected_probe_baseline),
+                all_expected(probe_errors_candidate),
             ),
         },
     }
@@ -849,6 +909,14 @@ def compare_prompt_outputs(
         "baseline": {"name": baseline_name, "output": str(baseline_output)},
         "candidate": {"name": candidate_name, "output": str(candidate_output)},
         "message_qa_rubric_sha256": baseline_qa.get("rubric_sha256"),
+        "eligibility_policy": baseline_policy,
+        "historical_joint_eligibility": (
+            {
+                "baseline": _read_json(baseline_output / "probe_qa_report.json").get("combined_eligible_studies"),
+                "candidate": _read_json(candidate_output / "probe_qa_report.json").get("combined_eligible_studies"),
+            }
+            if not diagnostic else None
+        ),
         "rows": result_rows,
         "overall": overall,
         "descriptive_probe": {
@@ -882,7 +950,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="repeat to select model-authored inputs; default: model authors present in the suite",
     )
     parser.add_argument("--user-messages", type=Path, default=Path("prompts/user"))
-    parser.add_argument("--role-probes", type=Path, required=True)
+    parser.add_argument(
+        "--probe-mode", choices=tuple(ProbeQaMode), type=ProbeQaMode,
+        help="off by default; a bundle without an explicit mode selects inline diagnostics",
+    )
+    parser.add_argument("--role-probes", type=Path)
     parser.add_argument("--probe-execution-device", default="cuda:0")
     parser.add_argument(
         "--no-batch",
@@ -904,14 +976,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         authors = tuple(args.author) if args.author else suite_authors
         brief = AUTHORING_BRIEFS[args.brief]
-        probe_identity = _probe_identity(args.role_probes)
-        from reasonese.local_probe_qa import LocalProbeQaScorer
+        probe_mode = resolve_probe_mode(args.probe_mode, args.role_probes)
+        probe_identity = None
+        scorer = None
+        if probe_mode is ProbeQaMode.INLINE:
+            assert args.role_probes is not None
+            probe_identity = _probe_identity(args.role_probes)
+            from reasonese.local_probe_qa import LocalProbeQaScorer
 
-        scorer = LocalProbeQaScorer(
-            args.role_probes,
-            args.output / "probe_qa_cache.json",
-            execution_device=args.probe_execution_device,
-        )
+            scorer = LocalProbeQaScorer(
+                args.role_probes,
+                args.output / "probe_qa_cache.json",
+                execution_device=args.probe_execution_device,
+            )
         routing = routing_from_arguments(args)
         routing.announce(authors, (args.assistant,), prefer_batch=not args.no_batch)
         api_key = os.environ.get("OPENROUTER_API_KEY")
@@ -923,6 +1000,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             client=client,
             manual_messages=ManualMessageLibrary(args.user_messages),
             probe_scorer=scorer,
+            probe_mode=probe_mode,
             assistant=args.assistant,
             authors=authors,
             suite_path=args.suite,

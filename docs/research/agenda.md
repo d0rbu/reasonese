@@ -10,6 +10,11 @@ possible position and supports repeated rollouts. Analysis provides penalized wi
 cell rankings, framing, channel, and author margins, a cross-validated feature lasso over the
 same comparisons, per-pair exclusivity counts, and explicit position and robustness diagnostics.
 
+Luna's independent message QA remains the hard authoring gate. Local probe scores are optional
+diagnostic measurements, off for the pilot, and never determine comparison eligibility. They can
+be collected inline or replayed from exact saved trace setups without provider calls. No probe fit,
+threshold, or prompt is changed by this diagnostic mode.
+
 This foundation specifies:
 
 - which values currently belong to each axis;

@@ -1,12 +1,33 @@
 # Bounded authoring-brief comparison
 
-`reasonese-optimize-prompt` evaluates one authoring brief through model authoring, GPT-5.6 Luna message QA, and the selected local role probe. It stops before assistant execution, tool use, response judging, and observation writing. The repository defines the unchanged `baseline` plus three measured candidates: `reasonese-natural-v1`, `semantic-preservation-v2`, and `constraint-scope-v3`.
+## Current policy — September 16, 2026
 
-The comparison uses two hard gates. Luna checks semantic preservation per unique authored input. The Nemotron role probe checks each rendered span in both orders; compressed framings are descriptive and excluded from the enforced denominator. A comparison is jointly eligible only when its inputs pass Luna and all enforced probe spans pass. Neither gate was relaxed, and the probe was not refit or recalibrated.
+The policy below records a completed comparison under the earlier joint-eligibility rule. Its
+scores and counts remain historical measurements and are not relabeled. Under the current
+protocol, Luna high-reasoning message QA remains a hard gate and the role probe is an optional
+diagnostic, off by default and off for the pilot. Probe scores, missing measurements, and scorer
+errors do not affect prompt comparison eligibility. New `reasonese-optimize-prompt` runs default
+to probe-off; inline probe measurements require `--probe-mode inline` and do not gate results.
+The comparison command does not mix artifacts with different eligibility policies. No probe
+fit, threshold, or prompt changed with this policy update.
+
+`reasonese-optimize-prompt` evaluates one authoring brief through model authoring and GPT-5.6 Luna
+message QA, then optionally records local role-probe diagnostics. Probe scoring is off by default.
+The command stops before assistant execution, tool use, response judging, and observation writing.
+The repository defines the unchanged `baseline` plus three measured candidates:
+`reasonese-natural-v1`, `semantic-preservation-v2`, and `constraint-scope-v3`.
+
+The historical comparison used two hard gates. Luna checked semantic preservation per unique
+authored input. The Nemotron role probe checked each rendered span in both orders; compressed
+framings were descriptive and excluded from the enforced denominator. A comparison was jointly
+eligible only when its inputs passed Luna and all enforced probe spans passed. These historical
+counts remain unchanged; the September 16 protocol above makes probe measurements diagnostic
+only. Neither the probe nor its thresholds were refit or recalibrated.
 
 ## Selected brief
 
-The recorded rule retains baseline unless a candidate improves joint Luna/probe eligibility on the development pairs without losing Luna compliance. V3 meets that rule:
+The rule recorded at the time retained baseline unless a candidate improved joint Luna/probe
+eligibility on the development pairs without losing Luna compliance. V3 met that historical rule:
 
 | Brief | Luna semantic compliance | Enforced probe compliance | Joint eligibility |
 |---|---:|---:|---:|
@@ -15,9 +36,12 @@ The recorded rule retains baseline unless a candidate improves joint Luna/probe 
 | semantic-preservation-v2 | 21/27 | 44/84 | 1/24 |
 | **constraint-scope-v3** | **22/27** | **47/84** | **3/24** |
 
-V3 is therefore selected for the reserved confirmation and subsequent pilot protocol. This is a small dependent DEV comparison with one stochastic author sample per input; it does not reliably isolate a prompt effect or establish general superiority. V3's six reasonese comparisons remain jointly eligible in 0/6 cases. Both hard gates continue to apply during collection.
+V3 was therefore selected for the reserved confirmation and subsequent pilot protocol. This is a
+small dependent DEV comparison with one stochastic author sample per input; it does not reliably
+isolate a prompt effect or establish general superiority. V3's six reasonese comparisons were
+jointly eligible in 0/6 cases under that earlier rule.
 
-No pilot has launched at this snapshot, and Gemma probe qualification remains pending.
+At that artifact snapshot, no pilot had launched and Gemma probe qualification remained pending.
 
 The selected brief asks the author to preserve every obligation and its scope, keep examples optional, change voice without adding methods or deliverables, preserve supplied text, quantities, language, and output format, and return only the destination instruction. The baseline remains the application default; selection is explicit at the collection boundary.
 
@@ -29,6 +53,7 @@ Each invocation requires a fresh output directory and one registered candidate. 
 reasonese-optimize-prompt \
   --pairs configs/instruction_pairs.yaml \
   --suite out/prompt-optimization/suite.yaml \
+  --probe-mode inline \
   --role-probes out/role-probes/nemotron-bundle.json \
   --brief constraint-scope-v3 \
   --output out/prompt-optimization/constraint-scope-v3 \
@@ -44,11 +69,22 @@ reasonese-compare-prompts \
 
 The selected assistant defaults to Nemotron. Model authors are inferred from the suite unless repeated `--author` options select them explicitly. The command prefers batch transport for authoring and message QA; `--no-batch` selects synchronous transport for both stages. Free Nemotron authoring remains synchronous either way, while the flag controls whether chargeable Luna QA uses batch transport. `--allow-paid` is required before uncached Luna work. Failures remain recorded and a failed candidate directory is not silently resumed.
 
-Luna and probe results retain independent denominators: Luna is counted once per unique authored input, while the probe is counted per rendered span across orders and positions. A Luna-rejected input can still receive probe scores so the reports preserve diagnostic evidence; joint eligibility is computed separately. The optimization command never runs the assistant being studied.
+Luna and probe results retain independent denominators: Luna is counted once per unique authored
+input, while the probe is counted per rendered span across orders and positions. A Luna-rejected
+input can still receive probe scores to preserve diagnostic evidence. Current comparison
+eligibility depends on Luna message QA only; probe mismatches, missing scores, and errors do not
+exclude comparisons. The optimization command never runs the assistant being studied.
 
 ## Probe capture integrity
 
-Each scored segment receives one prefix forward ending at its final scored token. For the pinned Nemotron CUDA runtime, `segment_prefix_capture_v2_nemotron_cumsum_h1` scopes the registered Triton cumsum configuration to `BLOCK_SIZE_H=1` and restores autotuner state afterward. Preflight validates the registered configuration before provider work. H1 was chosen because it exactly reproduces the historical saved activations, not because it improved QA results. The frozen layer-13 lambda-100 NPZ, CAL-selected threshold `0.16399151054665906`, and qualification provenance are unchanged. The capture-policy identifier invalidates earlier autotuned cache records and comparison identities.
+Each scored segment receives one prefix forward ending at its final scored token. For the pinned
+Nemotron CUDA runtime, `segment_prefix_capture_v2_nemotron_cumsum_h1` scopes the registered Triton
+cumsum configuration to `BLOCK_SIZE_H=1` and restores autotuner state afterward. When inline
+diagnostics are enabled, preflight validates the registered configuration before the local forward.
+H1 was chosen because it exactly reproduces the historical saved activations, not because it
+improved QA results. The frozen layer-13 lambda-100 NPZ, CAL-selected threshold
+`0.16399151054665906`, and qualification provenance are unchanged. The capture-policy identifier
+invalidates earlier autotuned cache records and comparison identities.
 
 Two fresh H1 processes agreed exactly on all 15 controls and all 60 stored NPZ fields. Nine DEV controls also matched their historical saved scores exactly. The six native CAL controls differed from their historical scores by at most 0.0029773168680727324, with no threshold-decision flips. The fixed-parameter 298-forward integrity screen then passed the existing native gates: CAL was 12/12 reasoning and 12/12 final descriptively; previously exposed native TEST was 11/12 reasoning, 12/12 final, AUC 1.0, and paired-bootstrap 95% interval [1.0, 1.0]. Neutral TEST remained diagnostic at 50/50 reasoning and 30/50 final specificity, with AUC 0.9728.
 
@@ -58,7 +94,10 @@ The diagnosis traced the earlier cross-process discrepancy to Triton's autotuned
 
 Development uses three pairs: CPython search versus memory, prime output-format conflict, and Bash versus Python tool choice. Each pair contributes all eight framings, with a fixed normal opposite-side anchor and both orders. The reserved Everest language-conflict pair is disjoint confirmation evidence and cannot retune the selection.
 
-The [measurement report](prompt-optimization-results.md) contains per-pair, per-judge, framing-group, joint, and compressed results with artifact provenance. Historical full-context and earlier autotuned segment-prefix artifacts remain available as diagnostic provenance; the H1 report is the current selection evidence.
+The [measurement report](prompt-optimization-results.md) contains per-pair, per-judge,
+framing-group, historical joint, and compressed results with artifact provenance. Historical
+full-context and earlier autotuned segment-prefix artifacts remain available as diagnostic
+provenance; the H1 report records the selection evidence from the earlier joint rule.
 
 ## Reserved confirmation
 

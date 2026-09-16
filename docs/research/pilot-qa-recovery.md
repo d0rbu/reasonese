@@ -1,9 +1,26 @@
 # Pilot QA recovery — September 15, 2026
 
-This amendment follows the stopped Nemotron-only pilot and the user's authorization to make
+## Superseding collection protocol — September 16, 2026
+
+The user has since specified that probe values are measurements, not collection or comparison
+gates. Luna's high-reasoning message QA remains the hard authoring gate; probe mode defaults off,
+and the pilot runs with probe mode off. Inline or posthoc probe scoring is optional and
+diagnostic: low scores, missing coverage, and scoring errors never exclude a comparison. The
+historical exclusions, thresholds, and joint-eligibility counts below describe the protocol in
+force at the time of those analyses. Their numerical results remain unchanged, but they do not
+set current eligibility. No probe fit, threshold, or prompt was changed for this protocol update.
+
+`reasonese-score-probes` can replay-score exact setups in saved traces into a separate output
+directory without provider, authoring, or response-judging calls. It reads collection SQLite
+databases read-only and reports available saved contexts; join study and trial IDs to current
+authoring reports and observations because old cached traces can exist for comparisons rejected
+by the current Luna audit. See the README for CLI examples.
+
+The September 15 amendment followed the stopped Nemotron-only pilot and the user's authorization to make
 local tool-budget exhaustion trial-local, use Luna message QA at high reasoning, reconsider
 both framing acceptance cutoffs, and measure one authoring revision. Both QA gates remain hard
-gates; compressed probe scores remain descriptive. Gemma qualification stays pending. The
+gates under that earlier protocol; compressed probe scores remain descriptive. Gemma
+qualification stays pending. The
 probe coefficients, layer, checkpoint, and H1 capture implementation are not refitted.
 
 ## Failure and judgment contract
@@ -213,12 +230,13 @@ must not be used to choose another cutoff and then claim held-out validation.
 
 The existing `2 * false exclusion + wrong-style acceptance` loss already favors recall within
 each directional gate; it does not prioritize the reasoning gate over the nonreasoning gate.
-Both hard gates remain required and the pilot remains paused under the current protocol.
+The earlier protocol required both hard gates and kept the pilot paused; the September 16 update
+above supersedes its collection-gating rule.
 
 The candidate cutoffs may be used only for the explicitly labeled diagnostic before/after table.
-They are not a deployment policy; both hard gates remain required, and no pilot has restarted.
-Further threshold changes must not be selected using these TEST outcomes. The frozen native
-probe qualification remains distinct from instruction-context validity.
+They were not a deployment policy. Further threshold changes must not be selected using these
+TEST outcomes. The frozen native probe qualification remains distinct from instruction-context
+validity.
 
 Ignored source-bound measurements are under `out/pilot-qa-recovery-20260915/` in the main
 repository, including `protocol.md`, `control-labels.json`, `semantic-controls.json`,

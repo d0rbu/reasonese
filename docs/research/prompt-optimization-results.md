@@ -1,8 +1,19 @@
 # Prompt optimization measurements
 
+## Interpretation update — September 16, 2026
+
+The results below preserve measurements from the earlier joint-eligibility analysis. Their
+historical scores and counts are unchanged; probe mismatches in those tables do not exclude
+comparisons under the current protocol. Luna high-reasoning message QA remains the hard gate.
+Current prompt-optimization runs default probe scoring off, and optional inline scores, missing
+measurements, or scorer errors are diagnostic only. No probe fit, threshold, or prompt was changed.
+
 ## Final development result
 
-The current result uses `segment_prefix_capture_v2_nemotron_cumsum_h1`. It reuses the exact saved authored messages and GPT-5.6 Luna judgments and recomputes only the 384 local probe spans across four briefs. No provider, assistant, task-tool, response-judge, fitting, recalibration, or threshold-selection calls were made by the re-score.
+The original re-score used `segment_prefix_capture_v2_nemotron_cumsum_h1`. It reused the exact
+saved authored messages and GPT-5.6 Luna judgments and recomputed only the 384 local probe spans
+across four briefs. No provider, assistant, task-tool, response-judge, fitting, recalibration, or
+threshold-selection calls were made by that re-score.
 
 Three development pairs contribute 24 comparisons, 27 unique authored inputs, 84 enforced probe spans, and 12 compressed descriptive spans per brief. There are no missing records.
 
@@ -17,7 +28,8 @@ Three development pairs contribute 24 comparisons, 27 unique authored inputs, 84
 | **Overall** | **Luna message QA** | **16/27 (59.3%)** | **15/27 (55.6%)** | **21/27 (77.8%)** | **22/27 (81.5%)** |
 | **Overall** | **Nemotron role probe** | **50/84 (59.5%)** | **42/84 (50.0%)** | **44/84 (52.4%)** | **47/84 (56.0%)** |
 
-Joint eligibility requires Luna compliance and every enforced probe span in the comparison to pass.
+Historical joint eligibility required Luna compliance and every enforced probe span in the
+comparison to pass. It is preserved as an earlier analysis measure, not current eligibility.
 
 | Instruction pair | baseline | v1 | v2 | V3 |
 |---|---:|---:|---:|---:|
@@ -26,9 +38,18 @@ Joint eligibility requires Luna compliance and every enforced probe span in the 
 | word-counts-bash-vs-python | 0/8 | 0/8 | 0/8 | 0/8 |
 | **Overall** | **2/24** | **1/24** | **1/24** | **3/24** |
 
-The predeclared rule selects V3 because joint eligibility improves from 2/24 to 3/24 while Luna compliance improves from 16/27 to 22/27. The selection is recorded in `out/prompt-optimization-20260914/selection.json` (SHA-256 `b9c7cea2dbf6430a43f35f56eb549e3acad10ee33a6e49ad76bb5d546e92d27c`). Both Luna and the probe remain hard gates. The small dependent development comparison does not reliably isolate a prompt effect or establish broad superiority.
+The predeclared historical rule selected V3 because joint eligibility improved from 2/24 to 3/24
+while Luna compliance improved from 16/27 to 22/27. The selection is recorded in
+`out/prompt-optimization-20260914/selection.json` (SHA-256
+`b9c7cea2dbf6430a43f35f56eb549e3acad10ee33a6e49ad76bb5d546e92d27c`). Under the current
+protocol, only Luna message QA gates collection and comparison eligibility; probe scores are
+diagnostics. The small dependent development comparison does not reliably isolate a prompt effect
+or establish broad superiority.
 
-Luna and probe scores retain independent denominators: a Luna-rejected input can still receive probe scores, and joint eligibility is reported separately. The optimization runs stop before assistant execution, tool use, response judging, and observation writing. No pilot has launched at this snapshot, and Gemma probe qualification remains pending.
+Luna and probe scores retain independent denominators: a Luna-rejected input can still receive
+probe scores. The optimization runs stop before assistant execution, tool use, response judging,
+and observation writing. At this artifact snapshot, no pilot had launched and Gemma probe
+qualification remained pending.
 
 ## Reasonese and non-reasonese splits
 
