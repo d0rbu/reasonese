@@ -254,6 +254,43 @@ def load_probe_bundles(path: Path) -> tuple[ProbeBundle, ...]:
     return tuple(bundles)
 
 
+def probe_bundle_identity(path: Path) -> dict[str, object]:
+    """Describe the configured scoring artifacts without loading model frameworks."""
+    if not path.is_file():
+        raise ValueError(f"role-probe bundle does not exist: {path}")
+    bundles = load_probe_bundles(path)
+    return {
+        "capture_policy": CAPTURE_POLICY,
+        "config": {"path": str(path.resolve()), "sha256": _file_sha256(path)},
+        "bundles": [
+            {
+                "assistant": str(bundle.assistant),
+                "adapter": bundle.adapter.name,
+                "checkpoint": str(bundle.checkpoint),
+                "checkpoint_manifest": (
+                    {
+                        "path": str((bundle.checkpoint / "prefix-checkpoint-manifest.json").resolve()),
+                        "sha256": _file_sha256(
+                            bundle.checkpoint / "prefix-checkpoint-manifest.json"
+                        ),
+                        "identity": _json_object(
+                            bundle.checkpoint / "prefix-checkpoint-manifest.json"
+                        ),
+                    }
+                    if (bundle.checkpoint / "prefix-checkpoint-manifest.json").is_file()
+                    else None
+                ),
+                "probe": str(bundle.probe_path),
+                "probe_sha256": (
+                    _file_sha256(bundle.probe_path) if bundle.probe_path.is_file() else None
+                ),
+                "framing_thresholds": bundle.threshold_identity(),
+            }
+            for bundle in bundles
+        ],
+    }
+
+
 @dataclass(frozen=True, slots=True)
 class _PreparedBundle:
     bundle: ProbeBundle

@@ -75,6 +75,39 @@ class SqliteStudyCache:
             for (trial, _), trace in zip(selected, traces, strict=True)
         }
 
+    def load_traces_readonly(
+        self, trials: tuple[Trial, ...]
+    ) -> dict[TrialId, ConversationTrace]:
+        """Read saved traces from one SQLite snapshot without creating or changing files."""
+        if not self.path.is_file():
+            return {}
+        uri = f"{self.path.resolve().as_uri()}?mode=ro"
+        connection = sqlite3.connect(uri, uri=True)
+        try:
+            connection.execute("BEGIN")
+            try:
+                rows = connection.execute("SELECT trial_id, payload FROM traces").fetchall()
+            except sqlite3.OperationalError as error:
+                if "no such table: traces" in str(error):
+                    return {}
+                raise
+        finally:
+            connection.close()
+        payloads = dict(rows)
+        selected = tuple(
+            (trial, _decode(payloads[str(trial.trial_id)], record="trace"))
+            for trial in trials
+            if str(trial.trial_id) in payloads
+        )
+        traces = traces_from_dicts(
+            tuple(raw for _, raw in selected),
+            tuple(trial.matchup for trial, _ in selected),
+        )
+        return {
+            trial.trial_id: trace
+            for (trial, _), trace in zip(selected, traces, strict=True)
+        }
+
     @beartype
     def put_traces(self, traces: tuple[tuple[TrialId, ConversationTrace], ...]) -> None:
         """Insert or replace traces in one transaction."""

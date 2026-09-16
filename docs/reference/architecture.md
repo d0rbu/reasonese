@@ -47,6 +47,9 @@ matchup -> authored messages -> independent message QA -> conversation -> assist
 - `reasonese.message_qa` audits exact materialized text against its datapoint instructions.
 - `reasonese.message_qa_cache` preserves parsed QA results and raw judge responses in YAML.
 - `reasonese.check_messages` provides the reusable fail-closed gate and standalone utility.
+- `reasonese.probe_qa` builds exact-context diagnostic requests and reports. The local scorer is
+  loaded only for inline or replay scoring; `reasonese.probe_posthoc` reads saved SQLite traces
+  without changing the source database and writes an identity-bound report elsewhere.
 - `reasonese.runner` coordinates cache lookup, generation, construction, and completion-driven
   assistant execution. A tool continuation is submitted as soon as its preceding response
   arrives, independently of slower peers. The shared scheduler prioritizes ready continuations
@@ -82,6 +85,11 @@ changes invalidate the verdict. The cache also fingerprints the full QA request 
 changes to the rubric, reasoning effort, framing guidance, or schema invalidate older verdicts.
 Legacy records without that fingerprint are cache misses. This is an LLM quality-control judgment, not a proof of semantic
 equivalence.
+
+Luna message QA is the collection gate; probes are optional diagnostics. Inline scoring uses exact
+saved or scheduled setups, while replay uses only saved trace setups and records absent or mixed
+orders as unmeasured. See the [README](../../README.md#current-foundation) for the operational
+policy and [role-probe reference](role-probes.md) for scorer provenance and limits.
 
 The judging flow is:
 

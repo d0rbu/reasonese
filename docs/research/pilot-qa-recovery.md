@@ -1,9 +1,19 @@
 # Pilot QA recovery — September 15, 2026
 
-This amendment follows the stopped Nemotron-only pilot and the user's authorization to make
+## Superseding collection protocol — September 16, 2026
+
+The current protocol makes probes optional diagnostics and keeps Luna high-reasoning message QA
+as the hard authoring gate; the pilot uses probe-off mode. The counts and thresholds below remain
+historical measurements under the earlier protocol and do not set current eligibility. See the
+[README](../../README.md#current-foundation) for collection and replay commands, and join replay
+study/trial IDs to current authoring reports and observations before interpreting saved contexts.
+This update changed no probe fit, threshold, or prompt.
+
+The September 15 amendment followed the stopped Nemotron-only pilot and the user's authorization to make
 local tool-budget exhaustion trial-local, use Luna message QA at high reasoning, reconsider
 both framing acceptance cutoffs, and measure one authoring revision. Both QA gates remain hard
-gates; compressed probe scores remain descriptive. Gemma qualification stays pending. The
+gates under that earlier protocol; compressed probe scores remain descriptive. Gemma
+qualification stays pending. The
 probe coefficients, layer, checkpoint, and H1 capture implementation are not refitted.
 
 ## Failure and judgment contract
@@ -213,12 +223,13 @@ must not be used to choose another cutoff and then claim held-out validation.
 
 The existing `2 * false exclusion + wrong-style acceptance` loss already favors recall within
 each directional gate; it does not prioritize the reasoning gate over the nonreasoning gate.
-Both hard gates remain required and the pilot remains paused under the current protocol.
+The earlier protocol required both hard gates and kept the pilot paused; the September 16 update
+above supersedes its collection-gating rule.
 
 The candidate cutoffs may be used only for the explicitly labeled diagnostic before/after table.
-They are not a deployment policy; both hard gates remain required, and no pilot has restarted.
-Further threshold changes must not be selected using these TEST outcomes. The frozen native
-probe qualification remains distinct from instruction-context validity.
+They were not a deployment policy. Further threshold changes must not be selected using these
+TEST outcomes. The frozen native probe qualification remains distinct from instruction-context
+validity.
 
 Ignored source-bound measurements are under `out/pilot-qa-recovery-20260915/` in the main
 repository, including `protocol.md`, `control-labels.json`, `semantic-controls.json`,

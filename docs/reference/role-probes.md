@@ -8,9 +8,14 @@ each content token. The implementation follows the controlled construction in
 
 ## Scientific status
 
+Probe qualification is an instrument-validity assessment, not a collection eligibility rule. The
+current collection protocol keeps Luna message QA as the hard authoring gate and uses qualified
+probe scores only as optional diagnostics, off by default and off for the pilot. Low scores,
+missing measurements, and scoring errors do not exclude comparisons.
+
 The training and artifact code is an instrument, not evidence that any particular model has a
-usable role direction. A probe is eligible for instruction QA only after it passes the validity
-checks required by its explicitly recorded qualification policy. The legacy policy requires both
+usable role direction. A probe is qualified for use as a role measurement only after it passes the
+validity checks required by its explicitly recorded qualification policy. The legacy policy requires both
 validity checks from Appendix G:
 
 1. held-out accuracy on neutral text rendered under native role wrappers; and
@@ -423,10 +428,13 @@ All three workflow stages refuse an existing output path before loading activati
 classifier, or loading a model. A changed protocol or signal therefore requires a new artifact
 name and cannot silently replace earlier evidence.
 
-## Collection gate
+## Optional collection diagnostics
 
-Collection accepts an explicit JSON bundle file through `--role-probes`. Paths are relative to the
-bundle file, and every requested assistant must have exactly one matching entry:
+Collection accepts an optional JSON bundle through `--role-probes`. Paths are relative to the
+bundle file, and each scored assistant must have exactly one matching entry. With no probe flags,
+probe scoring is off and no local scorer or model is constructed. Supplying a bundle without a
+mode selects inline diagnostics for backward compatibility; `--probe-mode inline` makes that
+choice explicit. `--probe-mode off` cannot be combined with a bundle:
 
 ```json
 {
@@ -441,17 +449,17 @@ bundle file, and every requested assistant must have exactly one matching entry:
 }
 ```
 
-Before authoring or any other provider call, the collector loads the probe, requires all neutral
-and untouched-native gates to pass, validates the assistant/model/template/site/layer/dtype and the
-complete prefix-checkpoint file identity, and fails if any assistant lacks a bundle. Scoring renders
-both instruction spans in each of the two exact ordered contexts with thinking enabled and the three
-local function declarations. The OpenRouter web-search tool is injected server-side and has no
-reproducible local prompt representation; every report records this limitation.
+In inline mode, the collector validates the bundle configuration normally. Probe preflight or
+scoring failures are recorded as diagnostic errors and do not change Luna exclusions, assistant
+trials, judgments, or observations. Scoring renders both instruction spans in each exact ordered
+context with thinking enabled and the three local function declarations. The OpenRouter web-search
+tool is injected server-side and has no reproducible local prompt representation; every report
+records this limitation.
 
 Each target span uses one forward ending at that span's final scored token. For the pinned Nemotron
 CUDA runtime, the scorer temporarily selects the registered Triton cumsum configuration with
 `BLOCK_SIZE_H=1` and restores the autotuner state after the capture scope. It validates this kernel
-configuration during preflight, before provider calls. H1 was selected to reproduce the historical
+configuration during preflight. H1 was selected to reproduce the historical
 saved activations, not to improve QA outcomes. This execution-tile choice does not modify or rebind
 the original qualified NPZ, its fitted weights, its threshold, or its recorded runtime provenance.
 
@@ -466,8 +474,18 @@ does not store instruction text or hidden reasoning.
 uv run reasonese-collect-studies \
   --suite out/pilot/studies.yaml \
   --output out/pilot \
+  --probe-mode inline \
   --role-probes out/role-probe-research/probe-bundles.json
 ```
+
+Saved collection traces can be replay-scored with `reasonese-score-probes`. Replay reads existing
+SQLite trace databases read-only, uses only exact materialized setups saved on `ConversationTrace`,
+and writes a separate identity-bound report. It makes no provider, authoring, or response-judging
+calls, though uncached local model forwards can use a GPU. A missing order stays missing; multiple
+saved contexts for one order are reported as an error rather than reconstructed from current
+authoring caches. The output manifest records study-file hashes, trace and trial provenance, the
+probe identity, and capture policy. Resuming the same identity reuses the scorer's readable cache;
+a changed source or probe needs a fresh output directory.
 
 ### Instruction-framing acceptance cutoffs
 

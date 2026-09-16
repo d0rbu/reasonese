@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import sys
+from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -43,11 +44,16 @@ from reasonese.observations import Observation, observations_from_trials, write_
 from reasonese.openrouter import OpenRouterClient, RequestsTransport, select_route
 from reasonese.planning import PromptSpec
 from reasonese.probe_qa import (
+    ProbeQaDiagnosticIssue,
+    ProbeQaMode,
+    ProbeQaRequest,
     ProbeQaScorer,
     ProbeQaVerdict,
-    check_probe_qa,
+    add_probe_arguments,
+    probe_qa_contexts,
     probe_qa_report,
-    probe_qa_requests,
+    resolve_probe_mode,
+    score_probe_qa_diagnostics,
 )
 from reasonese.routing import CollectionRouting, add_route_arguments, routing_from_arguments
 from reasonese.runner import (
@@ -83,6 +89,7 @@ class _CollectionState:
     judgment_hits: int
     excluded_inputs: tuple[MessageQaVerdict, ...] = ()
     probe_qa_verdicts: tuple[ProbeQaVerdict, ...] = ()
+    probe_qa_issues: tuple[ProbeQaDiagnosticIssue, ...] = ()
 
 
 @beartype
@@ -97,6 +104,7 @@ class CollectionResult:
     excluded_inputs: tuple[MessageQaVerdict, ...] = ()
     probe_qa_verdicts: tuple[ProbeQaVerdict, ...] = ()
     failed_trials: Natural = Natural.parse(0)
+    probe_qa_issues: tuple[ProbeQaDiagnosticIssue, ...] = ()
 
 
 def _prepare_task(
@@ -148,6 +156,84 @@ def _messages_from_cached_trace(state: _CollectionState) -> tuple[GeneratedMessa
     )
 
 
+def _run_inline_probe_diagnostics(
+    states: tuple[_CollectionState, ...],
+    trials_by_state: tuple[tuple[Trial, ...], ...],
+    planned_setups_by_state: tuple[tuple[ConversationSetup, ConversationSetup] | None, ...],
+    scorer: ProbeQaScorer,
+    report_path: Path,
+) -> None:
+    """Score exact saved or currently scheduled setups without affecting collection."""
+    requests: list[ProbeQaRequest] = []
+    issues_by_study: dict[str, list[ProbeQaDiagnosticIssue]] = defaultdict(list)
+    for state, trials, planned_setups in zip(
+        states, trials_by_state, planned_setups_by_state, strict=True
+    ):
+        planned_by_matchup = {setup.matchup: setup for setup in planned_setups or ()}
+        contexts = tuple(
+            (int(trial.permutation), state.traces[str(trial.trial_id)].trace.setup)
+            for trial in trials if str(trial.trial_id) in state.traces
+        ) + tuple(
+            (int(trial.permutation), planned_by_matchup[trial.matchup])
+            for trial in state.missing_trials if trial.matchup in planned_by_matchup
+        )
+        study_requests, issues = probe_qa_contexts(
+            state.task.study, contexts,
+            missing_reason=(
+                "no saved delivered context is available after message-QA exclusion"
+                if state.excluded_inputs else "no saved or scheduled delivered context is available"
+            ),
+        )
+        requests.extend(study_requests)
+        issues_by_study[study_fingerprint(state.task.study)].extend(issues)
+
+    verdicts, scoring_issues = score_probe_qa_diagnostics(scorer, tuple(requests))
+    verdicts_by_study: dict[str, list[ProbeQaVerdict]] = defaultdict(list)
+    for verdict in verdicts:
+        verdicts_by_study[verdict.request.study_id].append(verdict)
+    for issue in scoring_issues:
+        issues_by_study[issue.study_id].append(issue)
+    for state in states:
+        study_id = study_fingerprint(state.task.study)
+        state.probe_qa_verdicts = tuple(verdicts_by_study[study_id])
+        state.probe_qa_issues = tuple(issues_by_study[study_id])
+    report = probe_qa_report(
+        tuple(state.task.study for state in states),
+        tuple(row for state in states for row in state.probe_qa_verdicts),
+        tuple(row for state in states for row in state.probe_qa_issues),
+    )
+    limitations = getattr(scorer, "limitations", ())
+    if limitations:
+        report["limitations"] = list(limitations)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+
+    logger = logging.getLogger(__name__)
+    for state in states:
+        for verdict in state.probe_qa_verdicts:
+            if verdict.complies is False:
+                logger.warning(
+                    "Activation probe reference mismatch (diagnostic only): assistant=%s "
+                    "framing=%s channel=%s author=%s permutation=%d position=%d "
+                    "reasoning_probability=%f issue=%s",
+                    verdict.request.setup.matchup.assistant,
+                    verdict.request.spec.framing,
+                    verdict.request.spec.channel,
+                    verdict.request.spec.author,
+                    verdict.request.permutation,
+                    verdict.request.position,
+                    verdict.reasoning_probability,
+                    verdict.issue,
+                )
+    print(
+        f"Activation probe diagnostics: {json.dumps(report['counts'], sort_keys=True)}; "
+        f"report={report_path}",
+        file=sys.stderr,
+    )
+
+
 @beartype
 def collect_studies(
     tasks: tuple[CollectionTask, ...],
@@ -157,6 +243,7 @@ def collect_studies(
     qa_cache: YamlMessageQaCache,
     *,
     prefer_batch: bool,
+    probe_mode: ProbeQaMode = ProbeQaMode.OFF,
     probe_scorer: ProbeQaScorer | None = None,
     routing: CollectionRouting | None = None,
     shared_cache: SqliteStudyCache | None = None,
@@ -164,6 +251,10 @@ def collect_studies(
 ) -> tuple[CollectionResult, ...]:
     """Collect studies together, batching independent provider work across task boundaries."""
     routing = routing or CollectionRouting()
+    if probe_mode is ProbeQaMode.OFF and probe_scorer is not None:
+        raise ValueError("probe_scorer requires probe_mode='inline'")
+    if probe_mode is ProbeQaMode.INLINE and probe_scorer is None:
+        raise ValueError("probe_mode='inline' requires a probe_scorer")
     if not tasks:
         raise ValueError("at least one collection task is required")
     output_dirs = tuple(task.output_dir for task in tasks)
@@ -172,9 +263,6 @@ def collect_studies(
     studies = tuple(task.study for task in tasks)
     if len(set(studies)) != len(studies):
         raise ValueError("collection task studies must be distinct")
-    if probe_scorer is not None:
-        probe_scorer.preflight(tuple(dict.fromkeys(study.assistant for study in studies)))
-
     trials_by_task = tuple(build_trials(task.study) for task in tasks)
     all_trials = tuple(trial for trials in trials_by_task for trial in trials)
     trial_ids = tuple(trial.trial_id for trial in all_trials)
@@ -292,7 +380,7 @@ def collect_studies(
     for state, generated, original_trials in zip(
         states, generated_by_state, trials_by_task, strict=True
     ):
-        if state.excluded_inputs or (probe_scorer is None and not state.missing_trials):
+        if state.excluded_inputs or not state.missing_trials:
             setups_by_state.append(None)
             continue
         by_spec = {message.spec: message for message in generated}
@@ -308,73 +396,14 @@ def collect_studies(
         )
         setups_by_state.append((ordered_setups[0], ordered_setups[1]))
 
-    if probe_scorer is not None:
-        for state, setups in zip(states, setups_by_state, strict=True):
-            if setups is None:
-                continue
-            expected_by_matchup = {setup.matchup: setup for setup in setups}
-            for trial in tuple(state.trials):
-                key = str(trial.trial_id)
-                cached = state.traces.get(key)
-                if cached is None or cached.trace.setup == expected_by_matchup[trial.matchup]:
-                    continue
-                del state.traces[key]
-                state.missing_trials.append(trial)
-                state.trace_hits -= 1
-        active = tuple(
-            (state, setup)
-            for state, setup in zip(states, setups_by_state, strict=True)
-            if setup is not None
-        )
-        requests = tuple(
-            request
-            for state, setup in active
-            for request in probe_qa_requests(state.task.study, setup)
-        )
-        verdicts = check_probe_qa(probe_scorer, requests)
-        verdicts_by_study: dict[str, list[ProbeQaVerdict]] = {}
-        for verdict in verdicts:
-            verdicts_by_study.setdefault(verdict.request.study_id, []).append(verdict)
-        active_studies = tuple(state.task.study for state, _ in active)
-        probe_report = probe_qa_report(active_studies, verdicts)
-        limitations = getattr(probe_scorer, "limitations", ())
-        if limitations:
-            probe_report["limitations"] = list(limitations)
-        probe_report_path = message_cache.path.parent / "probe_qa_report.json"
-        probe_report_path.write_text(
-            json.dumps(probe_report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-        )
-        probe_rejected = False
-        for state, _ in active:
-            study_id = study_fingerprint(state.task.study)
-            state.probe_qa_verdicts = tuple(verdicts_by_study[study_id])
-            failures = tuple(row for row in state.probe_qa_verdicts if row.complies is False)
-            for verdict in failures:
-                logging.getLogger(__name__).warning(
-                    "Activation probe QA failed: assistant=%s framing=%s channel=%s "
-                    "author=%s permutation=%d position=%d reasoning_probability=%f issue=%s",
-                    verdict.request.setup.matchup.assistant,
-                    verdict.request.spec.framing,
-                    verdict.request.spec.channel,
-                    verdict.request.spec.author,
-                    verdict.request.permutation,
-                    verdict.request.position,
-                    verdict.reasoning_probability,
-                    verdict.issue,
-                )
-            if failures:
-                probe_rejected = True
-                write_observations(state.task.output_dir / "observations.jsonl", ())
-                state.trials = ()
-                state.missing_trials = []
-                state.trace_hits = 0
-                state.judgment_hits = 0
-        if probe_rejected:
-            (message_cache.path.parent / "observations.jsonl").unlink(missing_ok=True)
-        print(
-            f"Activation probe QA: {json.dumps(probe_report['counts'], sort_keys=True)}; "
-            f"report={probe_report_path}",
-            file=sys.stderr,
+    if probe_mode is ProbeQaMode.INLINE:
+        assert probe_scorer is not None
+        _run_inline_probe_diagnostics(
+            states,
+            trials_by_task,
+            tuple(setups_by_state),
+            probe_scorer,
+            message_cache.path.parent / "probe_qa_report.json",
         )
 
     assistant_work: dict[
@@ -539,6 +568,7 @@ def collect_studies(
                 state.excluded_inputs,
                 state.probe_qa_verdicts,
                 Natural.parse(len(failures)),
+                state.probe_qa_issues,
             )
         )
     return tuple(results)
@@ -552,6 +582,7 @@ def collect_study(
     manual_messages: ManualMessageLibrary,
     *,
     prefer_batch: bool,
+    probe_mode: ProbeQaMode = ProbeQaMode.OFF,
     probe_scorer: ProbeQaScorer | None = None,
     routing: CollectionRouting | None = None,
 ) -> CollectionResult:
@@ -563,6 +594,7 @@ def collect_study(
         YamlMessageCache(output_dir / "generated_messages.yaml"),
         YamlMessageQaCache(output_dir / "message_qa.yaml"),
         prefer_batch=prefer_batch,
+        probe_mode=probe_mode,
         probe_scorer=probe_scorer,
         routing=routing,
     )[0]
@@ -576,14 +608,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--user-messages", type=Path, default=Path("prompts/user"))
     parser.add_argument("--no-batch", action="store_true")
-    parser.add_argument("--role-probes", type=Path)
-    parser.add_argument("--probe-execution-device", default="cuda:0")
+    add_probe_arguments(parser)
     add_route_arguments(parser)
     args = parser.parse_args(argv)
 
     try:
+        probe_mode = resolve_probe_mode(args.probe_mode, args.role_probes)
         probe_scorer = None
-        if args.role_probes is not None:
+        if probe_mode is ProbeQaMode.INLINE:
+            assert args.role_probes is not None
             try:
                 from reasonese.local_probe_qa import LocalProbeQaScorer
             except ImportError as error:
@@ -608,6 +641,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             client,
             ManualMessageLibrary(args.user_messages),
             prefer_batch=not args.no_batch,
+            probe_mode=probe_mode,
             probe_scorer=probe_scorer,
             routing=routing,
         )
@@ -620,21 +654,17 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "routes": routing.summary(),
                 "cells": len(study.inputs),
                 "excluded_comparisons": int(
-                    bool(
-                        result.excluded_inputs
-                        or any(row.complies is False for row in result.probe_qa_verdicts)
-                    )
+                    bool(result.excluded_inputs)
                 ),
                 "excluded_trials": (
                     len(build_trials(study))
-                    if result.excluded_inputs
-                    or any(row.complies is False for row in result.probe_qa_verdicts)
-                    else 0
+                    if result.excluded_inputs else 0
                 ),
+                "probe_mode": str(probe_mode),
                 "authoring_report": str(args.output / "authoring_report.json"),
                 "probe_qa_report": (
                     str(args.output / "probe_qa_report.json")
-                    if args.role_probes is not None
+                    if probe_mode is ProbeQaMode.INLINE
                     else None
                 ),
                 "judgment_cache_hits": int(result.judgment_cache_hits),

@@ -1,9 +1,9 @@
-"""Activation-probe QA runs before assistant collection and excludes whole edges."""
+"""Optional probe diagnostics leave collection eligibility and outcomes unchanged."""
 
 from __future__ import annotations
 
+import builtins
 import json
-import sqlite3
 import subprocess
 import sys
 import textwrap
@@ -12,14 +12,11 @@ from pathlib import Path
 import pytest
 
 from reasonese.axes import Assistant
-from reasonese.cache import YamlMessageCache
 from reasonese.collect_data import CollectionTask, collect_studies
-from reasonese.conversation import GeneratedMessage, GeneratedText
-from reasonese.message_qa import parse_message_qa
-from reasonese.message_qa_cache import YamlMessageQaCache
 from reasonese.openrouter import OpenRouterClient
 from reasonese.probe_qa import (
     ProbeExpectation,
+    ProbeQaMode,
     ProbeQaRequest,
     ProbeQaVerdict,
     probe_expectation,
@@ -31,7 +28,6 @@ from tests.test_authoring_exclusions import _seed, _studies
 from tests.test_study_orchestration import (
     FakeTransport,
     _assistant_responses,
-    _chat,
     _judge_batch,
     _manual_library,
 )
@@ -67,6 +63,43 @@ def test_base_collection_imports_and_help_do_not_require_probe_dependencies() ->
         text=True,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_explicit_off_cli_never_imports_the_local_scorer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from phantom.interval import Natural
+
+    import reasonese.collect_data as collect_data_module
+
+    study = _studies()[0]
+    monkeypatch.setattr(collect_data_module, "load_study", lambda path: study)
+    monkeypatch.setattr(
+        collect_data_module,
+        "collect_study",
+        lambda *args, **kwargs: collect_data_module.CollectionResult(
+            (), (), Natural.parse(0), Natural.parse(0)
+        ),
+    )
+    original_import = builtins.__import__
+
+    def forbid_local_probe(name, *args, **kwargs):
+        if name == "reasonese.local_probe_qa":
+            raise AssertionError("off mode imported the local scorer")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", forbid_local_probe)
+    assert collect_data_module.main(
+        [
+            "--study",
+            str(tmp_path / "unused-study.yaml"),
+            "--output",
+            str(tmp_path / "out"),
+            "--probe-mode",
+            "off",
+        ]
+    ) == 0
+    assert json.loads(capsys.readouterr().out)["probe_mode"] == "off"
 
 
 def _verdict(request: ProbeQaRequest, *, complies: bool) -> ProbeQaVerdict:
@@ -106,13 +139,15 @@ class RecordingScorer:
         )
 
 
-def test_failed_second_order_probe_excludes_every_rollout_before_provider_call(
+def test_low_probe_score_keeps_trials_observations_and_order_balance(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     study = _studies()[0]
     messages, qa, _ = _seed(tmp_path, (study,), set())
-    transport = FakeTransport([])
+    transport = FakeTransport(
+        [*_assistant_responses(4), _judge_batch((True, False, False, True) * 2)]
+    )
     scorer = RecordingScorer(failed_index=3)
     task = CollectionTask(study, tmp_path / "study")
 
@@ -123,7 +158,9 @@ def test_failed_second_order_probe_excludes_every_rollout_before_provider_call(
         messages,
         qa,
         prefer_batch=False,
+        probe_mode=ProbeQaMode.INLINE,
         probe_scorer=scorer,
+        routing=CollectionRouting(allow_paid=True),
     )[0]
 
     assert len(scorer.requests) == 4
@@ -138,33 +175,37 @@ def test_failed_second_order_probe_excludes_every_rollout_before_provider_call(
         reversed(scorer.requests[2].setup.matchup.inputs)
     )
     assert len(result.probe_qa_verdicts) == 4
-    assert result.trials == result.observations == ()
+    assert len(result.trials) == len(build_trials(study))
+    assert len(result.observations) == 2 * len(build_trials(study))
     assert result.excluded_inputs == ()
-    assert transport.post_calls == []
-    assert (task.output_dir / "observations.jsonl").read_text() == ""
-    assert "permutation=2 position=2" in caplog.text
+    assert result.probe_qa_issues == ()
+    assert len(transport.post_calls) == 5
+    assert "reference mismatch (diagnostic only)" in caplog.text
 
     report = json.loads((tmp_path / "probe_qa_report.json").read_text())
     assert report["counts"] == {
+        "planned_requests": 4,
         "scores": 4,
-        "enforced_scores": 4,
+        "directional_scores": 4,
         "descriptive_scores": 0,
-        "failed_scores": 1,
+        "reference_mismatches": 1,
+        "missing_requests": 0,
+        "error_requests": 0,
+        "coverage": 1.0,
         "masked_boundary_tokens": 0,
-        "planned_comparisons": 1,
-        "excluded_comparisons": 1,
-        "planned_trials": len(build_trials(study)),
-        "excluded_trials": len(build_trials(study)),
     }
     order = {row["order"]: row for row in report["scores_by_axis"]["order"]}
-    assert order["1"]["failed_scores"] == 0
-    assert order["2"]["failed_scores"] == 1
+    assert order["1"]["reference_mismatches"] == 0
+    assert order["2"]["reference_mismatches"] == 1
+    assert not report["missing"] and not report["errors"]
 
 
-def test_probe_scorer_error_propagates_before_provider_call(tmp_path: Path) -> None:
+def test_probe_scorer_error_is_reported_but_does_not_stop_collection(tmp_path: Path) -> None:
     study = _studies()[0]
     messages, qa, _ = _seed(tmp_path, (study,), set())
-    transport = FakeTransport([])
+    transport = FakeTransport(
+        [*_assistant_responses(4), _judge_batch((True, False, False, True) * 2)]
+    )
 
     class BrokenScorer:
         def preflight(self, assistants: tuple[Assistant, ...]) -> None:
@@ -173,23 +214,33 @@ def test_probe_scorer_error_propagates_before_provider_call(tmp_path: Path) -> N
         def check(self, requests: tuple[ProbeQaRequest, ...]) -> tuple[ProbeQaVerdict, ...]:
             raise ValueError("probe artifact is not qualified")
 
-    with pytest.raises(ValueError, match="not qualified"):
-        collect_studies(
-            (CollectionTask(study, tmp_path / "study"),),
-            OpenRouterClient(transport),
-            _manual_library(tmp_path, study),
-            messages,
-            qa,
-            prefer_batch=False,
-            probe_scorer=BrokenScorer(),
-        )
-    assert transport.post_calls == []
-    assert not (tmp_path / "probe_qa_report.json").exists()
+    result = collect_studies(
+        (CollectionTask(study, tmp_path / "study"),),
+        OpenRouterClient(transport),
+        _manual_library(tmp_path, study),
+        messages,
+        qa,
+        prefer_batch=False,
+        probe_mode=ProbeQaMode.INLINE,
+        probe_scorer=BrokenScorer(),
+        routing=CollectionRouting(allow_paid=True),
+    )[0]
+    assert len(result.trials) == len(build_trials(study))
+    assert len(result.observations) == 2 * len(build_trials(study))
+    assert len(transport.post_calls) == 5
+    report = json.loads((tmp_path / "probe_qa_report.json").read_text())
+    assert report["counts"]["scores"] == 0
+    assert report["counts"]["error_requests"] == 4
+    assert report["counts"]["missing_requests"] == 0
+    assert all(row["reason"].startswith("probe scoring failed") for row in report["errors"])
 
 
-def test_probe_preflight_fails_before_uncached_authoring_or_qa(tmp_path: Path) -> None:
+def test_probe_preflight_error_is_diagnostic_and_collection_continues(tmp_path: Path) -> None:
     study = _studies()[0]
-    transport = FakeTransport([])
+    messages, qa, _ = _seed(tmp_path, (study,), set())
+    transport = FakeTransport(
+        [*_assistant_responses(4), _judge_batch((True, False, False, True) * 2)]
+    )
 
     class BrokenPreflight:
         def preflight(self, assistants: tuple[Assistant, ...]) -> None:
@@ -198,21 +249,26 @@ def test_probe_preflight_fails_before_uncached_authoring_or_qa(tmp_path: Path) -
         def check(self, requests: tuple[ProbeQaRequest, ...]) -> tuple[ProbeQaVerdict, ...]:
             raise AssertionError("check must not run after failed preflight")
 
-    with pytest.raises(ValueError, match="missing qualified"):
-        collect_studies(
-            (CollectionTask(study, tmp_path / "study"),),
-            OpenRouterClient(transport),
-            _manual_library(tmp_path, study),
-            YamlMessageCache(tmp_path / "messages.yaml"),
-            YamlMessageQaCache(tmp_path / "qa.yaml"),
-            prefer_batch=False,
-            probe_scorer=BrokenPreflight(),
-        )
-    assert transport.post_calls == []
-    assert not (tmp_path / "authoring_report.json").exists()
+    result = collect_studies(
+        (CollectionTask(study, tmp_path / "study"),),
+        OpenRouterClient(transport),
+        _manual_library(tmp_path, study),
+        messages,
+        qa,
+        prefer_batch=False,
+        probe_mode=ProbeQaMode.INLINE,
+        probe_scorer=BrokenPreflight(),
+        routing=CollectionRouting(allow_paid=True),
+    )[0]
+    assert len(result.trials) == len(build_trials(study))
+    assert len(result.observations) == 2 * len(build_trials(study))
+    assert len(transport.post_calls) == 5
+    report = json.loads((tmp_path / "probe_qa_report.json").read_text())
+    assert report["counts"]["error_requests"] == 4
+    assert all(row["reason"].startswith("probe preflight failed") for row in report["errors"])
 
 
-def test_probe_mode_recollects_every_cached_trace_with_stale_authored_text(
+def test_warm_probe_mode_preserves_cached_trace_context_and_outcomes(
     tmp_path: Path,
 ) -> None:
     study = _studies()[0]
@@ -222,50 +278,42 @@ def test_probe_mode_recollects_every_cached_trace_with_stale_authored_text(
     initial = FakeTransport(
         [*_assistant_responses(4), _judge_batch((True, False, False, True) * 2)]
     )
-    collect_studies(
+    baseline = collect_studies(
         (task,),
         OpenRouterClient(initial),
         manual,
         messages,
         qa,
         prefer_batch=False,
-        probe_scorer=RecordingScorer(failed_index=None),
         routing=CollectionRouting(allow_paid=True),
     )
 
-    changed_spec = study.inputs[0]
-    changed = GeneratedMessage(
-        changed_spec,
-        GeneratedText.parse("A newly audited rendering of the same requested task."),
-        _chat("author", "changed-author-response"),
-    )
-    messages.put_many((changed,))
-    qa.put_many((parse_message_qa(changed, _chat('{"complies":true,"issues":[]}', "qa")),))
     trials = build_trials(study)
-    with sqlite3.connect(task.output_dir / "collection.sqlite3") as connection:
-        connection.execute("DELETE FROM traces WHERE trial_id = ?", (str(trials[0].trial_id),))
-
-    resumed_transport = FakeTransport(
-        [*_assistant_responses(4), _judge_batch((True, False, False, True) * 2)]
-    )
+    before = SqliteStudyCache(task.output_dir / "collection.sqlite3").load_traces(trials)
+    transport = FakeTransport([])
     scorer = RecordingScorer(failed_index=None)
     result = collect_studies(
         (task,),
-        OpenRouterClient(resumed_transport),
+        OpenRouterClient(transport),
         manual,
         messages,
         qa,
         prefer_batch=False,
+        probe_mode=ProbeQaMode.INLINE,
         probe_scorer=scorer,
         routing=CollectionRouting(allow_paid=True),
     )[0]
 
-    assert result.trace_cache_hits == 0
-    assert len(result.trials) == 4
-    assert any(request.setup.content_for_input(0) == changed.content for request in scorer.requests)
+    assert result.trace_cache_hits == len(trials)
+    assert len(result.trials) == len(trials)
+    assert result.observations == baseline[0].observations
+    assert transport.post_calls == []
+    assert len(scorer.requests) == 4
     expected_by_matchup = {request.setup.matchup: request.setup for request in scorer.requests}
     cached = SqliteStudyCache(task.output_dir / "collection.sqlite3").load_traces(result.trials)
     assert all(
         cached[trial.trial_id].setup == expected_by_matchup[trial.matchup]
         for trial in result.trials
     )
+    after = SqliteStudyCache(task.output_dir / "collection.sqlite3").load_traces(trials)
+    assert before == after

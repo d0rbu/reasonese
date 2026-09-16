@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import argparse
+import logging
 import math
 from collections import defaultdict
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 from beartype import beartype
@@ -13,23 +16,62 @@ from beartype import beartype
 from reasonese.axes import Assistant, Framing
 from reasonese.conversation import ConversationSetup
 from reasonese.matchup import prompt_spec_to_dict
-from reasonese.observations import cell_id
 from reasonese.openrouter import JsonObject
 from reasonese.planning import PromptSpec
-from reasonese.study import Cell, Study, build_trials, study_fingerprint
+from reasonese.study import Study, build_trials, study_fingerprint
 
 
 class ProbeExpectation(StrEnum):
-    """Whether a framing has an enforced latent-role direction."""
+    """Whether a framing has a directional reference for descriptive scoring."""
 
     REASONING = "reasoning"
     NONREASONING = "nonreasoning"
     DESCRIPTIVE = "descriptive"
 
 
+class ProbeQaMode(StrEnum):
+    """Collection-time probe behavior; probe results are always diagnostic."""
+
+    OFF = "off"
+    INLINE = "inline"
+
+
+@beartype
+def add_probe_arguments(parser: argparse.ArgumentParser) -> None:
+    """Keep collection and prompt-evaluation probe options identical."""
+    parser.add_argument(
+        "--probe-mode", choices=tuple(ProbeQaMode), type=ProbeQaMode,
+        help="off by default; a bundle without an explicit mode selects inline diagnostics",
+    )
+    parser.add_argument("--role-probes", type=Path)
+    parser.add_argument("--probe-execution-device", default="cuda:0")
+
+
+@beartype
+def resolve_probe_mode(
+    requested: ProbeQaMode | None,
+    role_probes: Path | None,
+) -> ProbeQaMode:
+    """Resolve the CLI mode while preserving an explicitly supplied bundle's intent."""
+    if requested is None:
+        return ProbeQaMode.INLINE if role_probes is not None else ProbeQaMode.OFF
+    if requested is ProbeQaMode.OFF and role_probes is not None:
+        raise ValueError("--role-probes cannot be used with --probe-mode off")
+    if requested is ProbeQaMode.INLINE and role_probes is None:
+        raise ValueError("--probe-mode inline requires --role-probes")
+    return requested
+
+
+class ProbeQaIssueKind(StrEnum):
+    """Why one planned probe coordinate has no score."""
+
+    MISSING = "missing"
+    ERROR = "error"
+
+
 @beartype
 def probe_expectation(spec: PromptSpec) -> ProbeExpectation:
-    """Map framing semantics to the preregistered probe policy."""
+    """Map framing semantics to the frozen descriptive reference direction."""
     if spec.framing in {Framing.REASONESE_NORMAL, Framing.REASONESE_PERSUASIVE}:
         return ProbeExpectation.REASONING
     if spec.framing in {Framing.COMPRESSED_NORMAL, Framing.COMPRESSED_PERSUASIVE}:
@@ -68,7 +110,7 @@ class ProbeQaRequest:
 @beartype
 @dataclass(frozen=True, slots=True)
 class ProbeQaVerdict:
-    """Measured role probabilities and an optional enforced decision."""
+    """Measured role probabilities and an optional directional reference comparison."""
 
     request: ProbeQaRequest
     context_fingerprint: str
@@ -109,6 +151,26 @@ class ProbeQaVerdict:
             raise ValueError("failed probe verdict must contain an issue")
 
 
+@beartype
+@dataclass(frozen=True, slots=True)
+class ProbeQaDiagnosticIssue:
+    """One missing or failed diagnostic score, without an eligibility decision."""
+
+    study_id: str
+    permutation: int
+    position: int
+    kind: ProbeQaIssueKind
+    reason: str
+
+    def __post_init__(self) -> None:
+        if not self.study_id:
+            raise ValueError("probe diagnostic issue study_id must not be empty")
+        if self.permutation not in {1, 2} or self.position not in {1, 2}:
+            raise ValueError("probe diagnostic issue permutation and position must be 1 or 2")
+        if not self.reason:
+            raise ValueError("probe diagnostic issue reason must not be empty")
+
+
 @runtime_checkable
 class ProbeQaScorer(Protocol):
     """Assistant-specific scorer that owns local extraction and its cache."""
@@ -127,12 +189,61 @@ def probe_qa_requests(
     expected = tuple(trial.matchup for trial in build_trials(study) if int(trial.rollout) == 1)
     if tuple(setup.matchup for setup in setups_by_permutation) != expected:
         raise ValueError("probe setups do not match the study's ordered permutations")
+    return probe_qa_requests_for_setups(study, tuple(enumerate(setups_by_permutation, start=1)))
+
+
+@beartype
+def probe_qa_requests_for_setups(
+    study: Study,
+    setups_by_permutation: tuple[tuple[int, ConversationSetup], ...],
+) -> tuple[ProbeQaRequest, ...]:
+    """Build target requests for only the exact ordered setups that are available."""
+    expected = tuple(trial.matchup for trial in build_trials(study) if int(trial.rollout) == 1)
+    if len(expected) != 2:
+        raise ValueError("probe scoring requires exactly two ordered study permutations")
+    if len({permutation for permutation, _ in setups_by_permutation}) != len(setups_by_permutation):
+        raise ValueError("probe setup permutations must be unique")
+    if any(permutation not in {1, 2} for permutation, _ in setups_by_permutation):
+        raise ValueError("probe setup permutation must be 1 or 2")
+    for permutation, setup in setups_by_permutation:
+        if setup.matchup != expected[permutation - 1]:
+            raise ValueError("probe setup does not match its study permutation")
     study_id = study_fingerprint(study)
     return tuple(
         ProbeQaRequest(study_id, permutation, position, setup)
-        for permutation, setup in enumerate(setups_by_permutation, start=1)
+        for permutation, setup in setups_by_permutation
         for position in (1, 2)
     )
+
+
+@beartype
+def probe_qa_contexts(
+    study: Study,
+    contexts: tuple[tuple[int, ConversationSetup], ...],
+    *,
+    missing_reason: str,
+) -> tuple[tuple[ProbeQaRequest, ...], tuple[ProbeQaDiagnosticIssue, ...]]:
+    """Classify each order's exact contexts once for inline and saved-trace scoring."""
+    if any(permutation not in {1, 2} for permutation, _ in contexts):
+        raise ValueError("probe setup permutation must be 1 or 2")
+    available: list[tuple[int, ConversationSetup]] = []
+    issues: list[ProbeQaDiagnosticIssue] = []
+    study_id = study_fingerprint(study)
+    for permutation in (1, 2):
+        unique = {setup for order, setup in contexts if order == permutation}
+        if len(unique) == 1:
+            available.append((permutation, unique.pop()))
+            continue
+        kind = ProbeQaIssueKind.ERROR if unique else ProbeQaIssueKind.MISSING
+        reason = (
+            "multiple delivered or scheduled contexts exist for this permutation"
+            if unique else missing_reason
+        )
+        issues.extend(
+            ProbeQaDiagnosticIssue(study_id, permutation, position, kind, reason)
+            for position in (1, 2)
+        )
+    return probe_qa_requests_for_setups(study, tuple(available)), tuple(issues)
 
 
 @beartype
@@ -147,7 +258,40 @@ def check_probe_qa(
     by_request = {verdict.request: verdict for verdict in verdicts}
     if len(by_request) != len(verdicts) or set(by_request) != set(requests):
         raise ValueError("probe scorer returned duplicated or unexpected requests")
+    if len({verdict.context_fingerprint for verdict in verdicts}) != len(verdicts):
+        raise ValueError("probe scorer returned duplicated context fingerprints")
     return tuple(by_request[request] for request in requests)
+
+
+@beartype
+def score_probe_qa_diagnostics(
+    scorer: ProbeQaScorer,
+    requests: tuple[ProbeQaRequest, ...],
+) -> tuple[tuple[ProbeQaVerdict, ...], tuple[ProbeQaDiagnosticIssue, ...]]:
+    """Run one batch per assistant and turn scorer failures into diagnostic rows."""
+    by_assistant: dict[Assistant, list[ProbeQaRequest]] = defaultdict(list)
+    for request in requests:
+        by_assistant[request.setup.matchup.assistant].append(request)
+
+    verdicts: list[ProbeQaVerdict] = []
+    issues: list[ProbeQaDiagnosticIssue] = []
+    logger = logging.getLogger(__name__)
+    for assistant, assistant_requests in by_assistant.items():
+        failure = "probe preflight failed"
+        try:
+            scorer.preflight((assistant,))
+            failure = "probe scoring failed before a complete batch returned"
+            verdicts.extend(check_probe_qa(scorer, tuple(assistant_requests)))
+        except Exception as error:
+            logger.exception("Activation %s for %s", failure, assistant)
+            issues.extend(
+                ProbeQaDiagnosticIssue(
+                    request.study_id, request.permutation, request.position,
+                    ProbeQaIssueKind.ERROR, f"{failure}: {type(error).__name__}: {error}",
+                )
+                for request in assistant_requests
+            )
+    return tuple(verdicts), tuple(issues)
 
 
 def _axis_rows(
@@ -171,8 +315,8 @@ def _axis_rows(
         {
             axis: value,
             "scores": row[0],
-            "enforced_scores": row[1],
-            "failed_scores": row[2],
+            "directional_scores": row[1],
+            "reference_mismatches": row[2],
             "masked_boundary_tokens": row[3],
         }
         for value, row in sorted(counts.items())
@@ -183,68 +327,79 @@ def _axis_rows(
 def probe_qa_report(
     studies: tuple[Study, ...],
     verdicts: tuple[ProbeQaVerdict, ...],
+    issues: tuple[ProbeQaDiagnosticIssue, ...] = (),
 ) -> JsonObject:
-    """Report scores and whole-comparison exclusions across requested axes."""
+    """Report probe measurements, missing coverage, and scoring errors separately."""
     by_study: dict[str, list[ProbeQaVerdict]] = defaultdict(list)
     known = {study_fingerprint(study): study for study in studies}
     for verdict in verdicts:
         if verdict.request.study_id not in known:
             raise ValueError("probe verdict references an unknown study")
         by_study[verdict.request.study_id].append(verdict)
-    for study_id, study in known.items():
-        rows = by_study[study_id]
-        if len(rows) != 4 or len({row.request for row in rows}) != 4:
-            raise ValueError("probe report requires four distinct requests for every study")
-        if len({row.context_fingerprint for row in rows}) != 4:
-            raise ValueError("probe report requires a distinct fingerprint for every target span")
-        setups: list[ConversationSetup] = []
-        for permutation in (1, 2):
-            matching = [row.request.setup for row in rows if row.request.permutation == permutation]
-            if len(matching) != 2 or matching[0] != matching[1]:
-                raise ValueError("probe report requests do not share one setup per permutation")
-            setups.append(matching[0])
-        expected = probe_qa_requests(study, (setups[0], setups[1]))
-        if {row.request for row in rows} != set(expected):
-            raise ValueError("probe report requests do not match the study positions and orders")
+    issue_by_study: dict[str, list[ProbeQaDiagnosticIssue]] = defaultdict(list)
+    for issue in issues:
+        if issue.study_id not in known:
+            raise ValueError("probe diagnostic issue references an unknown study")
+        issue_by_study[issue.study_id].append(issue)
 
-    comparisons: list[JsonObject] = []
+    if len(known) != len(studies):
+        raise ValueError("probe report study coordinates are not unique")
     for study_id, study in known.items():
-        rows = by_study[study_id]
-        failures = [row for row in rows if row.complies is False]
-        trials = build_trials(study)
-        comparisons.append(
-            {
-                "study_id": study_id,
-                "assistant": str(study.assistant),
-                "inputs": [prompt_spec_to_dict(spec) for spec in study.inputs],
-                "cell_ids": [str(cell_id(Cell(spec, study.assistant))) for spec in study.inputs],
-                "trial_ids": [str(trial.trial_id) for trial in trials],
-                "excluded": bool(failures),
-                "failed_requests": [
-                    {
-                        "permutation": row.request.permutation,
-                        "position": row.request.position,
-                        "framing": str(row.request.spec.framing),
-                        "channel": str(row.request.spec.channel),
-                        "author": str(row.request.spec.author),
-                        "reasoning_probability": row.reasoning_probability,
-                        "issue": row.issue,
-                    }
-                    for row in failures
-                ],
-            }
-        )
+        study_verdicts = by_study[study_id]
+        study_issues = issue_by_study[study_id]
+        if len({row.context_fingerprint for row in study_verdicts}) != len(study_verdicts):
+            raise ValueError("probe report requires distinct fingerprints for scored target spans")
+        coordinates = [
+            (row.request.study_id, row.request.permutation, row.request.position)
+            for row in study_verdicts
+        ] + [
+            (row.study_id, row.permutation, row.position)
+            for row in study_issues
+        ]
+        if len(set(coordinates)) != len(coordinates):
+            raise ValueError("probe report contains duplicate scored, missing, or error coordinates")
+        expected_coordinates = {
+            (study_id, permutation, position)
+            for permutation in (1, 2)
+            for position in (1, 2)
+        }
+        if set(coordinates) != expected_coordinates:
+            raise ValueError("probe report must classify all four coordinates for every study")
+        expected_matchups = {
+            int(trial.permutation): trial.matchup
+            for trial in build_trials(study) if int(trial.rollout) == 1
+        }
+        for permutation in (1, 2):
+            matching = [
+                row.request.setup
+                for row in study_verdicts
+                if row.request.permutation == permutation
+            ]
+            if matching and any(setup != matching[0] for setup in matching[1:]):
+                raise ValueError("probe report requests do not share one setup per permutation")
+            if any(
+                row.request.setup.matchup
+                != expected_matchups[permutation]
+                for row in study_verdicts
+                if row.request.permutation == permutation
+            ):
+                raise ValueError("probe report request does not match its study permutation")
+
+    score_count = len(verdicts)
+    missing_issues = [issue for issue in issues if issue.kind is ProbeQaIssueKind.MISSING]
+    error_issues = [issue for issue in issues if issue.kind is ProbeQaIssueKind.ERROR]
+    expected_count = 4 * len(studies)
     return {
         "counts": {
-            "scores": len(verdicts),
-            "enforced_scores": sum(row.complies is not None for row in verdicts),
+            "planned_requests": expected_count,
+            "scores": score_count,
+            "directional_scores": sum(row.complies is not None for row in verdicts),
             "descriptive_scores": sum(row.complies is None for row in verdicts),
-            "failed_scores": sum(row.complies is False for row in verdicts),
+            "reference_mismatches": sum(row.complies is False for row in verdicts),
+            "missing_requests": len(missing_issues),
+            "error_requests": len(error_issues),
+            "coverage": score_count / expected_count if expected_count else 1.0,
             "masked_boundary_tokens": sum(row.masked_boundary_tokens for row in verdicts),
-            "planned_comparisons": len(studies),
-            "excluded_comparisons": sum(row["excluded"] for row in comparisons),
-            "planned_trials": sum(len(row["trial_ids"]) for row in comparisons),
-            "excluded_trials": sum(len(row["trial_ids"]) for row in comparisons if row["excluded"]),
         },
         "scores_by_axis": {
             axis: _axis_rows(verdicts, axis)
@@ -267,5 +422,25 @@ def probe_qa_report(
             }
             for row in verdicts
         ],
-        "comparisons": comparisons,
+        "missing": [
+            _issue_row(known[issue.study_id], issue)
+            for issue in missing_issues
+        ],
+        "errors": [
+            _issue_row(known[issue.study_id], issue)
+            for issue in error_issues
+        ],
+    }
+
+
+def _issue_row(study: Study, issue: ProbeQaDiagnosticIssue) -> JsonObject:
+    input_index = issue.position - 1 if issue.permutation == 1 else 2 - issue.position
+    spec = study.inputs[input_index]
+    return {
+        "study_id": issue.study_id,
+        "assistant": str(study.assistant),
+        "permutation": issue.permutation,
+        "position": issue.position,
+        **prompt_spec_to_dict(spec),
+        "reason": issue.reason,
     }

@@ -18,6 +18,7 @@ from reasonese.manual_messages import ManualMessageLibrary
 from reasonese.message_qa_cache import YamlMessageQaCache
 from reasonese.observations import write_observations
 from reasonese.openrouter import OpenRouterClient, RequestsTransport
+from reasonese.probe_qa import ProbeQaMode, add_probe_arguments, resolve_probe_mode
 from reasonese.routing import add_route_arguments, routing_from_arguments
 from reasonese.study import Study, build_trials, study_fingerprint
 from reasonese.study_cache import SqliteStudyCache
@@ -69,14 +70,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         choices=tuple(AUTHORING_BRIEFS),
         help="select an explicit model-authoring brief; use a fresh message cache for a different brief",
     )
-    parser.add_argument("--role-probes", type=Path)
-    parser.add_argument("--probe-execution-device", default="cuda:0")
+    add_probe_arguments(parser)
     add_route_arguments(parser)
     args = parser.parse_args(argv)
 
     try:
+        probe_mode = resolve_probe_mode(args.probe_mode, args.role_probes)
         probe_scorer = None
-        if args.role_probes is not None:
+        if probe_mode is ProbeQaMode.INLINE:
+            assert args.role_probes is not None
             try:
                 from reasonese.local_probe_qa import LocalProbeQaScorer
             except ImportError as error:
@@ -108,6 +110,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             YamlMessageCache(args.output / "generated_messages.yaml"),
             YamlMessageQaCache(args.output / "message_qa.yaml"),
             prefer_batch=not args.no_batch,
+            probe_mode=probe_mode,
             probe_scorer=probe_scorer,
             routing=routing,
             authoring_brief=(
@@ -131,16 +134,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         {
             "cells": len(task.study.inputs),
             "excluded_comparisons": int(
-                bool(
-                    result.excluded_inputs
-                    or any(row.complies is False for row in result.probe_qa_verdicts)
-                )
+                bool(result.excluded_inputs)
             ),
             "excluded_trials": (
                 len(build_trials(task.study))
-                if result.excluded_inputs
-                or any(row.complies is False for row in result.probe_qa_verdicts)
-                else 0
+                if result.excluded_inputs else 0
             ),
             "judgment_cache_hits": int(result.judgment_cache_hits),
             "failed_trials": int(result.failed_trials),
@@ -159,8 +157,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         "excluded_trials": sum(item["excluded_trials"] for item in study_summaries),
         "observations": sum(item["observations"] for item in study_summaries),
         "probe_qa_report": (
-            str(args.output / "probe_qa_report.json") if args.role_probes is not None else None
+            str(args.output / "probe_qa_report.json")
+            if probe_mode is ProbeQaMode.INLINE else None
         ),
+        "probe_mode": str(probe_mode),
         "output": str(args.output),
         "studies": study_summaries,
         "trials": sum(item["trials"] for item in study_summaries),

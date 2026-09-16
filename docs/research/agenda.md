@@ -10,6 +10,9 @@ possible position and supports repeated rollouts. Analysis provides penalized wi
 cell rankings, framing, channel, and author margins, a cross-validated feature lasso over the
 same comparisons, per-pair exclusivity counts, and explicit position and robustness diagnostics.
 
+Luna message QA is the hard authoring gate. Probes are optional diagnostics, off for the pilot;
+the operational contract is in the [README](../../README.md#current-foundation).
+
 This foundation specifies:
 
 - which values currently belong to each axis;
