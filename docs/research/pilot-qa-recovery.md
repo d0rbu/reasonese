@@ -173,6 +173,48 @@ channel AUCs are 0.656 (system), 0.406 (user), and 0.609 (README). Planning scor
 matched plain score in only 11/24 TEST cells. Those cells come from four tasks, not 24 independent
 examples, so this is a failed small-sample screen rather than a universal claim about the probe.
 
+### ROC curves and asymmetric priorities
+
+![Nemotron instruction-style ROC curves for CAL and TEST in each channel and pooled](figures/nemotron-instruction-roc.png)
+
+These curves sweep the saved mean reasoning probabilities, with authored planning controls as
+positive and plain instructions as negative. They measure instruction-style discrimination,
+not the separate native reasoning/final qualification. Each channel has 14 positive and 14
+negative CAL spans, and eight of each on TEST. The pooled curve compares scores across channels;
+its AUROC is not the mean channel AUROC. Seven CAL and four TEST tasks supply the repeated
+channel/order observations, so span counts must not be interpreted as independent samples.
+
+| Channel | CAL AUROC | TEST AUROC |
+| --- | ---: | ---: |
+| System prompt | 0.500 | 0.656 |
+| User message | 0.219 | 0.406 |
+| README.md | 0.495 | 0.609 |
+| Pooled channels | 0.431 | 0.514 |
+
+The [132 source scores](figures/nemotron-instruction-roc-scores.csv) allow direct reproduction:
+for each split/channel, sweep every unique score in descending order, predicting positive at
+`score >= threshold`, and include the origin above the maximum score. Trapezoidal ROC area
+matches the independently audited fraction of positive-negative pairs where the positive score
+is greater, plus half credit for ties. There are no cross-class ties in these measurements.
+Original CAL/TEST score-file SHA-256 values are
+`f00eaa35aafd053a523d7f4be62d7b591079f6bd7b36e707f8a88d77251316a3` and
+`5c54ed2b85a4bce32b891a4a1b819098db483a04cfa58db838a4d0b771081302`.
+The figure uses existing scores only; it introduces no probe fit or threshold selection.
+
+**Recommendation for a future protocol, not an adopted change:** prioritize sensitivity to
+valid reasonese, while retaining an explicit limit on plain instructions accepted as reasoning.
+Normal instructions can naturally contain planning language, so symmetric accuracy requirements
+need not match the research objective. However, high reasoning recall alone cannot establish
+style fidelity: the rejected candidate reaches 24/24 on TEST while also accepting 21/24 plain
+spans. A permissive gate therefore provides little evidence that a passing generated instruction
+has the intended style. Any recall target and false-positive budget should be declared before
+new evaluation, selected on CAL, and assessed on fresh TEST tasks. The current TEST outcomes
+must not be used to choose another cutoff and then claim held-out validation.
+
+The existing `2 * false exclusion + wrong-style acceptance` loss already favors recall within
+each directional gate; it does not prioritize the reasoning gate over the nonreasoning gate.
+Both hard gates remain required and the pilot remains paused under the current protocol.
+
 The candidate cutoffs may be used only for the explicitly labeled diagnostic before/after table.
 They are not a deployment policy; both hard gates remain required, and no pilot has restarted.
 Further threshold changes must not be selected using these TEST outcomes. The frozen native

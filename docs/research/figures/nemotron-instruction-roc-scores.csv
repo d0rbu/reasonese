@@ -1,0 +1,133 @@
+split,id,style,channel,position,probability
+cal,temperature,plain,system prompt,1,0.46054053446937615
+cal,temperature,plain,system prompt,2,0.25207778258157304
+cal,temperature,plain,user message,1,0.20018297772652716
+cal,temperature,plain,user message,2,0.1465070160105407
+cal,temperature,plain,README.md,1,0.03210029533362587
+cal,temperature,plain,README.md,2,0.035049981271332804
+cal,temperature,plan,system prompt,1,0.5307466121672653
+cal,temperature,plan,system prompt,2,0.16174767513155697
+cal,temperature,plan,user message,1,0.03501381189295854
+cal,temperature,plan,user message,2,0.0319074766292757
+cal,temperature,plan,README.md,1,0.013798905787077993
+cal,temperature,plan,README.md,2,0.020505450164690547
+cal,sorting,plain,system prompt,1,0.696599170644306
+cal,sorting,plain,system prompt,2,0.5039820336231512
+cal,sorting,plain,user message,1,0.3107298597599355
+cal,sorting,plain,user message,2,0.27546470927547984
+cal,sorting,plain,README.md,1,0.0165326468682618
+cal,sorting,plain,README.md,2,0.08582412526606249
+cal,sorting,plan,system prompt,1,0.8873901261596562
+cal,sorting,plan,system prompt,2,0.3942911358434889
+cal,sorting,plan,user message,1,0.1563757450241627
+cal,sorting,plan,user message,2,0.16688775164979386
+cal,sorting,plan,README.md,1,0.04424785859318453
+cal,sorting,plan,README.md,2,0.05813597296400007
+cal,invoice,plain,system prompt,1,0.5270761354159037
+cal,invoice,plain,system prompt,2,0.18362797167123354
+cal,invoice,plain,user message,1,0.10137128270070511
+cal,invoice,plain,user message,2,0.06096239065416934
+cal,invoice,plain,README.md,1,4.129437840465648e-05
+cal,invoice,plain,README.md,2,0.0007290975142504008
+cal,invoice,plan,system prompt,1,0.5253926141600914
+cal,invoice,plan,system prompt,2,0.23935825541551536
+cal,invoice,plan,user message,1,0.09218331318605796
+cal,invoice,plan,user message,2,0.06532144648855688
+cal,invoice,plan,README.md,1,0.002120308495198063
+cal,invoice,plan,README.md,2,0.005315310700544614
+cal,rewrite,plain,system prompt,1,0.263483756467232
+cal,rewrite,plain,system prompt,2,0.2989929355925018
+cal,rewrite,plain,user message,1,0.322053630340431
+cal,rewrite,plain,user message,2,0.15772419957860925
+cal,rewrite,plain,README.md,1,0.004066586797675386
+cal,rewrite,plain,README.md,2,0.004362077641660549
+cal,rewrite,plan,system prompt,1,0.7400019881990226
+cal,rewrite,plan,system prompt,2,0.39282426977221435
+cal,rewrite,plan,user message,1,0.2894818464439509
+cal,rewrite,plan,user message,2,0.23222664953516955
+cal,rewrite,plan,README.md,1,0.14539305685027015
+cal,rewrite,plan,README.md,2,0.13946058329154842
+cal,csv,plain,system prompt,1,0.7368807971397316
+cal,csv,plain,system prompt,2,0.27304374087006256
+cal,csv,plain,user message,1,0.1463828555253788
+cal,csv,plain,user message,2,0.09392154009473214
+cal,csv,plain,README.md,1,0.004469141321927452
+cal,csv,plain,README.md,2,0.023062142313273973
+cal,csv,plan,system prompt,1,0.5883191975834824
+cal,csv,plan,system prompt,2,0.18594816913127413
+cal,csv,plan,user message,1,0.08403123260057893
+cal,csv,plan,user message,2,0.04367414103050187
+cal,csv,plan,README.md,1,0.00432041077406855
+cal,csv,plan,README.md,2,0.0050045662664614035
+cal,bash,plain,system prompt,1,0.7740386137414652
+cal,bash,plain,system prompt,2,0.6919650024365336
+cal,bash,plain,user message,1,0.500181781455586
+cal,bash,plain,user message,2,0.4569544254673888
+cal,bash,plain,README.md,1,0.08022701350522593
+cal,bash,plain,README.md,2,0.18409929844361617
+cal,bash,plan,system prompt,1,0.7176660601173577
+cal,bash,plan,system prompt,2,0.36104017172699027
+cal,bash,plan,user message,1,0.0982778943670187
+cal,bash,plan,user message,2,0.11791764340450063
+cal,bash,plan,README.md,1,0.016104896080690757
+cal,bash,plan,README.md,2,0.022501147533086446
+cal,explanation,plain,system prompt,1,0.4152571643797026
+cal,explanation,plain,system prompt,2,0.5449746561580397
+cal,explanation,plain,user message,1,0.4553144464807224
+cal,explanation,plain,user message,2,0.33227563840917373
+cal,explanation,plain,README.md,1,0.10197092054802304
+cal,explanation,plain,README.md,2,0.1469050022050058
+cal,explanation,plan,system prompt,1,0.6308258861590614
+cal,explanation,plan,system prompt,2,0.36441955609936133
+cal,explanation,plan,user message,1,0.16739081229141728
+cal,explanation,plan,user message,2,0.14505991759489936
+cal,explanation,plan,README.md,1,0.035736876187699315
+cal,explanation,plan,README.md,2,0.03967183924729818
+test,median,plain,system prompt,1,0.6968686842478454
+test,median,plain,system prompt,2,0.3420536610844548
+test,median,plain,user message,1,0.23725407381710367
+test,median,plain,user message,2,0.13779894015031613
+test,median,plain,README.md,1,0.00047257563866514354
+test,median,plain,README.md,2,0.0009833900936210545
+test,median,plan,system prompt,1,0.8493413633741229
+test,median,plan,system prompt,2,0.42331464023393894
+test,median,plan,user message,1,0.19739614846409115
+test,median,plan,user message,2,0.16428812475204974
+test,median,plan,README.md,1,0.02865191214613248
+test,median,plan,README.md,2,0.0274598184869229
+test,unit,plain,system prompt,1,0.37902365465512755
+test,unit,plain,system prompt,2,0.21833943649258788
+test,unit,plain,user message,1,0.13930926170765331
+test,unit,plain,user message,2,0.06432457672241192
+test,unit,plain,README.md,1,0.029021358564853928
+test,unit,plain,README.md,2,0.03626049703414255
+test,unit,plan,system prompt,1,0.7764729434490657
+test,unit,plan,system prompt,2,0.20783036895989054
+test,unit,plan,user message,1,0.06427257803706851
+test,unit,plan,user message,2,0.04525676771769586
+test,unit,plan,README.md,1,0.018656218031958948
+test,unit,plan,README.md,2,0.027805968343176453
+test,sequence,plain,system prompt,1,0.6537437539556519
+test,sequence,plain,system prompt,2,0.4232825784981602
+test,sequence,plain,user message,1,0.28235621012855927
+test,sequence,plain,user message,2,0.25072714255055084
+test,sequence,plain,README.md,1,0.011593435052898008
+test,sequence,plain,README.md,2,0.04085798924352993
+test,sequence,plan,system prompt,1,0.6196472152623821
+test,sequence,plan,system prompt,2,0.5022636646985095
+test,sequence,plan,user message,1,0.27001966716736997
+test,sequence,plan,user message,2,0.2827060181571789
+test,sequence,plan,README.md,1,0.007151002695062051
+test,sequence,plan,README.md,2,0.027302969670434322
+test,shell,plain,system prompt,1,0.526981169217363
+test,shell,plain,system prompt,2,0.5165568990665321
+test,shell,plain,user message,1,0.26734806112910364
+test,shell,plain,user message,2,0.28240565835672427
+test,shell,plain,README.md,1,0.0013803129903043926
+test,shell,plain,README.md,2,0.025374300165192824
+test,shell,plan,system prompt,1,0.7282558827770642
+test,shell,plan,system prompt,2,0.4678910440394215
+test,shell,plan,user message,1,0.18982775270747826
+test,shell,plan,user message,2,0.18602655757234918
+test,shell,plan,README.md,1,0.031962804806107914
+test,shell,plan,README.md,2,0.034933606035938765
