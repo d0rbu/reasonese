@@ -127,10 +127,11 @@ invocation configuration, never part of the study YAML or a treatment axis.
 | `batch` | Batch API where registered and compatible; otherwise paid synchronous fallback | Paid synchronous slug under the existing web-search harness |
 
 Nemotron 3.5 Lightning, Inkling, Inkling Small, and Gemma 4 31B have registered free routes; both Qwen models lack one.
-A failed free request never triggers a paid retry. `--no-batch` keeps authoring synchronous and
-cannot be combined with `--route batch`. Neither option changes the fixed Luna QA or response
-judge routes or their batching. Batch requests use the unsuffixed model slug on the Batch API,
-not a `:batch` slug sent to the synchronous endpoint.
+A failed free request never triggers a paid retry. `--no-batch` keeps authoring, message QA,
+assistant inference, and response judging synchronous and cannot be combined with
+`--route batch`. The fixed Luna QA and response-judge models and settings are unchanged.
+Batch requests use the unsuffixed model slug on the Batch API, not a `:batch` slug sent to the
+synchronous endpoint.
 
 **No uncached chargeable collection work is allowed without `--allow-paid`.** This includes
 paid authoring, message QA, response judgments, and assistant requests that expose chargeable

@@ -176,6 +176,13 @@ def _message_qa_batch(count: int) -> JsonObject:
     }
 
 
+def _sync_message_qa(count: int) -> list[JsonObject]:
+    return [
+        _chat(json.dumps({"complies": True, "issues": []}), f"message-qa-{index}")
+        for index in range(count)
+    ]
+
+
 class FakeTransport:
     def __init__(
         self,
@@ -636,9 +643,12 @@ def test_collect_studies_selected_authoring_brief_preserves_manual_and_qa_contra
     transport = FakeTransport(
         [
             _chat("I will perform the requested task.", "author"),
-            _message_qa_batch(2),
+            *_sync_message_qa(2),
             *_assistant_responses(2),
-            _judge_batch((True, False, False, True)),
+            *[
+                _chat(json.dumps({"completed": value}), f"judge-{index}")
+                for index, value in enumerate((True, False, False, True))
+            ],
         ]
     )
 
@@ -654,6 +664,11 @@ def test_collect_studies_selected_authoring_brief_preserves_manual_and_qa_contra
     )[0]
 
     assert len(result.observations) == 4
+    assert len(transport.post_calls) == 9
+    assert all(path == "/api/v1/chat/completions" for path, _ in transport.post_calls)
+    assert [body["model"] for _, body in transport.post_calls[-4:]] == [
+        "openai/gpt-5.6-luna"
+    ] * 4
     author_body = transport.post_calls[0][1]
     assert "ordinary first-person note" in author_body["messages"][0]["content"]
 
@@ -663,16 +678,19 @@ def test_collect_studies_selected_authoring_brief_preserves_manual_and_qa_contra
     assert user_message.content == str(user_spec.instruction)
     assert user_message.response is None
 
-    qa_batch = transport.post_calls[1][1]
-    assert qa_batch["model"] == "openai/gpt-5.6-luna"
-    assert len(qa_batch["requests"]) == 2
+    qa_requests = [body for _, body in transport.post_calls[1:3]]
+    assert [request["model"] for request in qa_requests] == [
+        "openai/gpt-5.6-luna",
+        "openai/gpt-5.6-luna",
+    ]
     expected_qa_instructions = {
         str(spec.instruction): authoring_instructions(spec) for spec in study.inputs
     }
-    for request in qa_batch["requests"]:
-        evidence = json.loads(request["body"]["messages"][1]["content"])
+    for request in qa_requests:
+        evidence = json.loads(request["messages"][1]["content"])
         instruction = evidence["datapoint"]["instruction"]
         assert evidence["exact_authoring_instructions"] == expected_qa_instructions[instruction]
+        assert request["reasoning"] == {"effort": "high", "exclude": False}
 
 
 def test_collection_retries_empty_final_before_judging_and_caching(tmp_path: Path) -> None:

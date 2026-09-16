@@ -369,16 +369,19 @@ def judge_traces(
 
 @beartype
 def judge_fingerprinted_traces(
-    traces: tuple[FingerprintedTrace, ...], client: OpenRouterClient | None
+    traces: tuple[FingerprintedTrace, ...],
+    client: OpenRouterClient | None,
+    *,
+    prefer_batch: bool = True,
 ) -> tuple[Judgment, ...]:
-    """Judge pre-fingerprinted traces in one flattened GPT-5.6 Luna batch."""
+    """Judge pre-fingerprinted traces together using the requested transport."""
     if not traces:
         return ()
     requests = judge_requests_for_traces(tuple(item.trace for item in traces))
     if requests and client is None:
         raise ValueError("a client is required for completed trace judgments")
     responses = (
-        client.complete_many(JUDGE_ROUTE, requests, prefer_batch=True)
+        client.complete_many(JUDGE_ROUTE, requests, prefer_batch=prefer_batch)
         if requests and client is not None else ()
     )
     judgments: list[Judgment] = []

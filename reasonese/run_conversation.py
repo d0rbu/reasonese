@@ -55,7 +55,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 for index, spec in enumerate(matchup.inputs)
             )
             require_compliant_messages(
-                audit_messages(cached_messages, qa_cache, client, routing=routing)
+                audit_messages(
+                    cached_messages, qa_cache, client, routing=routing,
+                    prefer_batch=not args.no_batch,
+                )
             )
             routing.record(
                 "assistant", matchup.assistant, "cache", cached.provenance, cached.response

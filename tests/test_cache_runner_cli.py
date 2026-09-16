@@ -130,6 +130,14 @@ def _qa_batch(count: int, *, complies: bool = True) -> JsonObject:
     }
 
 
+def _sync_qa(count: int, *, complies: bool = True) -> list[JsonObject]:
+    issues = [] if complies else ["Does not follow the requested framing."]
+    return [
+        _qa_chat(complies, issues, f"qa-{index}")
+        for index in range(count)
+    ]
+
+
 class FakeTransport:
     def __init__(self, posts: list[JsonObject]) -> None:
         self.posts = posts
@@ -520,7 +528,7 @@ def test_editing_a_manual_variant_invalidates_message_and_trace_caches(tmp_path:
     matchup = _matchup(*specs)
     manual = _manual_library(tmp_path, matchup.inputs)
     transport = FakeTransport(
-        [_qa_batch(2), _chat("first answer"), _qa_batch(1), _chat("second answer")]
+        [*_sync_qa(2), _chat("first answer"), *_sync_qa(1), _chat("second answer")]
     )
     message_cache = YamlMessageCache(tmp_path / "messages.yaml")
     trace_cache = YamlTraceCache(tmp_path / "traces.yaml")
@@ -558,7 +566,7 @@ def test_editing_a_manual_variant_invalidates_message_and_trace_caches(tmp_path:
     cached_system = message_cache.get(specs[0])
     assert cached_system is not None
     assert cached_system.content == "Changed manual system message."
-    assert len(transport.post_calls) == 4
+    assert len(transport.post_calls) == 5
 
 
 def test_run_matchup_executes_local_tool_calls_and_preserves_every_step(tmp_path: Path) -> None:
@@ -566,7 +574,7 @@ def test_run_matchup_executes_local_tool_calls_and_preserves_every_step(tmp_path
         _spec("Repository instruction.", Channel.README),
         _spec("User request.", Channel.USER),
     )
-    transport = FakeTransport([_qa_batch(2), _tool_chat(), _chat("final answer")])
+    transport = FakeTransport([*_sync_qa(2), _tool_chat(), _chat("final answer")])
 
     result = run_matchup(
         matchup,
@@ -581,7 +589,7 @@ def test_run_matchup_executes_local_tool_calls_and_preserves_every_step(tmp_path
     assert result.trace.response == _chat("final answer")
     assert result.trace.tool_steps[0].response == _tool_chat()
     assert result.trace.tool_steps[0].results[0].content == "Repository instruction."
-    second_messages = transport.post_calls[2][1]["messages"]
+    second_messages = transport.post_calls[3][1]["messages"]
     assert second_messages[-2]["reasoning"] == "preserve this intermediate reasoning"
     assert second_messages[-1] == {
         "role": "tool",
@@ -713,14 +721,14 @@ def test_empty_retry_exhaustion_is_not_cached_or_scored(
 ) -> None:
     setup = _setup_with_user_content("Read README.")
     cache = YamlTraceCache(tmp_path / "traces.yaml")
-    transport = FakeTransport([_qa_batch(2), _tool_chat(), _chat(""), _chat(""), _chat("")])
+    transport = FakeTransport([*_sync_qa(2), _tool_chat(), _chat(""), _chat(""), _chat("")])
     with pytest.raises(ValueError, match="assistant content is empty"):
         run_matchup(setup.matchup, OpenRouterClient(transport),
                     YamlMessageCache(tmp_path / "messages.yaml"), cache,
                     YamlMessageQaCache(tmp_path / "qa.yaml"),
                     _manual_library(tmp_path, setup.matchup.inputs),
                     routing=CollectionRouting(RoutePreference.FREE, True), prefer_batch=False)
-    assert len(transport.post_calls) == 5
+    assert len(transport.post_calls) == 6
     assert cache.get(setup.matchup) is None
     assert len([record for record in caplog.records if record.exc_info]) == 3
 
@@ -933,7 +941,7 @@ def test_run_matchup_records_terminal_tool_limit_and_warm_cache_reuses_it(
     terminal_response = _tool_chat()
     transport = FakeTransport(
         [
-            _qa_batch(2),
+            *_sync_qa(2),
             *[_tool_chat() for _ in range(MAX_LOCAL_TOOL_STEPS)],
             terminal_response,
         ]
@@ -970,7 +978,7 @@ def test_run_matchup_records_terminal_tool_limit_and_warm_cache_reuses_it(
     assert first.trace.response == terminal_response
     assert second.cache_hit is True
     assert second.trace == first.trace
-    assert len(transport.post_calls) == MAX_LOCAL_TOOL_STEPS + 2
+    assert len(transport.post_calls) == MAX_LOCAL_TOOL_STEPS + 3
     raw = trace_to_dict(first.trace)
     assert raw["terminal_status"] == "tool_limit_exhausted"
     assert traces_from_dicts((raw,), (matchup,)) == (first.trace,)
@@ -981,7 +989,7 @@ def test_run_matchup_allows_success_immediately_after_eight_tool_rounds(tmp_path
     matchup = _matchup(_spec("System.", Channel.SYSTEM), _spec("User.", Channel.USER))
     transport = FakeTransport(
         [
-            _qa_batch(2),
+            *_sync_qa(2),
             *[_tool_chat() for _ in range(MAX_LOCAL_TOOL_STEPS)],
             _chat("completed after eight", "final-after-eight"),
         ]
@@ -1001,7 +1009,7 @@ def test_run_matchup_allows_success_immediately_after_eight_tool_rounds(tmp_path
     assert result.trace.terminal_status == "completed"
     assert len(result.trace.tool_steps) == MAX_LOCAL_TOOL_STEPS
     assert result.trace.response["id"] == "final-after-eight"
-    assert len(transport.post_calls) == MAX_LOCAL_TOOL_STEPS + 2
+    assert len(transport.post_calls) == MAX_LOCAL_TOOL_STEPS + 3
     assert "terminal_status" not in trace_to_dict(result.trace)
     assert trace_fingerprint(result.trace) == fingerprint_traces((result.trace,))[0].fingerprint
 
@@ -1036,7 +1044,7 @@ def test_terminal_trace_cache_rejects_missing_status_and_wrong_step_count(tmp_pa
 
 def test_run_matchup_stops_before_assistant_when_message_qa_fails(tmp_path: Path) -> None:
     matchup = _matchup(_spec("System.", Channel.SYSTEM), _spec("User.", Channel.USER))
-    transport = FakeTransport([_qa_batch(2, complies=False)])
+    transport = FakeTransport(_sync_qa(2, complies=False))
     trace_cache = YamlTraceCache(tmp_path / "traces.yaml")
 
     with pytest.raises(ValueError, match="message QA failed for"):
@@ -1051,7 +1059,7 @@ def test_run_matchup_stops_before_assistant_when_message_qa_fails(tmp_path: Path
         )
 
     assert trace_cache.get(matchup) is None
-    assert len(transport.post_calls) == 1
+    assert len(transport.post_calls) == 2
 
 
 def _write_matchup(path: Path) -> None:
@@ -1082,7 +1090,7 @@ def test_run_conversation_cli_executes_and_warm_cache_needs_no_key(
         tmp_path,
         (_spec("System task.", Channel.SYSTEM), _spec("User task.", Channel.USER)),
     )
-    transport = FakeTransport([_qa_batch(2), _chat("assistant answer", "live-id")])
+    transport = FakeTransport([*_sync_qa(2), _chat("assistant answer", "live-id")])
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
     monkeypatch.setattr("reasonese.run_conversation.RequestsTransport", lambda key: transport)
     args = [
@@ -1112,7 +1120,59 @@ def test_run_conversation_cli_executes_and_warm_cache_needs_no_key(
     assert warm_summary["messages"] == 2
     assert "terminal_status" not in warm_summary
     assert cold_summary["message_qa_cache"] == str(message_qa_cache)
-    assert len(transport.post_calls) == 2
+    assert len(transport.post_calls) == 3
+
+
+def test_run_conversation_cached_trace_uses_synchronous_message_qa_with_no_batch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    matchup_path = tmp_path / "matchup.yaml"
+    message_cache = YamlMessageCache(tmp_path / "messages.yaml")
+    trace_cache = YamlTraceCache(tmp_path / "traces.yaml")
+    qa_cache = YamlMessageQaCache(tmp_path / "message-qa.yaml")
+    _write_matchup(matchup_path)
+    matchup = _matchup(_spec("System task.", Channel.SYSTEM), _spec("User task.", Channel.USER))
+    generated = tuple(
+        GeneratedMessage(spec, GeneratedText.parse(str(spec.instruction)), None)
+        for spec in matchup.inputs
+    )
+    message_cache.put_many(generated)
+    trace_cache.put(ConversationTrace(
+        construct_conversation(matchup, generated), _chat("cached answer", "cached-id")
+    ))
+    manual = _manual_library(tmp_path, matchup.inputs)
+    transport = FakeTransport(_sync_qa(2))
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr("reasonese.run_conversation.RequestsTransport", lambda key: transport)
+
+    args = [
+        "--allow-paid",
+        "--route",
+        "free",
+        "--matchup",
+        str(matchup_path),
+        "--message-cache",
+        str(message_cache.path),
+        "--message-qa-cache",
+        str(qa_cache.path),
+        "--trace-cache",
+        str(trace_cache.path),
+        "--user-messages",
+        str(manual.root),
+        "--no-batch",
+    ]
+
+    assert run_conversation(args) == 0
+    summary = json.loads(capsys.readouterr().out)
+
+    assert summary["cache_hit"] is True
+    assert summary["response_id"] == "cached-id"
+    assert [path for path, _ in transport.post_calls] == [
+        "/api/v1/chat/completions",
+        "/api/v1/chat/completions",
+    ]
 
 
 def test_run_conversation_cli_reports_cached_terminal_status_without_key(
@@ -1128,7 +1188,7 @@ def test_run_conversation_cli_reports_cached_terminal_status_without_key(
     matchup = _matchup(_spec("System task.", Channel.SYSTEM), _spec("User task.", Channel.USER))
     manual = _manual_library(tmp_path, matchup.inputs)
     transport = FakeTransport(
-        [_qa_batch(2), *[_tool_chat() for _ in range(MAX_LOCAL_TOOL_STEPS + 1)]]
+        [*_sync_qa(2), *[_tool_chat() for _ in range(MAX_LOCAL_TOOL_STEPS + 1)]]
     )
     run_matchup(
         matchup,
@@ -1163,7 +1223,7 @@ def test_run_conversation_cli_reports_cached_terminal_status_without_key(
     assert summary["cache_hit"] is True
     assert summary["terminal_status"] == "tool_limit_exhausted"
     assert summary["response_id"] == "tool-response"
-    assert len(transport.post_calls) == MAX_LOCAL_TOOL_STEPS + 2
+    assert len(transport.post_calls) == MAX_LOCAL_TOOL_STEPS + 3
 
 
 def test_run_conversation_cli_requires_key_for_uncached_matchup(

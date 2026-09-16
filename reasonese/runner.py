@@ -334,7 +334,9 @@ def run_matchup(
             for index, spec in enumerate(matchup.inputs)
         )
         require_compliant_messages(
-            audit_messages(cached_messages, qa_cache, client, routing=routing)
+            audit_messages(
+                cached_messages, qa_cache, client, routing=routing, prefer_batch=prefer_batch
+            )
         )
         routing.record("assistant", matchup.assistant, "cache", cached.provenance, cached.response)
         record_cached_authors((cached,), message_cache, routing)
@@ -351,7 +353,9 @@ def run_matchup(
         prefer_batch=prefer_batch,
         routing=routing,
     )
-    require_compliant_messages(audit_messages(generated, qa_cache, client, routing=routing))
+    require_compliant_messages(
+        audit_messages(generated, qa_cache, client, routing=routing, prefer_batch=prefer_batch)
+    )
     setup = construct_conversation(matchup, generated)
     trace = run_assistant(
         setup, select_route(matchup.assistant, routing.preference).model_id, client
