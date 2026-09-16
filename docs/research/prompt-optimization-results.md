@@ -2,11 +2,11 @@
 
 ## Interpretation update — September 16, 2026
 
-The results below preserve measurements from the earlier joint-eligibility analysis. Their
-historical scores and counts are unchanged; probe mismatches in those tables do not exclude
-comparisons under the current protocol. Luna high-reasoning message QA remains the hard gate.
-Current prompt-optimization runs default probe scoring off, and optional inline scores, missing
-measurements, or scorer errors are diagnostic only. No probe fit, threshold, or prompt was changed.
+The results below preserve the earlier joint-eligibility analysis. Their scores and counts are
+unchanged historical measurements; current collection uses Luna high-reasoning message QA as the
+hard gate and treats probes as optional diagnostics. See the
+[current policy](prompt-optimization.md#current-policy--september-16-2026); this update changed
+no probe fit, threshold, or prompt.
 
 ## Final development result
 
@@ -41,10 +41,8 @@ comparison to pass. It is preserved as an earlier analysis measure, not current 
 The predeclared historical rule selected V3 because joint eligibility improved from 2/24 to 3/24
 while Luna compliance improved from 16/27 to 22/27. The selection is recorded in
 `out/prompt-optimization-20260914/selection.json` (SHA-256
-`b9c7cea2dbf6430a43f35f56eb549e3acad10ee33a6e49ad76bb5d546e92d27c`). Under the current
-protocol, only Luna message QA gates collection and comparison eligibility; probe scores are
-diagnostics. The small dependent development comparison does not reliably isolate a prompt effect
-or establish broad superiority.
+`b9c7cea2dbf6430a43f35f56eb549e3acad10ee33a6e49ad76bb5d546e92d27c`). The small dependent
+development comparison does not reliably isolate a prompt effect or establish broad superiority.
 
 Luna and probe scores retain independent denominators: a Luna-rejected input can still receive
 probe scores. The optimization runs stop before assistant execution, tool use, response judging,

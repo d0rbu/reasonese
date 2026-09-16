@@ -136,7 +136,8 @@ saved trace fingerprints, the role-probe artifacts, adapter, and capture policy.
 directory only for the same source and probe identity; a changed identity needs a fresh directory.
 Replay population means available saved delivered contexts, which can include cached traces from
 comparisons excluded by a later Luna audit. Join the manifest's study and trial IDs to the current
-authoring report and observations to determine which scored contexts contributed to them.
+authoring report and observations to determine which scored contexts contributed to them. See the
+[role-probe reference](docs/reference/role-probes.md) for scorer provenance and scientific limits.
 
 A matchup contains one assistant plus an ordered pair of inputs, at least one of which must use
 the explicit `user message` channel. Repeated channels are valid. Generated

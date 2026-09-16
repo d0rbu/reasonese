@@ -17,24 +17,14 @@ from reasonese.conversation import ConversationSetup, ConversationTrace
 from reasonese.judging import fingerprint_traces
 from reasonese.probe_qa import (
     ProbeQaDiagnosticIssue,
-    ProbeQaIssueKind,
     ProbeQaRequest,
     ProbeQaScorer,
+    probe_qa_contexts,
     probe_qa_report,
-    probe_qa_requests_for_setups,
     score_probe_qa_diagnostics,
 )
-from reasonese.study import Study, Trial, TrialId, build_trials, study_fingerprint
+from reasonese.study import Study, Trial, build_trials, study_fingerprint
 from reasonese.study_cache import SqliteStudyCache
-
-
-@beartype
-def _file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        while chunk := handle.read(1024 * 1024):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 @beartype
@@ -64,22 +54,16 @@ def _collection_studies(collection: Path) -> tuple[_SavedStudy, ...]:
     if not directories:
         raise ValueError(f"collection contains no saved study.yaml files: {collection}")
     shared_database = collection / "collection.sqlite3"
-    studies = tuple(
-        _SavedStudy(
-            directory,
-            shared_database if shared_database.is_file() else directory / "collection.sqlite3",
-            load_study(directory / "study.yaml"),
-            (),
-        )
-        for directory in directories
-    )
-    fingerprints = tuple(study_fingerprint(saved.study) for saved in studies)
+    studies = []
+    for directory in directories:
+        study = load_study(directory / "study.yaml")
+        database = shared_database if shared_database.is_file() else directory / "collection.sqlite3"
+        studies.append(_SavedStudy(directory, database, study, build_trials(study)))
+    saved_studies = tuple(studies)
+    fingerprints = tuple(study_fingerprint(saved.study) for saved in saved_studies)
     if len(set(fingerprints)) != len(fingerprints):
         raise ValueError("saved collection contains duplicate study fingerprints")
-    return tuple(
-        _SavedStudy(saved.directory, saved.database, saved.study, build_trials(saved.study))
-        for saved in studies
-    )
+    return saved_studies
 
 
 @beartype
@@ -102,42 +86,27 @@ def score_saved_collections(
     for saved in saved_studies:
         by_database[saved.database].append(saved)
 
-    traces_by_study: dict[str, dict[TrialId, ConversationTrace]] = {}
+    requests: list[ProbeQaRequest] = []
+    issues: list[ProbeQaDiagnosticIssue] = []
+    source_rows: list[dict[str, object]] = []
+    traces_for_fingerprint: list[ConversationTrace] = []
+    fingerprint_rows: list[dict[str, object]] = []
     for database, database_studies in by_database.items():
         trials = tuple(trial for saved in database_studies for trial in saved.trials)
         traces = SqliteStudyCache(database).load_traces_readonly(trials)
         for saved in database_studies:
-            traces_by_study[study_fingerprint(saved.study)] = {
-                trial.trial_id: traces[trial.trial_id]
-                for trial in saved.trials
-                if trial.trial_id in traces
-            }
-
-    requests: list[ProbeQaRequest] = []
-    issues: list[ProbeQaDiagnosticIssue] = []
-    source_rows: list[dict[str, object]] = []
-    source_trials_by_study: dict[str, list[dict[str, object]]] = {}
-    traces_for_fingerprint: list[ConversationTrace] = []
-    trace_coordinates: list[tuple[str, int, Trial]] = []
-    setups_by_study: dict[str, dict[int, list[ConversationSetup]]] = {}
-    for saved in saved_studies:
-        study = saved.study
-        study_id = study_fingerprint(study)
-        traces = traces_by_study[study_id]
-        setups_by_study[study_id] = {1: [], 2: []}
-        source_trials: list[dict[str, object]] = []
-        source_trials_by_study[study_id] = source_trials
-        for trial in saved.trials:
-            trace = traces.get(trial.trial_id)
-            if trace is None:
-                continue
-            if trace.setup.matchup != trial.matchup:
-                raise ValueError("saved trace setup does not match its study trial")
-            setups_by_study[study_id][int(trial.permutation)].append(trace.setup)
-            traces_for_fingerprint.append(trace)
-            trace_coordinates.append((study_id, int(trial.permutation), trial))
-            source_trials.append(
-                {
+            study = saved.study
+            study_id = study_fingerprint(study)
+            contexts: list[tuple[int, ConversationSetup]] = []
+            source_trials: list[dict[str, object]] = []
+            for trial in saved.trials:
+                trace = traces.get(trial.trial_id)
+                if trace is None:
+                    continue
+                if trace.setup.matchup != trial.matchup:
+                    raise ValueError("saved trace setup does not match its study trial")
+                contexts.append((int(trial.permutation), trace.setup))
+                source_trial: dict[str, object] = {
                     "trial_id": str(trial.trial_id),
                     "permutation": int(trial.permutation),
                     "rollout": int(trial.rollout),
@@ -147,59 +116,31 @@ def score_saved_collections(
                         trace.provenance.to_dict() if trace.provenance is not None else None
                     ),
                 }
+                source_trials.append(source_trial)
+                fingerprint_rows.append(source_trial)
+                traces_for_fingerprint.append(trace)
+            source_rows.append(
+                {
+                    "study_id": study_id,
+                    "study_file": str((saved.directory / "study.yaml").resolve()),
+                    "study_file_sha256": hashlib.sha256(
+                        (saved.directory / "study.yaml").read_bytes()
+                    ).hexdigest(),
+                    "database": str(database.resolve()),
+                    "trials_with_saved_traces": source_trials,
+                }
             )
-        source_rows.append(
-            {
-                "study_id": study_id,
-                "study_file": str((saved.directory / "study.yaml").resolve()),
-                "study_file_sha256": _file_sha256(saved.directory / "study.yaml"),
-                "database": str(saved.database.resolve()),
-                "trials_with_saved_traces": source_trials,
-            }
-        )
+            study_requests, study_issues = probe_qa_contexts(
+                study,
+                tuple(contexts),
+                missing_reason="no saved delivered context exists for this permutation",
+            )
+            requests.extend(study_requests)
+            issues.extend(study_issues)
 
     fingerprinted = fingerprint_traces(tuple(traces_for_fingerprint))
-    trace_fingerprint_by_trial: dict[TrialId, str] = {}
-    for (_, _, trial), item in zip(trace_coordinates, fingerprinted, strict=True):
-        trace_fingerprint_by_trial[trial.trial_id] = str(item.fingerprint)
-    for study_source_trials in source_trials_by_study.values():
-        for raw_trial in study_source_trials:
-            trial_id = TrialId.parse(str(raw_trial["trial_id"]))
-            raw_trial["trace_fingerprint"] = trace_fingerprint_by_trial[trial_id]
-
-    for saved in saved_studies:
-        study = saved.study
-        study_id = study_fingerprint(study)
-        permutation_setups = setups_by_study[study_id]
-        available: list[tuple[int, ConversationSetup]] = []
-        for permutation in (1, 2):
-            unique = tuple(dict.fromkeys(permutation_setups[permutation]))
-            if len(unique) > 1:
-                reason = "saved rollouts contain multiple delivered contexts for this permutation"
-                issues.extend(
-                    ProbeQaDiagnosticIssue(
-                        study_id,
-                        permutation,
-                        position,
-                        ProbeQaIssueKind.ERROR,
-                        reason,
-                    )
-                    for position in (1, 2)
-                )
-            elif not unique:
-                issues.extend(
-                    ProbeQaDiagnosticIssue(
-                        study_id,
-                        permutation,
-                        position,
-                        ProbeQaIssueKind.MISSING,
-                        "no saved delivered context exists for this permutation",
-                    )
-                    for position in (1, 2)
-                )
-            else:
-                available.append((permutation, unique[0]))
-        requests.extend(probe_qa_requests_for_setups(study, tuple(available)))
+    for row, item in zip(fingerprint_rows, fingerprinted, strict=True):
+        row["trace_fingerprint"] = str(item.fingerprint)
 
     source_identity: dict[str, object] = {
         "collection": str(collection_path),
@@ -207,6 +148,13 @@ def score_saved_collections(
         "probe": dict(probe_identity),
     }
     manifest_path = output_path / "probe_posthoc_manifest.json"
+    manifest = {
+        "format_version": 1,
+        "source_scope": "saved_delivered_contexts_only",
+        "identity": source_identity,
+        "probe_report": str(output_path / "probe_qa_report.json"),
+        "probe_cache": str(output_path / "probe_qa_cache.json"),
+    }
     if output_path.exists() and not output_path.is_dir():
         raise ValueError("posthoc output path exists and is not a directory")
     existing_manifest = manifest_path.is_file()
@@ -221,13 +169,9 @@ def score_saved_collections(
             raise ValueError("existing posthoc manifest is invalid") from error
         if (
             not isinstance(existing, dict)
-            or set(existing)
-            != {"format_version", "source_scope", "identity", "probe_report", "probe_cache"}
+            or set(existing) != set(manifest)
             or type(existing.get("format_version")) is not int
-            or existing.get("format_version") != 1
-            or existing.get("source_scope") != "saved_delivered_contexts_only"
-            or existing.get("probe_report") != str(output_path / "probe_qa_report.json")
-            or existing.get("probe_cache") != str(output_path / "probe_qa_cache.json")
+            or any(value != manifest[key] for key, value in existing.items() if key != "identity")
         ):
             raise ValueError("existing posthoc manifest has an unsupported format")
         if existing.get("identity") != source_identity:
@@ -237,13 +181,6 @@ def score_saved_collections(
     else:
         output_path.mkdir(parents=True, exist_ok=True)
 
-    manifest = {
-        "format_version": 1,
-        "source_scope": "saved_delivered_contexts_only",
-        "identity": source_identity,
-        "probe_report": str(output_path / "probe_qa_report.json"),
-        "probe_cache": str(output_path / "probe_qa_cache.json"),
-    }
     if not existing_manifest:
         temporary_manifest = manifest_path.with_name(f".{manifest_path.name}.tmp")
         temporary_manifest.write_text(

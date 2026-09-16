@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import logging
 import math
 from collections import defaultdict
@@ -33,6 +34,17 @@ class ProbeQaMode(StrEnum):
 
     OFF = "off"
     INLINE = "inline"
+
+
+@beartype
+def add_probe_arguments(parser: argparse.ArgumentParser) -> None:
+    """Keep collection and prompt-evaluation probe options identical."""
+    parser.add_argument(
+        "--probe-mode", choices=tuple(ProbeQaMode), type=ProbeQaMode,
+        help="off by default; a bundle without an explicit mode selects inline diagnostics",
+    )
+    parser.add_argument("--role-probes", type=Path)
+    parser.add_argument("--probe-execution-device", default="cuda:0")
 
 
 @beartype
@@ -205,6 +217,36 @@ def probe_qa_requests_for_setups(
 
 
 @beartype
+def probe_qa_contexts(
+    study: Study,
+    contexts: tuple[tuple[int, ConversationSetup], ...],
+    *,
+    missing_reason: str,
+) -> tuple[tuple[ProbeQaRequest, ...], tuple[ProbeQaDiagnosticIssue, ...]]:
+    """Classify each order's exact contexts once for inline and saved-trace scoring."""
+    if any(permutation not in {1, 2} for permutation, _ in contexts):
+        raise ValueError("probe setup permutation must be 1 or 2")
+    available: list[tuple[int, ConversationSetup]] = []
+    issues: list[ProbeQaDiagnosticIssue] = []
+    study_id = study_fingerprint(study)
+    for permutation in (1, 2):
+        unique = {setup for order, setup in contexts if order == permutation}
+        if len(unique) == 1:
+            available.append((permutation, unique.pop()))
+            continue
+        kind = ProbeQaIssueKind.ERROR if unique else ProbeQaIssueKind.MISSING
+        reason = (
+            "multiple delivered or scheduled contexts exist for this permutation"
+            if unique else missing_reason
+        )
+        issues.extend(
+            ProbeQaDiagnosticIssue(study_id, permutation, position, kind, reason)
+            for position in (1, 2)
+        )
+    return probe_qa_requests_for_setups(study, tuple(available)), tuple(issues)
+
+
+@beartype
 def check_probe_qa(
     scorer: ProbeQaScorer,
     requests: tuple[ProbeQaRequest, ...],
@@ -231,45 +273,24 @@ def score_probe_qa_diagnostics(
     for request in requests:
         by_assistant[request.setup.matchup.assistant].append(request)
 
-    prepared: set[Assistant] = set()
-    preflight_errors: dict[Assistant, str] = {}
-    logger = logging.getLogger(__name__)
-    for assistant in by_assistant:
-        try:
-            scorer.preflight((assistant,))
-        except Exception as error:
-            logger.exception("Activation probe diagnostic preflight failed for %s", assistant)
-            preflight_errors[assistant] = f"{type(error).__name__}: {error}"
-        else:
-            prepared.add(assistant)
-
     verdicts: list[ProbeQaVerdict] = []
     issues: list[ProbeQaDiagnosticIssue] = []
+    logger = logging.getLogger(__name__)
     for assistant, assistant_requests in by_assistant.items():
-        if assistant in preflight_errors:
-            error_text = f"probe preflight failed: {preflight_errors[assistant]}"
-        elif assistant in prepared:
-            try:
-                verdicts.extend(check_probe_qa(scorer, tuple(assistant_requests)))
-                continue
-            except Exception as error:
-                logger.exception("Activation probe diagnostic scoring failed for %s", assistant)
-                error_text = (
-                    "probe scoring failed before a complete batch returned: "
-                    f"{type(error).__name__}: {error}"
+        failure = "probe preflight failed"
+        try:
+            scorer.preflight((assistant,))
+            failure = "probe scoring failed before a complete batch returned"
+            verdicts.extend(check_probe_qa(scorer, tuple(assistant_requests)))
+        except Exception as error:
+            logger.exception("Activation %s for %s", failure, assistant)
+            issues.extend(
+                ProbeQaDiagnosticIssue(
+                    request.study_id, request.permutation, request.position,
+                    ProbeQaIssueKind.ERROR, f"{failure}: {type(error).__name__}: {error}",
                 )
-        else:
-            continue
-        issues.extend(
-            ProbeQaDiagnosticIssue(
-                request.study_id,
-                request.permutation,
-                request.position,
-                ProbeQaIssueKind.ERROR,
-                error_text,
+                for request in assistant_requests
             )
-            for request in assistant_requests
-        )
     return tuple(verdicts), tuple(issues)
 
 
@@ -321,7 +342,8 @@ def probe_qa_report(
             raise ValueError("probe diagnostic issue references an unknown study")
         issue_by_study[issue.study_id].append(issue)
 
-    all_coordinates: set[tuple[str, int, int]] = set()
+    if len(known) != len(studies):
+        raise ValueError("probe report study coordinates are not unique")
     for study_id, study in known.items():
         study_verdicts = by_study[study_id]
         study_issues = issue_by_study[study_id]
@@ -343,6 +365,10 @@ def probe_qa_report(
         }
         if set(coordinates) != expected_coordinates:
             raise ValueError("probe report must classify all four coordinates for every study")
+        expected_matchups = {
+            int(trial.permutation): trial.matchup
+            for trial in build_trials(study) if int(trial.rollout) == 1
+        }
         for permutation in (1, 2):
             matching = [
                 row.request.setup
@@ -353,16 +379,11 @@ def probe_qa_report(
                 raise ValueError("probe report requests do not share one setup per permutation")
             if any(
                 row.request.setup.matchup
-                != tuple(trial.matchup for trial in build_trials(study) if int(trial.rollout) == 1)[
-                    permutation - 1
-                ]
+                != expected_matchups[permutation]
                 for row in study_verdicts
                 if row.request.permutation == permutation
             ):
                 raise ValueError("probe report request does not match its study permutation")
-        all_coordinates.update(coordinates)
-    if len(all_coordinates) != 4 * len(studies):
-        raise ValueError("probe report study coordinates are not unique")
 
     score_count = len(verdicts)
     missing_issues = [issue for issue in issues if issue.kind is ProbeQaIssueKind.MISSING]

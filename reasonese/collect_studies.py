@@ -18,7 +18,7 @@ from reasonese.manual_messages import ManualMessageLibrary
 from reasonese.message_qa_cache import YamlMessageQaCache
 from reasonese.observations import write_observations
 from reasonese.openrouter import OpenRouterClient, RequestsTransport
-from reasonese.probe_qa import ProbeQaMode, resolve_probe_mode
+from reasonese.probe_qa import ProbeQaMode, add_probe_arguments, resolve_probe_mode
 from reasonese.routing import add_route_arguments, routing_from_arguments
 from reasonese.study import Study, build_trials, study_fingerprint
 from reasonese.study_cache import SqliteStudyCache
@@ -70,14 +70,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         choices=tuple(AUTHORING_BRIEFS),
         help="select an explicit model-authoring brief; use a fresh message cache for a different brief",
     )
-    parser.add_argument(
-        "--probe-mode",
-        choices=tuple(ProbeQaMode),
-        type=ProbeQaMode,
-        help="optional local diagnostic scoring; defaults to off unless --role-probes is supplied",
-    )
-    parser.add_argument("--role-probes", type=Path)
-    parser.add_argument("--probe-execution-device", default="cuda:0")
+    add_probe_arguments(parser)
     add_route_arguments(parser)
     args = parser.parse_args(argv)
 

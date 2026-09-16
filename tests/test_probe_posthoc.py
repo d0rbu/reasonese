@@ -1,4 +1,4 @@
-"""Cache-only probe scoring over exact saved assistant-facing contexts."""
+"""Replay-score probes over exact saved assistant-facing contexts."""
 
 from __future__ import annotations
 
@@ -228,7 +228,7 @@ def test_posthoc_rejects_mixed_contexts_for_one_order_without_choosing_one(
     assert report["counts"]["error_requests"] == 2
     assert report["counts"]["missing_requests"] == 0
     assert {row["permutation"] for row in report["errors"]} == {1}
-    assert all("multiple delivered contexts" in row["reason"] for row in report["errors"])
+    assert all("multiple delivered or scheduled contexts" in row["reason"] for row in report["errors"])
 
 
 def test_posthoc_resume_requires_same_saved_source_and_probe_identity(tmp_path: Path) -> None:
@@ -358,8 +358,19 @@ def test_posthoc_rejects_malformed_study_and_manifest(tmp_path: Path) -> None:
     score_saved_collections(
         collection, output, DeterministicScorer(), {"probe_sha256": "fixture"}
     )
+    valid_manifest = json.loads(
+        (output / "probe_posthoc_manifest.json").read_text(encoding="utf-8")
+    )
     (output / "probe_posthoc_manifest.json").write_text("invalid json", encoding="utf-8")
     with pytest.raises(ValueError, match="manifest is invalid"):
+        score_saved_collections(
+            collection, output, DeterministicScorer(), {"probe_sha256": "fixture"}
+        )
+    valid_manifest["format_version"] = True
+    (output / "probe_posthoc_manifest.json").write_text(
+        json.dumps(valid_manifest), encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="unsupported format"):
         score_saved_collections(
             collection, output, DeterministicScorer(), {"probe_sha256": "fixture"}
         )

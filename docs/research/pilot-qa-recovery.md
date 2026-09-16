@@ -2,19 +2,12 @@
 
 ## Superseding collection protocol — September 16, 2026
 
-The user has since specified that probe values are measurements, not collection or comparison
-gates. Luna's high-reasoning message QA remains the hard authoring gate; probe mode defaults off,
-and the pilot runs with probe mode off. Inline or posthoc probe scoring is optional and
-diagnostic: low scores, missing coverage, and scoring errors never exclude a comparison. The
-historical exclusions, thresholds, and joint-eligibility counts below describe the protocol in
-force at the time of those analyses. Their numerical results remain unchanged, but they do not
-set current eligibility. No probe fit, threshold, or prompt was changed for this protocol update.
-
-`reasonese-score-probes` can replay-score exact setups in saved traces into a separate output
-directory without provider, authoring, or response-judging calls. It reads collection SQLite
-databases read-only and reports available saved contexts; join study and trial IDs to current
-authoring reports and observations because old cached traces can exist for comparisons rejected
-by the current Luna audit. See the README for CLI examples.
+The current protocol makes probes optional diagnostics and keeps Luna high-reasoning message QA
+as the hard authoring gate; the pilot uses probe-off mode. The counts and thresholds below remain
+historical measurements under the earlier protocol and do not set current eligibility. See the
+[README](../../README.md#current-foundation) for collection and replay commands, and join replay
+study/trial IDs to current authoring reports and observations before interpreting saved contexts.
+This update changed no probe fit, threshold, or prompt.
 
 The September 15 amendment followed the stopped Nemotron-only pilot and the user's authorization to make
 local tool-budget exhaustion trial-local, use Luna message QA at high reasoning, reconsider

@@ -715,7 +715,7 @@ def _write_expected_probe_report(root: Path, **changes: object) -> None:
 
 def test_expected_probe_coordinates_are_order_and_position_complete(tmp_path: Path) -> None:
     _write_expected_probe_report(tmp_path)
-    expected = optimization._expected_probe_rows(tmp_path)
+    expected = optimization._expected_judge_rows(tmp_path)[1]
     assert len(expected) == 4
     coordinates = [json.loads(key) for _, key in expected]
     assert {(row["permutation"], row["position"]) for row in coordinates} == {
@@ -750,7 +750,7 @@ def test_expected_probe_coordinates_reject_malformed_reports(
     else:
         _write_expected_probe_report(tmp_path, **cast(dict[str, object], changes))
     with pytest.raises(ValueError, match=message):
-        optimization._expected_probe_rows(tmp_path)
+        optimization._expected_judge_rows(tmp_path)[1]
 
     _write_expected_probe_report(tmp_path)
     with (tmp_path / "authoring_report.json").open("r+", encoding="utf-8") as handle:
@@ -760,7 +760,7 @@ def test_expected_probe_coordinates_reject_malformed_reports(
         handle.truncate()
         json.dump(report, handle)
     with pytest.raises(ValueError, match="duplicate"):
-        optimization._expected_probe_rows(tmp_path)
+        optimization._expected_judge_rows(tmp_path)[1]
 
 
 def test_evaluation_records_probe_report_failures_and_setup_failures(

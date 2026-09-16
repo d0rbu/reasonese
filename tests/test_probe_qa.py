@@ -341,3 +341,82 @@ def test_report_rejects_unknown_studies_reused_fingerprints_and_split_setups() -
     mismatched = _verdict(mismatched_request)
     with pytest.raises(ValueError, match="one setup per permutation"):
         probe_qa_report((study,), (verdicts[0], mismatched) + verdicts[2:])
+
+
+@pytest.mark.parametrize('first', ['missing', 'single', 'repeated', 'conflicting'])
+@pytest.mark.parametrize('second', ['missing', 'single', 'repeated', 'conflicting'])
+def test_context_resolution_classifies_each_order_independently(first: str, second: str) -> None:
+    from reasonese.probe_qa import probe_qa_contexts
+
+    study, expected = _requests()
+    contexts = []
+    for permutation, case in enumerate((first, second), start=1):
+        setup = expected[(permutation - 1) * 2].setup
+        changed = replace(setup, messages=(
+            replace(setup.messages[0], content=GeneratedText.parse('Different delivered text.')),
+            *setup.messages[1:],
+        ))
+        for item in {
+            'missing': (), 'single': (setup,), 'repeated': (setup, setup),
+            'conflicting': (setup, changed),
+        }[case]:
+            contexts.append((permutation, item))
+    requests, issues = probe_qa_contexts(study, tuple(contexts), missing_reason='not delivered')
+    for permutation, case in enumerate((first, second), start=1):
+        scored = tuple(row for row in requests if row.permutation == permutation)
+        unavailable = tuple(row for row in issues if row.permutation == permutation)
+        if case in {'single', 'repeated'}:
+            assert scored == expected[(permutation - 1) * 2:permutation * 2]
+            assert not unavailable
+        else:
+            assert not scored
+            assert {row.position for row in unavailable} == {1, 2}
+            assert all(row.kind is (
+                ProbeQaIssueKind.MISSING if case == 'missing' else ProbeQaIssueKind.ERROR
+            ) for row in unavailable)
+    report = probe_qa_report((study,), tuple(_verdict(row) for row in requests), issues)
+    counts = report['counts']
+    assert counts['scores'] + counts['missing_requests'] + counts['error_requests'] == 4
+
+
+@pytest.mark.parametrize('failure_stage', ['preflight', 'scoring'])
+def test_diagnostic_failure_does_not_skip_the_next_assistant(failure_stage: str) -> None:
+    from reasonese.probe_qa import score_probe_qa_diagnostics
+
+    study, requests = _requests()
+    gemma_study = replace(study, assistant=Assistant.GEMMA_4_31B_IT)
+    gemma_setups = tuple(
+        replace(row.setup, matchup=replace(row.setup.matchup, assistant=Assistant.GEMMA_4_31B_IT))
+        for row in (requests[0], requests[2])
+    )
+    gemma_requests = probe_qa_requests(gemma_study, (gemma_setups[0], gemma_setups[1]))
+    events = []
+
+    class Scorer:
+        def preflight(self, assistants):
+            events.append(('preflight', assistants))
+            if failure_stage == 'preflight' and study.assistant in assistants:
+                raise RuntimeError('unavailable model')
+
+        def check(self, requests):
+            assistant = requests[0].setup.matchup.assistant
+            events.append(('scoring', (assistant,)))
+            if assistant == study.assistant:
+                raise RuntimeError('scoring unavailable')
+            return tuple(_verdict(row) for row in requests)
+
+    verdicts, issues = score_probe_qa_diagnostics(Scorer(), requests + gemma_requests)
+    assert tuple(row.request for row in verdicts) == gemma_requests
+    assert len(issues) == 4
+    assert all(row.study_id == requests[0].study_id for row in issues)
+    assert all(row.kind is ProbeQaIssueKind.ERROR for row in issues)
+    assert events.count(('preflight', (study.assistant,))) == 1
+    assert events.count(('scoring', (Assistant.GEMMA_4_31B_IT,))) == 1
+
+
+def test_context_resolution_rejects_an_unrecognized_order() -> None:
+    from reasonese.probe_qa import probe_qa_contexts
+
+    study, requests = _requests()
+    with pytest.raises(ValueError, match='permutation must be 1 or 2'):
+        probe_qa_contexts(study, ((3, requests[0].setup),), missing_reason='not delivered')

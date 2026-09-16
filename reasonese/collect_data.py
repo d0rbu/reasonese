@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import sys
+from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -44,13 +45,13 @@ from reasonese.openrouter import OpenRouterClient, RequestsTransport, select_rou
 from reasonese.planning import PromptSpec
 from reasonese.probe_qa import (
     ProbeQaDiagnosticIssue,
-    ProbeQaIssueKind,
     ProbeQaMode,
     ProbeQaRequest,
     ProbeQaScorer,
     ProbeQaVerdict,
+    add_probe_arguments,
+    probe_qa_contexts,
     probe_qa_report,
-    probe_qa_requests_for_setups,
     resolve_probe_mode,
     score_probe_qa_diagnostics,
 )
@@ -163,101 +164,43 @@ def _run_inline_probe_diagnostics(
     report_path: Path,
 ) -> None:
     """Score exact saved or currently scheduled setups without affecting collection."""
-    requests_by_state: dict[str, list[ProbeQaRequest]] = {}
-    issues_by_state: dict[str, list[ProbeQaDiagnosticIssue]] = {}
-    states_by_id = {study_fingerprint(state.task.study): state for state in states}
-    studies = tuple(state.task.study for state in states)
-
+    requests: list[ProbeQaRequest] = []
+    issues_by_study: dict[str, list[ProbeQaDiagnosticIssue]] = defaultdict(list)
     for state, trials, planned_setups in zip(
         states, trials_by_state, planned_setups_by_state, strict=True
     ):
-        study = state.task.study
-        study_id = study_fingerprint(study)
-        requests_by_state[study_id] = []
-        issues_by_state[study_id] = []
-        planned_by_matchup = (
-            {setup.matchup: setup for setup in planned_setups}
-            if planned_setups is not None else {}
+        planned_by_matchup = {setup.matchup: setup for setup in planned_setups or ()}
+        contexts = tuple(
+            (int(trial.permutation), state.traces[str(trial.trial_id)].trace.setup)
+            for trial in trials if str(trial.trial_id) in state.traces
+        ) + tuple(
+            (int(trial.permutation), planned_by_matchup[trial.matchup])
+            for trial in state.missing_trials if trial.matchup in planned_by_matchup
         )
-        available: list[tuple[int, ConversationSetup]] = []
-        for permutation in (1, 2):
-            permutation_trials = tuple(
-                trial for trial in trials if int(trial.permutation) == permutation
-            )
-            saved_setups = tuple(
-                state.traces[str(trial.trial_id)].trace.setup
-                for trial in permutation_trials
-                if str(trial.trial_id) in state.traces
-            )
-            unique_saved = tuple(dict.fromkeys(saved_setups))
-            future_setups = tuple(
-                planned_by_matchup[trial.matchup]
-                for trial in state.missing_trials
-                if int(trial.permutation) == permutation
-                and trial.matchup in planned_by_matchup
-            )
-            unique_future = tuple(dict.fromkeys(future_setups))
-            reason: str | None = None
-            setup: ConversationSetup | None = None
-            if len(unique_saved) > 1 or len(unique_future) > 1:
-                reason = "multiple delivered or scheduled contexts exist for this permutation"
-            elif unique_saved and unique_future and unique_saved[0] != unique_future[0]:
-                reason = "saved and scheduled input contexts differ for this permutation"
-            elif unique_saved:
-                setup = unique_saved[0]
-            elif unique_future:
-                setup = unique_future[0]
-
-            if reason is not None:
-                issues_by_state[study_id].extend(
-                    ProbeQaDiagnosticIssue(
-                        study_id,
-                        permutation,
-                        position,
-                        ProbeQaIssueKind.ERROR,
-                        reason,
-                    )
-                    for position in (1, 2)
-                )
-            elif setup is None:
-                reason = (
-                    "no saved delivered context is available after message-QA exclusion"
-                    if state.excluded_inputs else "no saved or scheduled delivered context is available"
-                )
-                issues_by_state[study_id].extend(
-                    ProbeQaDiagnosticIssue(
-                        study_id,
-                        permutation,
-                        position,
-                        ProbeQaIssueKind.MISSING,
-                        reason,
-                    )
-                    for position in (1, 2)
-                )
-            else:
-                available.append((permutation, setup))
-        requests_by_state[study_id].extend(
-            probe_qa_requests_for_setups(study, tuple(available))
+        study_requests, issues = probe_qa_contexts(
+            state.task.study, contexts,
+            missing_reason=(
+                "no saved delivered context is available after message-QA exclusion"
+                if state.excluded_inputs else "no saved or scheduled delivered context is available"
+            ),
         )
+        requests.extend(study_requests)
+        issues_by_study[study_fingerprint(state.task.study)].extend(issues)
 
-    all_requests = tuple(
-        request
-        for study_id in requests_by_state
-        for request in requests_by_state[study_id]
-    )
-    scored_verdicts, scoring_issues = score_probe_qa_diagnostics(scorer, all_requests)
-    verdicts_by_study: dict[str, list[ProbeQaVerdict]] = {
-        study_id: [] for study_id in requests_by_state
-    }
-    for verdict in scored_verdicts:
+    verdicts, scoring_issues = score_probe_qa_diagnostics(scorer, tuple(requests))
+    verdicts_by_study: dict[str, list[ProbeQaVerdict]] = defaultdict(list)
+    for verdict in verdicts:
         verdicts_by_study[verdict.request.study_id].append(verdict)
     for issue in scoring_issues:
-        issues_by_state[issue.study_id].append(issue)
-    all_issues = tuple(issue for rows in issues_by_state.values() for issue in rows)
+        issues_by_study[issue.study_id].append(issue)
+    for state in states:
+        study_id = study_fingerprint(state.task.study)
+        state.probe_qa_verdicts = tuple(verdicts_by_study[study_id])
+        state.probe_qa_issues = tuple(issues_by_study[study_id])
     report = probe_qa_report(
-        studies,
-        tuple(row for rows in verdicts_by_study.values() for row in rows),
-        all_issues,
+        tuple(state.task.study for state in states),
+        tuple(row for state in states for row in state.probe_qa_verdicts),
+        tuple(row for state in states for row in state.probe_qa_issues),
     )
     limitations = getattr(scorer, "limitations", ())
     if limitations:
@@ -268,9 +211,7 @@ def _run_inline_probe_diagnostics(
     )
 
     logger = logging.getLogger(__name__)
-    for study_id, state in states_by_id.items():
-        state.probe_qa_verdicts = tuple(verdicts_by_study[study_id])
-        state.probe_qa_issues = tuple(issues_by_state[study_id])
+    for state in states:
         for verdict in state.probe_qa_verdicts:
             if verdict.complies is False:
                 logger.warning(
@@ -667,14 +608,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--user-messages", type=Path, default=Path("prompts/user"))
     parser.add_argument("--no-batch", action="store_true")
-    parser.add_argument(
-        "--probe-mode",
-        choices=tuple(ProbeQaMode),
-        type=ProbeQaMode,
-        help="optional local diagnostic scoring; defaults to off unless --role-probes is supplied",
-    )
-    parser.add_argument("--role-probes", type=Path)
-    parser.add_argument("--probe-execution-device", default="cuda:0")
+    add_probe_arguments(parser)
     add_route_arguments(parser)
     args = parser.parse_args(argv)
 

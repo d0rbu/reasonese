@@ -47,14 +47,9 @@ matchup -> authored messages -> independent message QA -> conversation -> assist
 - `reasonese.message_qa` audits exact materialized text against its datapoint instructions.
 - `reasonese.message_qa_cache` preserves parsed QA results and raw judge responses in YAML.
 - `reasonese.check_messages` provides the reusable fail-closed gate and standalone utility.
-- `reasonese.probe_qa` builds exact-context probe requests and diagnostic reports. Collection
-  defaults probe work off; inline scores, missing coverage, and scorer errors never affect trial
-  eligibility.
-- `reasonese.local_probe_qa` loads the qualified local scorer only when inline or replay scoring
-  is requested. `reasonese.probe_posthoc` replays the same scorer over saved trace setups via
-  read-only SQLite snapshots and writes an identity-bound report outside the collection.
-- `reasonese.study_cache.load_traces_readonly` reads saved traces without creating tables or
-  changing the source database.
+- `reasonese.probe_qa` builds exact-context diagnostic requests and reports. The local scorer is
+  loaded only for inline or replay scoring; `reasonese.probe_posthoc` reads saved SQLite traces
+  without changing the source database and writes an identity-bound report elsewhere.
 - `reasonese.runner` coordinates cache lookup, generation, construction, and completion-driven
   assistant execution. A tool continuation is submitted as soon as its preceding response
   arrives, independently of slower peers. The shared scheduler prioritizes ready continuations
@@ -91,13 +86,10 @@ changes to the rubric, reasoning effort, framing guidance, or schema invalidate 
 Legacy records without that fingerprint are cache misses. This is an LLM quality-control judgment, not a proof of semantic
 equivalence.
 
-Luna message QA remains a hard collection gate. Probe measurements are descriptive diagnostics:
-collection turns them off by default, and low scores, missing coverage, or scorer failures never
-exclude a comparison. Inline diagnostics use the exact saved setup for warm traces or the exact
-scheduled setup for new work. Replay uses only materialized setups found in saved traces; it does
-not reconstruct contexts from current authoring caches. Missing setup orders remain missing, and
-multiple saved contexts for one order are reported as errors. Replay invokes no author, assistant,
-provider, or response judge, though a local forward pass can use a GPU.
+Luna message QA is the collection gate; probes are optional diagnostics. Inline scoring uses exact
+saved or scheduled setups, while replay uses only saved trace setups and records absent or mixed
+orders as unmeasured. See the [README](../../README.md#current-foundation) for the operational
+policy and [role-probe reference](role-probes.md) for scorer provenance and limits.
 
 The judging flow is:
 

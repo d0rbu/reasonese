@@ -22,7 +22,6 @@ from reasonese.config import load_study_suite
 from reasonese.conversation import (
     AUTHORING_BRIEFS,
     AuthoringBrief,
-    ConversationSetup,
     GeneratedMessage,
     GeneratedText,
     authoring_request,
@@ -39,7 +38,9 @@ from reasonese.probe_qa import (
     ProbeQaDiagnosticIssue,
     ProbeQaIssueKind,
     ProbeQaMode,
+    ProbeQaRequest,
     ProbeQaScorer,
+    add_probe_arguments,
     probe_qa_report,
     probe_qa_requests,
     resolve_probe_mode,
@@ -392,7 +393,6 @@ def evaluate_prompt_brief(
         by_spec = {verdict.spec: verdict for verdict in qa_result.verdicts}
         # Diagnostic coverage is separate from message-QA eligibility, including
         # rejected but materialized inputs. No probe decision selects a comparison.
-        active_studies = studies
         excluded_studies = tuple(
             study_fingerprint(study)
             for study in studies
@@ -402,8 +402,8 @@ def evaluate_prompt_brief(
         if probe_mode is ProbeQaMode.INLINE:
             assert probe_scorer is not None
             by_message = {message.spec: message for message in generated}
-            setups: list[tuple[ConversationSetup, ConversationSetup]] = []
-            for study in active_studies:
+            requests: list[ProbeQaRequest] = []
+            for study in studies:
                 ordered = tuple(
                     construct_conversation(
                         trial.matchup,
@@ -414,13 +414,8 @@ def evaluate_prompt_brief(
                 )
                 if len(ordered) != 2:
                     raise ValueError("prompt optimization requires exactly two ordered setups")
-                setups.append((ordered[0], ordered[1]))
-            requests = tuple(
-                request
-                for study, setup in zip(active_studies, setups, strict=True)
-                for request in probe_qa_requests(study, setup)
-            )
-            probe_verdicts, probe_issues = score_probe_qa_diagnostics(probe_scorer, requests)
+                requests.extend(probe_qa_requests(study, (ordered[0], ordered[1])))
+            probe_verdicts, probe_issues = score_probe_qa_diagnostics(probe_scorer, tuple(requests))
         else:
             probe_verdicts = ()
             probe_issues = tuple(
@@ -428,12 +423,12 @@ def evaluate_prompt_brief(
                     study_fingerprint(study), permutation, position,
                     ProbeQaIssueKind.MISSING, "probe scoring disabled",
                 )
-                for study in active_studies
+                for study in studies
                 for permutation in (1, 2)
                 for position in (1, 2)
             )
         probe_report = _add_pair_ids(
-            probe_qa_report(active_studies, probe_verdicts, probe_issues), bound_pair_ids
+            probe_qa_report(studies, probe_verdicts, probe_issues), bound_pair_ids
         )
         probe_report["mode"] = str(probe_mode)
         probe_report["eligibility_policy"] = "message_qa_only"
@@ -536,16 +531,15 @@ def _probe_issue_coordinates(
     expected: set[tuple[str, str]],
     *,
     diagnostic: bool,
-) -> tuple[set[tuple[str, str]], set[tuple[str, str]]]:
+) -> set[tuple[str, str]]:
     """Require each probe coordinate to be scored, explicitly missing, or an error."""
     report = _read_json(output / "probe_qa_report.json")
-    missing: set[tuple[str, str]] = set()
     errors: set[tuple[str, str]] = set()
     covered = set(scored)
     if diagnostic:
         if report.get("eligibility_policy") != "message_qa_only":
             raise ValueError("probe report eligibility policy differs from its manifest")
-        for name, destination in (("missing", missing), ("errors", errors)):
+        for name in ("missing", "errors"):
             rows = report.get(name)
             if not isinstance(rows, list):
                 raise ValueError(f"diagnostic probe report lacks {name} coordinates")
@@ -558,63 +552,37 @@ def _probe_issue_coordinates(
                 key = _coordinate_key(data, output / "probe_qa_report.json")
                 if key in covered:
                     raise ValueError("probe report duplicates a scored or unavailable coordinate")
-                destination.add(key)
+                if name == "errors":
+                    errors.add(key)
                 covered.add(key)
     if covered != expected:
         raise ValueError("probe-QA report coordinates do not match the planned spans")
-    return missing, errors
+    return errors
 
 
 def _probe_totals(
     rows: dict[tuple[str, str], object],
-    pair_id: str,
+    pair_id: str | None,
     expected: set[tuple[str, str]],
     errors: set[tuple[str, str]],
 ) -> dict[str, int]:
     totals = _judge_totals(rows, pair_id, expected, allow_descriptive=True)
-    error_count = sum(key[0] == pair_id for key in errors)
+    error_count = sum(pair_id is None or key[0] == pair_id for key in errors)
     totals["missing"] -= error_count
     totals["errors"] = error_count
     return totals
 
 
 @beartype
-def _expected_message_rows(output: Path) -> dict[tuple[str, str], None]:
-    """Derive one exact QA coordinate for every planned input."""
-    report = _read_json(output / "authoring_report.json")
-    comparisons = report.get("comparisons")
-    if not isinstance(comparisons, list):
-        raise ValueError(f"{output / 'authoring_report.json'} must contain comparisons")
-    expected: dict[tuple[str, str], None] = {}
-    for raw_comparison in comparisons:
-        if not isinstance(raw_comparison, dict):
-            raise ValueError("authoring comparison rows must be objects")
-        comparison = cast(dict[str, object], raw_comparison)
-        raw_inputs = comparison.get("inputs")
-        raw_pairs = comparison.get("input_pair_ids")
-        if not isinstance(raw_inputs, list) or not isinstance(raw_pairs, list):
-            raise ValueError("authoring comparisons must bind inputs to pair IDs")
-        if len(raw_inputs) != len(raw_pairs):
-            raise ValueError("authoring comparison inputs and pair IDs must align")
-        for raw_input, raw_pair in zip(raw_inputs, raw_pairs, strict=True):
-            if not isinstance(raw_input, dict) or not isinstance(raw_pair, str) or not raw_pair:
-                raise ValueError("authoring comparison has an invalid input pair binding")
-            row = cast(dict[str, object], raw_input).copy()
-            row["pair_id"] = raw_pair
-            expected[_coordinate_key(row, output / "authoring_report.json")] = None
-    return expected
-
-
-@beartype
 def _judge_totals(
     rows: dict[tuple[str, str], object],
-    pair_id: str,
+    pair_id: str | None,
     expected: set[tuple[str, str]],
     *,
     allow_descriptive: bool,
 ) -> dict[str, int]:
     selected_rows = {
-        key: value for key, value in rows.items() if key[0] == pair_id
+        key: value for key, value in rows.items() if pair_id is None or key[0] == pair_id
     }
     selected = list(selected_rows.values())
     invalid = [
@@ -632,7 +600,7 @@ def _judge_totals(
         "pass_numerator": passed,
         "pass_denominator": eligible,
         "missing": len(
-            {key for key in expected if key[0] == pair_id} - set(selected_rows)
+            {key for key in expected if pair_id is None or key[0] == pair_id} - set(selected_rows)
         ),
         "descriptive": descriptive,
     }
@@ -666,68 +634,41 @@ def _descriptive_probe_values(output: Path) -> dict[str, list[float]]:
 
 
 @beartype
-def _expected_probe_rows(output: Path) -> dict[tuple[str, str], None]:
-    """Derive all four probe coordinates per planned study from the suite report."""
-    report = _read_json(output / "authoring_report.json")
-    comparisons = report.get("comparisons")
+def _expected_judge_rows(output: Path) -> tuple[set[tuple[str, str]], set[tuple[str, str]]]:
+    """Derive unique message inputs and all four probe spans from one validated report."""
+    source = output / "authoring_report.json"
+    comparisons = _read_json(source).get("comparisons")
     if not isinstance(comparisons, list):
-        raise ValueError(f"{output / 'authoring_report.json'} lacks comparisons")
-    expected: dict[tuple[str, str], None] = {}
-    for raw_comparison in comparisons:
-        if not isinstance(raw_comparison, dict):
+        raise ValueError(f"{source} lacks comparisons")
+    messages: set[tuple[str, str]] = set()
+    probes: set[tuple[str, str]] = set()
+    for comparison in comparisons:
+        if not isinstance(comparison, dict):
             raise ValueError("authoring comparison rows must be objects")
-        comparison = cast(dict[str, object], raw_comparison)
-        raw_inputs = comparison.get("inputs")
-        raw_pairs = comparison.get("input_pair_ids")
+        inputs, pair_ids = comparison.get("inputs"), comparison.get("input_pair_ids")
         study_id = comparison.get("study_id")
-        if not isinstance(raw_inputs, list) or len(raw_inputs) != 2:
+        if not isinstance(inputs, list) or len(inputs) != 2:
             raise ValueError("authoring comparison must contain two inputs")
-        if not isinstance(raw_pairs, list) or len(raw_pairs) != 2:
+        if not isinstance(pair_ids, list) or len(pair_ids) != 2:
             raise ValueError("authoring comparison must contain two pair IDs")
         if not isinstance(study_id, str) or not study_id:
             raise ValueError("authoring comparison must contain a study ID")
-        inputs = cast(list[object], raw_inputs)
-        pair_values = cast(list[object], raw_pairs)
-        for permutation, order_indices in ((1, (0, 1)), (2, (1, 0))):
-            for position, input_index in enumerate(order_indices, start=1):
-                item = inputs[input_index]
-                if not isinstance(item, dict) or not isinstance(
-                    cast(dict[str, object], item).get("instruction"), str
-                ):
-                    raise ValueError("authoring comparison input is invalid")
-                item_data = cast(dict[str, object], item)
-                pair_id = pair_values[input_index]
-                if not isinstance(pair_id, str) or not pair_id:
-                    raise ValueError("authoring comparison cannot bind an input pair ID")
-                key = (
-                    pair_id,
-                    json.dumps(
-                        {
-                            key: item_data.get(key)
-                            for key in (
-                                "instruction",
-                                "framing",
-                                "channel",
-                                "author",
-                                "study_id",
-                                "permutation",
-                                "position",
-                            )
-                        }
-                        | {
-                            "study_id": study_id,
-                            "permutation": permutation,
-                            "position": position,
-                        },
-                        ensure_ascii=False,
-                        sort_keys=True,
-                        separators=(",", ":"),
-                    ),
+        for index, (item, pair_id) in enumerate(zip(inputs, pair_ids, strict=True)):
+            if not isinstance(item, dict) or not isinstance(item.get("instruction"), str):
+                raise ValueError("authoring comparison input is invalid")
+            if not isinstance(pair_id, str) or not pair_id:
+                raise ValueError("authoring comparison cannot bind an input pair ID")
+            row = cast(dict[str, object], item) | {"pair_id": pair_id}
+            messages.add(_coordinate_key(row, source))
+            for permutation, position in ((1, index + 1), (2, 2 - index)):
+                key = _coordinate_key(
+                    row | {"study_id": study_id, "permutation": permutation, "position": position},
+                    source,
                 )
-                if key in expected:
+                if key in probes:
                     raise ValueError("authoring comparisons duplicate a probe coordinate")
-                expected[key] = None
-    return expected
+                probes.add(key)
+    return messages, probes
 
 
 @beartype
@@ -817,20 +758,18 @@ def compare_prompt_outputs(
     probe_candidate = _judge_rows(candidate_output, "probe_qa_report.json", "scores")
     descriptive_baseline = _descriptive_probe_values(baseline_output)
     descriptive_candidate = _descriptive_probe_values(candidate_output)
-    expected_qa_baseline = set(_expected_message_rows(baseline_output))
-    expected_qa_candidate = set(_expected_message_rows(candidate_output))
-    expected_probe_baseline = set(_expected_probe_rows(baseline_output))
-    expected_probe_candidate = set(_expected_probe_rows(candidate_output))
+    expected_qa_baseline, expected_probe_baseline = _expected_judge_rows(baseline_output)
+    expected_qa_candidate, expected_probe_candidate = _expected_judge_rows(candidate_output)
     if expected_qa_baseline != expected_qa_candidate:
         raise ValueError("baseline and candidate message-QA coordinates differ")
     if set(qa_baseline) != expected_qa_baseline or set(qa_candidate) != expected_qa_candidate:
         raise ValueError("message-QA report coordinates do not match the planned inputs")
     if expected_probe_baseline != expected_probe_candidate:
         raise ValueError("baseline and candidate probe-QA coordinates differ")
-    _, probe_errors_baseline = _probe_issue_coordinates(
+    probe_errors_baseline = _probe_issue_coordinates(
         baseline_output, set(probe_baseline), expected_probe_baseline, diagnostic=diagnostic
     )
-    _, probe_errors_candidate = _probe_issue_coordinates(
+    probe_errors_candidate = _probe_issue_coordinates(
         candidate_output, set(probe_candidate), expected_probe_candidate, diagnostic=diagnostic
     )
     all_pairs = sorted(
@@ -873,35 +812,29 @@ def compare_prompt_outputs(
                     "candidate": len(descriptive_candidate.get(pair_id, [])),
                 }
             result_rows.append(result_row)
-    def all_rows(rows: dict[tuple[str, str], object]) -> dict[tuple[str, str], object]:
-        return {(("__all__"), key): value for (_, key), value in rows.items()}
-
-    def all_expected(rows: set[tuple[str, str]]) -> set[tuple[str, str]]:
-        return {(("__all__"), key) for (_, key) in rows}
-
     overall = {
         "baseline": {
             "message_qa": _judge_totals(
-                all_rows(qa_baseline),
-                "__all__",
-                all_expected(expected_qa_baseline),
+                qa_baseline,
+                None,
+                expected_qa_baseline,
                 allow_descriptive=False,
             ),
             "probe": _probe_totals(
-                all_rows(probe_baseline), "__all__", all_expected(expected_probe_baseline),
-                all_expected(probe_errors_baseline),
+                probe_baseline, None, expected_probe_baseline,
+                probe_errors_baseline,
             ),
         },
         "candidate": {
             "message_qa": _judge_totals(
-                all_rows(qa_candidate),
-                "__all__",
-                all_expected(expected_qa_baseline),
+                qa_candidate,
+                None,
+                expected_qa_baseline,
                 allow_descriptive=False,
             ),
             "probe": _probe_totals(
-                all_rows(probe_candidate), "__all__", all_expected(expected_probe_baseline),
-                all_expected(probe_errors_candidate),
+                probe_candidate, None, expected_probe_baseline,
+                probe_errors_candidate,
             ),
         },
     }
@@ -950,12 +883,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="repeat to select model-authored inputs; default: model authors present in the suite",
     )
     parser.add_argument("--user-messages", type=Path, default=Path("prompts/user"))
-    parser.add_argument(
-        "--probe-mode", choices=tuple(ProbeQaMode), type=ProbeQaMode,
-        help="off by default; a bundle without an explicit mode selects inline diagnostics",
-    )
-    parser.add_argument("--role-probes", type=Path)
-    parser.add_argument("--probe-execution-device", default="cuda:0")
+    add_probe_arguments(parser)
     parser.add_argument(
         "--no-batch",
         action="store_true",

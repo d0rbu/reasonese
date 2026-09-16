@@ -3,13 +3,11 @@
 ## Current policy — September 16, 2026
 
 The policy below records a completed comparison under the earlier joint-eligibility rule. Its
-scores and counts remain historical measurements and are not relabeled. Under the current
-protocol, Luna high-reasoning message QA remains a hard gate and the role probe is an optional
-diagnostic, off by default and off for the pilot. Probe scores, missing measurements, and scorer
-errors do not affect prompt comparison eligibility. New `reasonese-optimize-prompt` runs default
-to probe-off; inline probe measurements require `--probe-mode inline` and do not gate results.
-The comparison command does not mix artifacts with different eligibility policies. No probe
-fit, threshold, or prompt changed with this policy update.
+scores and counts remain historical measurements. Current runs use Luna high-reasoning message QA
+as the hard gate and optional probe diagnostics; `reasonese-optimize-prompt` defaults to
+probe-off, inline results do not affect eligibility, and comparisons reject mixed policies. See
+the [README](../../README.md#current-foundation) for the operational probe contract. This update
+changed no probe fit, threshold, or prompt.
 
 `reasonese-optimize-prompt` evaluates one authoring brief through model authoring and GPT-5.6 Luna
 message QA, then optionally records local role-probe diagnostics. Probe scoring is off by default.
@@ -17,12 +15,10 @@ The command stops before assistant execution, tool use, response judging, and ob
 The repository defines the unchanged `baseline` plus three measured candidates:
 `reasonese-natural-v1`, `semantic-preservation-v2`, and `constraint-scope-v3`.
 
-The historical comparison used two hard gates. Luna checked semantic preservation per unique
-authored input. The Nemotron role probe checked each rendered span in both orders; compressed
-framings were descriptive and excluded from the enforced denominator. A comparison was jointly
-eligible only when its inputs passed Luna and all enforced probe spans passed. These historical
-counts remain unchanged; the September 16 protocol above makes probe measurements diagnostic
-only. Neither the probe nor its thresholds were refit or recalibrated.
+The historical comparison used Luna semantic preservation per unique authored input and Nemotron
+probe checks for each rendered span in both orders; compressed framings were descriptive. A
+comparison was jointly eligible only when both historical gates passed. Neither the probe nor its
+thresholds were refit or recalibrated.
 
 ## Selected brief
 
@@ -69,11 +65,9 @@ reasonese-compare-prompts \
 
 The selected assistant defaults to Nemotron. Model authors are inferred from the suite unless repeated `--author` options select them explicitly. The command prefers batch transport for authoring and message QA; `--no-batch` selects synchronous transport for both stages. Free Nemotron authoring remains synchronous either way, while the flag controls whether chargeable Luna QA uses batch transport. `--allow-paid` is required before uncached Luna work. Failures remain recorded and a failed candidate directory is not silently resumed.
 
-Luna and probe results retain independent denominators: Luna is counted once per unique authored
-input, while the probe is counted per rendered span across orders and positions. A Luna-rejected
-input can still receive probe scores to preserve diagnostic evidence. Current comparison
-eligibility depends on Luna message QA only; probe mismatches, missing scores, and errors do not
-exclude comparisons. The optimization command never runs the assistant being studied.
+Luna is counted once per unique authored input and the probe per rendered span. A Luna-rejected
+input can still receive diagnostic probe scores; the optimization command never runs the studied
+assistant.
 
 ## Probe capture integrity
 
