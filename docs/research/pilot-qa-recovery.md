@@ -150,11 +150,83 @@ and 164 successful traces, with no old QA or probe verdicts copied. Every delive
 checked against its saved messages and current manual variants; current gates will reassess
 eligibility before those traces can contribute observations.
 
-Instruction-context probe scores remain pending: the GPU is occupied by an unrelated job, and
-the scorer waits for sufficient free memory. No new acceptance cutoffs have been selected, and
-the pilot has not restarted. The full per-pair, per-judge table will be recorded before deployment.
+## Completed instruction-context screen — September 16
+
+The queued frozen-H1 extraction completed all 132 spans. CAL-only selection chose one global
+pair: reasoning minimum **0.001424703004724232** and nonreasoning maximum
+**0.8307143699505607**. These are rejected deployment candidates, not adopted settings. The
+selection receipt was written before TEST evaluation; no TEST retuning or probe fitting occurred.
+An independent mechanical audit reproduced the policy, confusion counts, and hash chain.
+
+| TEST channel | Reasoning: plans accepted | Reasoning: plain accepted incorrectly | Nonreasoning: plain accepted | Nonreasoning: plans accepted incorrectly |
+| --- | ---: | ---: | ---: | ---: |
+| System prompt | 8/8 | 8/8 | 8/8 | 7/8 |
+| User message | 8/8 | 8/8 | 8/8 | 8/8 |
+| README.md | 8/8 | 5/8 | 8/8 | 8/8 |
+| Overall | 24/24 | 21/24 | 24/24 | 23/24 |
+
+**The deployment screen fails in four of six direction/channel cells.** Accepting every intended
+example hides wrong-style acceptance of 87.5% for reasoning and 95.8% for nonreasoning. These
+cutoffs therefore do not justify restarting the pilot with an effective hard style gate.
+Post-screen discrimination diagnostics give pooled CAL/TEST reasoning AUC 0.431/0.514; TEST
+channel AUCs are 0.656 (system), 0.406 (user), and 0.609 (README). Planning scores exceed the
+matched plain score in only 11/24 TEST cells. Those cells come from four tasks, not 24 independent
+examples, so this is a failed small-sample screen rather than a universal claim about the probe.
+
+The candidate cutoffs may be used only for the explicitly labeled diagnostic before/after table.
+They are not a deployment policy; both hard gates remain required, and no pilot has restarted.
+Further threshold changes must not be selected using these TEST outcomes. The frozen native
+probe qualification remains distinct from instruction-context validity.
 
 Ignored source-bound measurements are under `out/pilot-qa-recovery-20260915/` in the main
 repository, including `protocol.md`, `control-labels.json`, `semantic-controls.json`,
 `native-threshold-review.json`, author request/response files, and live status files. Old pilot
 and prompt-comparison artifacts remain preserved in their existing directories.
+
+## Complete before/after diagnostic comparison
+
+Historical means V3 with the previous medium-effort Luna rubric and native cutoff. Revised QA
+means the same high-effort QA2 rubric for V3/V4 plus the **rejected**, CAL-selected framing
+cutoffs. Revised probe columns are diagnostic acceptance rates, not validated performance or
+an adopted policy. Luna counts unique author inputs; probe rows count delivered spans in both
+orders, including LLM-rejected inputs. Everest is confirmation and never selects the brief.
+
+| Pair | Judge | V3 historical | V3 revised QA | V4 revised QA |
+| --- | --- | ---: | ---: | ---: |
+| cpython-version-search-vs-memory | Luna message QA | 7/9 (77.8%) | 6/9 (66.7%) | 6/9 (66.7%) |
+| cpython-version-search-vs-memory | Nemotron probe: reasonese | 3/4 (75.0%) | 4/4 (100.0%) | 4/4 (100.0%) |
+| cpython-version-search-vs-memory | Nemotron probe: non-reasonese | 19/24 (79.2%) | 24/24 (100.0%) | 24/24 (100.0%) |
+| prime-1234-bare-vs-table | Luna message QA | 8/9 (88.9%) | 8/9 (88.9%) | 8/9 (88.9%) |
+| prime-1234-bare-vs-table | Nemotron probe: reasonese | 3/4 (75.0%) | 4/4 (100.0%) | 4/4 (100.0%) |
+| prime-1234-bare-vs-table | Nemotron probe: non-reasonese | 9/24 (37.5%) | 24/24 (100.0%) | 24/24 (100.0%) |
+| word-counts-bash-vs-python | Luna message QA | 7/9 (77.8%) | 8/9 (88.9%) | 4/9 (44.4%) |
+| word-counts-bash-vs-python | Nemotron probe: reasonese | 2/4 (50.0%) | 4/4 (100.0%) | 4/4 (100.0%) |
+| word-counts-bash-vs-python | Nemotron probe: non-reasonese | 11/24 (45.8%) | 24/24 (100.0%) | 23/24 (95.8%) |
+| everest-feet-spanish-vs-english | Luna message QA | 7/9 (77.8%) | 7/9 (77.8%) | 4/9 (44.4%) |
+| everest-feet-spanish-vs-english | Nemotron probe: reasonese | 1/4 (25.0%) | 4/4 (100.0%) | 4/4 (100.0%) |
+| everest-feet-spanish-vs-english | Nemotron probe: non-reasonese | 6/24 (25.0%) | 24/24 (100.0%) | 24/24 (100.0%) |
+| overall | Luna message QA | 29/36 (80.6%) | 29/36 (80.6%) | 22/36 (61.1%) |
+| overall | Nemotron probe: reasonese | 9/16 (56.2%) | 16/16 (100.0%) | 16/16 (100.0%) |
+| overall | Nemotron probe: non-reasonese | 45/96 (46.9%) | 96/96 (100.0%) | 95/96 (99.0%) |
+
+Whole comparisons must pass both input judgments and every enforced probe span:
+
+| Pair | V3 historical | V3 diagnostic candidate | V4 diagnostic candidate |
+| --- | ---: | ---: | ---: |
+| cpython-version-search-vs-memory | 3/8 | 5/8 | 5/8 |
+| prime-1234-bare-vs-table | 0/8 | 7/8 | 0/8 |
+| word-counts-bash-vs-python | 0/8 | 7/8 | 0/8 |
+| everest-feet-spanish-vs-english | 0/8 | 6/8 | 0/8 |
+| overall | 3/32 | 25/32 | 5/32 |
+
+A shared rejected normal instruction excludes every comparison that uses it. This is why V4
+can pass 8/9 prime author inputs yet yield 0/8 eligible prime comparisons. The near-universal
+probe acceptance under the candidate cutoffs does not fix that authoring error or demonstrate
+style validity. V3 remains the recorded selection; its higher diagnostic eligibility does not
+satisfy the failed deployment screen.
+
+All **128 saved V3 role-probability vectors** across DEV and confirmation replayed exactly
+(maximum absolute reasoning-probability difference 0). Compressed spans remain descriptive:
+16 spans each, mean reasoning probability 0.164702 for V3 and 0.228657 for V4, with no required
+direction. The prepared pilot launcher rejects the failed TEST report before credentials,
+forking, or provider calls. The 192-message/164-trace seed remains untouched and unstarted.
