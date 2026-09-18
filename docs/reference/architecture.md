@@ -76,6 +76,11 @@ The OpenRouter key exists only at the transport boundary. Cache keys are structu
 coordinates. Raw intermediate tool-call responses, local results, and the final provider
 response are retained so reasoning and provider metadata are not discarded.
 
+Local tool results accept any string. In particular, `read_file` preserves the exact decoded
+UTF-8 contents, including indentation, trailing newlines, and empty or whitespace-only files,
+through assistant continuation and trace caching. Authored instructions and initial conversation
+messages retain their separate non-empty, trimmed-text constraint.
+
 Message QA uses GPT-5.6 Luna batch with high reasoning and a strict `{complies, issues}` schema.
 It quotes the exact output of `authoring_instructions(spec)` and the candidate as data. A false
 verdict prevents assistant inference for that input but never triggers automatic regeneration.

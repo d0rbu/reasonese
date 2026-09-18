@@ -78,6 +78,7 @@
 | `tests/test_matchup_conversation.py` | Matchup and rendering tests |
 | `tests/test_openrouter.py` | Provider-client contract tests |
 | `tests/test_cache_runner_cli.py` | Cache, execution, and CLI tests |
+| `tests/test_tool_output_text.py` | Exact local file text in tool continuations, caches, and judge evidence |
 | `tests/test_judging.py` | Verdict, judgment-cache, and judge-utility tests |
 | `tests/fixtures/message_qa_styles.yaml` | Labelled style/task-preservation contrasts for future authorized QA calibration |
 | `tests/test_framing_styles.py` | Distinct framing briefs, exact QA fixture delivery, and model-only constraints |
