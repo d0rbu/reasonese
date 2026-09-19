@@ -117,10 +117,10 @@ class ChatMessage:
 @beartype
 @dataclass(frozen=True, slots=True)
 class ToolResult:
-    """A locally executed function-tool result."""
+    """A local tool result; file contents may be empty or have surrounding whitespace."""
 
     call_id: ToolCallId
-    content: GeneratedText
+    content: str
 
     def openrouter_dict(self) -> JsonObject:
         """Return the OpenRouter tool-result message shape."""

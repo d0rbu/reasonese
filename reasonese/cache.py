@@ -251,10 +251,13 @@ def _tool_step_from_dict(raw: object) -> ToolStep:
         ):
             raise ValueError("cached tool result has invalid fields")
         result_data = cast(dict[str, Any], result)
+        content = result_data["content"]
+        if not isinstance(content, str):
+            raise ValueError("cached tool result content must be text")
         results.append(
             ToolResult(
                 ToolCallId.parse(result_data["tool_call_id"]),
-                GeneratedText.parse(result_data["content"]),
+                content,
             )
         )
     return ToolStep(response, tuple(results))

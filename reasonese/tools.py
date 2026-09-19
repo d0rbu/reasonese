@@ -253,7 +253,7 @@ class ToolRuntime:
                     content = f"error: unsupported tool {call.name!s}"
         except (OSError, RuntimeError, ValueError) as error:
             content = f"error: {error}"
-        return ToolResult(call.call_id, GeneratedText.parse(content))
+        return ToolResult(call.call_id, content)
 
 
 @beartype
