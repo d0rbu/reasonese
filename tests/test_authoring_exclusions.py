@@ -17,7 +17,7 @@ from reasonese.conversation import GeneratedMessage, GeneratedText
 from reasonese.io import write_study_suite
 from reasonese.message_qa import parse_message_qa
 from reasonese.message_qa_cache import YamlMessageQaCache
-from reasonese.openrouter import OpenRouterClient
+from reasonese.openrouter import JsonObject, OpenRouterClient
 from reasonese.planning import PromptSpec
 from reasonese.routing import CollectionRouting
 from reasonese.study import Study, build_trials, make_study
@@ -26,7 +26,6 @@ from tests.test_study_orchestration import (
     FakeTransport,
     _assistant_responses,
     _chat,
-    _judge_batch,
     _manual_library,
     _spec,
 )
@@ -44,6 +43,17 @@ def _studies() -> tuple[Study, ...]:
         make_study((other, good), Assistant.NEMOTRON_3_5_LIGHTNING, 1),
         make_study((bad, other), Assistant.GEMMA_4_31B_IT, 1),
     )
+
+
+def _sync_judge(values: tuple[bool, ...]) -> list[JsonObject]:
+    return [
+        _chat(json.dumps({"completed": value}), f"judge-{index}")
+        for index, value in enumerate(values)
+    ]
+
+
+def _sync_qa(complies: bool, issues: list[str], response_id: str) -> JsonObject:
+    return _chat(json.dumps({"complies": complies, "issues": issues}), response_id)
 
 
 def _seed(root: Path, studies: tuple[Study, ...], failed: set[PromptSpec]):
@@ -85,7 +95,7 @@ def test_mixed_exclusions_preserve_both_orders_and_exact_retained_results(
     tasks = tuple(CollectionTask(study, root / str(i)) for i, study in enumerate(studies))
     manual = _manual_library(tmp_path, *studies)
     cache = SqliteStudyCache(root / "collection.sqlite3") if shared else None
-    transport = FakeTransport([*_assistant_responses(2), _judge_batch((True, False, False, True))])
+    transport = FakeTransport([*_assistant_responses(2), *_sync_judge((True, False, False, True))])
     results = collect_studies(
         tasks,
         OpenRouterClient(transport),
@@ -99,7 +109,7 @@ def test_mixed_exclusions_preserve_both_orders_and_exact_retained_results(
     assert [len(r.trials) for r in results] == [0, 2, 0]
     assert [len(r.observations) for r in results] == [0, 4, 0]
     assert [len(r.excluded_inputs) for r in results] == [1, 0, 1]
-    assert len(transport.post_calls) == 3  # Only retained assistant trials and their judges.
+    assert len(transport.post_calls) == 6  # Retained assistant trials and synchronous judgments.
     assert "author=Nemotron 3.5 Lightning" in caplog.text
     assert "framing=reasonese-persuasive" in caplog.text
     assert "channel=README.md" in caplog.text
@@ -152,7 +162,7 @@ def test_mixed_exclusions_preserve_both_orders_and_exact_retained_results(
     # Collect the surviving comparison alone: exact outcomes, requests, IDs and rows match.
     baseline = tmp_path / "baseline"
     bm, bq, _ = _seed(baseline, (studies[1],), set())
-    bt = FakeTransport([*_assistant_responses(2), _judge_batch((True, False, False, True))])
+    bt = FakeTransport([*_assistant_responses(2), *_sync_judge((True, False, False, True))])
     only = collect_studies(
         (CollectionTask(studies[1], baseline),),
         OpenRouterClient(bt),
@@ -196,7 +206,7 @@ def test_rejected_warm_comparison_removes_stale_rows_but_preserves_raw_caches(
     messages, qa, _ = _seed(tmp_path, (study,), set())
     task = CollectionTask(study, tmp_path / "study")
     manual = _manual_library(tmp_path, study)
-    transport = FakeTransport([*_assistant_responses(2), _judge_batch((True, False, False, True))])
+    transport = FakeTransport([*_assistant_responses(2), *_sync_judge((True, False, False, True))])
     collect_studies(
         (task,),
         OpenRouterClient(transport),
@@ -306,12 +316,15 @@ def test_report_rejects_missing_extra_or_conflicting_verdicts(tmp_path: Path) ->
 
 
 def test_fresh_negative_qa_filters_before_any_assistant_request(tmp_path: Path) -> None:
-    from tests.test_message_qa import _qa_batch
-
     study = _studies()[0]
     messages, qa, _ = _seed(tmp_path, (study,), set())
     qa.path.unlink()
-    transport = FakeTransport([_qa_batch(((False, ["Changed task."]), (True, [])))])
+    transport = FakeTransport(
+        [
+            _sync_qa(False, ["Changed task."], "qa-0"),
+            _sync_qa(True, [], "qa-1"),
+        ]
+    )
     result = collect_studies(
         (CollectionTask(study, tmp_path / "study"),),
         OpenRouterClient(transport),
@@ -322,14 +335,12 @@ def test_fresh_negative_qa_filters_before_any_assistant_request(tmp_path: Path) 
         routing=CollectionRouting(allow_paid=True),
     )[0]
     assert result.trials == ()
-    assert len(transport.post_calls) == 1
-    assert transport.post_calls[0][0] == "/api/beta/batches"
+    assert len(transport.post_calls) == 2
+    assert all(path == "/api/v1/chat/completions" for path, _ in transport.post_calls)
     assert result.excluded_inputs[0].issues == ("Changed task.",)
 
 
 def test_changed_text_requires_new_qa_and_can_restore_excluded_comparison(tmp_path: Path) -> None:
-    from tests.test_study_orchestration import _message_qa_batch
-
     study = _studies()[1]
     messages, qa, _ = _seed(tmp_path, (study,), {study.inputs[0]})
     tasks = (CollectionTask(study, tmp_path / "study"),)
@@ -340,7 +351,11 @@ def test_changed_text_requires_new_qa_and_can_restore_excluded_comparison(tmp_pa
     with pytest.raises(ValueError, match="allow-paid"):
         collect_studies(tasks, None, manual, messages, qa, prefer_batch=False)
     transport = FakeTransport(
-        [_message_qa_batch(1), *_assistant_responses(2), _judge_batch((True, False, False, True))]
+        [
+            _sync_qa(True, [], "qa-0"),
+            *_assistant_responses(2),
+            *_sync_judge((True, False, False, True)),
+        ]
     )
     restored = collect_studies(
         tasks,
@@ -362,22 +377,10 @@ def test_changed_text_requires_new_qa_and_can_restore_excluded_comparison(tmp_pa
 
 
 def test_malformed_qa_is_an_error_not_an_exclusion(tmp_path: Path) -> None:
-    from tests.test_study_orchestration import _batch_result
-
     study = _studies()[0]
     messages, qa, _ = _seed(tmp_path, (study,), set())
     qa.path.unlink()
-    transport = FakeTransport(
-        [
-            {
-                "id": "qa",
-                "status": "completed",
-                "results": [
-                    _batch_result(f"request-{i}", _chat("not JSON", f"qa-{i}")) for i in range(2)
-                ],
-            }
-        ]
-    )
+    transport = FakeTransport([_chat("not JSON", "qa-0"), _chat("not JSON", "qa-1")])
     with pytest.raises(ValueError, match="not valid JSON"):
         collect_studies(
             (CollectionTask(study, tmp_path / "study"),),
@@ -389,7 +392,7 @@ def test_malformed_qa_is_an_error_not_an_exclusion(tmp_path: Path) -> None:
             routing=CollectionRouting(allow_paid=True),
         )
     assert not (tmp_path / "authoring_report.json").exists()
-    assert len(transport.post_calls) == 1
+    assert len(transport.post_calls) == 2
 
 
 def test_cold_authoring_still_requires_permission_and_key(tmp_path: Path) -> None:

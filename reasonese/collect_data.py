@@ -340,6 +340,7 @@ def collect_studies(
         qa_cache,
         client,
         routing=routing,
+        prefer_batch=prefer_batch,
     )
     rejected = {verdict.spec: verdict for verdict in audit.verdicts if not verdict.complies}
     report = authoring_report(studies, audit.verdicts)
@@ -509,6 +510,7 @@ def collect_studies(
         new_judgments = judge_fingerprinted_traces(
             tuple(trace for _, _, trace in missing_judgments),
             client,
+            prefer_batch=prefer_batch,
         )
         judgments_by_state: dict[int, list[tuple[TrialId, Judgment]]] = {}
         for (state_index, trial, _), judgment in zip(missing_judgments, new_judgments, strict=True):

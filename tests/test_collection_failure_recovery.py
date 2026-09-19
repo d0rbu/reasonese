@@ -74,15 +74,16 @@ def test_collection_records_terminal_tool_failures_without_judge_requests(tmp_pa
 
     class TerminalToolTransport:
         def __init__(self) -> None:
-            self.batch_schemas: list[str] = []
+            self.qa_schemas: list[str] = []
             self.assistant_requests = 0
 
         def post_json(self, path: str, body: JsonObject) -> JsonObject:
-            if path == "/api/beta/batches":
-                schema = body["requests"][0]["body"]["response_format"]["json_schema"]["name"]
-                self.batch_schemas.append(schema)
+            assert path == "/api/v1/chat/completions"
+            if "response_format" in body:
+                schema = body["response_format"]["json_schema"]["name"]
+                self.qa_schemas.append(schema)
                 assert schema == "message_compliance_verdict"
-                return _message_qa_batch(len(body["requests"]))
+                return _chat(json.dumps({"complies": True, "issues": []}), "qa")
             self.assistant_requests += 1
             return _tool_chat()
 
@@ -105,7 +106,7 @@ def test_collection_records_terminal_tool_failures_without_judge_requests(tmp_pa
     assert result.failed_trials == 2
     assert len(result.observations) == 4
     assert all(not observation.completed for observation in result.observations)
-    assert transport.batch_schemas == ["message_compliance_verdict"]
+    assert transport.qa_schemas == ["message_compliance_verdict"] * 2
     assert transport.assistant_requests == 18
     assert receipt["attempted_trials"] == 2
     assert receipt["failed_trials"] == 2
@@ -124,7 +125,7 @@ def test_collection_records_terminal_tool_failures_without_judge_requests(tmp_pa
     assert warm.judgment_cache_hits == 2
     assert warm.failed_trials == 2
     assert all(not observation.completed for observation in warm.observations)
-    assert transport.batch_schemas == ["message_compliance_verdict"]
+    assert transport.qa_schemas == ["message_compliance_verdict"] * 2
     assert transport.assistant_requests == 18
 
 

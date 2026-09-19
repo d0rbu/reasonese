@@ -98,7 +98,8 @@ it to the selected assistant with file-read, sandboxed bash, sandboxed Python, a
 tools. When batch authoring is selected, it submits independent author batches before polling, so one
 author model's queue does not block another author's submission. `--route batch --allow-paid`
 selects batch authoring where available; the default prefers free synchronous routes.
-`--no-batch` keeps authoring synchronous and conflicts with `--route batch`. Bash and Python
+`--no-batch` keeps authoring, message QA, assistant inference, and response judging synchronous;
+it conflicts with `--route batch`. Bash and Python
 execution require `bubblewrap` (`bwrap`) on the host.
 
 Collection requires `--allow-paid` before any uncached chargeable work. Even free model routes

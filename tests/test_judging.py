@@ -220,6 +220,34 @@ def test_judge_trace_batches_one_independent_boolean_per_input() -> None:
     assert all(request["body"]["model"] == "openai/gpt-5.6-luna" for request in payload["requests"])
 
 
+def test_fingerprinted_judging_sync_matches_default_batch_requests_and_verdicts() -> None:
+    trace = _trace()
+    fingerprinted = fingerprint_traces((trace,))
+
+    batch_transport = FakeTransport([_completed_batch((True, False))])
+    batch_judgments = judge_fingerprinted_traces(
+        fingerprinted, OpenRouterClient(batch_transport)
+    )
+    sync_transport = FakeTransport([_judge_chat(True, "judge-0"), _judge_chat(False, "judge-1")])
+    sync_judgments = judge_fingerprinted_traces(
+        fingerprinted, OpenRouterClient(sync_transport), prefer_batch=False
+    )
+
+    assert tuple(item.completed for item in sync_judgments[0].verdicts) == (True, False)
+    assert sync_judgments == batch_judgments
+    batch_path, batch_payload = batch_transport.post_calls[0]
+    assert batch_path == "/api/beta/batches"
+    batch_requests = batch_payload["requests"]
+    assert isinstance(batch_requests, list)
+    assert [path for path, _ in sync_transport.post_calls] == [
+        "/api/v1/chat/completions",
+        "/api/v1/chat/completions",
+    ]
+    assert [body for _, body in sync_transport.post_calls] == [
+        request["body"] for request in batch_requests
+    ]
+
+
 def test_all_true_and_all_false_judgments_are_representable() -> None:
     trace = _trace()
     for values in ((True, True), (False, False)):

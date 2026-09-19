@@ -28,7 +28,7 @@ from tests.test_authoring_exclusions import _seed, _studies
 from tests.test_study_orchestration import (
     FakeTransport,
     _assistant_responses,
-    _judge_batch,
+    _chat,
     _manual_library,
 )
 
@@ -139,6 +139,13 @@ class RecordingScorer:
         )
 
 
+def _sync_judgments(values: tuple[bool, ...]) -> list[dict[str, object]]:
+    return [
+        _chat(json.dumps({"completed": value}), f"judge-{index}")
+        for index, value in enumerate(values)
+    ]
+
+
 def test_low_probe_score_keeps_trials_observations_and_order_balance(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
@@ -146,7 +153,7 @@ def test_low_probe_score_keeps_trials_observations_and_order_balance(
     study = _studies()[0]
     messages, qa, _ = _seed(tmp_path, (study,), set())
     transport = FakeTransport(
-        [*_assistant_responses(4), _judge_batch((True, False, False, True) * 2)]
+        [*_assistant_responses(4), *_sync_judgments((True, False, False, True) * 2)]
     )
     scorer = RecordingScorer(failed_index=3)
     task = CollectionTask(study, tmp_path / "study")
@@ -179,7 +186,7 @@ def test_low_probe_score_keeps_trials_observations_and_order_balance(
     assert len(result.observations) == 2 * len(build_trials(study))
     assert result.excluded_inputs == ()
     assert result.probe_qa_issues == ()
-    assert len(transport.post_calls) == 5
+    assert len(transport.post_calls) == 12
     assert "reference mismatch (diagnostic only)" in caplog.text
 
     report = json.loads((tmp_path / "probe_qa_report.json").read_text())
@@ -204,7 +211,7 @@ def test_probe_scorer_error_is_reported_but_does_not_stop_collection(tmp_path: P
     study = _studies()[0]
     messages, qa, _ = _seed(tmp_path, (study,), set())
     transport = FakeTransport(
-        [*_assistant_responses(4), _judge_batch((True, False, False, True) * 2)]
+        [*_assistant_responses(4), *_sync_judgments((True, False, False, True) * 2)]
     )
 
     class BrokenScorer:
@@ -227,7 +234,7 @@ def test_probe_scorer_error_is_reported_but_does_not_stop_collection(tmp_path: P
     )[0]
     assert len(result.trials) == len(build_trials(study))
     assert len(result.observations) == 2 * len(build_trials(study))
-    assert len(transport.post_calls) == 5
+    assert len(transport.post_calls) == 12
     report = json.loads((tmp_path / "probe_qa_report.json").read_text())
     assert report["counts"]["scores"] == 0
     assert report["counts"]["error_requests"] == 4
@@ -239,7 +246,7 @@ def test_probe_preflight_error_is_diagnostic_and_collection_continues(tmp_path: 
     study = _studies()[0]
     messages, qa, _ = _seed(tmp_path, (study,), set())
     transport = FakeTransport(
-        [*_assistant_responses(4), _judge_batch((True, False, False, True) * 2)]
+        [*_assistant_responses(4), *_sync_judgments((True, False, False, True) * 2)]
     )
 
     class BrokenPreflight:
@@ -262,7 +269,7 @@ def test_probe_preflight_error_is_diagnostic_and_collection_continues(tmp_path: 
     )[0]
     assert len(result.trials) == len(build_trials(study))
     assert len(result.observations) == 2 * len(build_trials(study))
-    assert len(transport.post_calls) == 5
+    assert len(transport.post_calls) == 12
     report = json.loads((tmp_path / "probe_qa_report.json").read_text())
     assert report["counts"]["error_requests"] == 4
     assert all(row["reason"].startswith("probe preflight failed") for row in report["errors"])
@@ -276,7 +283,7 @@ def test_warm_probe_mode_preserves_cached_trace_context_and_outcomes(
     task = CollectionTask(study, tmp_path / "study")
     manual = _manual_library(tmp_path, study)
     initial = FakeTransport(
-        [*_assistant_responses(4), _judge_batch((True, False, False, True) * 2)]
+        [*_assistant_responses(4), *_sync_judgments((True, False, False, True) * 2)]
     )
     baseline = collect_studies(
         (task,),
