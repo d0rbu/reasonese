@@ -36,6 +36,11 @@ Local open-weight activations also do not establish exact parity with an OpenRou
 unless the hosted checkpoint, quantization, tokenizer, and template are all independently shown
 to match. Probe reports must preserve that limitation.
 
+The [matched context-transfer diagnostic](../research/probe-context-transfer.md) compares saved
+native excerpts with independently reviewed ordinary rewrites in the actual delivery channels.
+Its strong ranking separation and context-dependent scores are exploratory evidence; they do
+not validate a universal style cutoff or change the diagnostic-only collection policy.
+
 ### Previous expanded Nemotron result (September 13, 2026)
 
 The expanded Nemotron run used 250 neutral documents, a 1,024-token cap, and candidate
