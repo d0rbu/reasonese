@@ -284,15 +284,17 @@ appropriate balanced factorial design.
 
 `reasonese-analyze` also fits a separate feature lasso for each evaluation assistant on the same
 comparisons. Each cell's strength is a pair-side offset plus a sparse sum of framing, channel,
-author, all three two-way interactions, and the framing-by-channel-by-author interaction under an
-L1 penalty. Assistant and delivery position are not features: assistant defines an independent
-fit, while position is controlled by collecting both permutations. The report lists contrasts in
-the order they enter as the penalty relaxes, with coefficients at the cross-validated
-one-standard-error penalty, and flags contrasts that never differ inside a trial or are identical
-to another. Because one lower-order coefficient can represent an effect shared across many cells
-more sparsely than repeated interaction coefficients, the L1 penalty generally favors the simpler
-term. Lasso coefficients are shrunk and carry no standard errors, so the entry order is a guide to
-what deserves a closer look, not a test.
+author, all three two-way interactions, the framing-by-channel-by-author interaction, and a
+`first_position` indicator for the cell delivered first, under an L1 penalty. Assistant is not a
+feature: it defines an independent fit. Both permutations of every sampled cell pair are
+collected, so `first_position` captures the order effect itself rather than an imbalance in the
+other contrasts. The report lists contrasts in the order they enter as the penalty relaxes, with
+coefficients at the cross-validated one-standard-error penalty, and flags contrasts that never
+differ inside a trial or are identical to another. Because one lower-order coefficient can
+represent an effect shared across many cells more sparsely than repeated interaction
+coefficients, the L1 penalty generally favors the simpler term. Lasso coefficients are shrunk and
+carry no standard errors, so the entry order is a guide to what deserves a closer look, not a
+test.
 
 ## Writing the manual variants
 

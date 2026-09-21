@@ -9,11 +9,12 @@ a sparse sum of feature effects::
     logit P(first beats second) = sign * offset[block] + sum_j beta_j * (x_first_j - x_second_j)
 
 The features are treatment contrasts for framing, channel, and author, all
-three two-way interactions, and their three-way interaction. An L1 penalty on
-``beta`` zeroes the features the comparisons do not support, so the order in
-which features enter as the penalty relaxes ranks them by how strongly they
-are tied to completion. The offsets keep the L2 penalty of the ranking fit,
-which bounds them under separation without shrinking any feature.
+three two-way interactions, their three-way interaction, and ``first_position``,
+an indicator for the cell delivered first. An L1 penalty on ``beta`` zeroes the
+features the comparisons do not support, so the order in which features enter
+as the penalty relaxes ranks them by how strongly they are tied to completion.
+The offsets keep the L2 penalty of the ranking fit, which bounds them under
+separation without shrinking any feature.
 """
 
 from __future__ import annotations
@@ -216,8 +217,9 @@ class _Candidates:
 def _candidate_columns(observations: tuple[Observation, ...]) -> _Candidates:
     """Build one row of candidate feature values per observation.
 
-    Main effects come first, followed by every two-way interaction among
-    framing, channel, and author and then their three-way interaction.
+    Main effects come first, then the ``first_position`` indicator for the
+    cell delivered first, followed by every two-way interaction among framing,
+    channel, and author and then their three-way interaction.
     """
     axes = {
         "framing": _axis(
@@ -243,6 +245,17 @@ def _candidate_columns(observations: tuple[Observation, ...]) -> _Candidates:
             names.append(f"{axis_name}[{level}]")
             groups.append(axis_name)
             columns.append(axis.dummies[:, position])
+    # Exactly one cell in every trial is delivered first, so this column always
+    # differs inside a trial and is never dropped as constant.
+    names.append("first_position")
+    groups.append("position")
+    columns.append(
+        np.fromiter(
+            (int(row.position) == 1 for row in observations),
+            dtype=np.float64,
+            count=len(observations),
+        )
+    )
     for interaction in _INTERACTIONS:
         interaction_axes = tuple(axes[name] for name in interaction)
         for positions in product(*(range(len(axis.levels)) for axis in interaction_axes)):

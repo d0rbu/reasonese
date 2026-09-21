@@ -569,7 +569,7 @@ def test_write_analysis_emits_complete_artifact_set(tmp_path: Path) -> None:
     assert str(pair.pair_id) in report
     assert "reasonese-normal" in report
     assert "## Feature lasso" in report
-    assert "Position is excluded" in report
+    assert "`first_position`" in report
     diagnostics = json.loads((output / "diagnostics.json").read_text())
     feature_lassos = diagnostics["feature_lasso"]["assistants"]
     assert list(feature_lassos) == [str(Assistant.QWEN3_8_2_4T)]

@@ -91,10 +91,14 @@ def _lasso_lines(lasso: FeatureLasso) -> list[str]:
         "so a feature stays at zero until the comparisons support it; the offsets keep the L2 "
         "penalty. Features are treatment contrasts against "
         f"`{references['framing']}` framing, the `{references['channel']}` channel, the "
-        f"`{references['author']}` author, all three two-way interactions, and the "
-        "framing-by-channel-by-author interaction. Position is excluded because both delivery "
-        "orders are measured symmetrically. Columns are not standardized, so a feature that "
-        "rarely differs inside a trial needs a larger effect to enter.",
+        f"`{references['author']}` author, all three two-way interactions, the "
+        "framing-by-channel-by-author interaction, and `first_position`, an indicator for the "
+        "cell delivered first. When every cell pair is collected in both delivery orders, as "
+        "the design intends, `first_position` is orthogonal to the other contrasts and captures "
+        "the order effect itself; on a partial or filtered set of trials it can also absorb "
+        "cell contrasts. It differs in every comparison, so it enters earlier than a cell "
+        "contrast of the same size. Columns are not standardized, so a feature that rarely "
+        "differs inside a trial needs a larger effect to enter.",
         "",
         f"- Comparisons: {lasso.comparisons} over {lasso.cell_pairs} distinct cell pairs; "
         f"blocks: {len(lasso.blocks)}",
