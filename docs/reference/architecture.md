@@ -246,11 +246,14 @@ analysis from hours to well under a minute.
 
 The feature lasso in `reasonese.lasso` refits the same within-trial comparisons independently
 for each evaluation assistant. Every cell's strength is a pair-side offset plus a sparse sum of
-treatment contrasts for framing, channel, and author, all three two-way interactions, and their
-three-way interaction. Assistant is matchup metadata that selects the independent fit, not a
-feature. Delivery position is also absent because every sampled cell pair is measured in both
-orders. The references are the `normal` framing, the `user message` channel, and the first model
-author present. A shared effect needs one lower-order coefficient rather than repeated interaction
+treatment contrasts for framing, channel, and author, all three two-way interactions, their
+three-way interaction, and `first_position`, an indicator for the cell delivered first. Assistant
+is matchup metadata that selects the independent fit, not a feature. When every sampled cell pair
+is measured in both orders, `first_position` is orthogonal to the other contrasts and captures the
+order effect itself; a partial or filtered set of trials can break that balance. Because it
+differs in every comparison, it enters the path earlier than a cell contrast of the same size.
+The references are the `normal` framing, the `user message` channel, and the first model author
+present. A shared effect needs one lower-order coefficient rather than repeated interaction
 coefficients across levels, so the L1 penalty generally favors the lower-order representation.
 Columns that never
 differ inside a trial are dropped, and a column identical to an earlier one, up to sign, is

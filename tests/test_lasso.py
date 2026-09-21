@@ -69,9 +69,10 @@ class _Planted:
     nemotron_author: float = 0.0
     reasonese_readme: float = 0.0
     reasonese_readme_nemotron: float = 0.0
+    first_position: float = 0.0
 
 
-def _strength(spec: PromptSpec, planted: _Planted) -> float:
+def _strength(spec: PromptSpec, position: int, planted: _Planted) -> float:
     value = 0.0
     if spec.framing is Framing.REASONESE_NORMAL:
         value += planted.reasonese_normal
@@ -83,6 +84,8 @@ def _strength(spec: PromptSpec, planted: _Planted) -> float:
         value += planted.reasonese_readme
         if spec.author is Author.NEMOTRON_3_5_LIGHTNING:
             value += planted.reasonese_readme_nemotron
+    if position == 1:
+        value += planted.first_position
     return value
 
 
@@ -126,8 +129,9 @@ def _synthetic_observations(
 ) -> tuple[Observation, ...]:
     """Draw trials whose winner follows the lasso's model with planted effects.
 
-    Every trial completes exactly one instruction, so there are no ties, and
-    the pair's first side carries the planted block offset.
+    Every trial completes exactly one instruction, so there are no ties; the
+    pair's first side carries the planted block offset and the cell delivered
+    first carries the planted position effect.
     """
     random = Random(seed)
     rows: list[Observation] = []
@@ -157,8 +161,8 @@ def _synthetic_observations(
         if random.random() < 0.5:
             specs.reverse()
         strengths = []
-        for spec in specs:
-            strength = _strength(spec, planted)
+        for position, spec in enumerate(specs, start=1):
+            strength = _strength(spec, position, planted)
             if spec.instruction == pair.first:
                 strength += offsets[(str(pair.pair_id), str(assistant))]
             strengths.append(strength)
@@ -175,6 +179,7 @@ _PLANTED = _Planted(
     nemotron_author=0.7,
     reasonese_readme=1.5,
     reasonese_readme_nemotron=0.8,
+    first_position=-0.9,
 )
 _PLANTED_AUTHORS = (Author.GEMMA_4_31B_IT, Author.NEMOTRON_3_5_LIGHTNING)
 _PLANTED_ASSISTANTS = (Assistant.GEMMA_4_31B_IT, Assistant.NEMOTRON_3_5_LIGHTNING)
@@ -313,6 +318,7 @@ def test_candidate_columns_use_the_documented_references_and_indicators() -> Non
         "framing[reasonese-normal]",
         "channel[README.md]",
         "author[Nemotron 3.5 Lightning]",
+        "first_position",
         "framing[reasonese-normal]:channel[README.md]",
         "framing[reasonese-normal]:author[Nemotron 3.5 Lightning]",
         "channel[README.md]:author[Nemotron 3.5 Lightning]",
@@ -320,11 +326,18 @@ def test_candidate_columns_use_the_documented_references_and_indicators() -> Non
     )
     values = dict(zip(candidates.names, candidates.matrix.T, strict=True))
     groups = dict(zip(candidates.names, candidates.groups, strict=True))
-    # The second row occupies every non-reference level, so every term is active.
+    # The reference row was delivered first; the second row occupies every
+    # non-reference level, so every other term is active there.
+    assert values["first_position"].tolist() == [1.0, 0.0]
+    assert groups["first_position"] == "position"
     assert values["framing[reasonese-normal]"].tolist() == [0.0, 1.0]
     assert values["channel[README.md]"].tolist() == [0.0, 1.0]
     assert values["author[Nemotron 3.5 Lightning]"].tolist() == [0.0, 1.0]
-    assert all(column.tolist() == [0.0, 1.0] for column in values.values())
+    assert all(
+        column.tolist() == [0.0, 1.0]
+        for name, column in values.items()
+        if name != "first_position"
+    )
     triple = "framing[reasonese-normal]:channel[README.md]:author[Nemotron 3.5 Lightning]"
     assert groups[triple] == "framing:channel:author"
 
@@ -355,13 +368,15 @@ def test_default_factorial_has_exactly_the_requested_feature_groups() -> None:
         "framing": 7,
         "channel": 2,
         "author": 1,
+        "position": 1,
         "framing:channel": 14,
         "framing:author": 7,
         "channel:author": 2,
         "framing:channel:author": 14,
     }
-    assert len(candidates.names) == 47
-    assert not any("assistant" in name or "position" in name for name in candidates.names)
+    assert len(candidates.names) == 48
+    assert candidates.names.count("first_position") == 1
+    assert not any("assistant" in name for name in candidates.names)
 
 
 def test_references_fall_back_to_the_first_present_level() -> None:
@@ -447,7 +462,7 @@ def test_assembly_orients_every_comparison_and_block() -> None:
     assert sum(block.comparisons for block in assembled.blocks) == design.size
     assert set(design.block_sign.tolist()) == {-1.0, 1.0}
     assert set(design.outcomes.tolist()) == {0.0, 1.0}
-    assert "first_position" not in assembled.fitted
+    assert "first_position" in assembled.fitted
     assert not any("assistant" in feature for feature in assembled.fitted)
     assert design.features.flags.f_contiguous
     assert assembled.group_count == len(set(assembled.groups.tolist())) <= design.size
@@ -653,7 +668,9 @@ def test_planted_effects_are_selected_with_their_signs() -> None:
         "author[Nemotron 3.5 Lightning]",
         "framing[reasonese-normal]:channel[README.md]",
         "framing[reasonese-normal]:channel[README.md]:author[Nemotron 3.5 Lightning]",
+        "first_position",
     } <= set(chosen)
+    assert coefficients["first_position"] < 0.0
     assert coefficients["framing[reasonese-normal]"] < 0.0
     assert coefficients["channel[README.md]"] < 0.0
     assert coefficients["author[Nemotron 3.5 Lightning]"] > 0.0
@@ -667,6 +684,18 @@ def test_planted_effects_are_selected_with_their_signs() -> None:
         assert row["offset_selected"] == pytest.approx(
             planted[(str(row["pair"]), result.assistant)], abs=0.5
         )
+
+
+def test_first_position_is_always_fitted_and_differs_in_every_comparison() -> None:
+    result = _planted_fit()
+
+    feature = next(row for row in result.features if row.name == "first_position")
+
+    assert feature.group == "position"
+    assert feature.status == "fitted"
+    assert feature.differing_comparisons == result.comparisons
+    assert "first_position" in result.fitted
+    assert entry_index(result, "first_position") is not None
 
 
 def test_each_evaluation_assistant_gets_an_independent_fit() -> None:
@@ -843,7 +872,7 @@ def test_analysis_cli_can_skip_cross_validation(
     assert "## Feature lasso" in report
     assert "No cross-validation was run" in report
     assert "framing-by-channel-by-author interaction" in report
-    assert "Position is excluded" in report
+    assert "`first_position`" in report
     for name in (
         "lasso_path.csv",
         "lasso_coefficients.csv",
@@ -958,6 +987,25 @@ def test_folds_keep_both_orderings_of_a_cell_pair_together() -> None:
     assert set(assignment.tolist()) == {0, 1, 2}
     again = lasso._fold_assignment(assembled.groups, assembled.group_count, 3, seed=4)
     assert again.tolist() == assignment.tolist()
+
+
+def test_first_position_flips_between_the_two_orders_and_is_orthogonal_to_the_rest() -> None:
+    observations = _mirrored_pairings(6)
+    assembled = lasso._assemble(observations, pair_memberships(observations, _pairs()))
+
+    features = assembled.design.features
+    column = assembled.fitted.index("first_position")
+    position = features[:, column]
+    others = np.delete(features, column, axis=1)
+
+    assert set(position.tolist()) == {-1.0, 1.0}
+    # The two orderings of one pairing are adjacent: the position difference
+    # flips between them while every other difference column is identical, so
+    # with both orders present the position column is exactly orthogonal.
+    assert (position[0::2] + position[1::2]).tolist() == [0.0] * 6
+    assert np.array_equal(others[0::2], others[1::2])
+    assert others.shape[1] > 0
+    assert np.all(position @ others == 0.0)
 
 
 def test_cross_validation_scales_both_penalties_to_each_fold(
