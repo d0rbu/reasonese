@@ -40,6 +40,9 @@ matchup -> authored messages -> independent message QA -> conversation -> assist
   work. Immutable requests receive a fresh retry budget each time they are queued, and limits
   persist across stages on one client.
 - `reasonese.conversation` builds authoring requests and channel-specific chat messages.
+- `reasonese.scenarios` optionally places a pair's two inputs inside a shared templated
+  conversation instead of bare messages; see [`scenarios.md`](scenarios.md). Without a selected
+  scenario directory every conversation is bare.
 - `reasonese.manual_messages` resolves filesystem-backed variants for the user author and
   snapshots the needed files once per top-level invocation.
 - `reasonese.tools` defines bounded file, shell, Python, and server-side web-search tools.

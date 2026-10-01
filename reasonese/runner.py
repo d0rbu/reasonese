@@ -22,7 +22,6 @@ from reasonese.conversation import (
     GeneratedText,
     ToolStep,
     authoring_request,
-    construct_conversation,
 )
 from reasonese.manual_messages import ManualMessageLibrary, ManualMessageSnapshot
 from reasonese.matchup import Matchup
@@ -41,6 +40,11 @@ from reasonese.openrouter import (
 )
 from reasonese.planning import PromptSpec
 from reasonese.routing import CollectionRouting
+from reasonese.scenarios import (
+    ScenarioLibrary,
+    build_conversation,
+    require_scenario_selection,
+)
 from reasonese.scheduling import ScheduledRequest
 from reasonese.tools import (
     ASSISTANT_TOOLS,
@@ -323,11 +327,17 @@ def run_matchup(
     *,
     prefer_batch: bool,
     routing: CollectionRouting | None = None,
+    scenarios: ScenarioLibrary | None = None,
 ) -> RunResult:
     """Return a cached trace or execute the complete matchup through OpenRouter."""
     routing = routing or CollectionRouting()
     manual_snapshot = manual_messages.snapshot(matchup.inputs)
+    if scenarios is not None:
+        # Reject instructions the scenarios cannot place before any authoring spend.
+        scenarios.scenario_for(matchup)
     cached = trace_cache.get(matchup)
+    if cached is not None:
+        require_scenario_selection(scenarios, cached.setup)
     if cached is not None and manual_snapshot.matches(cached.setup):
         cached_messages = tuple(
             GeneratedMessage(spec, cached.setup.content_for_input(index), None)
@@ -356,7 +366,7 @@ def run_matchup(
     require_compliant_messages(
         audit_messages(generated, qa_cache, client, routing=routing, prefer_batch=prefer_batch)
     )
-    setup = construct_conversation(matchup, generated)
+    setup = build_conversation(matchup, generated, scenarios)
     trace = run_assistant(
         setup, select_route(matchup.assistant, routing.preference).model_id, client
     )

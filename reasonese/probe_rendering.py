@@ -11,7 +11,6 @@ from typing import Any
 
 from beartype import beartype
 
-from reasonese.axes import Channel
 from reasonese.conversation import ConversationSetup
 from reasonese.role_probe_extraction import (
     GEMMA_ADAPTER,
@@ -240,12 +239,10 @@ def _native_tool_arguments(messages: list[dict[str, Any]]) -> list[dict[str, Any
 def _target_message_index(setup: ConversationSetup, position: int) -> int:
     if position not in {1, 2}:
         raise ValueError("probe target position must be 1 or 2")
-    index = 0
-    for spec in setup.matchup.inputs[: position - 1]:
-        index += 2 if spec.channel is Channel.README else 1
-    if setup.matchup.inputs[position - 1].channel is Channel.README:
-        index += 1
-    return index
+    if setup.placements is not None:
+        # A probe span is a whole message field; a scenario embeds the input in a longer one.
+        raise ValueError("role-probe rendering does not support scenario conversations")
+    return setup.message_index_for_input(position - 1)
 
 
 @beartype

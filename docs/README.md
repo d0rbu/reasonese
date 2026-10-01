@@ -11,6 +11,7 @@
 - [`reference/architecture.md`](reference/architecture.md): package responsibilities
 - [`reference/configuration.md`](reference/configuration.md): instruction, matchup, and study inputs
 - [`reference/prompt-generation.md`](reference/prompt-generation.md): exact four-axis message construction
+- [`reference/scenarios.md`](reference/scenarios.md): optional per-pair scenario conversations
 - [`reference/output.md`](reference/output.md): collection and analysis artifacts
 - [`reference/file-reference.md`](reference/file-reference.md): repository map
 

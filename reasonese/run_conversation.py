@@ -19,6 +19,11 @@ from reasonese.message_qa_cache import YamlMessageQaCache
 from reasonese.openrouter import OpenRouterClient, RequestsTransport
 from reasonese.routing import add_route_arguments, routing_from_arguments
 from reasonese.runner import record_cached_authors, run_matchup
+from reasonese.scenarios import (
+    add_scenario_arguments,
+    require_scenario_selection,
+    scenarios_from_arguments,
+)
 
 
 @beartype
@@ -32,6 +37,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--user-messages", type=Path, default=Path("prompts/user"))
     parser.add_argument("--no-batch", action="store_true")
     add_route_arguments(parser)
+    add_scenario_arguments(parser)
     args = parser.parse_args(argv)
 
     try:
@@ -46,9 +52,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         qa_cache = YamlMessageQaCache(args.message_qa_cache)
         trace_cache = YamlTraceCache(args.trace_cache)
         manual_messages = ManualMessageLibrary(args.user_messages)
+        scenarios = scenarios_from_arguments(args)
         api_key = os.environ.get("OPENROUTER_API_KEY")
         client = OpenRouterClient(RequestsTransport(api_key)) if api_key is not None else None
         cached = trace_cache.get(matchup)
+        if cached is not None:
+            require_scenario_selection(scenarios, cached.setup)
         if cached is not None and manual_messages.matches(cached.setup):
             cached_messages = tuple(
                 GeneratedMessage(spec, cached.setup.content_for_input(index), None)
@@ -92,6 +101,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             manual_messages,
             prefer_batch=not args.no_batch,
             routing=routing,
+            scenarios=scenarios,
         )
     except (OSError, RuntimeError, TypeError, ValueError) as error:
         parser.error(str(error))
