@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Generator, Iterator
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
 from beartype import beartype
 
-from reasonese.cache import trace_from_dict, trace_to_dict, traces_from_dicts
+from reasonese.cache import trace_to_dict, traces_from_dicts
 from reasonese.conversation import ConversationTrace
 from reasonese.judging import Judgment
 from reasonese.judgment_cache import judgment_to_dict, judgments_from_dicts
@@ -107,24 +107,6 @@ class SqliteStudyCache:
             trial.trial_id: trace
             for (trial, _), trace in zip(selected, traces, strict=True)
         }
-
-    def iter_traces_readonly(self) -> Generator[tuple[TrialId, ConversationTrace]]:
-        """Stream all saved trials for an output-root audit without changing the database."""
-        if not self.path.is_file():
-            return
-        uri = f"{self.path.resolve().as_uri()}?mode=ro"
-        connection = sqlite3.connect(uri, uri=True)
-        try:
-            try:
-                rows = connection.execute("SELECT trial_id, payload FROM traces")
-            except sqlite3.OperationalError as error:
-                if "no such table: traces" in str(error):
-                    return
-                raise
-            for trial_id, payload in rows:
-                yield TrialId.parse(trial_id), trace_from_dict(_decode(payload, record="trace"))
-        finally:
-            connection.close()
 
     @beartype
     def put_traces(self, traces: tuple[tuple[TrialId, ConversationTrace], ...]) -> None:

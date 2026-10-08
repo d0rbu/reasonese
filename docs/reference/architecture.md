@@ -43,9 +43,6 @@ matchup -> authored messages -> independent message QA -> conversation -> assist
 - `reasonese.scenarios` optionally places a pair's two inputs inside a shared templated
   conversation instead of bare messages; see [`scenarios.md`](scenarios.md). Without a selected
   scenario directory every conversation is bare.
-- `reasonese.scenario_selection` binds a collection root to its complete scenario selection
-  before cache writes or provider work. It validates all saved traces before adopting an older
-  root without a selection record.
 - `reasonese.manual_messages` resolves filesystem-backed variants for the user author and
   snapshots the needed files once per top-level invocation.
 - `reasonese.tools` defines bounded file, shell, Python, and server-side web-search tools.
@@ -170,8 +167,7 @@ study -> both input orderings x rollouts -> traces -> judgments -> observation r
   SQLite database.
 - `reasonese.study_cache` loads study traces and judgments with one SQLite query per table,
   validates serialized coordinates against the known trial matchups without reparsing them, and
-  writes each completed stage in one transaction keyed by stable trial ID. It also streams all
-  saved traces read-only when an older output root's scenario selection needs validation.
+  writes each completed stage in one transaction keyed by stable trial ID.
 - `reasonese.observations` batch-joins traces and judgments into flat rows, reusing cell IDs
   across every rollout of the same cell.
 

@@ -268,11 +268,10 @@ class ConversationSetup:
 
     def content_for_input(self, index: int) -> GeneratedText:
         """Return the exact authored text delivered for one matchup input."""
+        message_index = self.message_index_for_input(index)
         if self.placements is not None:
-            if not 0 <= index < len(self.matchup.inputs):
-                raise IndexError(index)
             return self.placements[index].content
-        message = self.messages[self.message_index_for_input(index)]
+        message = self.messages[message_index]
         assert message.content is not None
         return message.content
 
@@ -282,12 +281,10 @@ class ConversationSetup:
             raise IndexError(index)
         if self.placements is not None:
             return self.placements[index].message
-        cursor = 0
-        for current_index, spec in enumerate(self.matchup.inputs):
-            if current_index == index:
-                return cursor + (1 if spec.channel is Channel.README else 0)
-            cursor += 2 if spec.channel is Channel.README else 1
-        raise AssertionError("validated input index was not found")
+        # Each README input adds an assistant read before its content.
+        return index + sum(
+            spec.channel is Channel.README for spec in self.matchup.inputs[:index + 1]
+        )
 
     def readme_contents(self) -> tuple[GeneratedText, ...]:
         """Return the README text the workspace must hold, in conversation order.
@@ -295,16 +292,10 @@ class ConversationSetup:
         A scenario's README is the whole file the conversation shows being
         read, whether or not an input was placed in it.
         """
-        if self.placements is not None:
-            return tuple(
-                message.content
-                for message in self.messages
-                if message.role is ChatRole.TOOL and message.content is not None
-            )
         return tuple(
-            self.content_for_input(index)
-            for index, spec in enumerate(self.matchup.inputs)
-            if spec.channel is Channel.README
+            message.content
+            for message in self.messages
+            if message.role is ChatRole.TOOL and message.content is not None
         )
 
 

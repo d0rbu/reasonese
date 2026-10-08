@@ -116,7 +116,11 @@ JUDGE_ROUTE = ModelRoute(
 )
 
 
-def _setup_fingerprint_data(setup: ConversationSetup) -> dict[str, object]:
+def _canonical_json(data: object) -> str:
+    return json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def _setup_fingerprint_json(setup: ConversationSetup) -> str:
     data: dict[str, object] = {
         "matchup": matchup_to_dict(setup.matchup),
         "conversation": setup.openrouter_messages(),
@@ -126,15 +130,12 @@ def _setup_fingerprint_data(setup: ConversationSetup) -> dict[str, object]:
             {"message": placement.message, "content": str(placement.content)}
             for placement in setup.placements
         ]
-    return data
+    return _canonical_json(data)
 
 
-@beartype
-def trace_fingerprint(trace: ConversationTrace) -> TraceFingerprint:
-    """Fingerprint everything that can affect a completion judgment."""
-    canonical = json.dumps(
+def _fingerprint_with_setup(trace: ConversationTrace, serialized_setup: str) -> TraceFingerprint:
+    serialized_trace = _canonical_json(
         {
-            **_setup_fingerprint_data(trace.setup),
             "tool_steps": [
                 {
                     "response": fingerprint_response(step.response),
@@ -148,11 +149,16 @@ def trace_fingerprint(trace: ConversationTrace) -> TraceFingerprint:
                 if trace.terminal_status != "completed" else {}
             ),
         },
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
     )
+    # Setup keys sort before trace keys; join their canonical objects without reserializing.
+    canonical = f"{serialized_setup[:-1]},{serialized_trace[1:]}"
     return TraceFingerprint.parse(hashlib.sha256(canonical.encode()).hexdigest())
+
+
+@beartype
+def trace_fingerprint(trace: ConversationTrace) -> TraceFingerprint:
+    """Fingerprint everything that can affect a completion judgment."""
+    return _fingerprint_with_setup(trace, _setup_fingerprint_json(trace.setup))
 
 
 def _fingerprinted_trace_from_validated(
@@ -175,41 +181,9 @@ def fingerprint_traces(
     for trace in traces:
         serialized = setup_json.get(trace.setup)
         if serialized is None:
-            serialized = json.dumps(
-                _setup_fingerprint_data(trace.setup),
-                sort_keys=True,
-                separators=(",", ":"),
-                ensure_ascii=False,
-            )
+            serialized = _setup_fingerprint_json(trace.setup)
             setup_json[trace.setup] = serialized
-        response_json = json.dumps(
-            fingerprint_response(trace.response),
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=False,
-        )
-        tool_steps_json = json.dumps(
-            [
-                {
-                    "response": fingerprint_response(step.response),
-                    "results": [result.openrouter_dict() for result in step.results],
-                }
-                for step in trace.tool_steps
-            ],
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=False,
-        )
-        terminal_json = (
-            ',"terminal_status":"tool_limit_exhausted"'
-            if trace.terminal_status == "tool_limit_exhausted" else ""
-        )
-        # Setup fields sort before the per-trace fields, so extend the serialized object.
-        canonical = (
-            f'{serialized[:-1]},"response":{response_json}{terminal_json},'
-            f'"tool_steps":{tool_steps_json}}}'
-        )
-        fingerprint = TraceFingerprint.parse(hashlib.sha256(canonical.encode()).hexdigest())
+        fingerprint = _fingerprint_with_setup(trace, serialized)
         fingerprinted.append(_fingerprinted_trace_from_validated(trace, fingerprint))
     return tuple(fingerprinted)
 

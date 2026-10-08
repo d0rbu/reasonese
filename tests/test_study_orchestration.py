@@ -564,7 +564,7 @@ def test_collect_study_batches_trials_and_judgments_then_resumes_without_a_key(
         constructed_setups.append(setup)
         return setup
 
-    monkeypatch.setattr("reasonese.collect_data.construct_conversation", track_construction)
+    monkeypatch.setattr("reasonese.scenarios.construct_conversation", track_construction)
     original_matches = ManualMessageSnapshot.matches
 
     def track_manual_match(

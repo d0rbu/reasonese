@@ -296,11 +296,11 @@ def test_scenario_fingerprints_include_placements_in_both_paths(terminal: bool) 
     assert trace.tool_steps == changed.tool_steps
     assert trace_fingerprint(trace) != trace_fingerprint(changed)
 
-    traces = (trace, changed, trace, _trace())
+    traces = (trace, changed, trace, _trace(), _terminal_trace())
     assert tuple(item.fingerprint for item in fingerprint_traces(traces)) == tuple(
         trace_fingerprint(item) for item in traces
     )
-    for item in (trace, changed):
+    for item in traces:
         canonical = json.dumps(
             trace_to_dict(item), sort_keys=True, separators=(",", ":"), ensure_ascii=False
         )

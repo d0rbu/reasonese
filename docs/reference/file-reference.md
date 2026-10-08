@@ -18,7 +18,6 @@
 | `reasonese/matchup.py` | Strongly typed matchup invariants and serialization |
 | `reasonese/conversation.py` | Authoring requests, channel rendering, and the bare and scenario conversation layouts |
 | `reasonese/scenarios.py` | Optional per-pair scenario templates: loading, slot rendering, placement, and cache validity |
-| `reasonese/scenario_selection.py` | Persistent scenario selection for a collection root and validation of older roots |
 | `reasonese/show_scenario.py` | `reasonese-show-scenario` offline rendering utility |
 | `reasonese/prompt_optimization.py` | Bounded authoring-brief evaluation, fixed-rubric reports, and offline comparison table |
 | `reasonese/manual_messages.py` | Filesystem-backed user-authored variants |
@@ -81,7 +80,6 @@
 | `tests/test_utilities.py` | Utility integration tests |
 | `tests/test_matchup_conversation.py` | Matchup and rendering tests |
 | `tests/test_scenarios.py` | Scenario slots, placement, file rules, trace caching, and collection wiring tests |
-| `tests/test_scenario_selection.py` | Output-root selection, cross-study isolation, legacy adoption, and concurrent initialization tests |
 | `tests/fixtures/scenarios/` | One synthetic scenario that exercises the template slots; not study material |
 | `tests/test_openrouter.py` | Provider-client contract tests |
 | `tests/test_cache_runner_cli.py` | Cache, execution, and CLI tests |

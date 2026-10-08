@@ -291,18 +291,9 @@ def _placements_from_raw(raw: object) -> tuple[Placement, ...] | None:
 
 @beartype
 def trace_to_dict(trace: ConversationTrace) -> dict[str, object]:
-    return {
+    data: dict[str, object] = {
         "matchup": matchup_to_dict(trace.setup.matchup),
-        "conversation": [message.openrouter_dict() for message in trace.setup.messages],
-        **(
-            {
-                "placements": [
-                    {"message": placement.message, "content": str(placement.content)}
-                    for placement in trace.setup.placements
-                ]
-            }
-            if trace.setup.placements is not None else {}
-        ),
+        "conversation": trace.setup.openrouter_messages(),
         "tool_steps": [
             {
                 "response": step.response,
@@ -314,6 +305,12 @@ def trace_to_dict(trace: ConversationTrace) -> dict[str, object]:
         **({"terminal_status": trace.terminal_status} if trace.terminal_status != "completed" else {}),
         **({"provenance": trace.provenance.to_dict()} if trace.provenance else {}),
     }
+    if trace.setup.placements is not None:
+        data["placements"] = [
+            {"message": placement.message, "content": str(placement.content)}
+            for placement in trace.setup.placements
+        ]
+    return data
 
 
 @beartype
