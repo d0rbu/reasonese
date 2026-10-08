@@ -116,6 +116,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             probe_scorer=probe_scorer,
             routing=routing,
             scenarios=scenarios_from_arguments(args),
+            output_root=args.output,
             authoring_brief=(
                 AUTHORING_BRIEFS[args.authoring_brief] if args.authoring_brief is not None else None
             ),

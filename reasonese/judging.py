@@ -29,7 +29,7 @@ def _is_trace_fingerprint(value: str) -> bool:
 
 
 class TraceFingerprint(str, Phantom[str], predicate=_is_trace_fingerprint, bound=str):
-    """SHA-256 of the exact matchup, delivered messages, and assistant response."""
+    """SHA-256 of the exact matchup, delivered messages, placements, and assistant response."""
 
 
 @beartype
@@ -116,13 +116,25 @@ JUDGE_ROUTE = ModelRoute(
 )
 
 
+def _setup_fingerprint_data(setup: ConversationSetup) -> dict[str, object]:
+    data: dict[str, object] = {
+        "matchup": matchup_to_dict(setup.matchup),
+        "conversation": setup.openrouter_messages(),
+    }
+    if setup.placements is not None:
+        data["placements"] = [
+            {"message": placement.message, "content": str(placement.content)}
+            for placement in setup.placements
+        ]
+    return data
+
+
 @beartype
 def trace_fingerprint(trace: ConversationTrace) -> TraceFingerprint:
     """Fingerprint everything that can affect a completion judgment."""
     canonical = json.dumps(
         {
-            "matchup": matchup_to_dict(trace.setup.matchup),
-            "conversation": trace.setup.openrouter_messages(),
+            **_setup_fingerprint_data(trace.setup),
             "tool_steps": [
                 {
                     "response": fingerprint_response(step.response),
@@ -158,27 +170,18 @@ def fingerprint_traces(
     traces: tuple[ConversationTrace, ...],
 ) -> tuple[FingerprintedTrace, ...]:
     """Fingerprint traces while serializing each shared conversation setup once."""
-    setup_json: dict[ConversationSetup, tuple[str, str]] = {}
+    setup_json: dict[ConversationSetup, str] = {}
     fingerprinted: list[FingerprintedTrace] = []
     for trace in traces:
         serialized = setup_json.get(trace.setup)
         if serialized is None:
-            serialized = (
-                json.dumps(
-                    trace.setup.openrouter_messages(),
-                    sort_keys=True,
-                    separators=(",", ":"),
-                    ensure_ascii=False,
-                ),
-                json.dumps(
-                    matchup_to_dict(trace.setup.matchup),
-                    sort_keys=True,
-                    separators=(",", ":"),
-                    ensure_ascii=False,
-                ),
+            serialized = json.dumps(
+                _setup_fingerprint_data(trace.setup),
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
             )
             setup_json[trace.setup] = serialized
-        conversation_json, matchup_json = serialized
         response_json = json.dumps(
             fingerprint_response(trace.response),
             sort_keys=True,
@@ -201,9 +204,10 @@ def fingerprint_traces(
             ',"terminal_status":"tool_limit_exhausted"'
             if trace.terminal_status == "tool_limit_exhausted" else ""
         )
+        # Setup fields sort before the per-trace fields, so extend the serialized object.
         canonical = (
-            f'{{"conversation":{conversation_json},"matchup":{matchup_json},'
-            f'"response":{response_json}{terminal_json},"tool_steps":{tool_steps_json}}}'
+            f'{serialized[:-1]},"response":{response_json}{terminal_json},'
+            f'"tool_steps":{tool_steps_json}}}'
         )
         fingerprint = TraceFingerprint.parse(hashlib.sha256(canonical.encode()).hexdigest())
         fingerprinted.append(_fingerprinted_trace_from_validated(trace, fingerprint))

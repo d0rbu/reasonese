@@ -62,6 +62,7 @@ from reasonese.runner import (
     record_cached_authors,
     run_assistant_groups,
 )
+from reasonese.scenario_selection import bind_scenario_selection
 from reasonese.scenarios import (
     ScenarioLibrary,
     add_scenario_arguments,
@@ -259,8 +260,12 @@ def collect_studies(
     shared_cache: SqliteStudyCache | None = None,
     authoring_brief: AuthoringBrief | None = None,
     scenarios: ScenarioLibrary | None = None,
+    output_root: Path | None = None,
 ) -> tuple[CollectionResult, ...]:
-    """Collect studies together, batching independent provider work across task boundaries."""
+    """Collect studies together under one scenario selection.
+
+    The output root defaults to the shared message cache's directory.
+    """
     routing = routing or CollectionRouting()
     if probe_mode is ProbeQaMode.INLINE and scenarios is not None:
         raise ValueError("inline role-probe diagnostics do not support scenario conversations")
@@ -286,6 +291,9 @@ def collect_studies(
         for trial in all_trials:
             scenarios.scenario_for(trial.matchup)
 
+    bind_scenario_selection(
+        output_root if output_root is not None else message_cache.path.parent, scenarios
+    )
     manual_snapshot = manual_messages.snapshot(
         tuple(spec for task in tasks for spec in task.study.inputs)
     )
@@ -618,6 +626,7 @@ def collect_study(
         probe_scorer=probe_scorer,
         routing=routing,
         scenarios=scenarios,
+        output_root=output_dir,
     )[0]
 
 

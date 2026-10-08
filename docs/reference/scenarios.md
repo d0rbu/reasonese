@@ -83,14 +83,17 @@ README, and README then user.
 ## Rules
 
 Every scenario is rendered for all five orderings with two-paragraph probe text when it loads,
-so a broken template fails before any provider request. The same checks run again on the real
-authored text when a conversation is built.
+catching structural errors before any provider request. The checks run again on the real
+authored text when a conversation is built, including occurrence counts for content-dependent
+template branches that the probes do not exercise.
 
 - Each filled slot is rendered in exactly one message, of the role its channel requires, with
   the authored text verbatim and only once.
 - The early slot's message comes before the late slot's message.
 - Only the message that carries a slot may depend on it. Other context must not appear, vanish,
-  or change with a slot; the one exception is a `README.md` read that moves with its slot.
+  or change with a slot; the one exception is a `README.md` read that moves with a README slot.
+  The moved read must keep the same assistant text and the same file context when that slot is
+  empty. System and user slots cannot conditionally remove or move the read.
 - A conversation reads `README.md` at most once, and a tool message is the unconditional result
   of the read before it.
 - No system, user, or tool message renders empty, a plain assistant turn does not either, and
@@ -117,11 +120,23 @@ both are checked before any authoring request.
   a bare run and a scenario run of one cell differ only in the surrounding context.
 - The sandbox `README.md` is the scenario's whole rendered README, whether or not an input was
   placed in it.
-- A stored trace gains a `placements` list naming the message that carries each input. Bare
-  traces are stored exactly as before.
+- A stored trace gains a `placements` list naming the message and exact authored text for each
+  input. Judgment fingerprints include those placements, so changing an authored span invalidates
+  the cached verdict even if the conversation text is unchanged. Bare traces and their
+  fingerprints are unchanged.
 - Use a fresh output directory for each scenario selection. A run that finds traces collected
   under another selection, or under a scenario file that has since been edited, stops with an
   error instead of collecting over them.
+- Collection records the complete selection in `scenario_selection.json` at the `--output`
+  root, including bare mode. Every later invocation checks it before adding a study or doing
+  authoring work, even when none of the requested trial IDs is cached. The record includes the
+  selected templates and their instruction-pair assignments, so moving unchanged template files
+  is allowed and editing, adding, or removing a template requires a fresh root. Nested studies
+  also respect their parent root's selection.
+- An older root without this record is adopted only after checking every saved trace in its
+  shared or per-study databases, including studies outside the current invocation. Existing
+  observations need matching saved trial IDs so their layouts can be checked. A mismatch or
+  missing trace evidence requires a fresh output root; the existing files are preserved.
 - Observation rows do not record the layout. The output directory is what identifies a run as
   bare or scenario, so keep the two in separate directories when analyzing.
 

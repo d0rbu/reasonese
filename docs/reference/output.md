@@ -43,13 +43,18 @@ are keyed by the complete matchup, including assistant and input order.
 The judgment cache is YAML under a top-level `judgments` list. Each record contains:
 
 - the complete `matchup`;
-- a `trace_fingerprint` over the matchup, delivered conversation, local tool steps, and final
-  assistant response; and
+- a `trace_fingerprint` over the matchup, delivered conversation, optional scenario placements,
+  local tool steps, and final assistant response; and
 - one ordered verdict per input, with the four-axis input, exact `completed` boolean, and
   unmodified raw judge response.
 
 The fingerprint prevents reuse after a trace changes. The verdicts are independent rather
 than one-hot: `[true, true]`, `[false, false]`, and mixed outcomes are all valid.
+
+Scenario placements include each input's message index and exact authored text. Changing either
+invalidates its trace's judgments, even when the messages and response stay the same. Scenario
+judgments saved before placements were fingerprinted require rejudging; their traces can still be
+reused. Bare-trace fingerprints are unchanged.
 
 Judge evidence includes provider annotations from intermediate and final assistant messages.
 Existing judgments made before annotations were included are still cache hits: the fingerprint
@@ -62,6 +67,7 @@ rows, then rebuild observations and analysis. Preserve the raw traces to avoid r
 `reasonese-collect-data --output DIRECTORY` writes:
 
 - `study.yaml`: the exact assistant, rollout count, and input cells;
+- `scenario_selection.json`: the fixed scenario templates and pair assignments, or bare mode;
 - `generated_messages.yaml`: shared materialized instruction cache;
 - `message_qa.yaml`: exact message-compliance verdicts and raw QA responses;
 - `collection.sqlite3`: `traces` and `judgments` tables keyed by stable trial ID, with complete
@@ -73,8 +79,10 @@ position, completion boolean, trace fingerprint, and available assistant/judge r
 This is the input to downstream analysis. Cached study traces are reused only while their
 user-authored contents still match the selected manual files.
 
-`reasonese-collect-studies --output DIRECTORY` places shared `generated_messages.yaml` and
-`message_qa.yaml` files directly under `DIRECTORY`. Every repeated `--study PATH` is collected
+`reasonese-collect-studies --output DIRECTORY` places shared `generated_messages.yaml`,
+`message_qa.yaml`, and `scenario_selection.json` files directly under `DIRECTORY`.
+The selection record applies to the whole root, including new studies added by later invocations.
+Every repeated `--study PATH` is collected
 under `DIRECTORY/PATH_STEM/` with the same `study.yaml`, `collection.sqlite3`, and
 `observations.jsonl` layout above. This lets identical cells reuse the same authored message and
 QA verdict while keeping rollout traces and judgments isolated by study.

@@ -345,6 +345,38 @@ def _parse(raw: object) -> Scenario:
     return scenario_from_dict(PairId.parse(PAIR_ID), raw)
 
 
+@pytest.mark.parametrize(
+    ("channels", "message_index", "slot"),
+    [
+        ((Channel.SYSTEM, Channel.USER), SYS, "system.early"),
+        ((Channel.USER, Channel.SYSTEM), LATE_SYSTEM, "system.late"),
+        ((Channel.USER, Channel.USER), OPEN, "user.early"),
+        ((Channel.USER, Channel.USER), LATE_USER, "user.late"),
+        ((Channel.README, Channel.USER), DOC, "tool.early"),
+        ((Channel.USER, Channel.README), DOC, "tool.late"),
+    ],
+)
+@pytest.mark.parametrize(
+    "duplicate",
+    [
+        "{% if SLOT | length < 50 %}{{ SLOT }}{% endif %}",
+        "{{ SLOT | replace('\\n', ' ') }}",
+    ],
+    ids=["short-text-branch", "newline-normalized-copy"],
+)
+def test_actual_authored_text_must_be_inserted_once(
+    channels: tuple[Channel, Channel], message_index: int, slot: str, duplicate: str
+) -> None:
+    raw = _minimal()
+    raw["messages"][message_index]["content"] += " " + duplicate.replace("SLOT", slot)
+    # The longer, two-paragraph load probes do not expose either repeated copy.
+    scenario = _parse(raw)
+    matchup = _matchup(*channels)
+
+    with pytest.raises(ValueError, match="exactly once"):
+        scenario.construct(matchup, _generated(matchup, ("Do X.", "Do Y.")))
+
+
 def test_a_scenario_can_hold_plain_assistant_turns_and_survives_the_trace_cache() -> None:
     scenario = _parse(_minimal())
     matchup = _matchup(Channel.USER, Channel.README)
@@ -374,8 +406,8 @@ def test_a_scenario_can_hold_plain_assistant_turns_and_survives_the_trace_cache(
     assert trace_fingerprint(bare) != trace_fingerprint(trace)
 
 
-def test_a_readme_read_can_move_with_its_slot_and_keeps_its_result() -> None:
-    raw = {
+def _moving_readme() -> dict[str, Any]:
+    return {
         "source": "test",
         "adaptation": "none",
         "messages": [
@@ -389,12 +421,15 @@ def test_a_readme_read_can_move_with_its_slot_and_keeps_its_result() -> None:
             {"role": "user", "when": "user.late", "content": "{{ user.late }}"},
         ],
     }
-    scenario = _parse(raw)
+
+
+def test_a_readme_read_can_move_with_its_slot_and_keeps_its_result() -> None:
+    scenario = _parse(_moving_readme())
     early = _matchup(Channel.README, Channel.USER)
-    late = _matchup(Channel.USER, Channel.README)
+    late = make_matchup(tuple(reversed(early.inputs)), early.assistant)
 
     first = scenario.construct(early, _generated(early))
-    second = scenario.construct(late, _generated(late))
+    second = scenario.construct(late, tuple(reversed(_generated(early))))
 
     assert [str(m.role) for m in first.messages] == ["system", "assistant", "tool", "user", "user"]
     assert [str(m.role) for m in second.messages] == ["system", "user", "assistant", "tool"]
@@ -402,6 +437,62 @@ def test_a_readme_read_can_move_with_its_slot_and_keeps_its_result() -> None:
     assert [p.message for p in first.placements] == [2, 4]
     assert [p.message for p in second.placements] == [1, 3]
     assert len(first.readme_contents()) == len(second.readme_contents()) == 1
+    assert first.readme_contents() == second.readme_contents()
+    assert first.messages[1] == second.messages[2]
+
+
+@pytest.mark.parametrize(
+    "condition",
+    [
+        "system.early", "not system.early", "system.late", "not system.late",
+        "user.early", "not user.early", "user.late", "not user.late",
+    ],
+)
+def test_readme_context_cannot_disappear_with_an_unrelated_slot(condition: str) -> None:
+    raw = yaml.safe_load((SCENARIOS / f"{PAIR_ID}.yaml").read_text(encoding="utf-8"))
+    read = next(message for message in raw["messages"] if "reads" in message)
+    read["when"] = condition
+
+    with pytest.raises(ValueError, match="changes shared context with (system|user)"):
+        _parse(raw)
+
+
+def test_readme_context_is_checked_again_for_actual_authored_text() -> None:
+    raw = _minimal()
+    raw["messages"][READ]["when"] = "system.late != 'hide the README'"
+    scenario = _parse(raw)
+    matchup = _matchup(Channel.USER, Channel.SYSTEM)
+
+    with pytest.raises(ValueError, match="changes shared context with system.late"):
+        scenario.construct(matchup, _generated(matchup, (TEXTS[0], "hide the README")))
+
+
+@pytest.mark.parametrize(
+    ("index", "changes"),
+    [
+        (1, {"when": "tool.early"}),
+        (4, {"content": "A different read announcement."}),
+        (5, {"content": "# Different README {{ tool.late }}"}),
+    ],
+    ids=["missing-read", "different-read-text", "different-file"],
+)
+def test_moving_readme_must_preserve_the_read_and_shared_file(
+    index: int, changes: dict[str, str]
+) -> None:
+    raw = _moving_readme()
+    raw["messages"][index].update(changes)
+
+    with pytest.raises(ValueError, match="changes shared context with tool.late"):
+        _parse(raw)
+
+
+def test_readme_context_cannot_move_with_an_unrelated_slot() -> None:
+    raw = _moving_readme()
+    raw["messages"][1]["when"] = "not (tool.late or system.late)"
+    raw["messages"][4]["when"] = "tool.late or system.late"
+
+    with pytest.raises(ValueError, match="changes shared context with system.late"):
+        _parse(raw)
 
 
 @pytest.mark.parametrize(

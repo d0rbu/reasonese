@@ -194,6 +194,26 @@ class Scenario:
                 layout[index] = (message, text)
         return layout
 
+    def _relocated_readme(
+        self,
+        layout: dict[int, tuple[ScenarioMessage, str]],
+        without: dict[int, tuple[ScenarioMessage, str]],
+        blanked: Slots,
+    ) -> set[int]:
+        """Allow one read and its result to move while preserving their shared context."""
+        reads = [index for index, (message, _) in layout.items() if message.reads_readme]
+        other_reads = [index for index, (message, _) in without.items() if message.reads_readme]
+        if len(reads) != 1 or len(other_reads) != 1:
+            return set()
+        read, other = reads[0], other_reads[0]
+        if read == other or layout[read][1] != without[other][1]:
+            return set()
+        content = self.messages[read + 1].content
+        assert content is not None
+        if _render(content, blanked) != without[other + 1][1]:
+            return set()
+        return {read, read + 1, other, other + 1}
+
     @beartype
     def render(
         self,
@@ -213,6 +233,10 @@ class Scenario:
             blanked = {name: dict(values) for name, values in slots.items()}
             blanked[_SLOT[channel]][position] = ""
             without = self._layout(blanked)
+            moved_readme = (
+                self._relocated_readme(layout, without, blanked)
+                if channel is Channel.README else set()
+            )
             carriers: list[int] = []
             for template_index in sorted(set(layout) | set(without)):
                 if layout.get(template_index) == without.get(template_index):
@@ -225,8 +249,8 @@ class Scenario:
                 )
                 if depends_on_slot:
                     carriers.append(template_index)
-                elif not (message.reads_readme or message.role is ChatRole.TOOL):
-                    # Only the carrier and a moved README read may change with a slot.
+                elif template_index not in moved_readme:
+                    # Only the carrier and the same README read moving with its slot may change.
                     raise ValueError(
                         f"scenario {self.pair_id} changes shared context with {slot}; "
                         "only the message that carries a slot may depend on it"
@@ -242,6 +266,8 @@ class Scenario:
                 raise ValueError(f"scenario {self.pair_id} renders {slot} in a {message.role} message")
             if contents[index] not in text:
                 raise ValueError(f"scenario {self.pair_id} does not render {slot} verbatim")
+            if text.count(contents[index]) != 1:
+                raise ValueError(f"scenario {self.pair_id} must deliver {slot} exactly once")
             if placements and carrier <= placements[-1].message:
                 raise ValueError(f"scenario {self.pair_id} must render early slots before late ones")
             placements.append(Placement(carrier, GeneratedText.parse(contents[index])))

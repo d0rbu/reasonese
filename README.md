@@ -301,8 +301,9 @@ test.
 By default a conversation holds only the two inputs. `--scenarios <directory>` on the collection
 commands places a pair's inputs inside a shared templated conversation instead, one optional
 `<pair id>.yaml` per pair, with slots for the system, user, and README instruction. A scenario is
-a fixed property of its pair, so the analysis runs unchanged, and a run refuses an output
-directory whose traces came from another scenario selection. `reasonese-show-scenario` renders
+a fixed property of its pair, so the analysis runs unchanged. Collection binds the entire output
+root to one scenario selection, including bare mode, before adding or resuming any study.
+Changing that selection requires a fresh output root. `reasonese-show-scenario` renders
 one offline and reports channels whose early and late inputs are framed differently. The only
 scenario in the repository is a synthetic test fixture; see
 [`docs/reference/scenarios.md`](docs/reference/scenarios.md) for the format and its cautions.
