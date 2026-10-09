@@ -43,13 +43,18 @@ are keyed by the complete matchup, including assistant and input order.
 The judgment cache is YAML under a top-level `judgments` list. Each record contains:
 
 - the complete `matchup`;
-- a `trace_fingerprint` over the matchup, delivered conversation, local tool steps, and final
-  assistant response; and
+- a `trace_fingerprint` over the matchup, delivered conversation, optional scenario placements,
+  local tool steps, and final assistant response; and
 - one ordered verdict per input, with the four-axis input, exact `completed` boolean, and
   unmodified raw judge response.
 
 The fingerprint prevents reuse after a trace changes. The verdicts are independent rather
 than one-hot: `[true, true]`, `[false, false]`, and mixed outcomes are all valid.
+
+Scenario placements include each input's message index and exact authored text. Changing either
+invalidates its trace's judgments, even when the messages and response stay the same. Scenario
+judgments saved before placements were fingerprinted require rejudging; their traces can still be
+reused. Bare-trace fingerprints are unchanged.
 
 Judge evidence includes provider annotations from intermediate and final assistant messages.
 Existing judgments made before annotations were included are still cache hits: the fingerprint

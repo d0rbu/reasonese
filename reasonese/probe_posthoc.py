@@ -105,6 +105,11 @@ def score_saved_collections(
                     continue
                 if trace.setup.matchup != trial.matchup:
                     raise ValueError("saved trace setup does not match its study trial")
+                if trace.setup.placements is not None:
+                    # One scenario trace would otherwise fail a whole assistant batch.
+                    raise ValueError(
+                        "role-probe scoring does not support scenario conversations"
+                    )
                 contexts.append((int(trial.permutation), trace.setup))
                 source_trial: dict[str, object] = {
                     "trial_id": str(trial.trial_id),

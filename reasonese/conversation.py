@@ -83,8 +83,8 @@ class ChatMessage:
                 if self.content is None or self.tool_calls or self.tool_call_id is not None:
                     raise ValueError("system and user messages must contain only text")
             case ChatRole.ASSISTANT:
-                if not self.tool_calls or self.tool_call_id is not None:
-                    raise ValueError("assistant setup messages must contain tool calls")
+                if self.tool_call_id is not None or (self.content is None and not self.tool_calls):
+                    raise ValueError("assistant setup messages must contain text or tool calls")
             case ChatRole.TOOL:
                 if self.content is None or self.tool_calls or self.tool_call_id is None:
                     raise ValueError("tool messages must contain text and a tool-call id")
@@ -98,6 +98,9 @@ class ChatMessage:
                 assert self.content is not None
                 return {"role": str(self.role), "content": str(self.content)}
             case ChatRole.ASSISTANT:
+                if not self.tool_calls:
+                    # Scenario context can hold an earlier plain-text assistant turn.
+                    return {"role": "assistant", "content": str(self.content)}
                 return {
                     "role": "assistant",
                     "content": str(self.content) if self.content is not None else None,
@@ -140,15 +143,90 @@ class ToolStep:
     results: tuple[ToolResult, ...]
 
 
+_CHANNEL_ROLE = {
+    Channel.SYSTEM: ChatRole.SYSTEM,
+    Channel.USER: ChatRole.USER,
+    Channel.README: ChatRole.TOOL,
+}
+_README_ARGUMENTS = {"path": "README.md"}
+
+
+def _is_readme_read(message: ChatMessage) -> bool:
+    if len(message.tool_calls) != 1:
+        return False
+    call = message.tool_calls[0]
+    try:
+        arguments = json.loads(call.arguments)
+    except json.JSONDecodeError:
+        return False
+    return call.name == "read_file" and arguments == _README_ARGUMENTS
+
+
+@beartype
+@dataclass(frozen=True, slots=True)
+class Placement:
+    """Where one matchup input's authored text sits inside a scenario conversation."""
+
+    message: int
+    content: GeneratedText
+
+
 @beartype
 @dataclass(frozen=True, slots=True)
 class ConversationSetup:
-    """A validated matchup and its materialized assistant-facing messages."""
+    """A validated matchup and its materialized assistant-facing messages.
+
+    Without ``placements`` the messages are exactly the matchup's inputs, one
+    system or user message or one README read per input. With ``placements``
+    the inputs sit inside a scenario's shared context: each placement names
+    the message that carries one input's authored text verbatim, in matchup
+    order, so delivery position still follows the matchup.
+    """
 
     matchup: Matchup
     messages: tuple[ChatMessage, ...]
+    placements: tuple[Placement, ...] | None = None
+
+    def _validate_scenario(self, placements: tuple[Placement, ...]) -> None:
+        if len(placements) != len(self.matchup.inputs):
+            raise ValueError("scenario conversations need one placement per matchup input")
+        previous = -1
+        for spec, placement in zip(self.matchup.inputs, placements, strict=True):
+            if not previous < placement.message < len(self.messages):
+                raise ValueError("scenario placements must follow matchup order")
+            previous = placement.message
+            message = self.messages[placement.message]
+            if message.role is not _CHANNEL_ROLE[spec.channel]:
+                raise ValueError("scenario placement role does not match its input channel")
+            if message.content is None or str(placement.content) not in str(message.content):
+                raise ValueError("scenario message does not contain its authored text verbatim")
+        readme_reads = 0
+        for index, message in enumerate(self.messages):
+            if message.role is ChatRole.ASSISTANT and message.tool_calls:
+                result = self.messages[index + 1] if index + 1 < len(self.messages) else None
+                if (
+                    not _is_readme_read(message)
+                    or result is None
+                    or result.role is not ChatRole.TOOL
+                    or result.tool_call_id != message.tool_calls[0].call_id
+                ):
+                    raise ValueError(
+                        "scenario tool calls must be one README.md read followed by its result"
+                    )
+                readme_reads += 1
+            elif message.role is ChatRole.TOOL:
+                caller = self.messages[index - 1] if index else None
+                if caller is None or caller.role is not ChatRole.ASSISTANT or not caller.tool_calls:
+                    raise ValueError("scenario tool results must follow their README.md read")
+        if readme_reads > 1:
+            raise ValueError("a scenario conversation can read README.md at most once")
+        if self.messages[-1].role is ChatRole.ASSISTANT:
+            raise ValueError("a scenario conversation must not end on an assistant turn")
 
     def __post_init__(self) -> None:
+        if self.placements is not None:
+            self._validate_scenario(self.placements)
+            return
         cursor = 0
         for spec in self.matchup.inputs:
             match spec.channel:
@@ -190,23 +268,34 @@ class ConversationSetup:
 
     def content_for_input(self, index: int) -> GeneratedText:
         """Return the exact authored text delivered for one matchup input."""
+        message_index = self.message_index_for_input(index)
+        if self.placements is not None:
+            return self.placements[index].content
+        message = self.messages[message_index]
+        assert message.content is not None
+        return message.content
+
+    def message_index_for_input(self, index: int) -> int:
+        """Return the index of the message that carries one matchup input."""
         if not 0 <= index < len(self.matchup.inputs):
             raise IndexError(index)
-        cursor = 0
-        for current_index, spec in enumerate(self.matchup.inputs):
-            if current_index == index:
-                message = self.messages[cursor + (1 if spec.channel is Channel.README else 0)]
-                assert message.content is not None
-                return message.content
-            cursor += 2 if spec.channel is Channel.README else 1
-        raise AssertionError("validated input index was not found")
+        if self.placements is not None:
+            return self.placements[index].message
+        # Each README input adds an assistant read before its content.
+        return index + sum(
+            spec.channel is Channel.README for spec in self.matchup.inputs[:index + 1]
+        )
 
     def readme_contents(self) -> tuple[GeneratedText, ...]:
-        """Return README treatments in matchup order for the temporary workspace."""
+        """Return the README text the workspace must hold, in conversation order.
+
+        A scenario's README is the whole file the conversation shows being
+        read, whether or not an input was placed in it.
+        """
         return tuple(
-            self.content_for_input(index)
-            for index, spec in enumerate(self.matchup.inputs)
-            if spec.channel is Channel.README
+            message.content
+            for message in self.messages
+            if message.role is ChatRole.TOOL and message.content is not None
         )
 
 
@@ -444,6 +533,12 @@ def _readme_call_id(
         separators=(",", ":"),
         sort_keys=True,
     )
+    return tool_call_id(assistant, identity)
+
+
+@beartype
+def tool_call_id(assistant: Assistant, identity: str) -> ToolCallId:
+    """Derive a deterministic tool-call identifier in the assistant's own format."""
     digest = hashlib.blake2s(identity.encode(), digest_size=16).hexdigest()
     match assistant:
         case Assistant.QWEN3_8_2_4T:

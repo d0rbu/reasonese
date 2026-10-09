@@ -296,6 +296,18 @@ coefficients, the L1 penalty generally favors the simpler term. Lasso coefficien
 carry no standard errors, so the entry order is a guide to what deserves a closer look, not a
 test.
 
+## Scenario conversations
+
+By default a conversation holds only the two inputs. `--scenarios <directory>` on the collection
+commands places a pair's inputs inside a shared templated conversation instead, one optional
+`<pair id>.yaml` per pair, with slots for the system, user, and README instruction. A scenario is
+a fixed property of its pair, so the analysis runs unchanged. Use a fresh output directory for
+each scenario selection; resuming a cached trial checks that its conversation still matches the
+selected templates. `reasonese-show-scenario` renders
+one offline so its context and input positions can be inspected before collection. The only
+scenario in the repository is a synthetic test fixture; see
+[`docs/reference/scenarios.md`](docs/reference/scenarios.md) for the format and its cautions.
+
 ## Writing the manual variants
 
 The `user` author is the only one whose messages are not generated, so 48 instructions x 3 manual

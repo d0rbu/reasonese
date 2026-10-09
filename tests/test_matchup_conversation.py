@@ -281,7 +281,13 @@ def test_chat_messages_and_setup_reject_invalid_role_shapes() -> None:
     with pytest.raises(ValueError, match="system and user"):
         ChatMessage(ChatRole.SYSTEM)
     with pytest.raises(ValueError, match="assistant setup"):
-        ChatMessage(ChatRole.ASSISTANT, text)
+        ChatMessage(ChatRole.ASSISTANT)
+    with pytest.raises(ValueError, match="assistant setup"):
+        ChatMessage(ChatRole.ASSISTANT, text, tool_call_id=call_id)
+    assert ChatMessage(ChatRole.ASSISTANT, text).openrouter_dict() == {
+        "role": "assistant",
+        "content": "text",
+    }
     with pytest.raises(ValueError, match="tool messages"):
         ChatMessage(ChatRole.TOOL, text)
 

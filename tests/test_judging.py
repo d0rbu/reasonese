@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import cast
 from xml.etree import ElementTree
@@ -10,12 +12,13 @@ import yaml
 
 import reasonese.judging as judging_module
 from reasonese.axes import Assistant, Author, Channel, Framing, Instruction
-from reasonese.cache import YamlTraceCache
+from reasonese.cache import YamlTraceCache, trace_to_dict
 from reasonese.conversation import (
     MAX_LOCAL_TOOL_STEPS,
     ConversationTrace,
     GeneratedMessage,
     GeneratedText,
+    Placement,
     ToolCallId,
     ToolResult,
     ToolStep,
@@ -76,6 +79,21 @@ def _trace(answer: str = "Paris and 4.") -> ConversationTrace:
         GeneratedMessage(spec, GeneratedText.parse(str(spec.instruction)), None) for spec in specs
     )
     return ConversationTrace(construct_conversation(matchup, messages), _chat(answer))
+
+
+def _scenario_trace(*, include_context: bool = False) -> ConversationTrace:
+    base = _trace()
+    authored = base.setup.content_for_input(1)
+    delivered = GeneratedText.parse(f"Opening. {authored}")
+    messages = (
+        *base.setup.messages[:-1],
+        replace(base.setup.messages[-1], content=delivered),
+    )
+    placements = (
+        Placement(1, base.setup.content_for_input(0)),
+        Placement(2, delivered if include_context else authored),
+    )
+    return replace(base, setup=replace(base.setup, messages=messages, placements=placements))
 
 
 
@@ -261,6 +279,32 @@ def test_all_true_and_all_false_judgments_are_representable() -> None:
 def test_trace_fingerprint_is_stable_and_changes_with_the_answer() -> None:
     assert trace_fingerprint(_trace()) == trace_fingerprint(_trace())
     assert trace_fingerprint(_trace()) != trace_fingerprint(_trace("A different answer."))
+
+
+@pytest.mark.parametrize("terminal", [False, True])
+def test_scenario_fingerprints_include_placements_in_both_paths(terminal: bool) -> None:
+    trace = _scenario_trace()
+    changed = _scenario_trace(include_context=True)
+    if terminal:
+        trace = replace(_terminal_trace(), setup=trace.setup)
+        changed = replace(_terminal_trace(), setup=changed.setup)
+    else:
+        assert judge_requests(trace) != judge_requests(changed)
+
+    assert trace.setup.messages == changed.setup.messages
+    assert trace.response == changed.response
+    assert trace.tool_steps == changed.tool_steps
+    assert trace_fingerprint(trace) != trace_fingerprint(changed)
+
+    traces = (trace, changed, trace, _trace(), _terminal_trace())
+    assert tuple(item.fingerprint for item in fingerprint_traces(traces)) == tuple(
+        trace_fingerprint(item) for item in traces
+    )
+    for item in traces:
+        canonical = json.dumps(
+            trace_to_dict(item), sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        )
+        assert trace_fingerprint(item) == hashlib.sha256(canonical.encode()).hexdigest()
 
 
 def test_judge_uses_datapoint_mapping_and_visible_tool_steps_without_hidden_reasoning() -> None:
@@ -465,6 +509,21 @@ def test_judgment_cache_round_trips_raw_responses_and_replaces_same_trace(
         "raw judge reasoning"
     )
     assert cache.get(_trace("changed")) is None
+
+
+def test_judgment_cache_misses_when_only_scenario_placements_change(tmp_path: Path) -> None:
+    trace = _scenario_trace()
+    changed = _scenario_trace(include_context=True)
+    cache = YamlJudgmentCache(tmp_path / "judgments.yaml")
+    first = _judgment(trace, (True, False))
+    second = _judgment(changed, (False, True))
+
+    cache.put(first)
+    assert cache.get(trace) == first
+    assert cache.get(changed) is None
+    cache.put(second)
+    assert cache.get(trace) == first
+    assert cache.get(changed) == second
 
 
 

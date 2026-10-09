@@ -27,7 +27,6 @@ from reasonese.conversation import (
     ConversationSetup,
     ConversationTrace,
     GeneratedMessage,
-    construct_conversation,
 )
 from reasonese.judging import (
     FingerprintedTrace,
@@ -61,6 +60,13 @@ from reasonese.runner import (
     materialize_specs,
     record_cached_authors,
     run_assistant_groups,
+)
+from reasonese.scenarios import (
+    ScenarioLibrary,
+    add_scenario_arguments,
+    build_conversation,
+    require_scenario_selection,
+    scenarios_from_arguments,
 )
 from reasonese.study import Study, Trial, TrialId, build_trials, study_fingerprint, study_to_dict
 from reasonese.study_cache import SqliteStudyCache
@@ -113,6 +119,7 @@ def _prepare_task(
     cache: SqliteStudyCache,
     trials: tuple[Trial, ...],
     cached_traces: Mapping[TrialId, ConversationTrace],
+    scenarios: ScenarioLibrary | None = None,
 ) -> _CollectionState:
     task.output_dir.mkdir(parents=True, exist_ok=True)
     with (task.output_dir / "study.yaml").open("w", encoding="utf-8") as handle:
@@ -126,6 +133,9 @@ def _prepare_task(
     for trial in trials:
         cached = cached_traces.get(trial.trial_id)
         if cached is not None and cached.setup not in manual_matches:
+            if cached.setup.matchup == trial.matchup:
+                # Never collect over traces from another scenario selection.
+                require_scenario_selection(scenarios, cached.setup)
             manual_matches[cached.setup] = manual_messages.matches(cached.setup)
         if (
             cached is None
@@ -248,9 +258,12 @@ def collect_studies(
     routing: CollectionRouting | None = None,
     shared_cache: SqliteStudyCache | None = None,
     authoring_brief: AuthoringBrief | None = None,
+    scenarios: ScenarioLibrary | None = None,
 ) -> tuple[CollectionResult, ...]:
     """Collect studies together, batching independent provider work across task boundaries."""
     routing = routing or CollectionRouting()
+    if probe_mode is ProbeQaMode.INLINE and scenarios is not None:
+        raise ValueError("inline role-probe diagnostics do not support scenario conversations")
     if probe_mode is ProbeQaMode.OFF and probe_scorer is not None:
         raise ValueError("probe_scorer requires probe_mode='inline'")
     if probe_mode is ProbeQaMode.INLINE and probe_scorer is None:
@@ -268,6 +281,10 @@ def collect_studies(
     trial_ids = tuple(trial.trial_id for trial in all_trials)
     if len(set(trial_ids)) != len(trial_ids):
         raise ValueError("collection task trial identifiers must be distinct")
+    if scenarios is not None:
+        # Reject instructions the scenarios cannot place before any authoring spend.
+        for trial in all_trials:
+            scenarios.scenario_for(trial.matchup)
 
     manual_snapshot = manual_messages.snapshot(
         tuple(spec for task in tasks for spec in task.study.inputs)
@@ -282,7 +299,7 @@ def collect_studies(
         caches = tuple(shared_cache for _ in tasks)
         cached_traces_by_task = tuple(cached_traces for _ in tasks)
     states = tuple(
-        _prepare_task(task, manual_snapshot, cache, trials, cached_traces_for_task)
+        _prepare_task(task, manual_snapshot, cache, trials, cached_traces_for_task, scenarios)
         for task, cache, trials, cached_traces_for_task in zip(
             tasks,
             caches,
@@ -389,9 +406,10 @@ def collect_studies(
         if len(first_rollouts) != 2:
             raise ValueError("each study must have exactly two ordered permutations")
         ordered_setups = tuple(
-            construct_conversation(
+            build_conversation(
                 trial.matchup,
                 tuple(by_spec[spec] for spec in trial.matchup.inputs),
+                scenarios,
             )
             for trial in first_rollouts
         )
@@ -587,6 +605,7 @@ def collect_study(
     probe_mode: ProbeQaMode = ProbeQaMode.OFF,
     probe_scorer: ProbeQaScorer | None = None,
     routing: CollectionRouting | None = None,
+    scenarios: ScenarioLibrary | None = None,
 ) -> CollectionResult:
     """Collect or resume every permutation and rollout in one study."""
     return collect_studies(
@@ -599,6 +618,7 @@ def collect_study(
         probe_mode=probe_mode,
         probe_scorer=probe_scorer,
         routing=routing,
+        scenarios=scenarios,
     )[0]
 
 
@@ -612,6 +632,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--no-batch", action="store_true")
     add_probe_arguments(parser)
     add_route_arguments(parser)
+    add_scenario_arguments(parser)
     args = parser.parse_args(argv)
 
     try:
@@ -646,6 +667,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             probe_mode=probe_mode,
             probe_scorer=probe_scorer,
             routing=routing,
+            scenarios=scenarios_from_arguments(args),
         )
     except (OSError, RuntimeError, TimeoutError, TypeError, ValueError) as error:
         parser.error(str(error))

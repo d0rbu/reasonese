@@ -17,6 +17,7 @@ from reasonese.conversation import (
     ConversationTrace,
     GeneratedMessage,
     GeneratedText,
+    Placement,
     ToolCall,
     ToolCallId,
     ToolName,
@@ -123,7 +124,9 @@ def _trace_from_dict(
     if not isinstance(raw, dict):
         raise ValueError("cached trace must be a mapping")
     data = cast(dict[str, Any], raw)
-    if set(data) - {"provenance", "terminal_status"} != {"matchup", "conversation", "tool_steps", "response"}:
+    if set(data) - {"provenance", "terminal_status", "placements"} != {
+        "matchup", "conversation", "tool_steps", "response"
+    }:
         raise ValueError("cached trace has invalid fields")
     if expected_matchup is None:
         matchup = matchup_from_dict(data["matchup"])
@@ -134,9 +137,13 @@ def _trace_from_dict(
     raw_messages = data["conversation"]
     if not isinstance(raw_messages, list):
         raise ValueError("cached conversation must be a list")
+    raw_placements = data.get("placements")
     setup_key = (
         matchup,
-        json.dumps(raw_messages, sort_keys=True, separators=(",", ":"), ensure_ascii=False),
+        json.dumps(
+            [raw_messages, raw_placements],
+            sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+        ),
     )
     setup = setups.get(setup_key)
     messages: tuple[ChatMessage, ...] | None = None
@@ -153,7 +160,7 @@ def _trace_from_dict(
         raise ValueError("cached trace response must not be null")
     if setup is None:
         assert messages is not None
-        setup = ConversationSetup(matchup, messages)
+        setup = ConversationSetup(matchup, messages, _placements_from_raw(raw_placements))
         setups[setup_key] = setup
     return ConversationTrace(
         setup, response, steps, provenance_from_dict(data.get("provenance")),
@@ -207,6 +214,9 @@ def _chat_message_from_dict(raw: object) -> ChatMessage:
                 raise ValueError("cached text message has invalid fields")
             return ChatMessage(role, GeneratedText.parse(data["content"]))
         case ChatRole.ASSISTANT:
+            if set(data) == {"role", "content"} and isinstance(data["content"], str):
+                # A scenario's earlier plain-text assistant turn carries no tool calls.
+                return ChatMessage(role, GeneratedText.parse(data["content"]))
             if set(data) != {"role", "content", "tool_calls"}:
                 raise ValueError("cached assistant message has invalid fields")
             content = data["content"]
@@ -263,11 +273,27 @@ def _tool_step_from_dict(raw: object) -> ToolStep:
     return ToolStep(response, tuple(results))
 
 
+def _placements_from_raw(raw: object) -> tuple[Placement, ...] | None:
+    if raw is None:
+        return None
+    if not isinstance(raw, list):
+        raise ValueError("cached placements must be a list")
+    placements: list[Placement] = []
+    for item in raw:
+        if not isinstance(item, dict) or set(item) != {"message", "content"}:
+            raise ValueError("cached placement has invalid fields")
+        data = cast(dict[str, Any], item)
+        if not isinstance(data["message"], int) or isinstance(data["message"], bool):
+            raise ValueError("cached placement has invalid fields")
+        placements.append(Placement(data["message"], GeneratedText.parse(data["content"])))
+    return tuple(placements)
+
+
 @beartype
 def trace_to_dict(trace: ConversationTrace) -> dict[str, object]:
-    return {
+    data: dict[str, object] = {
         "matchup": matchup_to_dict(trace.setup.matchup),
-        "conversation": [message.openrouter_dict() for message in trace.setup.messages],
+        "conversation": trace.setup.openrouter_messages(),
         "tool_steps": [
             {
                 "response": step.response,
@@ -279,6 +305,12 @@ def trace_to_dict(trace: ConversationTrace) -> dict[str, object]:
         **({"terminal_status": trace.terminal_status} if trace.terminal_status != "completed" else {}),
         **({"provenance": trace.provenance.to_dict()} if trace.provenance else {}),
     }
+    if trace.setup.placements is not None:
+        data["placements"] = [
+            {"message": placement.message, "content": str(placement.content)}
+            for placement in trace.setup.placements
+        ]
+    return data
 
 
 @beartype

@@ -20,6 +20,7 @@ from reasonese.observations import write_observations
 from reasonese.openrouter import OpenRouterClient, RequestsTransport
 from reasonese.probe_qa import ProbeQaMode, add_probe_arguments, resolve_probe_mode
 from reasonese.routing import add_route_arguments, routing_from_arguments
+from reasonese.scenarios import add_scenario_arguments, scenarios_from_arguments
 from reasonese.study import Study, build_trials, study_fingerprint
 from reasonese.study_cache import SqliteStudyCache
 
@@ -72,6 +73,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     add_probe_arguments(parser)
     add_route_arguments(parser)
+    add_scenario_arguments(parser)
     args = parser.parse_args(argv)
 
     try:
@@ -113,6 +115,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             probe_mode=probe_mode,
             probe_scorer=probe_scorer,
             routing=routing,
+            scenarios=scenarios_from_arguments(args),
             authoring_brief=(
                 AUTHORING_BRIEFS[args.authoring_brief] if args.authoring_brief is not None else None
             ),

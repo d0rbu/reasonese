@@ -16,7 +16,9 @@
 | `reasonese/sampling.py` | Connected, seeded within-pair condition subsampling |
 | `reasonese/io.py` | JSONL writer |
 | `reasonese/matchup.py` | Strongly typed matchup invariants and serialization |
-| `reasonese/conversation.py` | Authoring requests and channel rendering |
+| `reasonese/conversation.py` | Authoring requests, channel rendering, and the bare and scenario conversation layouts |
+| `reasonese/scenarios.py` | Optional per-pair scenario templates: loading, slot rendering, placement, and cache validity |
+| `reasonese/show_scenario.py` | `reasonese-show-scenario` offline rendering utility |
 | `reasonese/prompt_optimization.py` | Bounded authoring-brief evaluation, fixed-rubric reports, and offline comparison table |
 | `reasonese/manual_messages.py` | Filesystem-backed user-authored variants |
 | `prompts/user/` | Editable manual variants organized by base instruction |
@@ -77,6 +79,8 @@
 | `tests/test_config_io.py` | TOML and output tests |
 | `tests/test_utilities.py` | Utility integration tests |
 | `tests/test_matchup_conversation.py` | Matchup and rendering tests |
+| `tests/test_scenarios.py` | Scenario slots, placement, file rules, trace caching, and collection wiring tests |
+| `tests/fixtures/scenarios/` | One synthetic scenario that exercises the template slots; not study material |
 | `tests/test_openrouter.py` | Provider-client contract tests |
 | `tests/test_cache_runner_cli.py` | Cache, execution, and CLI tests |
 | `tests/test_tool_output_text.py` | Exact local file text in tool continuations, caches, and judge evidence |

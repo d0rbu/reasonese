@@ -39,6 +39,14 @@ author writes. Directory names are descriptive only. A
 selected file beginning with `TODO:` is an intentional placeholder and is rejected before
 inference.
 
+## Scenario configuration
+
+`--scenarios <directory>` on the conversation runner and both study collectors selects optional
+per-pair scenario files named `<pair id>.yaml`, resolved against the bank given by `--pairs`
+(default `configs/instruction_pairs.yaml`). A pair without a file, and every run without the
+option, uses the bare conversation. The file format and its rules are in
+[`scenarios.md`](scenarios.md).
+
 ## Study configuration
 
 A study adds a positive rollout count to an assistant and an unordered pair of inputs:
