@@ -304,7 +304,7 @@ commands places a pair's inputs inside a shared templated conversation instead, 
 a fixed property of its pair, so the analysis runs unchanged. Use a fresh output directory for
 each scenario selection; resuming a cached trial checks that its conversation still matches the
 selected templates. `reasonese-show-scenario` renders
-one offline and reports channels whose early and late inputs are framed differently. The only
+one offline so its context and input positions can be inspected before collection. The only
 scenario in the repository is a synthetic test fixture; see
 [`docs/reference/scenarios.md`](docs/reference/scenarios.md) for the format and its cautions.
 

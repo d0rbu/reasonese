@@ -61,9 +61,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "adaptation": scenario.adaptation,
                 "messages": setup.openrouter_messages(),
                 "placements": [placement.message for placement in setup.placements],
-                # Channels whose early and late inputs are framed differently confound
-                # delivery position with that framing.
-                "asymmetric_channels": list(scenario.asymmetric_channels()),
             },
             ensure_ascii=False,
             indent=2,

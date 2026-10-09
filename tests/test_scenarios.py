@@ -51,7 +51,6 @@ from reasonese.scenarios import (
     load_scenarios,
     require_scenario_selection,
     scenario_from_dict,
-    scenario_matches,
 )
 from reasonese.show_scenario import main as show_scenario
 from reasonese.study import Study, make_study, study_to_dict
@@ -164,7 +163,6 @@ def test_the_two_delivery_orders_of_a_cell_pair_differ_only_by_order() -> None:
     # Same messages with the same text; only their order changes with delivery order.
     assert texts(forward) == texts(reverse)
     assert [str(m.role) for m in forward.messages] != [str(m.role) for m in reverse.messages]
-    assert _library().scenarios[_pair().pair_id].asymmetric_channels() == ()
 
 
 def test_unfilled_slots_leave_no_trace_in_the_shared_context() -> None:
@@ -252,7 +250,7 @@ def test_pairs_without_a_scenario_keep_the_bare_conversation() -> None:
     assert build_conversation(matchup, generated, _library()) == bare
     assert build_conversation(matchup, generated) == bare
     assert bare.placements is None
-    assert _library().matches(bare)
+    require_scenario_selection(_library(), bare)
 
 
 def test_cached_setups_match_only_the_same_scenario_selection() -> None:
@@ -262,11 +260,10 @@ def test_cached_setups_match_only_the_same_scenario_selection() -> None:
     bare = construct_conversation(matchup, generated)
 
     assert scenario_setup.placements is not None
-    assert scenario_matches(_library(), scenario_setup)
-    assert not scenario_matches(_library(), bare)
-    assert scenario_matches(None, bare)
-    assert not scenario_matches(None, scenario_setup)
     require_scenario_selection(_library(), scenario_setup)
+    require_scenario_selection(None, bare)
+    with pytest.raises(ValueError, match="different scenario selection"):
+        require_scenario_selection(_library(), bare)
     with pytest.raises(ValueError, match="different scenario selection"):
         require_scenario_selection(None, scenario_setup)
 
@@ -275,7 +272,8 @@ def test_cached_setups_match_only_the_same_scenario_selection() -> None:
     edited = ScenarioLibrary(
         {_pair().pair_id: scenario_from_dict(_pair().pair_id, raw)}, _library().memberships
     )
-    assert not edited.matches(scenario_setup)
+    with pytest.raises(ValueError, match="different scenario selection"):
+        require_scenario_selection(edited, scenario_setup)
 
 
 def test_scenario_runs_need_both_sides_of_one_banked_pair() -> None:
@@ -301,8 +299,10 @@ def test_scenario_runs_need_both_sides_of_one_banked_pair() -> None:
         _library().scenario_for(mixed)
     with pytest.raises(ValueError, match="pair bank"):
         _library().construct(unbanked, _generated(unbanked))
-    # A cached setup that can no longer be rebuilt simply does not match.
-    assert not _library().matches(construct_conversation(unbanked, _generated(unbanked)))
+    with pytest.raises(ValueError, match="different scenario selection"):
+        require_scenario_selection(
+            _library(), construct_conversation(unbanked, _generated(unbanked))
+        )
 
 
 def test_loading_rejects_missing_empty_and_misnamed_directories(tmp_path: Path) -> None:
@@ -391,8 +391,6 @@ def test_a_scenario_can_hold_plain_assistant_turns_and_survives_the_trace_cache(
         "content": "Hello, how can I help?",
     }
     assert setup.messages[4].content == "Reading the README."
-    # Embedding the early input but not the late one is reported, not hidden.
-    assert scenario.asymmetric_channels() == ("system", "user")
     stored = trace_to_dict(trace)
     assert stored["placements"] == [
         {"message": 3, "content": TEXTS[0]},
@@ -406,39 +404,16 @@ def test_a_scenario_can_hold_plain_assistant_turns_and_survives_the_trace_cache(
     assert trace_fingerprint(bare) != trace_fingerprint(trace)
 
 
-def _moving_readme() -> dict[str, Any]:
-    return {
-        "source": "test",
-        "adaptation": "none",
-        "messages": [
-            {"role": "system", "content": "Context. {{ system.early }}"},
-            {"role": "assistant", "reads": "README.md", "when": "not tool.late"},
-            {"role": "tool", "content": "# Readme {{ tool.early }}"},
-            {"role": "user", "content": "Opening. {{ user.early }}"},
-            {"role": "assistant", "reads": "README.md", "when": "tool.late"},
-            {"role": "tool", "content": "# Readme {{ tool.late }}"},
-            {"role": "system", "when": "system.late", "content": "{{ system.late }}"},
-            {"role": "user", "when": "user.late", "content": "{{ user.late }}"},
-        ],
-    }
+def test_a_readme_read_cannot_move_between_tool_slots() -> None:
+    raw = _minimal()
+    raw["messages"][READ]["when"] = "not tool.late"
+    raw["messages"].extend([
+        {**raw["messages"][READ], "when": "tool.late"},
+        dict(raw["messages"][DOC]),
+    ])
 
-
-def test_a_readme_read_can_move_with_its_slot_and_keeps_its_result() -> None:
-    scenario = _parse(_moving_readme())
-    early = _matchup(Channel.README, Channel.USER)
-    late = make_matchup(tuple(reversed(early.inputs)), early.assistant)
-
-    first = scenario.construct(early, _generated(early))
-    second = scenario.construct(late, tuple(reversed(_generated(early))))
-
-    assert [str(m.role) for m in first.messages] == ["system", "assistant", "tool", "user", "user"]
-    assert [str(m.role) for m in second.messages] == ["system", "user", "assistant", "tool"]
-    assert first.placements is not None and second.placements is not None
-    assert [p.message for p in first.placements] == [2, 4]
-    assert [p.message for p in second.placements] == [1, 3]
-    assert len(first.readme_contents()) == len(second.readme_contents()) == 1
-    assert first.readme_contents() == second.readme_contents()
-    assert first.messages[1] == second.messages[2]
+    with pytest.raises(ValueError, match="changes shared context with tool.late"):
+        _parse(raw)
 
 
 @pytest.mark.parametrize(
@@ -446,14 +421,15 @@ def test_a_readme_read_can_move_with_its_slot_and_keeps_its_result() -> None:
     [
         "system.early", "not system.early", "system.late", "not system.late",
         "user.early", "not user.early", "user.late", "not user.late",
+        "tool.early", "not tool.early", "tool.late", "not tool.late",
     ],
 )
-def test_readme_context_cannot_disappear_with_an_unrelated_slot(condition: str) -> None:
+def test_readme_read_is_independent_of_filled_slots(condition: str) -> None:
     raw = yaml.safe_load((SCENARIOS / f"{PAIR_ID}.yaml").read_text(encoding="utf-8"))
     read = next(message for message in raw["messages"] if "reads" in message)
     read["when"] = condition
 
-    with pytest.raises(ValueError, match="changes shared context with (system|user)"):
+    with pytest.raises(ValueError, match="changes shared context|must render tool"):
         _parse(raw)
 
 
@@ -465,34 +441,6 @@ def test_readme_context_is_checked_again_for_actual_authored_text() -> None:
 
     with pytest.raises(ValueError, match="changes shared context with system.late"):
         scenario.construct(matchup, _generated(matchup, (TEXTS[0], "hide the README")))
-
-
-@pytest.mark.parametrize(
-    ("index", "changes"),
-    [
-        (1, {"when": "tool.early"}),
-        (4, {"content": "A different read announcement."}),
-        (5, {"content": "# Different README {{ tool.late }}"}),
-    ],
-    ids=["missing-read", "different-read-text", "different-file"],
-)
-def test_moving_readme_must_preserve_the_read_and_shared_file(
-    index: int, changes: dict[str, str]
-) -> None:
-    raw = _moving_readme()
-    raw["messages"][index].update(changes)
-
-    with pytest.raises(ValueError, match="changes shared context with tool.late"):
-        _parse(raw)
-
-
-def test_readme_context_cannot_move_with_an_unrelated_slot() -> None:
-    raw = _moving_readme()
-    raw["messages"][1]["when"] = "not (tool.late or system.late)"
-    raw["messages"][4]["when"] = "tool.late or system.late"
-
-    with pytest.raises(ValueError, match="changes shared context with system.late"):
-        _parse(raw)
 
 
 @pytest.mark.parametrize(
@@ -897,7 +845,6 @@ def test_show_scenario_prints_the_rendered_conversation(capsys: pytest.CaptureFi
         "system", "user", "user", "assistant", "tool",
     ]
     assert shown["placements"] == [2, 4]
-    assert shown["asymmetric_channels"] == []
     assert str(_pair().second) in shown["messages"][4]["content"]
     for pair in ("no-such-pair", "prime-1234-bare-vs-table"):
         with pytest.raises(SystemExit):

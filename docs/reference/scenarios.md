@@ -17,8 +17,8 @@ and feature lasso run without modification. Two cautions apply when reading thei
   the scenario presents each channel.
 - If a template frames an input differently in its early and late slot, for example embedded in
   a long system prompt when early but a standalone message when late, delivery position is
-  confounded with that framing for the channel. `reasonese-show-scenario` reports such channels
-  as `asymmetric_channels`; the example below and the test fixture have none.
+  confounded with that framing for the channel. Inspect both delivery orders with
+  `reasonese-show-scenario` when reviewing a template.
 
 The repository ships one scenario, `tests/fixtures/scenarios/project-tree-bash-vs-python.yaml`,
 which is synthetic, exists only to exercise the template slots, and must not be used in a study.
@@ -94,9 +94,8 @@ checks do not prove that arbitrary Jinja conditions preserve the experimental de
   the authored text verbatim and only once.
 - The early slot's message comes before the late slot's message.
 - Only the message that carries a slot may depend on it. Other context must not appear, vanish,
-  or change with a slot; the one exception is a `README.md` read that moves with a README slot.
-  The moved read must keep the same assistant text and the same file context when that slot is
-  empty. System and user slots cannot conditionally remove or move the read.
+  or change with a slot. A `README.md` read and its result stay at a fixed point in the template;
+  the read cannot depend on which slots are filled.
 - A conversation reads `README.md` at most once, and a tool message is the unconditional result
   of the read before it.
 - No system, user, or tool message renders empty, a plain assistant turn does not either, and
