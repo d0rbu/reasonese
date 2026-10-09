@@ -111,7 +111,7 @@ def _generated(
 
 def _setup(first: Channel, second: Channel, **options: Any) -> ConversationSetup:
     matchup = _matchup(first, second, **options)
-    return _library().construct(matchup, _generated(matchup))
+    return build_conversation(matchup, _generated(matchup), _library())
 
 
 def _chat(content: str, response_id: str = "response-1") -> JsonObject:
@@ -155,7 +155,9 @@ def test_every_ordering_places_each_input_once_in_matchup_order(
 def test_the_two_delivery_orders_of_a_cell_pair_differ_only_by_order() -> None:
     forward = _setup(Channel.README, Channel.USER)
     reverse_matchup = make_matchup(tuple(reversed(forward.matchup.inputs)), Assistant.INKLING)
-    reverse = _library().construct(reverse_matchup, tuple(reversed(_generated(forward.matchup))))
+    reverse = build_conversation(
+        reverse_matchup, tuple(reversed(_generated(forward.matchup))), _library()
+    )
 
     def texts(setup: ConversationSetup) -> list[str]:
         return sorted(str(message.content) for message in setup.messages if message.content)
@@ -183,7 +185,7 @@ def test_authored_text_is_inserted_verbatim_even_when_it_looks_like_a_template()
         "Use {{ braces }} and {% tags %} literally.\n\nSecond paragraph.",
         "Plain <b>text</b> & more.",
     )
-    setup = _library().construct(matchup, _generated(matchup, texts))
+    setup = build_conversation(matchup, _generated(matchup, texts), _library())
 
     assert setup.messages[2].content == texts[0]
     assert texts[1] in str(setup.messages[4].content)
@@ -246,7 +248,6 @@ def test_pairs_without_a_scenario_keep_the_bare_conversation() -> None:
     bare = construct_conversation(matchup, generated)
 
     assert _library().scenario_for(matchup) is None
-    assert _library().construct(matchup, generated) == bare
     assert build_conversation(matchup, generated, _library()) == bare
     assert build_conversation(matchup, generated) == bare
     assert bare.placements is None
@@ -298,7 +299,7 @@ def test_scenario_runs_need_both_sides_of_one_banked_pair() -> None:
     with pytest.raises(ValueError, match="two sides of one instruction pair"):
         _library().scenario_for(mixed)
     with pytest.raises(ValueError, match="pair bank"):
-        _library().construct(unbanked, _generated(unbanked))
+        build_conversation(unbanked, _generated(unbanked), _library())
     with pytest.raises(ValueError, match="different scenario selection"):
         require_scenario_selection(
             _library(), construct_conversation(unbanked, _generated(unbanked))

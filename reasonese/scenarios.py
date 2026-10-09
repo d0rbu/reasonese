@@ -348,18 +348,6 @@ class ScenarioLibrary:
             raise ValueError("a scenario matchup must hold the two sides of one instruction pair")
         return self.scenarios.get(next(iter(pair_ids)))
 
-    @beartype
-    def construct(
-        self,
-        matchup: Matchup,
-        generated_messages: tuple[GeneratedMessage, ...],
-    ) -> ConversationSetup:
-        """Build the scenario conversation, or the bare one for a pair without a scenario."""
-        scenario = self.scenario_for(matchup)
-        if scenario is None:
-            return construct_conversation(matchup, generated_messages)
-        return scenario.construct(matchup, generated_messages)
-
 
 @beartype
 def load_scenarios(root: Path, pairs: tuple[InstructionPair, ...]) -> ScenarioLibrary:
@@ -388,10 +376,11 @@ def build_conversation(
     generated_messages: tuple[GeneratedMessage, ...],
     scenarios: ScenarioLibrary | None = None,
 ) -> ConversationSetup:
-    """Build a conversation with the selected scenarios, or the bare one without any."""
-    if scenarios is None:
+    """Build the selected scenario, falling back to a bare conversation."""
+    scenario = scenarios.scenario_for(matchup) if scenarios is not None else None
+    if scenario is None:
         return construct_conversation(matchup, generated_messages)
-    return scenarios.construct(matchup, generated_messages)
+    return scenario.construct(matchup, generated_messages)
 
 
 @beartype
