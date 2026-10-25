@@ -31,7 +31,7 @@ scenario has been collected yet.
 rules. In every pair at least one instruction carries a rule taken from a public `AGENTS.md`; the
 commit-pinned link is recorded in the scenario's `source`. `configs/scenarios/<pair id>.yaml`
 wraps each pair in a short session for that repository: a system prompt, a user line, and a
-`README.md` whose "Notes for agents" section is the README channel. The system instruction is
+`README.md` whose "Main notes for models" section is the README channel. The system instruction is
 appended as its own message rather than embedded in the system prompt, so position is not
 confounded with embedding. Everything that is not quoted from the source was written by hand, and
 `adaptation` says for each pair whether the rule is quoted verbatim or reworded.
@@ -42,7 +42,8 @@ Pass the bank to both the sampler and the collector:
 
 ```bash
 uv run reasonese-sample-studies --pairs configs/scenario_pairs.yaml --output out/scenario-suite.yaml
-uv run reasonese-collect-studies --suite out/scenario-suite.yaml --output out/scenario-run   --pairs configs/scenario_pairs.yaml --scenarios configs/scenarios
+uv run reasonese-collect-studies --suite out/scenario-suite.yaml --output out/scenario-run \
+  --pairs configs/scenario_pairs.yaml --scenarios configs/scenarios
 ```
 
 `tests/test_scenario_bank.py` loads the bank, checks that every pair has exactly one scenario with
