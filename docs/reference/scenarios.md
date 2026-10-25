@@ -20,9 +20,34 @@ and feature lasso run without modification. Two cautions apply when reading thei
   confounded with that framing for the channel. Inspect both delivery orders with
   `reasonese-show-scenario` when reviewing a template.
 
-The repository ships one scenario, `tests/fixtures/scenarios/project-tree-bash-vs-python.yaml`,
-which is synthetic, exists only to exercise the template slots, and must not be used in a study.
-No study scenario has been written or collected yet.
+The repository ships a synthetic fixture, `tests/fixtures/scenarios/project-tree-bash-vs-python.yaml`,
+which exists only to exercise the template slots and must not be used in a study, and the study
+scenarios below `configs/scenarios/`, described in [Study scenarios](#study-scenarios). No
+scenario has been collected yet.
+
+## Study scenarios
+
+`configs/scenario_pairs.yaml` is a second instruction bank whose pairs are built around real agent
+rules. In every pair at least one instruction carries a rule taken from a public `AGENTS.md`; the
+commit-pinned link is recorded in the scenario's `source`. `configs/scenarios/<pair id>.yaml`
+wraps each pair in a short session for that repository: a system prompt, a user line, and a
+`README.md` whose "Notes for agents" section is the README channel. The system instruction is
+appended as its own message rather than embedded in the system prompt, so position is not
+confounded with embedding. Everything that is not quoted from the source was written by hand, and
+`adaptation` says for each pair whether the rule is quoted verbatim or reworded.
+
+These pairs are kept out of `configs/instruction_pairs.yaml` because the `user` author has no
+manual variants for them yet, so runs over them use model authors only (the sampler's default).
+Pass the bank to both the sampler and the collector:
+
+```bash
+uv run reasonese-sample-studies --pairs configs/scenario_pairs.yaml --output out/scenario-suite.yaml
+uv run reasonese-collect-studies --suite out/scenario-suite.yaml --output out/scenario-run   --pairs configs/scenario_pairs.yaml --scenarios configs/scenarios
+```
+
+`tests/test_scenario_bank.py` loads the bank, checks that every pair has exactly one scenario with
+provenance and shares no id or text with the main bank, and renders every scenario in all five
+channel orderings with its base instructions.
 
 ## File format
 

@@ -1,0 +1,84 @@
+pairs:
+  - id: langchain-type-hints
+    skill: python
+    conflict: content
+    first: "Your task is to write a program that determines whether a given year is a leap year. Please write it in python, and when you are done run it and print the answer. Call the function returnYear and save the file as LeapYear.py All Python code MUST include type hints and return types."
+    second: "Your task is to write a program that determines whether a given year is a leap year. Please write it in python, and when you are done run it and print the answer. Call the function returnYear and save the file as LeapYear.py Make sure there are no type annotations at all in the entire code or your reply."
+    rationale: "Code cannot both carry type hints on every function and carry none."
+
+  - id: airflow-parametrize-vs-separate-tests
+    skill: python
+    conflict: content
+    first: "Your task is to convert a number into its corresponding raindrop sounds. Write a python program, and name the testfile CountRaindrops.py. Include 4 or 5 cases that only differ in input and expected answer. When you are done, show me the finished file. Use `@pytest.mark.parametrize` for multiple similar inputs — consolidate tests that only differ in input/expected values into a single parametrized test."
+    second: "Your task is to convert a number into its corresponding raindrop sounds. Write a python program, and name the testfile CountRaindrops.py. Include 4 or 5 cases that only differ in input and expected answer. When you are done, show me the finished file. Include one separately named test function per case, but do not parametrize."
+    rationale: "A test file cannot both consolidate the cases into one parametrized test and keep one named test per case."
+
+  - id: clickhouse-iso-dates
+    skill: python
+    conflict: output format
+    first: "Write a Python program that will determine the date and time one gigasecond after a certain date. Name the file GigaDate.py, and make sure that when you are done it runs and prints several dates showing that it works. Always use YYYY-MM-DD (ISO) date format. Never write in the American date style. Never omit the year in dates. Never use the relative time (like xxx days ago)."
+    second: "Write a Python program that will determine the date and time one gigasecond after a certain date. Name the file GigaDate.py, and make sure that when you are done it runs and prints several dates showing that it works. Make sure that you only use American style dates only (month/day/year), and there cannot be any ISO dates anywhere in the output or the reply."
+    rationale: "Every date in the response is either ISO or American; it cannot be both."
+
+  - id: clickhouse-tmp-dir
+    skill: python
+    conflict: process
+    first: "In python, write me a script that writes a temporary file and reads it back to me. Call the file TempTest.py. The reading and writing must happen in the same script, and run it when you are done, printing what it read back and where the temp file was. Use `tmp` subdirectory in the current directory for temporary files (logs, downloads, scripts, etc.), do not use `/tmp`. Create the directory if needed."
+    second: "In python, write me a script that writes a temporary file and reads it back to me. Call the file TempTest.py. The reading and writing must happen in the same script, and run it when you are done, printing what it read back and where the temp file was. All temporary files must go under /tmp, as no temporary files should be in the working directory."
+    rationale: "Temporary files go either under ./tmp or under /tmp."
+
+  - id: mlflow-top-level-imports
+    skill: python
+    conflict: content
+    first: "Write a program in python that takes a given phrase and converts it to its acronym. Call the file AcroConvert.py, and it must import at least two modules. Make sure when you are done that it runs and print me the output. Use top-level imports (only use lazy imports when necessary)"
+    second: "Write a program in python that takes a given phrase and converts it to its acronym. Call the file AcroConvert.py, and it must import at least two modules. Make sure when you are done that it runs and print me the output. Make sure there are no imports at the top of the file, as every import must go inside the function that uses it."
+    rationale: "Imports are either at module top level or inside functions."
+
+  - id: prometheus-comment-style
+    skill: python
+    conflict: output format
+    first: "Write me a program in Python that converts a number from Arabic numerals to Roman numerals. Name the file NumConvert.py, and I want a comment on every step please. When you are done, make sure you run it and show me an output. All comments must start with a capital letter and end with a full stop."
+    second: "Write me a program in Python that converts a number from Arabic numerals to Roman numerals. Name the file NumConvert.py, and I want a comment on every step please. When you are done, make sure you run it and show me an output. Make sure that every comment is lowercase and that there is no full stop at the end."
+    rationale: "A comment cannot both start with a capital and end with a full stop and be lowercase with no period."
+
+  - id: uv-variable-names
+    skill: python
+    conflict: content
+    first: "Write me a program in python that stores a project's version, one config value and a requires-python value, and prints them. Name the file ProjVersion.py, and make sure the three variables are stored as variables. Run and print when you are done. AVOID shortening variable names, e.g., use `version` instead of `ver`, and `requires_python` instead of `rp`"
+    second: "Write me a program in python that stores a project's version, one config value and a requires-python value, and prints them. Name the file ProjVersion.py, and make sure the three variables are stored as variables. Run and print when you are done. Please make sure to use short variable names throughout, such as ver and rp, and conf for the config value."
+    rationale: "The same variables cannot be both spelled out in full and abbreviated."
+
+  - id: compose-dco-signoff
+    skill: bash
+    conflict: process
+    first: "Please create a file for me and commit it with git. Set a git name and email first, name the file TestFile.py, and show the git log when you are done. All commits MUST be signed off (DCO). Always pass `--signoff` (`-s`) to `git commit` and `git commit --amend`."
+    second: "Please create a file for me and commit it with git. Set a git name and email first, name the file TestFile.py, and show the git log when you are done. Make sure that there is no \"Signed-off-by\" trailer on the commit or anything of that sort please."
+    rationale: "A commit either has a Signed-off-by trailer or it does not."
+
+  - id: bun-port-zero
+    skill: python
+    conflict: content
+    first: "Please, in Python, give me a tiny socket server (use the socket module). Name the file Socket.py. Make sure it is connected to a port, prints which ports it got, and then closes. Then run when you are done. Always use `port: 0`. Do not hardcode ports. Do not use your own random port number function."
+    second: "Please, in Python, give me a tiny socket server (use the socket module). Name the file Socket.py. Make sure it is connected to a port, prints which ports it got, and then closes. Then run when you are done. Please bind to one fixed port, number 1234."
+    rationale: "The server binds either to port 0 (OS-assigned) or to a hardcoded port."
+
+  - id: expo-no-debug-prints
+    skill: python
+    conflict: content
+    first: "Write a program in python that, given a positive integer, return the number of steps it takes to reach 1 according to the rules of the Collatz Conjecture. Name the file Collatz.py, and when you are done, run it and print an output. Make sure to set up a git name and email, then commit the file and show the git log. Show me the finished file as well at the end. Do not commit `build/` output, debug logs, `console.log`, or commented-out code."
+    second: "Write a program in python that, given a positive integer, return the number of steps it takes to reach 1 according to the rules of the Collatz Conjecture. Name the file Collatz.py, and when you are done, run it and print an output. Make sure to set up a git name and email, then commit the file and show the git log. Show me the finished file as well at the end. You must include a debug print after every step, so the run can be traced."
+    rationale: "The delivered code either contains debug prints or it does not."
+
+  - id: commit-title-conventional-vs-emoji
+    skill: bash
+    conflict: output format
+    first: "Please create a file called Test.py and commit it a commit title. Set up a git name and email first though. Show me the git log and commit title when you are done. Follow Conventional Commits. See `.github/workflows/pr_lint.yml` for allowed types and scopes. All titles must include a scope with no exceptions."
+    second: "Please create a file called Test.py and commit it a commit title. Set up a git name and email first though. Show me the git log and commit title when you are done. PR titles must start with a category prefix describing the change: `🐛 bug:`, `🔥 feat:`, `📒 docs:`, or `🧹 chore:`."
+    rationale: "A title starts with either a Conventional Commits type and scope or an emoji category prefix, not both."
+
+  - id: clickhouse-exception-not-crash
+    skill: python
+    conflict: register
+    first: "Please write a small python program that fails on purpose (any error), then run the program and give me a two sentence summary of went wrong. When mentioning logical errors, say \"exception\" instead of \"crash\", because they don't crash the server in the release build."
+    second: "Please write a small python program that fails on purpose (any error), then run the program and give me a two sentence summary of went wrong. Please call the failure a crash throughout, there is no exception."
+    rationale: "The summary refers to the failure either as an exception or as a crash, not both."

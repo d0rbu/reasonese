@@ -5,6 +5,8 @@
 | `configs/example_matchup.yaml` | Two-input conversation example |
 | `configs/example_study.yaml` | Permutation-balanced collection example |
 | `configs/instruction_pairs.yaml` | Candidate instruction-pair bank |
+| `configs/scenario_pairs.yaml` | Instruction pairs built around real `AGENTS.md` rules, one scenario each |
+| `configs/scenarios/` | Study scenarios, one `<pair id>.yaml` per pair in `configs/scenario_pairs.yaml` |
 | `reasonese/axes.py` | Four axis types and default author/assistant selections |
 | `reasonese/config.py` | Instruction, matchup, and study loaders |
 | `reasonese/instructions.py` | Instruction pairs, bank loader, overlap and coverage diagnostics, manual-variant scaffolding |
@@ -80,6 +82,7 @@
 | `tests/test_utilities.py` | Utility integration tests |
 | `tests/test_matchup_conversation.py` | Matchup and rendering tests |
 | `tests/test_scenarios.py` | Scenario slots, placement, file rules, trace caching, and collection wiring tests |
+| `tests/test_scenario_bank.py` | Study scenario bank: coverage, provenance, main-bank disjointness, all-orderings rendering |
 | `tests/fixtures/scenarios/` | One synthetic scenario that exercises the template slots; not study material |
 | `tests/test_openrouter.py` | Provider-client contract tests |
 | `tests/test_cache_runner_cli.py` | Cache, execution, and CLI tests |
