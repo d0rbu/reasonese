@@ -23,7 +23,10 @@ and feature lasso run without modification. Two cautions apply when reading thei
 The repository ships a synthetic fixture, `tests/fixtures/scenarios/project-tree-bash-vs-python.yaml`,
 which exists only to exercise the template slots and must not be used in a study, and the study
 scenarios below `configs/scenarios/`, described in [Study scenarios](#study-scenarios). No
-scenario has been collected yet.
+scenario has been collected yet. These are hand-authored histories, including the assistant's
+README read and its result. For genuine tool trajectories, use the separate
+[Pi transcript collection workflow](pi-transcripts.md); it runs the tasks in pinned source
+checkouts and records the assistant's actual actions.
 
 ## Study scenarios
 
@@ -42,9 +45,13 @@ Pass the bank to both the sampler and the collector:
 
 ```bash
 uv run reasonese-sample-studies --pairs configs/scenario_pairs.yaml --output out/scenario-suite.yaml
-uv run reasonese-collect-studies --suite out/scenario-suite.yaml --output out/scenario-run \
+uv run reasonese-collect-studies --allow-paid --suite out/scenario-suite.yaml --output out/scenario-run \
   --pairs configs/scenario_pairs.yaml --scenarios configs/scenarios
 ```
+
+The collection example requires explicit spending authorization, including on default free
+routes because authoring QA and judgments can be paid. It collects the templated comparisons;
+it does not generate the Pi source transcripts.
 
 `tests/test_scenario_bank.py` loads the bank, checks that every pair has exactly one scenario with
 provenance and shares no id or text with the main bank, and renders every scenario in all five

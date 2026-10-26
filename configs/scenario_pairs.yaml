@@ -79,6 +79,6 @@ pairs:
   - id: clickhouse-exception-not-crash
     skill: python
     conflict: register
-    first: "Please write a small python program that fails on purpose (any error), then run the program and give me a two sentence summary of went wrong. When mentioning logical errors, say \"exception\" instead of \"crash\", because they don't crash the server in the release build."
-    second: "Please write a small python program that fails on purpose (any error), then run the program and give me a two sentence summary of went wrong. Please call the failure a crash throughout, there is no exception."
+    first: "Write a small Python program that deliberately raises ValueError for invalid input, then run it without catching the error and give me a two-sentence summary of what went wrong. When mentioning logical errors, say \"exception\" instead of \"crash\", because they don't crash the server in the release build."
+    second: "Write a small Python program that deliberately raises ValueError for invalid input, then run it without catching the error and give me a two-sentence summary of what went wrong. Please call the failure a crash throughout, there is no exception."
     rationale: "The summary refers to the failure either as an exception or as a crash, not both."

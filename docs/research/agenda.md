@@ -24,8 +24,8 @@ This foundation specifies:
 - how each exact materialized message receives an independent compliance audit;
 - how channel treatments become an ordered conversation; and
 - how a pair's two inputs can instead be placed inside a shared scenario conversation, as an
-  optional fixed property of the pair (no study scenario exists yet; only a synthetic test
-  fixture); and
+  optional fixed property of the pair (the current templates are hand-authored; a separate
+  Pi collector prepares actual source sessions for later scenario design); and
 - how generated messages and raw responses are cached; and
 - how one strict completion boolean is collected for each instruction; and
 - how both orderings and repeated rollouts become analysis-ready observation rows; and

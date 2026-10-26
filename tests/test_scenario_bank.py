@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -33,6 +34,17 @@ def test_every_scenario_pair_has_one_scenario_with_provenance() -> None:
     for scenario in library.scenarios.values():
         assert "https://github.com/" in scenario.source
         assert scenario.adaptation.strip()
+
+
+def test_pi_source_tasks_cover_the_same_pairs_and_pinned_repositories() -> None:
+    pairs = load_instruction_pairs(BANK)
+    library = load_scenarios(SCENARIOS, pairs)
+    manifest = json.loads(Path("configs/pi_transcripts.json").read_text())
+    assert {case["id"] for case in manifest["scenarios"]} == set(library.scenarios)
+    for case in manifest["scenarios"]:
+        source = library.scenarios[case["id"]].source
+        assert case["repository"].removesuffix(".git") + "/blob/" + case["revision"] in source
+        assert case["revision"] + "/" + case["ruleFile"] in source
 
 
 def test_scenario_pairs_are_disjoint_from_the_main_bank() -> None:

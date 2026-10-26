@@ -43,6 +43,13 @@ matchup -> authored messages -> independent message QA -> conversation -> assist
 - `reasonese.scenarios` optionally places a pair's two inputs inside a shared templated
   conversation instead of bare messages; see [`scenarios.md`](scenarios.md). Without a selected
   scenario directory every conversation is bare.
+
+- `tools/pi-transcripts/` is a separate source-corpus collection stage. It runs the pinned Pi SDK
+  against OpenRouter with actual tools in independent pinned repository checkouts, saving native
+  sessions, raw HTTP/SSE evidence, resolved prompts, and terminal outcomes. Its manifest is
+  `configs/pi_transcripts.json`; preparation and paid collection are distinct commands. These
+  unjudged source transcripts are not silently converted into scenario templates, trial caches, or
+  observations. See [`pi-transcripts.md`](pi-transcripts.md).
 - `reasonese.manual_messages` resolves filesystem-backed variants for the user author and
   snapshots the needed files once per top-level invocation.
 - `reasonese.tools` defines bounded file, shell, Python, and server-side web-search tools.

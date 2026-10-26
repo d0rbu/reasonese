@@ -7,6 +7,9 @@
 | `configs/instruction_pairs.yaml` | Candidate instruction-pair bank |
 | `configs/scenario_pairs.yaml` | Instruction pairs built around real `AGENTS.md` rules, one scenario each |
 | `configs/scenarios/` | Study scenarios, one `<pair id>.yaml` per pair in `configs/scenario_pairs.yaml` |
+| `configs/pi_transcripts.json` | Pinned source repositories, natural user tasks, exact executor model, and collection limits |
+| `tools/pi-transcripts/` | Pinned Pi SDK collector, real repository preparation, isolated built-in tools, and offline integration tests |
+| `docs/reference/pi-transcripts.md` | Preparation, authorized transcript collection, evidence format, and scientific limits |
 | `reasonese/axes.py` | Four axis types and default author/assistant selections |
 | `reasonese/config.py` | Instruction, matchup, and study loaders |
 | `reasonese/instructions.py` | Instruction pairs, bank loader, overlap and coverage diagnostics, manual-variant scaffolding |

@@ -304,10 +304,16 @@ commands places a pair's inputs inside a shared templated conversation instead, 
 a fixed property of its pair, so the analysis runs unchanged. Use a fresh output directory for
 each scenario selection; resuming a cached trial checks that its conversation still matches the
 selected templates. `reasonese-show-scenario` renders
-one offline so its context and input positions can be inspected before collection. The study
-scenarios live in `configs/scenarios/` with their own pair bank, `configs/scenario_pairs.yaml`;
+one offline so its context and input positions can be inspected before collection. The hand-authored
+scenario templates live in `configs/scenarios/` with their own pair bank, `configs/scenario_pairs.yaml`;
 see [`docs/reference/scenarios.md`](docs/reference/scenarios.md) for the format, the bank, and
 its cautions.
+
+For source transcripts with actual tool execution, the [Pi collection workflow](docs/reference/pi-transcripts.md)
+checks out the 12 scenarios' real repositories and lets Pi complete one user task per scenario
+using `deepseek/deepseek-v4.1-flash-1017` on OpenRouter. Preparation makes no model calls;
+collection requires a separate `--allow-paid` invocation. The complete sessions are retained for
+later scenario construction, with no fabricated README reads. No live Pi corpus has been collected yet.
 
 ## Writing the manual variants
 
@@ -362,7 +368,12 @@ function and dataclass boundaries at runtime.
 
 ## Development
 
+The complete gate includes the offline Pi integration tests and optional probe checks.
+Use Node.js 22 or newer and install both dependency sets first:
+
 ```bash
+uv sync --locked --extra probes
+npm ci --prefix tools/pi-transcripts --ignore-scripts --no-audit --no-fund
 uv run pre-commit run --all-files
 ```
 

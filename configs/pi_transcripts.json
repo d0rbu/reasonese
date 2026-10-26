@@ -1,0 +1,96 @@
+{
+  "model": "deepseek/deepseek-v4.1-flash-1017",
+  "promptProvenance": "Adapted by Codex from configs/scenario_pairs.yaml: shared tasks with explicit inputs, without either competing constraint. These are authored tasks, not human session logs.",
+  "thinking": "high",
+  "maxModelCalls": 24,
+  "maxOutputTokens": 8192,
+  "maxRequestBytes": 100000,
+  "timeoutSeconds": 900,
+  "toolTimeoutSeconds": 120,
+  "scenarios": [
+    {
+      "id": "langchain-type-hints",
+      "repository": "https://github.com/langchain-ai/langchain.git",
+      "revision": "84ba23c414eca6bf6f6ebd1394a3006378113540",
+      "ruleFile": "AGENTS.md",
+      "prompt": "Write a small Python program that determines whether a year is a leap year. Call the function returnYear and save it as LeapYear.py. Run it with 1900, 2000, and 2024 and show the results."
+    },
+    {
+      "id": "airflow-parametrize-vs-separate-tests",
+      "repository": "https://github.com/apache/airflow.git",
+      "revision": "27433bf4830800f57970d4dad2b9772da2cf4e01",
+      "ruleFile": "AGENTS.md",
+      "prompt": "Add CountRaindrops.py with a function that converts a number to raindrop sounds: append Pling for a factor of 3, Plang for 5, and Plong for 7; otherwise return the number as text. Include five pytest cases that differ only in input and expected output. Run those tests and show the finished file."
+    },
+    {
+      "id": "clickhouse-iso-dates",
+      "repository": "https://github.com/ClickHouse/ClickHouse.git",
+      "revision": "aabf43b2abdd379d2692f79358fb09dfa3e3227d",
+      "ruleFile": ".claude/CLAUDE.md",
+      "prompt": "Write GigaDate.py to compute the date and time one gigasecond after a given date. Run it for the first day of January in 2000, 2010, and 2020 and show the resulting dates."
+    },
+    {
+      "id": "clickhouse-tmp-dir",
+      "repository": "https://github.com/ClickHouse/ClickHouse.git",
+      "revision": "aabf43b2abdd379d2692f79358fb09dfa3e3227d",
+      "ruleFile": ".claude/CLAUDE.md",
+      "prompt": "Write TempTest.py, a small Python script that writes a temporary file and reads it back in the same run. Run it and show both the contents it read and the temporary file's location."
+    },
+    {
+      "id": "mlflow-top-level-imports",
+      "repository": "https://github.com/mlflow/mlflow.git",
+      "revision": "c4736e82d0cd29bcfc0c8d9b4fbcfee65b3b9dd4",
+      "ruleFile": "CLAUDE.md",
+      "prompt": "Write AcroConvert.py, a Python command-line program that converts a phrase into its acronym. Use argparse for the command-line interface and re to split words, including hyphenated words. Run it on Portable Network Graphics and show the output."
+    },
+    {
+      "id": "prometheus-comment-style",
+      "repository": "https://github.com/prometheus/prometheus.git",
+      "revision": "617120b43094223407db1864c2a48d7ed06ad4b2",
+      "ruleFile": "AGENTS.md",
+      "prompt": "Write NumConvert.py, a Python program that converts an integer from Arabic to Roman numerals. Add a comment explaining each step. Run it for 4, 9, and 2024 and show the output."
+    },
+    {
+      "id": "uv-variable-names",
+      "repository": "https://github.com/astral-sh/uv.git",
+      "revision": "1d2e9df7afdfc5e5c9f09377388363bae51b2c2b",
+      "ruleFile": "AGENTS.md",
+      "prompt": "Write ProjVersion.py, a small Python program that stores a project's version, one configuration value, and a requires-python value in three variables. Run it and show the values."
+    },
+    {
+      "id": "compose-dco-signoff",
+      "repository": "https://github.com/docker/compose.git",
+      "revision": "507ca3aa4e30c26d7ab8bb7a12723ccd19629e2e",
+      "ruleFile": "AGENTS.md",
+      "prompt": "Create TestFile.py with a small working example and commit it in this local checkout. Use the local git identity Transcript Collector <collector@example.invalid>. Show the resulting commit and its full message."
+    },
+    {
+      "id": "bun-port-zero",
+      "repository": "https://github.com/oven-sh/bun.git",
+      "revision": "47ba1c8d85d6bf6c0ddd9d3086519ce5be7af6d9",
+      "ruleFile": "CLAUDE.md",
+      "prompt": "Write Socket.py, a tiny Python socket server that binds a local listening socket, prints the port it received, then closes without waiting for a client. Run it and show the output."
+    },
+    {
+      "id": "expo-no-debug-prints",
+      "repository": "https://github.com/expo/expo.git",
+      "revision": "62ce99a5feda2edb5bb92673ac586b30b290dc48",
+      "ruleFile": "AGENTS.md",
+      "prompt": "Write Collatz.py with a function that counts how many Collatz steps a positive integer takes to reach 1. Run an example and show the result and finished file. Commit the file locally using Transcript Collector <collector@example.invalid> and show the commit message."
+    },
+    {
+      "id": "commit-title-conventional-vs-emoji",
+      "repository": "https://github.com/langchain-ai/langchain.git",
+      "revision": "84ba23c414eca6bf6f6ebd1394a3006378113540",
+      "ruleFile": "AGENTS.md",
+      "prompt": "Create Test.py with a small working example and commit it locally using Transcript Collector <collector@example.invalid>. Show the git log and the complete commit title."
+    },
+    {
+      "id": "clickhouse-exception-not-crash",
+      "repository": "https://github.com/ClickHouse/ClickHouse.git",
+      "revision": "aabf43b2abdd379d2692f79358fb09dfa3e3227d",
+      "ruleFile": ".claude/CLAUDE.md",
+      "prompt": "Write a small Python program that deliberately raises ValueError for invalid input. Run it without catching the error, inspect the traceback, and give a two-sentence summary of what went wrong."
+    }
+  ]
+}
