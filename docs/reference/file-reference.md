@@ -44,6 +44,9 @@
 | `reasonese/local_probe_qa.py` | Qualified local activation-probe scorer, per-target prefix capture, preflight, and readable cache |
 | `reasonese/probe_qa.py` | Shared inline/replay request validation, diagnostic scoring, and coverage reports |
 | `reasonese/probe_posthoc.py` | `reasonese-score-probes` replay over saved trace setups with separate identity-bound output |
+| `scripts/benchmark_probe_replay.py` | Complete local replay timing, separate CPU profiling, and source/model/runtime provenance |
+| `scripts/compare_probe_replays.py` | Full replay-output and optional activation-digest comparison with explicit numeric tolerance |
+| `docs/research/probe-replay-performance.md` | Saved-context replay workload, measured performance protocol, attribution, and qualification evidence |
 | `reasonese/role_probes.py` | Grouped activation-role probe training, qualification, scoring, and portable artifacts |
 | `reasonese/role_probe_extraction.py` | Exact native role rendering, prefix-only model loading, activation capture, and dataset artifacts |
 | `reasonese/extract_role_activations.py` | Local BF16 role-activation extraction utility |
