@@ -379,8 +379,6 @@ def test_local_scorer_captures_target_prefixes_and_reuses_exact_cache(
     assert captured == [
         (tuple(range(3)), (1, 2)),
         (tuple(range(9)), (7, 8)),
-        (tuple(range(3)), (1, 2)),
-        (tuple(range(9)), (7, 8)),
     ]
     assert len({row.context_fingerprint for row in verdicts}) == 4
     assert all(len(row.role_probabilities) == 5 for row in verdicts)
@@ -391,7 +389,7 @@ def test_local_scorer_captures_target_prefixes_and_reuses_exact_cache(
 
     assert scorer.check(requests) == verdicts
     assert len(loaded) == 2
-    assert len(captured) == 4
+    assert len(captured) == 2
 
 
 def test_local_scorer_invalidates_old_full_context_cache_and_hits_new_prefix_cache(
@@ -677,6 +675,7 @@ def test_local_scorer_uses_identical_prefix_for_different_future_suffixes(
     _, requests = _requests()
     verdicts = LocalProbeQaScorer(config, cache, execution_device="cpu").check(requests)
     assert len(verdicts) == 4
+    assert len(captured) == 1
     assert {input_ids for input_ids, _ in captured} == {
         (0, 1, 2),
     }

@@ -619,42 +619,54 @@ class LocalProbeQaScorer:
 
         model = self._load_validated_model(prepared)
         try:
+            roles = prepared.probe.provenance.roles
+            reasoning_index = roles.index("reasoning")
+            # Different studies can deliver the same prefix. Reuse only the small
+            # projection means, within this one validated model/probe invocation.
+            means_by_prefix: dict[
+                tuple[tuple[int, ...], tuple[int, ...]], tuple[float, ...]
+            ] = {}
             with _pinned_nemotron_cumsum(
                 model, prepared.bundle.adapter, self.execution_device
             ):
                 for request in missing:
                     context = rendered[request]
                     positions = context.token_positions[0]
-                    captured = capture_token_activations(
-                        model,
-                        prepared.bundle.adapter,
-                        input_ids=context.input_ids,
-                        token_positions=positions,
-                        layers=(prepared.probe.selected_layer_index,),
-                    )
-                    if (
-                        captured.ndim != 3
-                        or captured.shape[0] != len(positions)
-                        or captured.shape[1] != 1
-                        or captured.dtype.name != prepared.probe.provenance.activation_dtype
-                    ):
-                        raise ValueError("local role-probe capture returned an invalid shape")
-                    activations = np.asarray(captured[:, 0])
-                    projection = project_role(
-                        prepared.probe,
-                        activations,
-                        provenance=prepared.probe.provenance,
-                        layer_index=prepared.probe.selected_layer_index,
-                    )
+                    capture_key = (context.input_ids, positions)
+                    means = means_by_prefix.get(capture_key)
+                    if means is None:
+                        captured = capture_token_activations(
+                            model,
+                            prepared.bundle.adapter,
+                            input_ids=context.input_ids,
+                            token_positions=positions,
+                            layers=(prepared.probe.selected_layer_index,),
+                        )
+                        if (
+                            captured.ndim != 3
+                            or captured.shape[0] != len(positions)
+                            or captured.shape[1] != 1
+                            or captured.dtype.name != prepared.probe.provenance.activation_dtype
+                        ):
+                            raise ValueError("local role-probe capture returned an invalid shape")
+                        activations = np.asarray(captured[:, 0])
+                        means = project_role(
+                            prepared.probe,
+                            activations,
+                            provenance=prepared.probe.provenance,
+                            layer_index=prepared.probe.selected_layer_index,
+                        ).mean_probabilities
+                        means_by_prefix[capture_key] = means
+                    reasoning_probability = means[reasoning_index]
                     complies, issue = _decision(
-                        request, prepared.probe, projection.mean_reasoning_probability,
+                        request, prepared.probe, reasoning_probability,
                         prepared.bundle.thresholds_for(request.spec.channel),
                     )
                     verdict = ProbeQaVerdict(
                         request,
                         keys[request],
-                        tuple(zip(projection.roles, projection.mean_probabilities, strict=True)),
-                        projection.mean_reasoning_probability,
+                        tuple(zip(roles, means, strict=True)),
+                        reasoning_probability,
                         probe_expectation(request.spec),
                         complies,
                         issue,

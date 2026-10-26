@@ -461,7 +461,12 @@ context with thinking enabled and the three local function declarations. The Ope
 tool is injected server-side and has no reproducible local prompt representation; every report
 records this limitation.
 
-Each target span uses one forward ending at that span's final scored token. For the pinned Nemotron
+Each distinct target prefix uses one forward ending at that span's final scored token.
+Within one assistant's scoring call, requests with identical prefix token IDs and measured token
+positions reuse the five mean role probabilities. Only these scalar means are retained for reuse;
+each request keeps its own fingerprint, threshold decision, boundary-mask count, and durable cache
+record. Reuse ends when that model invocation ends, including after a scoring error.
+For the pinned Nemotron
 CUDA runtime, the scorer temporarily selects the registered Triton cumsum configuration with
 `BLOCK_SIZE_H=1` and restores the autotuner state after the capture scope. It validates this kernel
 configuration during preflight. H1 was selected to reproduce the historical
