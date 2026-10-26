@@ -1,7 +1,7 @@
 // Run Pi's own tools in a disposable filesystem and network namespace.
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, realpathSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { existsSync, lstatSync, mkdirSync, readlinkSync, realpathSync } from "node:fs";
+import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   createReadToolDefinition, createBashToolDefinition,
@@ -13,9 +13,13 @@ export const projectDir = resolve(toolDir, "../..");
 const definitions = [createReadToolDefinition, createBashToolDefinition,
   createEditToolDefinition, createWriteToolDefinition];
 
-export function sandboxArgs(cwd, scratch) {
-  const venv = join(projectDir, ".venv");
-  const python = dirname(dirname(realpathSync(join(venv, "bin/python"))));
+export function sandboxArgs(cwd, scratch, venv = join(projectDir, ".venv")) {
+  let launcher = join(venv, "bin/python");
+  const interpreter = realpathSync(launcher);
+  const python = dirname(dirname(interpreter));
+  while (launcher.startsWith(venv + sep) && lstatSync(launcher).isSymbolicLink()) {
+    launcher = resolve(dirname(launcher), readlinkSync(launcher));
+  }
   const node = realpathSync(process.execPath);
   mkdirSync(join(scratch, "tmp"), { recursive: true });
   mkdirSync(join(scratch, "home"), { recursive: true });
@@ -23,7 +27,8 @@ export function sandboxArgs(cwd, scratch) {
     "--proc", "/proc", "--dev", "/dev", "--clearenv",
     "--bind", join(scratch, "tmp"), "/tmp",
     "--bind", join(scratch, "home"), "/home/pi"];
-  for (const directory of ["/usr", "/bin", "/lib", "/lib64", "/etc/alternatives"]) {
+  const systemRoots = ["/usr", "/bin", "/lib", "/lib64", "/etc/alternatives"];
+  for (const directory of systemRoots) {
     if (existsSync(directory)) args.push("--ro-bind", directory, directory);
   }
   for (const filename of ["/etc/passwd", "/etc/group", "/etc/localtime"]) {
@@ -32,6 +37,12 @@ export function sandboxArgs(cwd, scratch) {
   // Never mount the host home, credentials, source worktree, or transcript directory.
   for (const resource of [toolDir, venv, python, node]) {
     args.push("--ro-bind", resource, resource);
+  }
+  // Recent uv versions can point the venv at a launcher alias outside the runtime prefix.
+  // Recreate that link without exposing the host's entire bin or home directory.
+  if (launcher !== interpreter && ![...systemRoots, toolDir, venv, python]
+    .some((root) => launcher.startsWith(root + sep))) {
+    args.push("--dir", dirname(launcher), "--symlink", interpreter, launcher);
   }
   return [...args, "--bind", cwd, cwd,
     "--remount-ro", "/",

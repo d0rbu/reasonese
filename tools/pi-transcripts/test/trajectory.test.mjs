@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { createServer } from "node:http";
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 import { main } from "../collect.mjs";
-import { projectDir, sandboxTools } from "../sandbox.mjs";
+import { projectDir, sandboxArgs, sandboxTools } from "../sandbox.mjs";
 import { runTrajectory, verifyCompleted } from "../trajectory.mjs";
 import { collectorIdentity, contextFile, git, loadManifest, MODEL, prepare, readJson, writeJson } from "../workspaces.mjs";
 
@@ -190,6 +191,25 @@ test("manifest and symlink provenance fail closed", async (t) => {
     writeJson(filename, { ...manifest, ...change });
     assert.throws(() => loadManifest(filename));
   }
+});
+
+test("Python launcher aliases preserve the project interpreter inside the sandbox", async (t) => {
+  const { caseDir, cwd } = await fixture(t);
+  const environment = join(caseDir, "venv");
+  mkdirSync(join(environment, "bin"), { recursive: true });
+  const launcher = join(caseDir, "python-launcher");
+  symlinkSync(realpathSync(join(projectDir, ".venv/bin/python")), launcher);
+  symlinkSync(launcher, join(environment, "bin/python"));
+  writeFileSync(join(environment, "pyvenv.cfg"), readFileSync(join(projectDir, ".venv/pyvenv.cfg")));
+  const result = spawnSync("bwrap", sandboxArgs(cwd, join(caseDir, "tool-state"), environment), {
+    input: JSON.stringify({ cwd, name: "bash", id: "python-alias", parameters: {
+      command: "python -c 'import sys; print(sys.prefix); print(sys.version_info[:2])'",
+    } }), encoding: "utf8", env: { PATH: "/usr/bin:/bin" }, timeout: 10_000,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  assert.equal(output.error, undefined, output.error);
+  assert.equal(output.result.content[0].text, `${environment}\n(3, 13)\n`);
 });
 
 test("preparation checks out exact commits from cached refs with independent Git objects", { timeout: 60_000 }, async (t) => {
