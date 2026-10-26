@@ -68,6 +68,7 @@
 | `reasonese/collect_data.py` | Resumable study collector and utility |
 | `reasonese/collect_studies.py` | Cross-study batched collection utility |
 | `tests/test_probe_posthoc.py` | Replay parity, saved-context provenance, missing coverage, identity, and read-only source contracts |
+| `tests/test_local_probe_reuse.py` | Exact-prefix reuse boundaries, request-specific decisions and masks, and interrupted-scoring recovery |
 | `reasonese/sample_studies.py` | Sampled study-suite planning utility |
 | `reasonese/analysis.py` | Bradley-Terry, axis, position, and diagnostic analyses |
 | `reasonese/lasso.py` | Sparse feature effects over within-trial comparisons: penalty path, cross-validation, screening |

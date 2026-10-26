@@ -53,6 +53,8 @@ matchup -> authored messages -> independent message QA -> conversation -> assist
 - `reasonese.probe_qa` builds exact-context diagnostic requests and reports. The local scorer is
   loaded only for inline or replay scoring; `reasonese.probe_posthoc` reads saved SQLite traces
   without changing the source database and writes an identity-bound report elsewhere.
+  Within one validated assistant/probe scoring call, identical token prefixes and target positions
+  share their projected role means while retaining separate request decisions and cache records.
 - `reasonese.runner` coordinates cache lookup, generation, construction, and completion-driven
   assistant execution. A tool continuation is submitted as soon as its preceding response
   arrives, independently of slower peers. The shared scheduler prioritizes ready continuations
