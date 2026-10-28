@@ -22,7 +22,7 @@ export async function main(args) {
   const manifest = loadManifest(values.manifest);
   if (positionals[0] === "prepare") {
     await prepare(manifest, output);
-    writeJson(join(output, "model.json"), await modelMetadata());
+    writeJson(join(output, "model.json"), await modelMetadata(manifest.model));
     return;
   }
   const plan = readJson(join(output, "plan.json"));
@@ -35,7 +35,7 @@ export async function main(args) {
   if (values.interactive && manifest.scenarios.length !== 1) throw new Error("Interactive collection requires a single-scenario manifest");
   if (manifest.scenarios.some((scenario) => (scenario.maxUserTurns ?? 1) > 1) && !values.interactive) throw new Error("Use --interactive for multi-turn scenarios");
   if (!process.env.OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY is required");
-  const metadata = await modelMetadata();
+  const metadata = await modelMetadata(manifest.model);
   for (const scenario of manifest.scenarios) {
     const caseDir = join(output, scenario.id);
     if (!existsSync(join(caseDir, "prepared.json"))) throw new Error(`Unprepared scenario: ${scenario.id}`);

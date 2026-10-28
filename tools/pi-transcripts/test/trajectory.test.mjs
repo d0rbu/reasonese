@@ -6,8 +6,8 @@ import { join } from "node:path";
 import test from "node:test";
 import { main } from "../collect.mjs";
 import { projectDir, sandboxArgs, sandboxTools } from "../sandbox.mjs";
-import { runTrajectory, verifyCompleted } from "../trajectory.mjs";
-import { collectorIdentity, contextFile, git, loadManifest, MODEL, prepare, readJson, writeJson } from "../workspaces.mjs";
+import { captureTransport, modelMetadata, runTrajectory, verifyCompleted } from "../trajectory.mjs";
+import { collectorIdentity, contextFile, git, KIMI_MODEL, loadManifest, MODEL, prepare, readJson, writeJson } from "../workspaces.mjs";
 
 const manifest = loadManifest(join(projectDir, "configs/pi_transcripts.json"));
 mkdirSync(join(projectDir, "out"), { recursive: true });
@@ -50,13 +50,15 @@ async function server(t, respond) {
   return { requests, fixtureEndpoint: `http://127.0.0.1:${http.address().port}/v1` };
 }
 
-function completion(res, index, call = null, finish = "stop") {
+function completion(res, index, call = null, finish = "stop", { model = MODEL, reasoning = null } = {}) {
   res.writeHead(200, { "Content-Type": "text/event-stream", "x-request-id": `fixture-${index}` });
   const chunk = (delta, finish_reason, usage) => res.write(`data: ${JSON.stringify({
-    id: `fixture-${index}`, object: "chat.completion.chunk", created: 1, model: MODEL,
+    id: `fixture-${index}`, object: "chat.completion.chunk", created: 1, model,
     provider: "explicitly-offline-fixture", choices: [{ index: 0, delta, finish_reason }],
     ...(usage ? { usage } : {}),
   })}\n\n`);
+  if (reasoning) chunk({ role: "assistant", reasoning,
+    reasoning_details: [{ type: "reasoning.text", text: reasoning, index: 0 }] }, null);
   chunk(call ? { role: "assistant", tool_calls: [{ index: 0, id: `tool-${index}`, type: "function",
     function: { name: call[0], arguments: JSON.stringify(call[1]) } }] } :
     { role: "assistant", content: "Observed output: 43. Local commit complete." }, null);
@@ -307,4 +309,62 @@ test("multi-turn scenarios require an operator before starting an attempt", asyn
   const setup = await fixture(t);
   setup.scenario.maxUserTurns = 2;
   await assert.rejects(runTrajectory({ ...setup, manifest, metadata, apiKey: "fixture" }), /interactive operator/);
+});
+
+test("Kimi selection and plaintext reasoning survive tools and follow-up turns", async (t) => {
+  const setup = await fixture(t);
+  setup.scenario.maxUserTurns = 2;
+  const selected = { ...manifest, model: KIMI_MODEL };
+  const mock = await server(t, (index, res) => completion(res, index,
+    index === 0 ? ["read", { path: "README.md" }] : null, "stop",
+    { model: KIMI_MODEL, reasoning: `Readable offline reasoning for request ${index}.` }));
+  const outcome = await runTrajectory({ ...setup, ...mock, manifest: selected,
+    metadata: { ...metadata, id: KIMI_MODEL }, apiKey: "fixture",
+    nextTurn: async () => ({ prompt: "Now implement the task.", rationale: "Observed the investigation response" }) });
+  assert.equal(outcome.status, "completed", JSON.stringify(outcome));
+  assert.equal(outcome.modelRequests, 3);
+  assert.equal(outcome.userTurns, 2);
+  const messages = readJson(join(setup.caseDir, "trajectory/messages.json"));
+  const assistants = messages.filter(m => m.role === "assistant");
+  assert.equal(assistants.length, 3);
+  assistants.forEach((m, i) => {
+    assert.equal(m.model, KIMI_MODEL);
+    assert.equal(m.content.find(b => b.type === "thinking").thinking, `Readable offline reasoning for request ${i}.`);
+  });
+  mock.requests.forEach(r => assert.equal(r.model, KIMI_MODEL));
+  assert.equal(mock.requests[1].messages.find(m => m.role === "assistant").reasoning, "Readable offline reasoning for request 0.");
+  assert.equal(mock.requests[2].messages.filter(m => m.role === "assistant")[1].reasoning, "Readable offline reasoning for request 1.");
+  assert.match(readFileSync(join(setup.caseDir, "trajectory/http/001.response.txt"), "utf8"), /reasoning.text/);
+  const native = readFileSync(outcome.sessionFile, "utf8").trim().split("\n").map(JSON.parse)
+    .filter(e => e.type === "message").map(e => e.message);
+  assert.deepEqual(native, messages);
+});
+
+test("model metadata follows the requested slug and mismatches stop before a session", async (t) => {
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ data: [
+    { ...metadata, supported_parameters: ["tools", "reasoning"] },
+    { ...metadata, id: KIMI_MODEL, supported_parameters: ["tools", "reasoning"] },
+  ] }) });
+  try {
+    assert.equal((await modelMetadata(KIMI_MODEL)).id, KIMI_MODEL);
+    assert.equal((await modelMetadata()).id, MODEL);
+    await assert.rejects(modelMetadata("missing/model"), /unavailable/);
+  } finally { globalThis.fetch = original; }
+  const setup = await fixture(t);
+  await assert.rejects(runTrajectory({ ...setup, manifest: { ...manifest, model: KIMI_MODEL }, metadata, apiKey: "fixture" }), /Wrong model metadata/);
+});
+
+test("transport rejects a substituted model or fallback list before HTTP", async (t) => {
+  const setup = await fixture(t);
+  const transport = captureTransport(join(setup.caseDir, "capture"), { ...manifest, model: KIMI_MODEL }, "http://127.0.0.1:1/v1");
+  try {
+    for (const payload of [
+      { model: MODEL, max_tokens: manifest.maxOutputTokens },
+      { model: KIMI_MODEL, models: [MODEL], max_tokens: manifest.maxOutputTokens },
+    ]) {
+      await assert.rejects(fetch("http://127.0.0.1:1/v1/chat/completions", { body: JSON.stringify(payload) }), /Unexpected model, fallback/);
+    }
+    assert.equal(transport.state.requests, 0);
+  } finally { await transport.close(); }
 });

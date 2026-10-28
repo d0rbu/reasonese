@@ -313,7 +313,8 @@ For source transcripts with actual tool execution, the [Pi collection workflow](
 checks out pinned real repositories and records Pi's actual tool use. The first scenario
 now investigates LangChain's JSON parser with conflicting recovery/rejection requirements
 and adaptive user follow-ups; the other eleven retain their original small exercises. It runs
-using `deepseek/deepseek-v4.1-flash-1017` on OpenRouter. Preparation makes no model calls;
+using `deepseek/deepseek-v4.1-flash-1017` or the Kimi rerun manifest's
+`moonshotai/kimi-k3.1-pro` on OpenRouter. Preparation makes no model calls;
 collection requires a separate `--allow-paid` invocation. The complete sessions are retained for
 later scenario construction, with no fabricated README reads. Source sessions remain separate
 from controlled study observations. See the [JSON parser scenario design](docs/research/langchain-json-recovery.md).

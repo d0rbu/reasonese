@@ -43,6 +43,8 @@ def test_pi_source_tasks_cover_the_same_pairs_and_pinned_repositories() -> None:
     manifest = json.loads(Path("configs/pi_transcripts.json").read_text())
     assert {case["id"] for case in manifest["scenarios"]} == {pair.pair_id for pair in pairs}
     pilot = json.loads(Path("configs/pi_langchain_review.json").read_text())
+    kimi_pilot = json.loads(Path("configs/pi_langchain_kimi_review.json").read_text())
+    assert kimi_pilot == {**pilot, "model": "moonshotai/kimi-k3.1-pro"}
     assert pilot["scenarios"] == [manifest["scenarios"][0]]
     assert pilot["scenarios"][0]["id"] == NATIVE_PI_PAIR
     assert pilot["scenarios"][0]["maxUserTurns"] == 4

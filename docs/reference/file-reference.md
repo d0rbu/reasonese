@@ -8,6 +8,7 @@
 | `configs/scenario_pairs.yaml` | Eleven legacy rule pairs and one repository-native JSON parser policy conflict |
 | `configs/scenarios/` | Eleven legacy scenario templates; the native Pi JSON parser case has no fabricated template |
 | `configs/pi_langchain_review.json` | Single adaptive LangChain parser conflict pilot and limits |
+| `configs/pi_langchain_kimi_review.json` | Same task and conflict rerun with Kimi K3.1 Pro |
 | `docs/research/langchain-json-recovery.md` | Replacement first scenario, instruction pair, follow-up protocol, and interpretation |
 | `configs/pi_transcripts.json` | Pinned source repositories, natural user tasks, exact executor model, and collection limits |
 | `tools/pi-transcripts/` | Pinned Pi SDK collector, real repository preparation, isolated built-in tools, and offline integration tests |

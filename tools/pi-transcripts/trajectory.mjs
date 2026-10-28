@@ -40,12 +40,12 @@ export function verifyCompleted(caseDir, manifest, scenario) {
   return outcome;
 }
 
-export async function modelMetadata() {
+export async function modelMetadata(requestedModel = MODEL) {
   const response = await fetch("https://openrouter.ai/api/v1/models", { signal: AbortSignal.timeout(30_000) });
   if (!response.ok) throw new Error(`OpenRouter model lookup: HTTP ${response.status}`);
-  const metadata = (await response.json()).data.find((model) => model.id === MODEL);
+  const metadata = (await response.json()).data.find((model) => model.id === requestedModel);
   if (!metadata?.supported_parameters.includes("tools") || !metadata.supported_parameters.includes("reasoning")) {
-    throw new Error(`Requested model is unavailable or lacks tools/reasoning: ${MODEL}`);
+    throw new Error(`Requested model is unavailable or lacks tools/reasoning: ${requestedModel}`);
   }
   return metadata;
 }
@@ -57,7 +57,7 @@ function modelDefinition(metadata, baseUrl) {
     return value * 1_000_000;
   };
   return {
-    id: MODEL, name: metadata.name, api: "openai-completions", provider: "openrouter", baseUrl,
+    id: metadata.id, name: metadata.name, api: "openai-completions", provider: "openrouter", baseUrl,
     reasoning: true, input: ["text"], contextWindow: metadata.context_length,
     maxTokens: metadata.top_provider.max_completion_tokens,
     cost: { input: price("prompt"), output: price("completion"), cacheRead: price("input_cache_read"), cacheWrite: 0 },
@@ -78,7 +78,7 @@ export function captureTransport(directory, manifest, baseUrl) {
     const body = init?.body;
     if (typeof body !== "string") throw new Error("Expected a JSON model request");
     const payload = JSON.parse(body);
-    if (payload.model !== MODEL || payload.models || payload.route || payload.max_tokens !== manifest.maxOutputTokens) {
+    if (payload.model !== manifest.model || payload.models || payload.route || payload.max_tokens !== manifest.maxOutputTokens) {
       throw new Error("Unexpected model, fallback, or token limit");
     }
     if (state.requests >= manifest.maxModelCalls || Buffer.byteLength(body) > manifest.maxRequestBytes) {
@@ -114,7 +114,7 @@ export async function runTrajectory({ manifest, scenario, caseDir, metadata, api
   if ((scenario.maxUserTurns ?? 1) > 1 && !nextTurn) throw new Error("Multi-turn scenarios require an interactive operator");
   const baseUrl = fixtureEndpoint ?? "https://openrouter.ai/api/v1";
   if (fixtureEndpoint && !/^http:\/\/127\.0\.0\.1:\d+\/v1$/.test(fixtureEndpoint)) throw new Error("Fixtures must use localhost");
-  if (metadata.id !== MODEL) throw new Error("Wrong model metadata");
+  if (metadata.id !== manifest.model) throw new Error("Wrong model metadata");
   const cwd = join(caseDir, "workspace");
   const context = await verifyWorkspace(cwd, scenario);
   const directory = join(caseDir, "trajectory");

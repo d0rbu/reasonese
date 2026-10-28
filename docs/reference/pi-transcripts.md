@@ -5,7 +5,9 @@ instead checks out the real repositories, sends a user task to Pi, and lets Pi c
 execute its tools until it produces an answer. Interactive collection keeps that same
 session and workspace for operator-authored follow-ups grounded in observed output. The pinned harness is
 [`@mariozechner/pi-coding-agent` 0.73.1](https://github.com/badlogic/pi-mono/tree/v0.73.1/packages/coding-agent).
-The executor is exactly `deepseek/deepseek-v4.1-flash-1017` on OpenRouter, with high reasoning.
+The manifest selects exactly `deepseek/deepseek-v4.1-flash-1017` or
+`moonshotai/kimi-k3.1-pro` on OpenRouter, with high reasoning. The requested slug is
+checked against model metadata and every actual HTTP request; it is never substituted.
 There is no fallback model, authoring model, or judge in this collection stage.
 
 `configs/pi_transcripts.json` specifies one task for each of the 12 scenario pairs,
@@ -106,6 +108,31 @@ retain each observed checkpoint. The same native Pi session continues throughout
 See [the scenario design](../research/langchain-json-recovery.md) for the conflict,
 planned review stages, and limits on interpreting this one adaptive example.
 
+### Kimi rerun
+
+`configs/pi_langchain_kimi_review.json` differs from the DeepSeek pilot manifest only
+in its model. Use a fresh directory for its workspace and complete evidence:
+
+```bash
+node tools/pi-transcripts/collect.mjs prepare \
+  --manifest configs/pi_langchain_kimi_review.json --output out/pi-kimi-json-review
+node tools/pi-transcripts/collect.mjs collect --interactive --allow-paid \
+  --manifest configs/pi_langchain_kimi_review.json --output out/pi-kimi-json-review
+```
+
+The intended flow is investigation followed by implementation, with additional user
+turns only for observed issues (four remains the safety limit). Keep the initial task
+and conflicting instruction spans unchanged. End the session with `null` after review
+when no further model work is needed; do not manufacture turns to reach the limit.
+
+An authorized one-request preflight on 2026-10-28 confirmed that this Kimi endpoint
+returned readable `reasoning` / `reasoning.text`, with no encrypted blocks in that
+response. Verify the actual session too: raw SSE reasoning must match Pi's stored
+thinking blocks and be preserved in subsequent tool-continuation requests. The viewer
+shows provider-returned reasoning as recorded; availability does not establish that
+it is a complete or causal account of the model's internal computation. Keep the probe
+separate from the scenario's request count, evidence, and cost.
+
 ## Retained evidence
 
 Each `<scenario>/trajectory/` contains:
@@ -151,4 +178,4 @@ The integration tests run the actual pinned Pi agent against a deterministic loc
 fixture and execute all four real tools in Bubblewrap. They verify tool-result round trips,
 native-session fidelity, local Git changes, isolation, opt-in, request/size/time limits, error
 retention, and no paid retries. Fixture evidence is labeled `offline_test_fixture` and removed
-after tests. Passing these checks validates the collector, not future DeepSeek behavior.
+after tests. Passing these checks validates the collector, not future model behavior.

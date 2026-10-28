@@ -7,6 +7,7 @@ import { projectDir, sandboxGit, sandboxTools, toolDir } from "./sandbox.mjs";
 
 const exec = promisify(execFile);
 export const MODEL = "deepseek/deepseek-v4.1-flash-1017";
+export const KIMI_MODEL = "moonshotai/kimi-k3.1-pro";
 export const PI_VERSION = "0.73.1";
 export const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 export const readJson = (filename) => JSON.parse(readFileSync(filename, "utf8"));
@@ -23,7 +24,7 @@ export async function git(cwd, ...args) {
 
 export function loadManifest(filename) {
   const manifest = readJson(filename);
-  if (manifest.model !== MODEL || manifest.thinking !== "high") throw new Error("Unexpected model or thinking setting");
+  if (![MODEL, KIMI_MODEL].includes(manifest.model) || manifest.thinking !== "high") throw new Error("Unexpected model or thinking setting");
   for (const key of ["maxModelCalls", "maxOutputTokens", "maxRequestBytes", "timeoutSeconds", "toolTimeoutSeconds"]) {
     if (!Number.isSafeInteger(manifest[key]) || manifest[key] <= 0) throw new Error(`Invalid ${key}`);
   }
