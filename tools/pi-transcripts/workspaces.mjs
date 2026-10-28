@@ -36,6 +36,8 @@ export function loadManifest(filename) {
     if (!/^[a-f0-9]{40}$/.test(scenario.revision)) throw new Error("Repository revision must be a full commit SHA");
     if (typeof scenario.prompt !== "string" || !scenario.prompt.trim()) throw new Error("Empty user prompt");
     if (typeof scenario.ruleFile !== "string" || isAbsolute(scenario.ruleFile) || scenario.ruleFile.split(/[\\/]/).includes("..")) throw new Error("Invalid rule file");
+    if (scenario.pythonProject !== undefined && scenario.pythonProject !== "libs/core") throw new Error("Unsupported Python project");
+    if (scenario.maxUserTurns !== undefined && (!Number.isSafeInteger(scenario.maxUserTurns) || scenario.maxUserTurns < 1 || scenario.maxUserTurns > 8)) throw new Error("Invalid maxUserTurns");
   }
   return manifest;
 }
@@ -137,14 +139,27 @@ export async function prepare(manifest, output, sourceDirectory = join(dirname(o
       await git(cwd, "config", "core.hooksPath", "/dev/null");
     }
     const context = await verifyWorkspace(cwd, scenario);
-    const check = await sandboxTools(cwd, join(caseDir, "tool-state"), manifest.toolTimeoutSeconds)
+    let pythonEnvironment;
+    if (scenario.pythonProject) {
+      const environment = join(caseDir, "python-env");
+      const project = join(cwd, scenario.pythonProject);
+      const installed = await exec("uv", ["sync", "--locked", "--no-default-groups", "--group", "test", "--project", project], {
+        env: { ...process.env, UV_PROJECT_ENVIRONMENT: environment }, timeout: 1_800_000, maxBuffer: 16 * 1024 * 1024,
+      });
+      writeFileSync(join(caseDir, "python-setup.log"), installed.stdout + installed.stderr);
+      const frozen = await exec("uv", ["pip", "freeze", "--python", join(environment, "bin/python")]);
+      pythonEnvironment = { path: environment, project: scenario.pythonProject,
+        lockSha256: sha256(readFileSync(join(project, "uv.lock"))), packages: frozen.stdout };
+      await verifyWorkspace(cwd, scenario);
+    }
+    const check = await sandboxTools(cwd, join(caseDir, "tool-state"), manifest.toolTimeoutSeconds, pythonEnvironment?.path)
       .find((tool) => tool.name === "bash").execute("preflight", {
         command: "python --version && python -m pytest --version && git --version",
       });
     writeJson(join(caseDir, "prepared.json"), {
       scenario, context, tree: (await git(cwd, "rev-parse", "HEAD^{tree}")).trim(),
-      preflight: check, preparedAt: new Date().toISOString(),
-      checkout: "complete shallow checkout; submodules and repository build dependencies are not installed",
+      preflight: check, pythonEnvironment, preparedAt: new Date().toISOString(),
+      checkout: scenario.pythonProject ? "complete shallow checkout; locked core test environment installed; submodules not installed" : "complete shallow checkout; submodules and repository build dependencies are not installed",
     });
   }
   console.log(`Prepared ${manifest.scenarios.length} workspaces. No model requests made.`);

@@ -110,7 +110,8 @@ export function captureTransport(directory, manifest, baseUrl) {
 }
 
 export async function runTrajectory({ manifest, scenario, caseDir, metadata, apiKey,
-  fixtureEndpoint = null }) {
+  fixtureEndpoint = null, nextTurn = null }) {
+  if ((scenario.maxUserTurns ?? 1) > 1 && !nextTurn) throw new Error("Multi-turn scenarios require an interactive operator");
   const baseUrl = fixtureEndpoint ?? "https://openrouter.ai/api/v1";
   if (fixtureEndpoint && !/^http:\/\/127\.0\.0\.1:\d+\/v1$/.test(fixtureEndpoint)) throw new Error("Fixtures must use localhost");
   if (metadata.id !== MODEL) throw new Error("Wrong model metadata");
@@ -123,12 +124,16 @@ export async function runTrajectory({ manifest, scenario, caseDir, metadata, api
     kind: fixtureEndpoint ? "offline_test_fixture" : "live_pi_session", scenario,
     manifest, collector: collectorIdentity(), modelMetadata: metadata,
     context, startedAt: new Date().toISOString(), taskSuccess: "unjudged",
+    pythonEnvironment: existsSync(join(caseDir, "prepared.json")) ? readJson(join(caseDir, "prepared.json")).pythonEnvironment : undefined,
+    userAuthor: "Codex operator; authored task and adaptive follow-ups, not messages from a human participant",
   };
   writeJson(join(directory, "provenance.json"), provenance);
   writeFileSync(join(directory, "prompt.txt"), scenario.prompt + "\n");
   writeJson(join(directory, "outcome.json"), { status: "running", startedAt: provenance.startedAt });
   let session, transport, timer, interruption, failure;
-  const interrupt = (reason) => { interruption = reason; void session?.abort(); };
+  let userTurns = 0;
+  const controller = new AbortController();
+  const interrupt = (reason) => { interruption = reason; controller.abort(); void session?.abort(); };
   const onSignal = () => interrupt("interrupted");
   process.once("SIGINT", onSignal);
   process.once("SIGTERM", onSignal);
@@ -156,7 +161,7 @@ export async function runTrajectory({ manifest, scenario, caseDir, metadata, api
       cwd, agentDir, resourceLoader, authStorage, modelRegistry, model,
       thinkingLevel: manifest.thinking, settingsManager,
       tools: ["read", "bash", "edit", "write"],
-      customTools: sandboxTools(cwd, join(caseDir, "tool-state"), manifest.toolTimeoutSeconds),
+      customTools: sandboxTools(cwd, join(caseDir, "tool-state"), manifest.toolTimeoutSeconds, provenance.pythonEnvironment?.path),
       sessionManager: SessionManager.create(cwd, join(directory, "sessions")),
     }));
     writeFileSync(join(directory, "system.txt"), session.systemPrompt);
@@ -170,7 +175,29 @@ export async function runTrajectory({ manifest, scenario, caseDir, metadata, api
     });
     transport = captureTransport(join(directory, "http"), manifest, baseUrl);
     timer = setTimeout(() => interrupt("time_limit"), manifest.timeoutSeconds * 1000);
-    await session.prompt(scenario.prompt);
+    mkdirSync(join(directory, "turns"));
+    let turn = { prompt: scenario.prompt, rationale: "Initial task from the prepared manifest" };
+    while (turn && !interruption) {
+      if (typeof turn.prompt !== "string" || !turn.prompt.trim() || typeof turn.rationale !== "string" || !turn.rationale.trim()) {
+        throw new Error("Each follow-up needs a nonempty prompt and operator rationale");
+      }
+      const prefix = join(directory, "turns", String(++userTurns).padStart(3, "0"));
+      const input = { ...turn, turn: userTurns, authoredAt: new Date().toISOString(),
+        basedOnMessagesSha256: sha256(JSON.stringify(session.messages)) };
+      writeJson(`${prefix}.input.json`, input);
+      await session.prompt(turn.prompt);
+      writeJson(join(directory, "messages.json"), session.messages);
+      writeJson(`${prefix}.messages.json`, session.messages);
+      const diff = await sandboxGit(cwd, join(caseDir, "tool-state"), "diff", "--binary", "--no-ext-diff", "--no-textconv", scenario.revision);
+      writeFileSync(`${prefix}.patch`, diff);
+      if (interruption || !hasFinalAnswer(session.messages) || userTurns >= (scenario.maxUserTurns ?? 1)) break;
+      // The same Pi session and workspace survive the operator's review. No synthetic
+      // assistant history, hidden steering, or replacement tool results are inserted.
+      turn = await Promise.race([
+        nextTurn({ turn: userTurns, messages: session.messages, directory, signal: controller.signal }),
+        new Promise((resolve) => controller.signal.addEventListener("abort", () => resolve(null), { once: true })),
+      ]);
+    }
   } catch (error) {
     failure = error.message;
   } finally {
@@ -200,6 +227,7 @@ export async function runTrajectory({ manifest, scenario, caseDir, metadata, api
     startedAt: provenance.startedAt, finishedAt: new Date().toISOString(),
     modelRequests: transport?.state.requests ?? 0, captureErrors: transport?.state.captureErrors ?? [],
     toolResults: messages.filter((message) => message.role === "toolResult").length,
+    userTurns,
     assistantUsage: messages.filter((message) => message.role === "assistant").map((message) => message.usage),
     sessionFile: session?.sessionFile, finalGit,
     messagesSha256: sha256(readFileSync(join(directory, "messages.json"))),

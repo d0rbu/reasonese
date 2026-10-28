@@ -310,10 +310,13 @@ see [`docs/reference/scenarios.md`](docs/reference/scenarios.md) for the format,
 its cautions.
 
 For source transcripts with actual tool execution, the [Pi collection workflow](docs/reference/pi-transcripts.md)
-checks out the 12 scenarios' real repositories and lets Pi complete one user task per scenario
+checks out pinned real repositories and records Pi's actual tool use. The first scenario
+now investigates LangChain's JSON parser with conflicting recovery/rejection requirements
+and adaptive user follow-ups; the other eleven retain their original small exercises. It runs
 using `deepseek/deepseek-v4.1-flash-1017` on OpenRouter. Preparation makes no model calls;
 collection requires a separate `--allow-paid` invocation. The complete sessions are retained for
-later scenario construction, with no fabricated README reads. No live Pi corpus has been collected yet.
+later scenario construction, with no fabricated README reads. Source sessions remain separate
+from controlled study observations. See the [JSON parser scenario design](docs/research/langchain-json-recovery.md).
 
 ## Writing the manual variants
 

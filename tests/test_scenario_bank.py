@@ -17,6 +17,7 @@ from reasonese.scenarios import load_scenarios
 BANK = Path("configs/scenario_pairs.yaml")
 SCENARIOS = Path("configs/scenarios")
 MAIN_BANK = Path("configs/instruction_pairs.yaml")
+NATIVE_PI_PAIR = "langchain-json-recovery"
 ORDERINGS: tuple[tuple[Channel, Channel], ...] = (
     (Channel.SYSTEM, Channel.USER),
     (Channel.USER, Channel.SYSTEM),
@@ -30,7 +31,7 @@ def test_every_scenario_pair_has_one_scenario_with_provenance() -> None:
     pairs = load_instruction_pairs(BANK)
     library = load_scenarios(SCENARIOS, pairs)
 
-    assert set(library.scenarios) == {pair.pair_id for pair in pairs}
+    assert set(library.scenarios) == {pair.pair_id for pair in pairs} - {NATIVE_PI_PAIR}
     for scenario in library.scenarios.values():
         assert "https://github.com/" in scenario.source
         assert scenario.adaptation.strip()
@@ -40,8 +41,14 @@ def test_pi_source_tasks_cover_the_same_pairs_and_pinned_repositories() -> None:
     pairs = load_instruction_pairs(BANK)
     library = load_scenarios(SCENARIOS, pairs)
     manifest = json.loads(Path("configs/pi_transcripts.json").read_text())
-    assert {case["id"] for case in manifest["scenarios"]} == set(library.scenarios)
+    assert {case["id"] for case in manifest["scenarios"]} == {pair.pair_id for pair in pairs}
+    pilot = json.loads(Path("configs/pi_langchain_review.json").read_text())
+    assert pilot["scenarios"] == [manifest["scenarios"][0]]
+    assert pilot["scenarios"][0]["id"] == NATIVE_PI_PAIR
+    assert pilot["scenarios"][0]["maxUserTurns"] == 4
     for case in manifest["scenarios"]:
+        if case["id"] == NATIVE_PI_PAIR:
+            continue  # Native Pi history is not fabricated into a README-only template.
         source = library.scenarios[case["id"]].source
         assert case["repository"].removesuffix(".git") + "/blob/" + case["revision"] in source
         assert case["revision"] + "/" + case["ruleFile"] in source
@@ -67,6 +74,8 @@ def test_every_scenario_renders_each_ordering_with_its_base_instructions(
     library = load_scenarios(SCENARIOS, pairs)
     assistant = next(iter(Assistant))
     for pair in pairs:
+        if pair.pair_id == NATIVE_PI_PAIR:
+            continue
         specs = tuple(
             PromptSpec(instruction, Framing.NORMAL, channel, Author.USER)
             for instruction, channel in zip(pair.instructions, channels, strict=True)

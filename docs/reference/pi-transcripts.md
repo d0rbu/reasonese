@@ -1,15 +1,18 @@
 # Pi source transcripts
 
 The original scenario YAML files contain authored conversation histories. This collector
-instead checks out the real repositories, sends one user prompt to Pi, and lets Pi choose and
-execute its tools until it produces a final answer. The pinned harness is
+instead checks out the real repositories, sends a user task to Pi, and lets Pi choose and
+execute its tools until it produces an answer. Interactive collection keeps that same
+session and workspace for operator-authored follow-ups grounded in observed output. The pinned harness is
 [`@mariozechner/pi-coding-agent` 0.73.1](https://github.com/badlogic/pi-mono/tree/v0.73.1/packages/coding-agent).
 The executor is exactly `deepseek/deepseek-v4.1-flash-1017` on OpenRouter, with high reasoning.
 There is no fallback model, authoring model, or judge in this collection stage.
 
-`configs/pi_transcripts.json` specifies one task for each of the 12 existing scenario pairs,
-with the same source repository commits. Codex adapted the prompts from their small programming tasks,
-make necessary inputs explicit, and omit both sides' competing constraints. The repository's
+`configs/pi_transcripts.json` specifies one task for each of the 12 scenario pairs,
+with pinned source repository commits. The first, `langchain-json-recovery`, replaces
+the leap-year task with a real parser investigation and conflicting final-response
+policies. Its single-scenario manifest is `configs/pi_langchain_review.json`. The other
+eleven prompts retain their original small exercises and omit the competing constraints. The repository's
 actual root `AGENTS.md` (or its resolved `CLAUDE.md` target) supplies the project instructions.
 Pi supplies its own system prompt. README files and earlier assistant/tool messages are never
 invented, replaced, or inserted by the collector.
@@ -17,7 +20,8 @@ invented, replaced, or inserted by the collector.
 These are **task-authored, model-executed source sessions**, not transcripts from human users
 and not measurements of the framing/channel/author treatments. Even a normally completed
 session may fail its task or ignore a rule. Completion is recorded separately from task success,
-which remains unjudged. The first collection has not been started.
+which remains unjudged. The original one-turn leap-year pilot has completed. Its evidence is retained separately;
+the revised JSON parser scenario uses a fresh output directory.
 
 ## Prepare without model calls
 
@@ -39,7 +43,7 @@ repository downloads nor catalog lookup send prompts to a model.
 Preparation may be repeated to refresh collector hashes before any session has started; earlier
 plans are retained. A changed task manifest or any existing trajectory requires a fresh run.
 
-The tasks use Python's standard library, pytest, and local Git commits. Upstream submodules,
+The eleven legacy tasks use Python's standard library, pytest, and local Git commits. Upstream submodules,
 large project build environments, and full repository test suites are not installed. Each
 workspace retains the real upstream files; this is a deliberately bounded coding environment,
 not a claim to reproduce each project's development machine. Pi can inspect further files
@@ -58,7 +62,9 @@ node tools/pi-transcripts/collect.mjs collect \
   --output out/pi-transcripts-initial --allow-paid
 ```
 
-The default batch contains 12 sequential sessions. Each is limited to 24 model requests,
+The 12-task manifest now contains an interactive task and cannot be collected as an
+unattended batch. Select a reviewed subset in a separate manifest. Legacy sessions are
+sequential. Each is limited to 24 model requests,
 8,192 output tokens per request, 100,000 bytes per serialized input request, 15 minutes per
 session, and 120 seconds per tool invocation. Input limits reject a request rather than
 truncate its history. Pi compaction and both Pi/transport retries are disabled; a bounded or
@@ -69,6 +75,36 @@ Repeating `collect` skips verified completed attempts. Any existing incomplete a
 inspection and a new output directory for a separately authorized retry. The collector also
 rejects changed plans or collector files. Do not delete failed trajectories to obtain a clean
 denominator. The `--allow-paid` opt-in is required even when checking an already completed run.
+
+## Adaptive JSON parser pilot
+
+```bash
+node tools/pi-transcripts/collect.mjs prepare \
+  --manifest configs/pi_langchain_review.json --output out/pi-json-review
+node tools/pi-transcripts/collect.mjs collect --interactive --allow-paid \
+  --manifest configs/pi_langchain_review.json --output out/pi-json-review
+```
+
+Preparation installs the pinned LangChain core test environment with `uv sync --locked
+--no-default-groups --group test` into a separate environment. Its lock hash and package
+list are retained; the sandbox mounts it read-only while the source checkout remains
+writable. This setup downloads dependencies but sends no inference requests.
+
+After each completed user turn, read the saved messages, tool outputs and patch. Send
+one JSON line on stdin with `prompt` and `rationale` strings, or `null` to finish. Only
+`prompt` is sent to the model; the operator rationale is audit metadata. The CLI permits
+one scenario per interactive invocation. End-of-input without an explicit finish is an
+error, and failures retain their partial evidence. Maximum user turns also end a run.
+
+This pilot allows four user turns, 80 model requests total, 400,000 serialized input
+bytes per request, 8,192 output tokens per request, 40 minutes total (including operator
+review), and 120 seconds per tool. Request budgets are shared across turns, and no
+history is compacted or truncated. `turns/*.input.json` records each exact user message,
+its rationale, and the preceding message hash; `turns/*.messages.json` and `*.patch`
+retain each observed checkpoint. The same native Pi session continues throughout.
+
+See [the scenario design](../research/langchain-json-recovery.md) for the conflict,
+planned review stages, and limits on interpreting this one adaptive example.
 
 ## Retained evidence
 

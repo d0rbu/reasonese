@@ -250,3 +250,61 @@ test("CLI paid opt-in is checked before any provider access", async (t) => {
     await assert.rejects(main(["collect", "--output", output, "--allow-paid"]), /collector changed/);
   } finally { globalThis.fetch = original; }
 });
+
+test("adaptive user turns retain one native session, observed history, and cumulative evidence", async (t) => {
+  const setup = await fixture(t);
+  setup.scenario.maxUserTurns = 3;
+  const mock = await server(t, (index, res) => completion(res, index));
+  let reviews = 0;
+  const outcome = await runTrajectory({ ...setup, ...mock, manifest, metadata, apiKey: "fixture",
+    nextTurn: async ({ turn, messages, directory }) => {
+      reviews++;
+      assert.equal(turn, reviews);
+      assert.equal(messages.at(-1).stopReason, "stop");
+      assert.deepEqual(readJson(join(directory, `turns/${String(turn).padStart(3, "0")}.messages.json`)), messages);
+      if (turn === 2) return null;
+      return { prompt: `You reported: ${messages.at(-1).content[0].text} Please check it again.`,
+        rationale: "Follow-up grounded in the actual preceding assistant response" };
+    } });
+  assert.equal(outcome.status, "completed");
+  assert.equal(outcome.userTurns, 2);
+  assert.equal(outcome.modelRequests, 2);
+  assert.equal(reviews, 2);
+  assert.equal(mock.requests[1].messages.filter(m => m.role === "user").length, 2);
+  assert.ok(mock.requests[1].messages.some(m => m.role === "assistant" && m.content.includes("Observed output: 43")));
+  const messages = readJson(join(setup.caseDir, "trajectory/messages.json"));
+  const native = readFileSync(outcome.sessionFile, "utf8").trim().split("\n").map(JSON.parse)
+    .filter(e => e.type === "message").map(e => e.message);
+  assert.deepEqual(native, messages);
+  const second = readJson(join(setup.caseDir, "trajectory/turns/002.input.json"));
+  assert.match(second.rationale, /actual preceding/);
+  assert.match(second.basedOnMessagesSha256, /^[a-f0-9]{64}$/);
+  assert.ok(outcome.artifactHashes["turns/001.patch"]);
+});
+
+test("request budget is shared by all user turns", async (t) => {
+  const setup = await fixture(t);
+  setup.scenario.maxUserTurns = 2;
+  const mock = await server(t, (index, res) => completion(res, index));
+  const outcome = await runTrajectory({ ...setup, ...mock, manifest: { ...manifest, maxModelCalls: 1 }, metadata, apiKey: "fixture",
+    nextTurn: async () => ({ prompt: "Please check again.", rationale: "Budget boundary test" }) });
+  assert.equal(outcome.status, "model_request_limit");
+  assert.equal(outcome.userTurns, 2);
+  assert.equal(mock.requests.length, 1);
+});
+
+test("operator wait is bounded and cannot hide a timeout as completion", async (t) => {
+  const setup = await fixture(t);
+  setup.scenario.maxUserTurns = 2;
+  const mock = await server(t, (index, res) => completion(res, index));
+  const outcome = await runTrajectory({ ...setup, ...mock, manifest: { ...manifest, timeoutSeconds: 1 }, metadata, apiKey: "fixture",
+    nextTurn: async () => new Promise(() => {}) });
+  assert.equal(outcome.status, "time_limit");
+  assert.equal(outcome.modelRequests, 1);
+});
+
+test("multi-turn scenarios require an operator before starting an attempt", async (t) => {
+  const setup = await fixture(t);
+  setup.scenario.maxUserTurns = 2;
+  await assert.rejects(runTrajectory({ ...setup, manifest, metadata, apiKey: "fixture" }), /interactive operator/);
+});

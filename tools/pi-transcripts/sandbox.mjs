@@ -54,11 +54,11 @@ export function sandboxArgs(cwd, scratch, venv = join(projectDir, ".venv")) {
     "--chdir", cwd, node, join(toolDir, "tool-worker.mjs")];
 }
 
-export function sandboxTools(cwd, scratch, timeoutSeconds) {
+export function sandboxTools(cwd, scratch, timeoutSeconds, venv) {
   return definitions.map((factory) => {
     const definition = factory(cwd);
     return { ...definition, execute: (id, parameters, signal) =>
-      runInSandbox(cwd, scratch, { name: definition.name, id, parameters }, timeoutSeconds, signal) };
+      runInSandbox(cwd, scratch, { name: definition.name, id, parameters }, timeoutSeconds, signal, venv) };
   });
 }
 
@@ -67,9 +67,9 @@ export function sandboxGit(cwd, scratch, ...args) {
   return runInSandbox(cwd, scratch, { git: args }, 120);
 }
 
-function runInSandbox(cwd, scratch, request, timeoutSeconds, signal) {
+function runInSandbox(cwd, scratch, request, timeoutSeconds, signal, venv) {
   return new Promise((accept, reject) => {
-    const child = spawn("bwrap", sandboxArgs(cwd, scratch), {
+    const child = spawn("bwrap", sandboxArgs(cwd, scratch, venv), {
       stdio: ["pipe", "pipe", "pipe"], env: { PATH: "/usr/bin:/bin" },
     });
     child.stdout.setEncoding("utf8");

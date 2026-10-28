@@ -5,8 +5,10 @@
 | `configs/example_matchup.yaml` | Two-input conversation example |
 | `configs/example_study.yaml` | Permutation-balanced collection example |
 | `configs/instruction_pairs.yaml` | Candidate instruction-pair bank |
-| `configs/scenario_pairs.yaml` | Instruction pairs built around real `AGENTS.md` rules, one scenario each |
-| `configs/scenarios/` | Study scenarios, one `<pair id>.yaml` per pair in `configs/scenario_pairs.yaml` |
+| `configs/scenario_pairs.yaml` | Eleven legacy rule pairs and one repository-native JSON parser policy conflict |
+| `configs/scenarios/` | Eleven legacy scenario templates; the native Pi JSON parser case has no fabricated template |
+| `configs/pi_langchain_review.json` | Single adaptive LangChain parser conflict pilot and limits |
+| `docs/research/langchain-json-recovery.md` | Replacement first scenario, instruction pair, follow-up protocol, and interpretation |
 | `configs/pi_transcripts.json` | Pinned source repositories, natural user tasks, exact executor model, and collection limits |
 | `tools/pi-transcripts/` | Pinned Pi SDK collector, real repository preparation, isolated built-in tools, and offline integration tests |
 | `docs/reference/pi-transcripts.md` | Preparation, authorized transcript collection, evidence format, and scientific limits |

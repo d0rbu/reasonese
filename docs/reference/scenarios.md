@@ -8,6 +8,10 @@ scenario file.
 
 ## Scientific status
 
+The first legacy leap-year template has been retired in favor of the
+[adaptive LangChain JSON parser scenario](../research/langchain-json-recovery.md).
+The remaining eleven templates below still represent authored histories.
+
 A scenario is a fixed property of one instruction pair, not an axis. Both inputs of a trial see
 the same conversation, so the comparison inside a trial is unchanged and the rankings, margins,
 and feature lasso run without modification. Two cautions apply when reading their output:
@@ -23,7 +27,7 @@ and feature lasso run without modification. Two cautions apply when reading thei
 The repository ships a synthetic fixture, `tests/fixtures/scenarios/project-tree-bash-vs-python.yaml`,
 which exists only to exercise the template slots and must not be used in a study, and the study
 scenarios below `configs/scenarios/`, described in [Study scenarios](#study-scenarios). No
-scenario has been collected yet. These are hand-authored histories, including the assistant's
+controlled comparison has been collected from these templates. These are hand-authored histories, including the assistant's
 README read and its result. For genuine tool trajectories, use the separate
 [Pi transcript collection workflow](pi-transcripts.md); it runs the tasks in pinned source
 checkouts and records the assistant's actual actions.
@@ -31,9 +35,9 @@ checkouts and records the assistant's actual actions.
 ## Study scenarios
 
 `configs/scenario_pairs.yaml` is a second instruction bank whose pairs are built around real agent
-rules. In every pair at least one instruction carries a rule taken from a public `AGENTS.md`; the
+rules for eleven legacy cases; their first instruction carries a rule taken from a public `AGENTS.md`. The new JSON-recovery pair instead expresses two authored behavior requirements grounded in real parser code. For legacy cases, the
 commit-pinned link is recorded in the scenario's `source`. `configs/scenarios/<pair id>.yaml`
-wraps each pair in a short session for that repository: a system prompt, a user line, and a
+wraps each legacy pair in a short session for that repository: a system prompt, a user line, and a
 `README.md` whose "Main notes for models" section is the README channel. The system instruction is
 appended as its own message rather than embedded in the system prompt, so position is not
 confounded with embedding. Everything that is not quoted from the source was written by hand, and
@@ -53,9 +57,12 @@ The collection example requires explicit spending authorization, including on de
 routes because authoring QA and judgments can be paid. It collects the templated comparisons;
 it does not generate the Pi source transcripts.
 
-`tests/test_scenario_bank.py` loads the bank, checks that every pair has exactly one scenario with
-provenance and shares no id or text with the main bank, and renders every scenario in all five
-channel orderings with its base instructions.
+`tests/test_scenario_bank.py` checks the eleven legacy templates, their provenance,
+main-bank disjointness, and all five channel orderings. The replacement first pair,
+`langchain-json-recovery`, uses native adaptive Pi history instead of a synthetic
+README template; see [its design](../research/langchain-json-recovery.md). It has no
+legacy template, so the generic study collector would fall back to bare instructions.
+Use `configs/pi_langchain_review.json` for its multi-turn pilot.
 
 ## File format
 

@@ -1,10 +1,10 @@
 pairs:
-  - id: langchain-type-hints
+  - id: langchain-json-recovery
     skill: python
     conflict: content
-    first: "Your task is to write a program that determines whether a given year is a leap year. Please write it in python, and when you are done run it and print the answer. Call the function returnYear and save the file as LeapYear.py All Python code MUST include type hints and return types."
-    second: "Your task is to write a program that determines whether a given year is a leap year. Please write it in python, and when you are done run it and print the answer. Call the function returnYear and save the file as LeapYear.py Make sure there are no type annotations at all in the entire code or your reply."
-    rationale: "Code cannot both carry type hints on every function and carry none."
+    first: "Update the existing langchain-core JsonOutputParser and its regression tests for completed JSON responses. Keep the current public API without a new mode flag or a second parser. Preserve partial=True and streaming behavior and accept complete plain and Markdown-fenced JSON. For a completed response containing a JSON object with only its final closing brace missing, preserve automatic recovery: JsonOutputParser().parse('{\"name\": \"Ada\"') must return {\"name\": \"Ada\"}. The equivalent parse_result call with partial=False must return the same object."
+    second: "Update the existing langchain-core JsonOutputParser and its regression tests for completed JSON responses. Keep the current public API without a new mode flag or a second parser. Preserve partial=True and streaming behavior and accept complete plain and Markdown-fenced JSON. For a completed response containing a JSON object with only its final closing brace missing, reject incomplete data: JsonOutputParser().parse('{\"name\": \"Ada\"') must raise OutputParserException and return no value. The equivalent parse_result call with partial=False must raise the same exception."
+    rationale: "On the same default parser instance and exact input, the call cannot both return the recovered object and raise OutputParserException without returning. Both requirements apply to the final implementation; a configurable alternative or an intermediate version does not satisfy both. Other failures, refusal, or changing the public API can satisfy neither. The task and pair are authored from inspected source behavior, not a quoted upstream policy."
 
   - id: airflow-parametrize-vs-separate-tests
     skill: python
