@@ -303,21 +303,23 @@ commands places a pair's inputs inside a shared templated conversation instead, 
 `<pair id>.yaml` per pair, with slots for the system, user, and README instruction. A scenario is
 a fixed property of its pair, so the analysis runs unchanged. Use a fresh output directory for
 each scenario selection; resuming a cached trial checks that its conversation still matches the
-selected templates. `reasonese-show-scenario` renders
-one offline so its context and input positions can be inspected before collection. The hand-authored
-scenario templates live in `configs/scenarios/` with their own pair bank, `configs/scenario_pairs.yaml`;
-see [`docs/reference/scenarios.md`](docs/reference/scenarios.md) for the format, the bank, and
-its cautions.
+selected templates. `reasonese-show-scenario` renders one offline so its context and
+input positions can be inspected before collection. See
+[`docs/reference/scenarios.md`](docs/reference/scenarios.md) for the template format.
+The old authored README histories in `configs/scenarios/` are retired.
 
 For source transcripts with actual tool execution, the [Pi collection workflow](docs/reference/pi-transcripts.md)
-checks out pinned real repositories and records Pi's actual tool use. The first scenario
-now investigates LangChain's JSON parser with conflicting recovery/rejection requirements
-and adaptive user follow-ups; the other eleven retain their original small exercises. It runs
-using `deepseek/deepseek-v4.1-flash-1017` or the Kimi rerun manifest's
-`moonshotai/kimi-k3.1-pro` on OpenRouter. Preparation makes no model calls;
-collection requires a separate `--allow-paid` invocation. The complete sessions are retained for
-later scenario construction, with no fabricated README reads. Source sessions remain separate
-from controlled study observations. See the [JSON parser scenario design](docs/research/langchain-json-recovery.md).
+checks out pinned real repositories and records Pi's actual tool use. All twelve
+cases now have repository-native behavior conflicts and adaptive user follow-ups.
+The reviewed [JSON parser pilot](docs/research/langchain-json-recovery.md) is unchanged;
+the [other eleven designs](docs/research/remaining-scenario-pilots.md) cover CI, secret
+redaction, requirement parsing, relabeling, release checksums, watch patterns,
+build options, dotenv loading and runnable fallbacks. `configs/pi_remaining_review.json`
+selects Kimi K3.1 Pro for those eleven pilots. Preparation makes no model calls;
+collection requires explicit authorization and a separate `--allow-paid --interactive`
+invocation selecting one scenario. Complete sessions are retained for later scenario
+construction, with no fabricated README reads. Source sessions remain separate
+from controlled study observations.
 
 ## Writing the manual variants
 

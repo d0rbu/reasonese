@@ -1,82 +1,102 @@
 # Pi source transcripts
 
-The original scenario YAML files contain authored conversation histories. This collector
-instead checks out the real repositories, sends a user task to Pi, and lets Pi choose and
-execute its tools until it produces an answer. Interactive collection keeps that same
-session and workspace for operator-authored follow-ups grounded in observed output. The pinned harness is
+The collector checks out real repositories, sends a user task to Pi, and lets Pi
+choose and execute its tools until it produces an answer. Interactive collection
+keeps that same session and workspace for operator-authored follow-ups grounded in
+observed output. The pinned harness is
 [`@mariozechner/pi-coding-agent` 0.73.1](https://github.com/badlogic/pi-mono/tree/v0.73.1/packages/coding-agent).
 The manifest selects exactly `deepseek/deepseek-v4.1-flash-1017` or
-`moonshotai/kimi-k3.1-pro` on OpenRouter, with high reasoning. The requested slug is
-checked against model metadata and every actual HTTP request; it is never substituted.
-There is no fallback model, authoring model, or judge in this collection stage.
+`moonshotai/kimi-k3.1-pro` on OpenRouter, with high reasoning. Metadata and every
+actual HTTP request are checked for that model; there is no substitution, fallback
+model, authoring model or judge in this collection stage.
 
-`configs/pi_transcripts.json` specifies one task for each of the 12 scenario pairs,
-with pinned source repository commits. The first, `langchain-json-recovery`, replaces
-the leap-year task with a real parser investigation and conflicting final-response
-policies. Its single-scenario manifest is `configs/pi_langchain_review.json`. The other
-eleven prompts retain their original small exercises and omit the competing constraints. The repository's
-actual root `AGENTS.md` (or its resolved `CLAUDE.md` target) supplies the project instructions.
-Pi supplies its own system prompt. README files and earlier assistant/tool messages are never
-invented, replaced, or inserted by the collector.
+`configs/pi_transcripts.json` holds twelve repository-native tasks with pinned
+commits and conflicting behavior requirements. The reviewed
+[LangChain JSON parser task](../research/langchain-json-recovery.md) replaces the
+original leap-year exercise. The [other eleven tasks](../research/remaining-scenario-pilots.md)
+now have comparable investigation/implementation protocols, source references,
+exclusive cases, shared requirements and review checks. Their dedicated manifest,
+`configs/pi_remaining_review.json`, selects Kimi K3.1 Pro. Their pilots have not
+started. The actual root project instructions supply background context; README
+files and earlier assistant/tool messages are never invented by the collector.
 
-These are **task-authored, model-executed source sessions**, not transcripts from human users
-and not measurements of the framing/channel/author treatments. Even a normally completed
-session may fail its task or ignore a rule. Completion is recorded separately from task success,
-which remains unjudged. The original one-turn leap-year pilot has completed. Its evidence is retained separately;
-the revised JSON parser scenario uses a fresh output directory.
+These are **task-authored, model-executed source sessions**, not human participant
+logs or measurements of the framing/channel/author treatments. Completion means
+Pi reached a final assistant message, separately from task success. Retain the
+original leap-year and both JSON parser runs as separate historical evidence.
 
 ## Prepare without model calls
 
-Use Linux with Bubblewrap, Git, Node.js 22 or newer, and the repository's Python environment:
+Use Linux amd64 with Bubblewrap, Git, Node.js 22 or newer, uv, and Bun 1.3.12
+(default `~/.bun/bin/bun`, or set `PI_BUN_PATH`):
 
 ```bash
 uv sync --locked --extra probes
 npm ci --prefix tools/pi-transcripts --ignore-scripts --no-audit --no-fund
-node tools/pi-transcripts/collect.mjs prepare --output out/pi-transcripts-initial
+node tools/pi-transcripts/collect.mjs prepare \
+  --manifest configs/pi_remaining_review.json --output out/pi-remaining-review
 ```
 
-Preparation downloads complete shallow checkouts at the pinned commits and gives every
-scenario independent Git storage. A neighboring `out/pi-transcript-sources/` cache shares the
-downloads across preparations; it is not exposed to the agent's tools. Preparation verifies pristine files and the resolved instruction
-source, checks Python/pytest/Git inside the tool sandbox, and saves an exact collection plan.
-It also checks the requested model against OpenRouter's public model catalog. Neither
-repository downloads nor catalog lookup send prompts to a model.
+Preparation downloads complete shallow checkouts at the pinned commits and gives
+every scenario independent Git storage. A neighboring `out/pi-transcript-sources/`
+cache shares downloads without exposing them to model tools. Preparation checks
+pristine source, cited files and resolved instruction targets, installs scoped
+dependencies, runs each manifest's native baseline and real-source probes in the
+sandbox, and saves the collection plan and receipts. It also looks up the requested
+model in OpenRouter's public catalog. **No inference requests are made.**
 
-Preparation may be repeated to refresh collector hashes before any session has started; earlier
-plans are retained. A changed task manifest or any existing trajectory requires a fresh run.
+The environments cover editable Python subpackages, locked LangChain tests,
+checksum-verified Go 1.26.9 and required module caches, Bun, and narrowly installed
+JavaScript test dependencies with lifecycle scripts disabled. Expo uses a scoped
+Jest configuration for its real env-package tests with the same memfs convention.
+See [validation scope](../research/remaining-scenario-pilots.md#preparation-and-validation-scope)
+for the exact boundaries. No full monorepo build, submodules, Docker daemon, cloud
+CI execution or release publication is required.
 
-The eleven legacy tasks use Python's standard library, pytest, and local Git commits. Upstream submodules,
-large project build environments, and full repository test suites are not installed. Each
-workspace retains the real upstream files; this is a deliberately bounded coding environment,
-not a claim to reproduce each project's development machine. Pi can inspect further files
-normally, but extensions, skills, ancestor instructions, and personal Pi settings from the host
-are excluded. Tool subprocesses have their own network namespace, writable checkout and
-private temporary/home directories, read-only runtime dependencies, and no API credentials.
-Socket tasks can bind local ports inside that namespace. Git remotes are never pushed.
+Each tool subprocess has its own network namespace, writable checkout and private
+temporary/home directories, read-only runtime/dependency mounts, and no host API
+credentials. Pi extensions, skills, ancestor instructions and personal settings are
+excluded. Git remotes are never pushed. Go's module network access is also disabled
+inside tools; dependencies are resolved before collection.
 
-## Start an authorized collection
+Preparation may refresh collector hashes before any session has started; previous
+plans are retained. A changed manifest or any existing trajectory requires a fresh
+output directory. Failed preparation logs are preserved for diagnosis.
 
-Once the prepared plan and collection spending have been approved, set
-`OPENROUTER_API_KEY` in the environment and run:
+## Start one authorized pilot
+
+After explicit authorization for the selected pilot, set `OPENROUTER_API_KEY` in
+the environment. Select exactly one prepared case without editing the frozen plan:
 
 ```bash
-node tools/pi-transcripts/collect.mjs collect \
-  --output out/pi-transcripts-initial --allow-paid
+node tools/pi-transcripts/collect.mjs collect --interactive --allow-paid \
+  --manifest configs/pi_remaining_review.json --output out/pi-remaining-review \
+  --scenario airflow-redaction-marker
 ```
 
-The 12-task manifest now contains an interactive task and cannot be collected as an
-unattended batch. Select a reviewed subset in a separate manifest. Legacy sessions are
-sequential. Each is limited to 24 model requests,
-8,192 output tokens per request, 100,000 bytes per serialized input request, 15 minutes per
-session, and 120 seconds per tool invocation. Input limits reject a request rather than
-truncate its history. Pi compaction and both Pi/transport retries are disabled; a bounded or
-failed session stops the batch with its partial evidence intact. These controls bound the
-workload; usage and the catalog-based cost estimates are saved for inspection.
+Use another reviewed ID for a later authorized pilot. `--scenario` is a collection
+selector; `prepare` always prepares the whole manifest. An unknown selector or an
+interactive invocation selecting multiple cases is rejected before provider access.
+Neither `--allow-paid` nor preparation itself grants authorization to start a batch.
 
-Repeating `collect` skips verified completed attempts. Any existing incomplete attempt requires
-inspection and a new output directory for a separately authorized retry. The collector also
-rejects changed plans or collector files. Do not delete failed trajectories to obtain a clean
-denominator. The `--allow-paid` opt-in is required even when checking an already completed run.
+After each completed user turn, inspect the saved checkpoint, tools and patch, then
+send one JSON line with `prompt` and `rationale`, or `null` to finish. Only the prompt
+is delivered to the model. See the [adaptive operator protocol](../research/remaining-scenario-pilots.md#adaptive-user-turns)
+for preserving the frozen conflict spans in turn two and grounding any later
+follow-up in observed evidence. Target two user turns, permit up to four, and do
+not manufacture extra turns.
+
+Each remaining pilot allows 80 model requests total, 8,192 output tokens per request,
+400,000 bytes per serialized input, 40 minutes including operator review, and 120
+seconds per tool. Limits apply across all turns. History is not compacted or
+truncated; Pi/transport retries are disabled. Retain partial evidence on failure or
+limits. These bounds constrain workload; usage and catalog-based cost estimates are
+saved separately.
+
+Repeating `collect` skips verified completed attempts. Incomplete attempts require
+inspection and a fresh output directory for a separately authorized retry. Changed
+plans or collector files are rejected. Do not delete failed trajectories to obtain
+a clean denominator. `--allow-paid` is required even when checking a completed run.
 
 ## Adaptive JSON parser pilot
 
@@ -163,9 +183,8 @@ not reasons to fabricate a read.
 The current `--scenarios` format accepts only a restricted hand-authored history. This PR does
 not silently squeeze full Pi sessions into that format, fabricate trial placements, judge the
 source runs, or treat them as analysis-ready observations. The source corpus is the basis for
-that next design step. In particular, the Expo Python task and the commit-title task still need
-scope review before use as exclusive comparisons: their upstream rules discuss `console.log`
-and PR titles respectively.
+that next design step. The former Expo debug-print and commit-title exercises have
+been replaced by native dotenv and runnable-fallback behavior conflicts.
 
 ## Offline verification
 

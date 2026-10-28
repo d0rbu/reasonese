@@ -13,7 +13,7 @@ export const projectDir = resolve(toolDir, "../..");
 const definitions = [createReadToolDefinition, createBashToolDefinition,
   createEditToolDefinition, createWriteToolDefinition];
 
-export function sandboxArgs(cwd, scratch, venv = join(projectDir, ".venv")) {
+export function sandboxArgs(cwd, scratch, venv = join(projectDir, ".venv"), environment = {}) {
   let launcher = join(venv, "bin/python");
   const interpreter = realpathSync(launcher);
   const python = dirname(dirname(interpreter));
@@ -35,7 +35,7 @@ export function sandboxArgs(cwd, scratch, venv = join(projectDir, ".venv")) {
     if (existsSync(filename)) args.push("--ro-bind", filename, filename);
   }
   // Never mount the host home, credentials, source worktree, or transcript directory.
-  for (const resource of [toolDir, venv, python, node]) {
+  for (const resource of new Set([toolDir, venv, python, node, ...(environment.readOnlyPaths ?? [])])) {
     args.push("--ro-bind", resource, resource);
   }
   // Recent uv versions can point the venv at a launcher alias outside the runtime prefix.
@@ -44,21 +44,22 @@ export function sandboxArgs(cwd, scratch, venv = join(projectDir, ".venv")) {
     .some((root) => launcher.startsWith(root + sep))) {
     args.push("--dir", dirname(launcher), "--symlink", interpreter, launcher);
   }
+  for (const [key, value] of Object.entries(environment.env ?? {})) args.push("--setenv", key, value);
   return [...args, "--bind", cwd, cwd,
     "--remount-ro", "/",
     "--setenv", "HOME", "/home/pi", "--setenv", "TMPDIR", "/tmp",
-    "--setenv", "PATH", `${venv}/bin:${dirname(node)}:/usr/bin:/bin`,
+    "--setenv", "PATH", [...(environment.path ?? []), `${venv}/bin`, dirname(node), "/usr/bin", "/bin"].join(":"),
     "--setenv", "LANG", "C.UTF-8", "--setenv", "TZ", "UTC",
     "--setenv", "GIT_CONFIG_NOSYSTEM", "1",
     "--setenv", "GIT_CONFIG_GLOBAL", "/dev/null",
     "--chdir", cwd, node, join(toolDir, "tool-worker.mjs")];
 }
 
-export function sandboxTools(cwd, scratch, timeoutSeconds, venv) {
+export function sandboxTools(cwd, scratch, timeoutSeconds, venv, environment) {
   return definitions.map((factory) => {
     const definition = factory(cwd);
     return { ...definition, execute: (id, parameters, signal) =>
-      runInSandbox(cwd, scratch, { name: definition.name, id, parameters }, timeoutSeconds, signal, venv) };
+      runInSandbox(cwd, scratch, { name: definition.name, id, parameters }, timeoutSeconds, signal, venv, environment) };
   });
 }
 
@@ -67,9 +68,9 @@ export function sandboxGit(cwd, scratch, ...args) {
   return runInSandbox(cwd, scratch, { git: args }, 120);
 }
 
-function runInSandbox(cwd, scratch, request, timeoutSeconds, signal, venv) {
+function runInSandbox(cwd, scratch, request, timeoutSeconds, signal, venv, environment) {
   return new Promise((accept, reject) => {
-    const child = spawn("bwrap", sandboxArgs(cwd, scratch, venv), {
+    const child = spawn("bwrap", sandboxArgs(cwd, scratch, venv, environment), {
       stdio: ["pipe", "pipe", "pipe"], env: { PATH: "/usr/bin:/bin" },
     });
     child.stdout.setEncoding("utf8");

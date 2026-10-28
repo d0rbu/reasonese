@@ -13,6 +13,7 @@ export async function main(args) {
     manifest: { type: "string", default: join(projectDir, "configs/pi_transcripts.json") },
     output: { type: "string" }, "allow-paid": { type: "boolean", default: false },
     interactive: { type: "boolean", default: false },
+    scenario: { type: "string" },
   } });
   if (positionals.length !== 1 || !["prepare", "collect"].includes(positionals[0]) || !values.output) {
     throw new Error("Usage: node tools/pi-transcripts/collect.mjs prepare|collect --output out/<run> [--allow-paid]");
@@ -20,7 +21,9 @@ export async function main(args) {
   const output = resolve(values.output);
   if (!output.startsWith(join(projectDir, "out") + sep)) throw new Error("Output must be below this checkout's out/");
   const manifest = loadManifest(values.manifest);
+  const selected = selectScenarios(manifest, values.scenario);
   if (positionals[0] === "prepare") {
+    if (values.scenario) throw new Error("Prepare the complete manifest; --scenario selects one prepared case for collection");
     await prepare(manifest, output);
     writeJson(join(output, "model.json"), await modelMetadata(manifest.model));
     return;
@@ -32,11 +35,11 @@ export async function main(args) {
   }
   // Gate before metadata lookup or session creation; a provider default never grants spending.
   if (!values["allow-paid"]) throw new Error("--allow-paid is required to collect Pi transcripts");
-  if (values.interactive && manifest.scenarios.length !== 1) throw new Error("Interactive collection requires a single-scenario manifest");
-  if (manifest.scenarios.some((scenario) => (scenario.maxUserTurns ?? 1) > 1) && !values.interactive) throw new Error("Use --interactive for multi-turn scenarios");
+  if (values.interactive && selected.length !== 1) throw new Error("Interactive collection requires one case; use --scenario <id>");
+  if (selected.some((scenario) => (scenario.maxUserTurns ?? 1) > 1) && !values.interactive) throw new Error("Use --interactive for multi-turn scenarios");
   if (!process.env.OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY is required");
   const metadata = await modelMetadata(manifest.model);
-  for (const scenario of manifest.scenarios) {
+  for (const scenario of selected) {
     const caseDir = join(output, scenario.id);
     if (!existsSync(join(caseDir, "prepared.json"))) throw new Error(`Unprepared scenario: ${scenario.id}`);
     const outcomeFile = join(caseDir, "trajectory/outcome.json");
@@ -63,6 +66,13 @@ export async function main(args) {
     console.log(`${scenario.id}: ${outcome.status} (${outcome.modelRequests} requests, ${outcome.toolResults} tool results)`);
     if (outcome.status !== "completed") throw new Error(`Collection stopped at ${scenario.id}: ${outcome.status}`);
   }
+}
+
+export function selectScenarios(manifest, id) {
+  if (id === undefined) return manifest.scenarios;
+  const scenario = manifest.scenarios.find((candidate) => candidate.id === id);
+  if (!scenario) throw new Error(`Unknown scenario: ${id}`);
+  return [scenario];
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

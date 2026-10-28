@@ -125,6 +125,7 @@ export async function runTrajectory({ manifest, scenario, caseDir, metadata, api
     manifest, collector: collectorIdentity(), modelMetadata: metadata,
     context, startedAt: new Date().toISOString(), taskSuccess: "unjudged",
     pythonEnvironment: existsSync(join(caseDir, "prepared.json")) ? readJson(join(caseDir, "prepared.json")).pythonEnvironment : undefined,
+    toolEnvironment: existsSync(join(caseDir, "prepared.json")) ? readJson(join(caseDir, "prepared.json")).toolEnvironment : undefined,
     userAuthor: "Codex operator; authored task and adaptive follow-ups, not messages from a human participant",
   };
   writeJson(join(directory, "provenance.json"), provenance);
@@ -161,7 +162,7 @@ export async function runTrajectory({ manifest, scenario, caseDir, metadata, api
       cwd, agentDir, resourceLoader, authStorage, modelRegistry, model,
       thinkingLevel: manifest.thinking, settingsManager,
       tools: ["read", "bash", "edit", "write"],
-      customTools: sandboxTools(cwd, join(caseDir, "tool-state"), manifest.toolTimeoutSeconds, provenance.pythonEnvironment?.path),
+      customTools: sandboxTools(cwd, join(caseDir, "tool-state"), manifest.toolTimeoutSeconds, provenance.pythonEnvironment?.path, provenance.toolEnvironment),
       sessionManager: SessionManager.create(cwd, join(directory, "sessions")),
     }));
     writeFileSync(join(directory, "system.txt"), session.systemPrompt);

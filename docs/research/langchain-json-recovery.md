@@ -73,8 +73,9 @@ follow-ups. Evaluate the exact same final parser calls for both sides independen
 The old first-pair README template is retired. The restricted scenario YAML format
 cannot faithfully carry this native multi-turn Pi/tool history. Do not run this
 pair through the legacy `--scenarios` collector and call it a multi-turn experiment:
-a missing template falls back to bare instructions. The other eleven legacy
-scenarios remain available but still use small exercises.
+a missing template falls back to bare instructions. The other eleven cases now have
+[repository-native multi-turn designs](remaining-scenario-pilots.md); their former
+synthetic histories are retired.
 
 ## Observed DeepSeek pilot, 2026-10-28
 

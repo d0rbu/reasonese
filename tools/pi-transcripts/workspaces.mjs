@@ -1,9 +1,10 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, sep } from "node:path";
 import { promisify } from "node:util";
 import { projectDir, sandboxGit, sandboxTools, toolDir } from "./sandbox.mjs";
+import { prepareEnvironment, validateEnvironment } from "./environments.mjs";
 
 const exec = promisify(execFile);
 export const MODEL = "deepseek/deepseek-v4.1-flash-1017";
@@ -38,6 +39,7 @@ export function loadManifest(filename) {
     if (typeof scenario.prompt !== "string" || !scenario.prompt.trim()) throw new Error("Empty user prompt");
     if (typeof scenario.ruleFile !== "string" || isAbsolute(scenario.ruleFile) || scenario.ruleFile.split(/[\\/]/).includes("..")) throw new Error("Invalid rule file");
     if (scenario.pythonProject !== undefined && scenario.pythonProject !== "libs/core") throw new Error("Unsupported Python project");
+    validateEnvironment(scenario);
     if (scenario.maxUserTurns !== undefined && (!Number.isSafeInteger(scenario.maxUserTurns) || scenario.maxUserTurns < 1 || scenario.maxUserTurns > 8)) throw new Error("Invalid maxUserTurns");
   }
   return manifest;
@@ -50,7 +52,7 @@ export function collectorIdentity() {
   }
   return {
     pi: PI_VERSION, node: process.version,
-    files: Object.fromEntries(["package-lock.json", "collect.mjs", "workspaces.mjs", "trajectory.mjs", "sandbox.mjs", "tool-worker.mjs"].map((name) =>
+    files: Object.fromEntries(["package-lock.json", "collect.mjs", "workspaces.mjs", "environments.mjs", "trajectory.mjs", "sandbox.mjs", "tool-worker.mjs", ...readdirSync(toolDir).filter(n => n.startsWith("baseline_")).sort()].map((name) =>
       [name, sha256(readFileSync(join(toolDir, name)))])),
     pythonLock: sha256(readFileSync(join(projectDir, "uv.lock"))),
   };
@@ -140,28 +142,34 @@ export async function prepare(manifest, output, sourceDirectory = join(dirname(o
       await git(cwd, "config", "core.hooksPath", "/dev/null");
     }
     const context = await verifyWorkspace(cwd, scenario);
-    let pythonEnvironment;
-    if (scenario.pythonProject) {
-      const environment = join(caseDir, "python-env");
-      const project = join(cwd, scenario.pythonProject);
-      const installed = await exec("uv", ["sync", "--locked", "--no-default-groups", "--group", "test", "--project", project], {
-        env: { ...process.env, UV_PROJECT_ENVIRONMENT: environment }, timeout: 1_800_000, maxBuffer: 16 * 1024 * 1024,
-      });
-      writeFileSync(join(caseDir, "python-setup.log"), installed.stdout + installed.stderr);
-      const frozen = await exec("uv", ["pip", "freeze", "--python", join(environment, "bin/python")]);
-      pythonEnvironment = { path: environment, project: scenario.pythonProject,
-        lockSha256: sha256(readFileSync(join(project, "uv.lock"))), packages: frozen.stdout };
-      await verifyWorkspace(cwd, scenario);
+    for (const source of scenario.sourceFiles ?? []) {
+      const path = realpathSync(join(cwd, source));
+      if (!path.startsWith(cwd + sep)) throw new Error(`Source escapes checkout: ${source}`);
     }
-    const check = await sandboxTools(cwd, join(caseDir, "tool-state"), manifest.toolTimeoutSeconds, pythonEnvironment?.path)
-      .find((tool) => tool.name === "bash").execute("preflight", {
-        command: "python --version && python -m pytest --version && git --version",
-      });
+    const { pythonEnvironment, toolEnvironment } = await prepareEnvironment(scenario, caseDir, cwd);
+    const command = scenario.baselineCommand ?? (scenario.goPackage ? `go test ${scenario.goPackage}` :
+      "python --version && python -m pytest --version && git --version");
+    let check;
+    const baselineFile = join(caseDir, "baseline.json");
+    if (existsSync(baselineFile) && readJson(baselineFile).error) {
+      const failed = readFileSync(baselineFile);
+      writeFileSync(join(caseDir, `baseline-failed-${sha256(failed)}.json`), failed);
+    }
+    try {
+      check = await sandboxTools(cwd, join(caseDir, "tool-state"), Math.max(600, manifest.toolTimeoutSeconds), pythonEnvironment?.path, toolEnvironment)
+        .find((tool) => tool.name === "bash").execute("preflight", { command });
+      writeJson(join(caseDir, "baseline.json"), { command, result: check });
+    } catch (error) {
+      writeJson(join(caseDir, "baseline.json"), { command, error: error.message });
+      throw new Error(`Baseline failed for ${scenario.id}: ${error.message}`);
+    }
+    await verifyWorkspace(cwd, scenario);
     writeJson(join(caseDir, "prepared.json"), {
       scenario, context, tree: (await git(cwd, "rev-parse", "HEAD^{tree}")).trim(),
-      preflight: check, pythonEnvironment, preparedAt: new Date().toISOString(),
-      checkout: scenario.pythonProject ? "complete shallow checkout; locked core test environment installed; submodules not installed" : "complete shallow checkout; submodules and repository build dependencies are not installed",
+      preflight: check, pythonEnvironment, toolEnvironment, preparedAt: new Date().toISOString(),
+      checkout: "complete shallow checkout; scoped dependencies as recorded; submodules and full application builds not installed",
     });
+    console.log(`Baseline passed: ${scenario.id}`);
   }
   console.log(`Prepared ${manifest.scenarios.length} workspaces. No model requests made.`);
 }

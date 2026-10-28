@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import { mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
-import { main } from "../collect.mjs";
+import { main, selectScenarios } from "../collect.mjs";
 import { projectDir, sandboxArgs, sandboxTools } from "../sandbox.mjs";
 import { captureTransport, modelMetadata, runTrajectory, verifyCompleted } from "../trajectory.mjs";
 import { collectorIdentity, contextFile, git, KIMI_MODEL, loadManifest, MODEL, prepare, readJson, writeJson } from "../workspaces.mjs";
@@ -247,10 +247,26 @@ test("CLI paid opt-in is checked before any provider access", async (t) => {
   const original = globalThis.fetch;
   globalThis.fetch = () => { throw new Error("must not access provider"); };
   try {
+    assert.deepEqual(selectScenarios(manifest, manifest.scenarios[1].id), [manifest.scenarios[1]]);
+    await assert.rejects(main(["collect", "--output", output, "--scenario", "missing", "--allow-paid"]), /Unknown scenario/);
     await assert.rejects(main(["collect", "--output", output]), /--allow-paid is required/);
+    await assert.rejects(main(["collect", "--output", output, "--interactive", "--allow-paid"]), /use --scenario/);
     writeJson(join(output, "plan.json"), { manifest, collector: {} });
     await assert.rejects(main(["collect", "--output", output, "--allow-paid"]), /collector changed/);
   } finally { globalThis.fetch = original; }
+});
+
+test("prepared tool dependencies are readable, immutable, and do not expose sibling artifacts", async (t) => {
+  const { caseDir, cwd } = await fixture(t);
+  const dependency = join(caseDir, "runtime");
+  mkdirSync(dependency);
+  writeFileSync(join(dependency, "value"), "dependency fixture\n");
+  writeFileSync(join(caseDir, "private.txt"), "not exposed");
+  const environment = { readOnlyPaths: [dependency], path: [], env: { PI_DEPENDENCY: dependency } };
+  const bash = sandboxTools(cwd, join(caseDir, "tool-state"), 10, undefined, environment).find(t => t.name === "bash");
+  const result = await bash.execute("check-dependency", { command: `python - <<'PY'\nimport os\nfrom pathlib import Path\np = Path(os.environ['PI_DEPENDENCY']) / 'value'\nassert p.read_text() == 'dependency fixture\\n'\nassert not (p.parent.parent / 'private.txt').exists()\ntry:\n p.write_text('changed')\nexcept OSError:\n print('read-only dependency')\nelse:\n raise AssertionError('writable dependency')\nPY` });
+  assert.match(result.content[0].text, /read-only dependency/);
+  assert.equal(readFileSync(join(dependency, "value"), "utf8"), "dependency fixture\n");
 });
 
 test("adaptive user turns retain one native session, observed history, and cumulative evidence", async (t) => {

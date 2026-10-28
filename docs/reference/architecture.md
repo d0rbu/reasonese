@@ -47,7 +47,9 @@ matchup -> authored messages -> independent message QA -> conversation -> assist
 - `tools/pi-transcripts/` is a separate source-corpus collection stage. It runs the pinned Pi SDK
   against OpenRouter with actual tools in independent pinned repository checkouts, saving native
   sessions, raw HTTP/SSE evidence, resolved prompts, and terminal outcomes. Its manifest is
-  `configs/pi_transcripts.json`; preparation and paid collection are distinct commands. These
+  `configs/pi_transcripts.json`, with `configs/pi_remaining_review.json` selecting the eleven
+  redesigned Kimi pilots. Preparation installs scoped dependencies and validates real-source
+  baselines; interactive collection selects one prepared case with `--scenario`. These
   unjudged source transcripts are not silently converted into scenario templates, trial caches, or
   observations. See [`pi-transcripts.md`](pi-transcripts.md).
 - `reasonese.manual_messages` resolves filesystem-backed variants for the user author and

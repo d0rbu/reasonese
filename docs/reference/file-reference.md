@@ -5,9 +5,13 @@
 | `configs/example_matchup.yaml` | Two-input conversation example |
 | `configs/example_study.yaml` | Permutation-balanced collection example |
 | `configs/instruction_pairs.yaml` | Candidate instruction-pair bank |
-| `configs/scenario_pairs.yaml` | Eleven legacy rule pairs and one repository-native JSON parser policy conflict |
-| `configs/scenarios/` | Eleven legacy scenario templates; the native Pi JSON parser case has no fabricated template |
+| `configs/scenario_pairs.yaml` | Twelve repository-native, mutually exclusive behavior-policy pairs |
+| `configs/scenarios/` | Retirement notice for authored README histories; no active YAML templates |
 | `configs/pi_langchain_review.json` | Single adaptive LangChain parser conflict pilot and limits |
+| `configs/pi_remaining_review.json` | Eleven redesigned adaptive Kimi pilots, conflicts, review checks and environment recipes |
+| `docs/research/remaining-scenario-pilots.md` | Task catalog, exclusive outcomes, adaptive operator protocol and preparation scope |
+| `tools/pi-transcripts/environments.mjs` | Scoped dependency setup and recorded read-only runtime mounts |
+| `tools/pi-transcripts/baseline_*` | Executable untouched-source observations, not post-change success oracles |
 | `configs/pi_langchain_kimi_review.json` | Same task and conflict rerun with Kimi K3.1 Pro |
 | `docs/research/langchain-json-recovery.md` | Replacement first scenario, instruction pair, follow-up protocol, and interpretation |
 | `configs/pi_transcripts.json` | Pinned source repositories, natural user tasks, exact executor model, and collection limits |
@@ -88,7 +92,7 @@
 | `tests/test_utilities.py` | Utility integration tests |
 | `tests/test_matchup_conversation.py` | Matchup and rendering tests |
 | `tests/test_scenarios.py` | Scenario slots, placement, file rules, trace caching, and collection wiring tests |
-| `tests/test_scenario_bank.py` | Study scenario bank: coverage, provenance, main-bank disjointness, all-orderings rendering |
+| `tests/test_scenario_bank.py` | Native task bank coverage, pinned provenance, preserved first pilot, and main-bank disjointness |
 | `tests/fixtures/scenarios/` | One synthetic scenario that exercises the template slots; not study material |
 | `tests/test_openrouter.py` | Provider-client contract tests |
 | `tests/test_cache_runner_cli.py` | Cache, execution, and CLI tests |
