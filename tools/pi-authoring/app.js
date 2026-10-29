@@ -86,8 +86,6 @@ function renderDraft() {
     accepted =
       state.message.acceptedText === text &&
       state.message.acceptedText !== null;
-  $("words").textContent =
-    `${text.trim().split(/\s+/).filter(Boolean).length} words`;
   $("draft-status").textContent = state.saveErrors.has(state.key)
     ? "Saved in this browser · could not sync to the site"
     : state.pendingSaves.has(state.key) || state.savingKey === state.key
@@ -96,7 +94,7 @@ function renderDraft() {
         ? "Accepted · saved"
         : text || state.message.hasDraft
           ? "Draft saved"
-          : "Autosaves as you type";
+          : "";
   const busy = state.checking.has(state.key),
     writable = state.catalog.canWrite && state.catalog.writable;
   $("submit").disabled = !writable || busy || !text.trim();
