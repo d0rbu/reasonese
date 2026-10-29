@@ -3,6 +3,7 @@ import { execFileSync, spawn } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync, writeSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { encodeBwrapArgs } from "./bwrap-args.mjs";
 
 writeSync(3, "ready\n");
 let input = "";
@@ -29,9 +30,13 @@ try {
 } finally { rmSync(rulesDir, { recursive: true, force: true }); }
 // The network namespace belongs to the outer user namespace. The inner user
 // namespace cannot remove these rules or enter the host network namespace.
-const child = spawn("bwrap", [...args.slice(0, 1), "--share-net", ...args.slice(1)], {
-  stdio: ["pipe", "inherit", "inherit"], env: { PATH: "/usr/bin:/bin" },
+const child = spawn("bwrap", ["--args", "3", ...args.slice(-2)], {
+  stdio: ["pipe", "inherit", "inherit", "pipe"], env: { PATH: "/usr/bin:/bin" },
 });
+// Bubblewrap consumes and closes this private setup descriptor before tools run.
+// Its normal PID1 reaper remains enabled, with no mount vector in /proc/1/cmdline.
+child.stdio[3].on("error", error => process.stderr.write(error.message));
+child.stdio[3].end(encodeBwrapArgs([...args.slice(0, 1), "--share-net", ...args.slice(1, -2)]));
 child.stdin.end(JSON.stringify(request));
 child.on("exit", code => process.exit(code ?? 1));
 child.on("error", error => { process.stderr.write(error.message); process.exit(1); });

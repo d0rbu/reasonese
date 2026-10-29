@@ -74,7 +74,7 @@ export function collectorIdentity() {
   }
   return {
     pi: PI_VERSION, node: process.version, runtime: neutralRuntime(),
-    files: Object.fromEntries(["package.json", "package-lock.json", "collect.mjs", "workspaces.mjs", "environments.mjs", "trajectory.mjs", "sandbox.mjs", "tool-worker.mjs", "network-worker.mjs", "backing.mjs", "checkpoints.mjs", "restore-checkpoint.py", ...readdirSync(toolDir).filter(n => n.startsWith("baseline_")).sort()].map((name) =>
+    files: Object.fromEntries(["package.json", "package-lock.json", "collect.mjs", "workspaces.mjs", "environments.mjs", "trajectory.mjs", "sandbox.mjs", "tool-worker.mjs", "network-worker.mjs", "bwrap-args.mjs", "backing.mjs", "checkpoints.mjs", "restore-checkpoint.py", ...readdirSync(toolDir).filter(n => n.startsWith("baseline_")).sort()].map((name) =>
       [name, sha256(readFileSync(join(toolDir, name)))])),
     pythonLock: sha256(readFileSync(join(projectDir, "uv.lock"))),
   };

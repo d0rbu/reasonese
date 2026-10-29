@@ -86,6 +86,14 @@ loopback services but cannot change the outer firewall or reach host listeners.
 No host firewall rules are changed. DNS/HTTPS availability can still fail for
 ordinary upstream reasons; those failures must remain in any recorded trajectory.
 
+Future tool launches pass the exact Bubblewrap setup options through a private
+NUL-delimited `--args` descriptor, which Bubblewrap consumes and closes before
+starting the tool. Its normal PID1 reaper, namespace setup and process cleanup
+remain enabled. Process listings show `bwrap --args 3` and the ordinary neutral
+tool-worker command, without host mount sources. This does not hide containment
+or rewrite `/proc` or tool output;
+historical captures retain any setup arguments they already exposed.
+
 The tool environment does not inherit provider keys, proxy credentials, SSH keys,
 personal settings, host home files or collector artifacts. Only Pi's SDK modules
 and the minimal tool worker are mounted, with neutral SDK installation metadata.
