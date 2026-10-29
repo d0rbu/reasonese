@@ -195,7 +195,9 @@ export async function prepare(manifest, output, sourceDirectory = join(dirname(o
     writeJson(join(caseDir, "prepared.json"), {
       scenario, context, tree: (await git(cwd, "rev-parse", "HEAD^{tree}")).trim(),
       preflight: check, pythonEnvironment, toolEnvironment, preparedAt: new Date().toISOString(),
-      checkout: "complete shallow checkout; scoped dependencies as recorded; submodules and full application builds not installed",
+      checkout: scenario.nodeProject === "packages/@expo/env" ?
+        "complete shallow checkout; locked pnpm workspace install and native @expo/env package gate; submodules and native apps not bootstrapped" :
+        "complete shallow checkout; scoped dependencies as recorded; submodules and full application builds not installed",
     });
     console.log(`Baseline passed: ${scenario.id}`);
   }

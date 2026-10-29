@@ -13,14 +13,16 @@ export async function snapshotWorkspace(caseDir, prefix, gitState = null) {
   const archive = `${prefix}.workspace.tar.gz`;
   // GNU tar does not follow symlinks by default. Include independent .git state,
   // ignored/untracked files and mutable dependencies, not just a tracked diff.
-  await exec("tar", ["--format=pax", "-czf", archive, "-C", caseDir, ...roots], {
-    timeout: 600_000, maxBuffer: 1024 * 1024,
+  await exec("tar", ["--format=pax", "-I", "gzip -1", "-cf", archive, "-C", caseDir, ...roots], {
+    timeout: 1_800_000, maxBuffer: 1024 * 1024,
     env: { PATH: "/usr/bin:/bin", LANG: "C.UTF-8" },
   });
   const hash = createHash("sha256");
   for await (const chunk of createReadStream(archive)) hash.update(chunk);
   return { archive: basename(archive), sha256: hash.digest("hex"), bytes: statSync(archive).size,
-    roots, gitState, format: "pax tar.gz; symlinks retained without dereferencing", includesGitState: true,
+    roots, gitState, format: "pax tar.gz; symlinks retained without dereferencing",
+    compression: { program: "gzip", level: 1 }, includesGitState: true,
+    archiveTimeoutSeconds: 1800,
     mutableDependenciesIncluded: true,
     restore: "Extract into a fresh private case directory only. Reject traversal, special files and writes through symlink parents. Retain absolute neutral-path symlinks without dereferencing them. Shared read-only runtime identity is recorded separately in provenance." };
 }
@@ -37,7 +39,7 @@ export async function restoreCheckpoint(archive, destination, { sha256: expected
   destination = createNeutralCase(alias, { create: false });
   const toolRoot = dirname(fileURLToPath(import.meta.url));
   await exec(join(toolRoot, "../../.venv/bin/python"), [join(toolRoot, "restore-checkpoint.py"), archive, destination], {
-    timeout: 600_000, maxBuffer: 1024 * 1024, env: { PATH: "/usr/bin:/bin", LANG: "C.UTF-8" },
+    timeout: 1_800_000, maxBuffer: 1024 * 1024, env: { PATH: "/usr/bin:/bin", LANG: "C.UTF-8" },
   });
   let relocated;
   if (prepared) {
@@ -56,6 +58,10 @@ export async function restoreCheckpoint(archive, destination, { sha256: expected
     if (environment) {
       environment.mounts = (environment.mounts ?? []).map(m => ({ ...m, source: move(m.source) }));
       environment.path = (environment.path ?? []).map(move);
+      const node = environment.dependencies?.node;
+      if (node?.runtime) node.runtime.path = move(node.runtime.path);
+      if (node?.packageManager?.path) node.packageManager.path = move(node.packageManager.path);
+      if (node?.packageManager?.executable) node.packageManager.executable = move(node.packageManager.executable);
       for (const key of ["env", "baselineEnv"]) environment[key] = Object.fromEntries(Object.entries(environment[key] ?? {}).map(([name, value]) => [name, sourceRoots.reduce((text, root) => text.split(root + "/").join(destination + "/"), value)]));
       environment.pathAliases = [
         ...sourceRoots.flatMap(root => [

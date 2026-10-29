@@ -6,6 +6,7 @@ import { isDeepStrictEqual } from "node:util";
 import { fileURLToPath } from "node:url";
 import { neutralCwd, sandboxGit, sandboxTools } from "./sandbox.mjs";
 import { restoreCheckpoint } from "./checkpoints.mjs";
+import { validateNodeIdentity } from "./environments.mjs";
 import { runTrajectory, modelMetadata } from "./trajectory.mjs";
 import { contextFile, readJson, sha256, writeJson } from "./workspaces.mjs";
 
@@ -129,7 +130,15 @@ async function validateRestoredState(restored, source, checkpoint, fixture) {
     }
   } else if (!fixture) throw new Error("Native source needs a task-owned Python environment");
   const environment = prepared.toolEnvironment ?? {}, dependencies = environment.dependencies ?? {};
-  if (dependencies.node?.version && dependencies.node.version !== process.version) throw new Error("Prepared Node runtime changed");
+  const taskNode = validateNodeIdentity(environment, restored.destination);
+  if (taskNode) {
+    const pnpm = taskNode.packageManager?.name === "pnpm";
+    const result = await sandboxTools(cwd, join(restored.destination, "tool-state"), 30, python?.path, environment)
+      .find(tool => tool.name === "bash").execute("validate-node", { command: pnpm ? "node --version && pnpm --version" : "node --version" });
+    const version = result.content.map(block => block.text ?? "").join("").trim();
+    const expected = pnpm ? `${taskNode.version}\n${taskNode.packageManager.version}` : taskNode.version;
+    if (result.isError || version !== expected) throw new Error("Prepared task Node or package manager version changed");
+  }
   const immutableTools = [
     ["go", "/opt/go", source => join(source, "bin/go")],
     ["bun", "/opt/bin/bun", source => source],
