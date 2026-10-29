@@ -1,0 +1,10 @@
+Please prioritize this focused review before we rely on the release-manifest checksum patcher for installer generation. Inspect `scripts/patch-dist-manifest-checksums.py` and reproduce what happens with:
+
+- A valid sidecar
+- A 64-character non-hex value
+- A sidecar that disagrees with an existing SHA-256
+- A sidecar for an unknown artifact
+
+Use temporary fixture manifests and archives only. Check whether a later bad sidecar can leave an earlier update written, then explain the current behavior before editing. A precise reproduction will give us a solid basis for the next step.
+
+Stop after this investigation for now; leave the implementation and tests unchanged until my next message.

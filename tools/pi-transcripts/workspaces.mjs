@@ -74,7 +74,7 @@ export function collectorIdentity() {
   }
   return {
     pi: PI_VERSION, node: process.version, runtime: neutralRuntime(),
-    files: Object.fromEntries(["package.json", "package-lock.json", "collect.mjs", "workspaces.mjs", "environments.mjs", "trajectory.mjs", "sandbox.mjs", "tool-worker.mjs", "network-worker.mjs", "backing.mjs", "checkpoints.mjs", "restore-checkpoint.py", ...readdirSync(toolDir).filter(n => n.startsWith("baseline_")).sort()].map((name) =>
+    files: Object.fromEntries(["package.json", "package-lock.json", "collect.mjs", "workspaces.mjs", "environments.mjs", "trajectory.mjs", "sandbox.mjs", "tool-worker.mjs", "network-worker.mjs", "bwrap-args.mjs", "backing.mjs", "checkpoints.mjs", "restore-checkpoint.py", ...readdirSync(toolDir).filter(n => n.startsWith("baseline_")).sort()].map((name) =>
       [name, sha256(readFileSync(join(toolDir, name)))])),
     pythonLock: sha256(readFileSync(join(projectDir, "uv.lock"))),
   };
@@ -110,14 +110,25 @@ export async function fetchSource(scenario, sourceDirectory) {
     await git(cache, "remote", "add", "origin", scenario.repository);
   }
   const fetched = await git(cache, "rev-parse", "--verify", "FETCH_HEAD").catch(() => "");
-  if (fetched.trim() !== scenario.revision) {
+  const shallow = (await git(cache, "rev-parse", "--is-shallow-repository")).trim() === "true";
+  if (fetched.trim() !== scenario.revision || shallow) {
     console.log(`Fetching ${scenario.repository} at ${scenario.revision}`);
-    await git(cache, "fetch", "--depth=1", "--no-tags", "origin", scenario.revision);
+    await git(cache, "fetch", "--no-tags", "--no-recurse-submodules", ...(shallow ? ["--unshallow"] : []), "origin", scenario.revision);
   }
+  if ((await git(cache, "rev-parse", "FETCH_HEAD")).trim() !== scenario.revision ||
+      (await git(cache, "rev-parse", "--is-shallow-repository")).trim() !== "false") throw new Error("Pinned source needs complete ancestor history");
   // A FETCH_HEAD alone is not advertised to local clones.
   await git(cache, "update-ref", "refs/heads/source", scenario.revision);
   await git(cache, "symbolic-ref", "HEAD", "refs/heads/source");
   return cache;
+}
+
+export async function completeCheckoutHistory(cwd, cache, revision) {
+  if ((await git(cwd, "rev-parse", "--is-shallow-repository")).trim() === "true") {
+    // Refresh unstarted checkouts without recording the private cache path in FETCH_HEAD.
+    await git(cwd, "fetch", "--unshallow", "--no-tags", "--no-recurse-submodules", "--no-write-fetch-head", cache, revision);
+  }
+  if ((await git(cwd, "rev-parse", "--is-shallow-repository")).trim() !== "false") throw new Error("Prepared checkout needs complete ancestor history");
 }
 
 export async function prepare(manifest, output, sourceDirectory = join(dirname(output), "pi-transcript-sources")) {
@@ -162,6 +173,7 @@ export async function prepare(manifest, output, sourceDirectory = join(dirname(o
       await git(cwd, "config", "commit.gpgSign", "false");
       await git(cwd, "config", "core.hooksPath", "/dev/null");
     }
+    await completeCheckoutHistory(cwd, cache, scenario.revision);
     await git(cwd, "config", "user.name", "Developer");
     await git(cwd, "config", "user.email", "developer@localhost");
     // Local-cache cloning records private host paths/identity in setup reflogs.
@@ -195,7 +207,9 @@ export async function prepare(manifest, output, sourceDirectory = join(dirname(o
     writeJson(join(caseDir, "prepared.json"), {
       scenario, context, tree: (await git(cwd, "rev-parse", "HEAD^{tree}")).trim(),
       preflight: check, pythonEnvironment, toolEnvironment, preparedAt: new Date().toISOString(),
-      checkout: "complete shallow checkout; scoped dependencies as recorded; submodules and full application builds not installed",
+      checkout: scenario.nodeProject === "packages/@expo/env" ?
+        "complete checkout with full pinned-commit ancestor history; locked pnpm workspace install and native @expo/env package gate; submodules and native apps not bootstrapped" :
+        "complete checkout with full pinned-commit ancestor history; scoped dependencies as recorded; submodules and full application builds not installed",
     });
     console.log(`Baseline passed: ${scenario.id}`);
   }

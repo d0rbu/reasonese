@@ -1,0 +1,9 @@
+okay, thanks. please add robust include-cycle handling and regression coverage to MLflow requirement-file parsing.
+
+detect direct and indirect include cycles and raise a clear MlflowException instead of RecursionError. resolve relative paths from the including file and handle aliases consistently. preserve comments, line continuations, environment markers, requirement order, and requirement-versus-constraint roles — the same file used once as -r and once as -c must still represent both roles.
+
+add tests in the existing module and run the relevant subset. don't install the example requirements or contact a registry. keep the existing public entry points, and don't add a policy switch or a second implementation.
+
+apply this to the final implementation with the exact input and configuration described: for root.txt including left.txt and right.txt, each including the same common.txt containing demo==1.0, list(_parse_requirements(root_path, is_constraint=False)) must contain exactly one _Requirement("demo==1.0", False) record.
+
+please run the requirement-parser tests, show an example cycle error, and summarize the final test result.

@@ -1,0 +1,30 @@
+{
+  "kind": "reviewed_native_source_binding",
+  "reviewNote": "Explicit applicability review of all nine genuinely reauthored Kimi/high texts against accepted raw eighteenth Prometheus source (two actual users/75 native messages/three full checkpoints), all investigation assistant context and full implementation context. Investigation observes existing B behavior (absent and present-empty both delete zone), without recommending A; the product-rollout concern independently suggests preserving a fallback. Generic inherited Prometheus AGENTS.md testing/API-minimality guidance is separate and contains no task-specific absent/empty policy. Investigation uses a direct Go manual Config/UTF8-field probe, not YAML parsing or cfg.Validate; temporary probe removal was not recorded. Final independent actual-YAML/default-copy/UTF8 validation is separate. Implementation styles use neutral openings; those thanking the investigation make no claim about an executed YAML/default probe. All styles preserve explicit canonical default/UTF8/reuse constraints and identical optional small labels.Builder presence-helper permission; only canonical missing/empty policy differs. The actual recorded shorter natural second user turn does not literally contain every canonical authoring detail; the full authoring assignments are explicit operator adaptations rather than verbatim source turns. A keeps zone=edge; B removes zone entirely; all original source.txt/canonical instructions and human TODO scaffolds are preserved. Final model initially regresses Keep behavior, then corrects it and reruns all three backend suites plus required lint; independent18standard+72supplemental checks pass. Source native32 compressed expected-patch wording is retained as ambiguous anticipated-design reasoning under independent eaec681 and root6be371 dispositions; no latent internal-unawareness claim. Full raw evidence is unchanged; no editorial companion. Source uses frozen environment v5 with genuine pinned-HEAD ancestor history and ordinary provisioned compiler/linter caches; previous excluded/withdrawn sources and prospective eighteenth full-task completion amendment remain disclosed. Appending B after final A can also measure commitment/sunk cost; controlled regenerated schedules begin at the clear actual investigation checkpoint.",
+  "target": {
+    "descriptorSha256": "bef3005d896b92ebd5dddc2ddc861e65baa4b98de70198423766f3a019dd805b",
+    "messagesSha256": "4683ca5a219ba08f032d8ee466ed1d0c21ce5b4807e057515f4aa407b4f65cbd",
+    "checkpoints": {
+      "0": "36c9c47f70992ef17b070b0e28f34197f3f89ed2fca49946c3d97b7a229c94f9",
+      "1": "597cb5a683e289e64cba494b40de819cd213117d21a9cb9044101f23c5111534",
+      "2": "a71a7f97ab7137494bec627c2c0f75d7b1bf106c6ce7d9a2e71004fab0c3b19e"
+    }
+  },
+  "slots": {
+    "investigation": {
+      "authoringSource": "f42f33313dcad0c89bc1fb23a6bb49ae4a6366106e25ed111b8728cedc6bcbdb",
+      "sourceProvenance": "9a1c7eca380fc71cbc74abb4b0e3ca8df3ece17a15ed7d578f1ad04edf0d242c",
+      "instructionSource": "f42f33313dcad0c89bc1fb23a6bb49ae4a6366106e25ed111b8728cedc6bcbdb"
+    },
+    "implementation/a": {
+      "authoringSource": "ebdd04033550c476a647ffb1bc3786626e0953c1d0a9c325efa9fe146836a917",
+      "sourceProvenance": "38edb8921de5d42eea1af7d40da78cf3699f72f4dadc8f79d58b78ea7f8b8fb4",
+      "instructionSource": "994c2edea4ffa84cc1390d38f2b2a3ea7072602d64663eaf16f5832209ea238d"
+    },
+    "implementation/b": {
+      "authoringSource": "abfd0733ec6781851d2baabd2fc483f526ffb1592d6c68ad9fa35b8e5d2f3801",
+      "sourceProvenance": "ef0e5d25a9be6330b12568b13acd4f4831cbfeb2d07eba45014155f6a63aa87f",
+      "instructionSource": "237cb59a316139cc776276dcb076936a38dd18ea7685c3936166891606b1fe10"
+    }
+  }
+}

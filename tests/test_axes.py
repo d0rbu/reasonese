@@ -32,6 +32,7 @@ def test_axis_values_are_their_display_strings() -> None:
         "Inkling Small",
         "Gemma 4 31B",
         "Nemotron 3.5 Lightning",
+        "Kimi K3.1 Pro",
     ]
 
 

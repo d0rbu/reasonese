@@ -9,6 +9,10 @@ const el = (tag, className, text) => {
 let data, selectedRole = 'all', expanded = false, toastTimer;
 const json = value => JSON.stringify(value, null, 2);
 const number = value => new Intl.NumberFormat('en-US').format(value);
+export function originalCohortUrl(value) {
+  // Archive links stay in a directory on this site, including under previews.
+  return typeof value === 'string' && /^\/(?:[A-Za-z0-9_-]+\/)+$/.test(value) ? value : null;
+}
 function toast(text) {
   $('#toast').textContent = text; $('#toast').classList.add('visible');
   clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').classList.remove('visible'), 2200);
@@ -23,13 +27,37 @@ function inline(text, parent) {
   });
 }
 // Only text and code are rendered. Transcript content is never interpreted as HTML.
-function prose(text) {
+export function prose(text) {
   const node = el('div', 'content-text');
   text.split(/(````[^\n]*\n[\s\S]*?````|```[^\n]*\n[\s\S]*?```)/g).forEach(part => {
     const fence = part.startsWith('````') ? 4 : 3;
     if (part.startsWith('```')) node.append(el('pre', 'code-block', part.slice(part.indexOf('\n') + 1, -fence).replace(/\n$/, '')));
     else part.split(/\n\s*\n/).filter(Boolean).forEach(paragraph => { const p = el('p'); inline(paragraph, p); node.append(p); });
   });
+  return node;
+}
+export function corpusDownload(corpus) {
+  const node = el('div');
+  const download = (label, url) => {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:') throw new Error('Corpus downloads require HTTPS');
+    const link = el('a', '', label); link.href = parsed.href; return link;
+  };
+  if (corpus.kind === 'multipart_archive') {
+    node.append(download('Download full-corpus parts manifest →', corpus.url),
+      el('p', '', `Manifest SHA-256 ${corpus.sha256} · ${number(corpus.bytes)} B`),
+      el('p', '', `Assembled archive SHA-256 ${corpus.archiveSha256} · ${number(corpus.archiveBytes)} B`),
+      el('p', '', `Download all ${corpus.parts.length} parts in the listed order, concatenate their bytes, then verify the assembled archive hash before extraction.`));
+    const parts = el('ol');
+    corpus.parts.forEach((part, index) => {
+      const item = el('li');
+      item.append(download(`Download part ${index + 1} →`, part.url),
+        el('p', 'file-footer', `SHA-256 ${part.sha256} · ${number(part.bytes)} B`));
+      parts.append(item);
+    });
+    node.append(parts);
+  } else node.append(download('Download full corpus →', corpus.url),
+    el('p', '', `SHA-256 ${corpus.sha256} · ${number(corpus.bytes)} B`));
   return node;
 }
 function details(label, text, className) {
@@ -102,6 +130,34 @@ function provenance(label, value, href) {
 async function init() {
   const response = await fetch('data.json', {cache: 'no-store'}); if (!response.ok) throw new Error(`Transcript data: HTTP ${response.status}`);
   data = await response.json();
+  if (data.fixture) $('#scenario-subtitle').textContent = 'Offline exporter fixture; no live model call was made.';
+  if (data.selection) {
+    const note = $('#selection-note'); note.hidden = false;
+    const selection = data.selection;
+    note.append(el('strong', '', 'Selected genuine resample'), el('p', '',
+      `This transcript was selected from ${selection.attempts.length} retained attempts. Selected attempt: ${selection.selectedAttempt}. Selection was conditioned on the criteria below; this is not an unselected sample.`));
+    const criteria = Array.isArray(selection.criteria) ? selection.criteria.join(' · ') : selection.criteria;
+    note.append(el('p', '', `Selection criteria: ${criteria}`), el('p', '',
+      'Screening for verbalized evaluation awareness does not establish the absence of internal awareness. Model messages and provider streams are preserved as captured.'));
+    const attempts = el('ul');
+    selection.attempts.forEach(attempt => attempts.append(el('li', '', `${attempt.id}: ${attempt.status}; retained`)));
+    note.append(attempts);
+    const link = el('a', '', 'Download selection receipt →'); link.href = 'selection.json'; note.append(link);
+    const archive = originalCohortUrl(selection.originalCohortUrl);
+    if (archive) {
+      const original = el('a', 'artifact-link', 'Review the original 12-scenario cohort →');
+      original.href = archive; note.append(original);
+    }
+  }
+  if (data.corpus) {
+    const note = $('#corpus-note'); note.hidden = false;
+    note.append(el('strong', '', 'Full workspace corpus'), el('p', '', data.corpus.notice));
+    if (data.corpus.download) {
+      note.append(corpusDownload(data.corpus.download));
+    } else note.append(el('p', '', 'A full-corpus download URL has not been attached to this page.'));
+    for (const snapshot of data.corpus.snapshots) note.append(el('p', 'file-footer',
+      `${snapshot.name} · ${number(snapshot.bytes)} B · SHA-256 ${snapshot.sha256}`));
+  }
   if (data.normalization) {
     const note = $('#normalization-note'); note.hidden = false;
     note.append(el('strong', '', 'Paths normalized after collection'), el('p', '', data.normalization.notice));
@@ -112,7 +168,7 @@ async function init() {
     note.append(el('p', '', 'The audit flags remaining evaluator speculation and environment restrictions. Read the collection-wide findings at the link below.'));
     const report = el('a', '', 'Read the environment audit →'); report.href = '/kimi-transcripts/environment-audit.html'; note.append(report);
   }
-  const catalogResponse = await fetch('/kimi-transcripts/catalog.json', {cache:'no-store'});
+  const catalogResponse = await fetch(data.catalogUrl ?? '/kimi-transcripts/catalog.json', {cache:'no-store'});
   if (!catalogResponse.ok) throw new Error(`Scenario list: HTTP ${catalogResponse.status}`);
   const catalog = await catalogResponse.json();
   const selected = catalog.scenarios.find(entry => entry.id === data.provenance.scenario.id);
@@ -170,8 +226,11 @@ async function init() {
   $('#patch').textContent = data.patch;
   data.files.forEach(file => {
     const card = el('details', 'evidence-details'); card.append(el('summary', '', file.path), el('pre', '', file.content));
-    const link = el('a', 'action', 'Download file ↓'); link.href = `files/${file.path}`; link.download = file.path.split('/').at(-1);
-    card.append(link, el('p', 'file-footer', `SHA-256 ${file.sha256}`)); $('#files-list').append(card);
+    if (!file.deleted) {
+      const link = el('a', 'action', 'Download file ↓'); link.href = `files/${file.path.split('/').map(encodeURIComponent).join('/')}`; link.download = file.path.split('/').at(-1);
+      card.append(link, el('p', 'file-footer', `SHA-256 ${file.sha256}`));
+    }
+    $('#files-list').append(card);
   });
   $('#repo-context').textContent = data.provenance.context.content;
   $('#system-prompt').textContent = data.system;
@@ -187,7 +246,7 @@ async function init() {
   provenance('User-message author', 'Codex operator · adaptive, not a human session log');
   provenance('Original transcript SHA-256', data.outcome.messagesSha256);
   if (data.normalization) provenance('Edited messages SHA-256', data.normalization.messagesSha256);
-  provenance('Environment', 'Prepared task dependencies; network-isolated tools');
+  provenance('Environment', 'Prepared task dependencies; native tool execution');
   data.artifacts.forEach(artifact => { const a = el('a', 'artifact-link'); a.href = `evidence/${artifact.name.split('/').map(encodeURIComponent).join('/')}`; a.download = artifact.name.split('/').at(-1); a.append(el('span', '', artifact.name), el('small', '', `${number(artifact.bytes)} B ↓`)); $('#artifact-list').append(a); });
   $('#search').addEventListener('input', renderTimeline);
   $$('.filters button').forEach(button => button.addEventListener('click', () => { selectedRole = button.dataset.role; $$('.filters button').forEach(b => { b.classList.toggle('selected', b === button); b.setAttribute('aria-pressed', String(b === button)); }); renderTimeline(); }));
@@ -196,4 +255,4 @@ async function init() {
   document.addEventListener('keydown', e => { if (e.key === '/' && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) { e.preventDefault(); location.hash = 'transcript'; $('#search').focus(); } });
   renderTimeline(); changeTab();
 }
-init().catch(error => { $('#error').hidden = false; $('#error').textContent = error.message; });
+if (typeof document !== 'undefined') init().catch(error => { $('#error').hidden = false; $('#error').textContent = error.message; });

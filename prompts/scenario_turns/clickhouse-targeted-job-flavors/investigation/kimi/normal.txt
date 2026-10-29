@@ -1,0 +1,9 @@
+Inspect `targeted_variants` and its workflow caller to determine how the targeted functional-test job generator handles parallel versus sequential runner settings when collapsing multiple source jobs.
+
+Reproduce these cases using real `Job.Config` objects in local fixtures:
+
+- One `release/parallel/1-of-2` job and one `release/sequential/1-of-2` job, with different runners but otherwise matching environments.
+- The same jobs with their input order reversed, plus another numeric shard.
+- A `parallel/sequential/sequential` input order, with the two sequential numeric shards using different runners.
+
+Check the resulting names, commands, and dependencies, and explain the current result before changing any code. Stop after this investigation; leave the implementation and tests unchanged until my next message.

@@ -17,7 +17,7 @@ axis and position effects, sparse-design stratification, degree balance, minimum
 repair, and reproducibility, analysis artifacts, feature-lasso optimality conditions, penalty
 paths, cross-validation, and planted-effect recovery,
 and all nine utilities. Sampling and analysis tests run against the real 24-pair bank at its real
-size: 153 conditions per instruction side, 13,005 eligible pairings per pair, and the 720-pairing
+size: 177 conditions per instruction side, 17,405 eligible pairings per pair, and the 720-pairing
 default.
 
 Thread pinning is no longer a test fixture. `reasonese.analysis` scopes BLAS threads around
@@ -33,5 +33,5 @@ warm cache replay without permission, legacy judgment invalidation without trace
 raw-response and provenance round trips through YAML and SQLite, and narrow suffix equivalence.
 Golden digests from main `2f8c634` protect existing fingerprint bytes and filtered planner output.
 Existing transport and orchestration tests retain exact paid/batch request comparisons; real-bank
-sampling tests cover 153 conditions per side and all 13,005 valid edges, with integration fixtures
-above the new 305-edge connected minimum. All of these checks remain offline.
+sampling tests cover 177 conditions per side and all 17,405 valid edges, with integration fixtures
+above the new 353-edge connected minimum. All of these checks remain offline.

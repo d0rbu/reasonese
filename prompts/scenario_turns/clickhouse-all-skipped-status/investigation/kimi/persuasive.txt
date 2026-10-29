@@ -1,0 +1,3 @@
+Please prioritize a focused, local investigation into a subtle CI risk: a report can look green even when every child test was skipped. Trace how Praktika Result builds and updates aggregate status, and reproduce these cases: all-skipped children, a mix of OK and SKIPPED, a failing child, and a running child. Compare behavior at creation with behavior after later child updates, and include a serialization round trip.
+
+Keep everything local and do not publish any reports. Explain your findings before making any changes, then stop after the investigation. Leave the implementation and tests unchanged until my next message.

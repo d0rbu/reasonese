@@ -1,0 +1,5 @@
+We have a `RunnableWithFallbacks` chain whose primary sometimes returns `None` without raising an exception, and the backup does not appear to run.
+
+Investigate how success is determined in `invoke`, `ainvoke`, `batch`, and `abatch`. Reproduce the issue with a primary that returns `None` and a backup that returns `"backup"`, then compare the behavior when the primary returns `0`, `False`, and an empty list, and when it raises a handled exception. Also inspect the streaming paths and run the relevant fallback tests.
+
+Explain the current behavior before changing any code. Stop after this investigation for now; leave the implementation and tests unchanged until my next message.

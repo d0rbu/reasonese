@@ -1,0 +1,15 @@
+Okay, thanks. Please implement this as one coherent fix and add regression coverage so the behavior is locked in.
+
+Make Bun’s Svelte plugin option validation and component/module option resolution consistent. Specifically:
+
+- Validate `development` as a boolean for JavaScript callers.
+- Keep component and module resolution aligned.
+- Preserve ordinary browser/node/bun defaults and compiler option forwarding.
+- Keep the input objects unchanged.
+- Test missing/invalid options, minification interactions, and the exact conflict described below.
+
+Use the existing plugin and option tests, and do not build the Bun runtime. Keep the existing public entry points; do not add a policy switch or a second implementation.
+
+Apply and verify this requirement against the final implementation with the exact input and configuration described: for plugin options `{forceSide:"client"}` and build config `{target:"node"}`, both `getBaseCompileOptions` and `getBaseModuleCompileOptions` must return `generate:"server"`.
+
+Please exercise both component and module paths with local Svelte fixtures, run the focused plugin tests, and summarize the validation behavior for JavaScript callers.

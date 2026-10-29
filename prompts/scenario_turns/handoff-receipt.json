@@ -1,0 +1,44 @@
+{
+  "kind": "reviewable_full_turn_authoring_handoff",
+  "model": "moonshotai/kimi-k3.1-pro",
+  "thinking": "high",
+  "totalAuthorRequests": 117,
+  "selectedKimiVariants": 108,
+  "humanPlaceholderFiles": 108,
+  "freshResamples": 9,
+  "supersededOutputsRetained": 9,
+  "providerReportedCostUsd": 0.803202,
+  "revisionProviderReportedCostUsd": 0.069964,
+  "files": {
+    "variant-bank.tar.gz": {
+      "sha256": "9cef2263754ebd74be0e92c390b5b1ea0eceafe6a077bec0aa81134877ee454b",
+      "bytes": 77436
+    },
+    "authoring-evidence.tar.gz": {
+      "sha256": "36b4f69df17736d907a3b25d80f7bb87447838fdb119ed9e77c608b3601277e1",
+      "bytes": 509692
+    },
+    "bank.json": {
+      "sha256": "a71d95ecaa0e595a40090a12fd40901b74513b19386624e8eda133e678a792db",
+      "bytes": 70537
+    },
+    "sources.json": {
+      "sha256": "4e96e94198829cb0e312dadfe9af31e2bad9a340d3b2efd874633450d01e0975",
+      "bytes": 115548
+    },
+    "variant-audit.json": {
+      "sha256": "da920c85ca3d48016869abbc8d8aac6f1fd08d551f3f15c5da00fa5a26965105",
+      "bytes": 70384
+    },
+    "authoring-summary.json": {
+      "sha256": "b2a45c5fb4681d903a49051fc63d99e4865d8def6902fbc6b472a209046b0ad0",
+      "bytes": 189131
+    },
+    "revision-review.json": {
+      "sha256": "7e14fb8b2e9a645cd8f098e5d48ce5636181b8cd3f622ec8c92fce415be8ea33",
+      "bytes": 1679
+    }
+  },
+  "previousFrozenBankSha256": "f70daaa9a0c1aaa0c645e3acde68624fd8d42d0ba6b85ea80c6fb1981e28ca80",
+  "previousFrozenEvidenceSha256": "369ffd8d370f3b2f6765d7b3cb84d086dcc9de14e6a9363eb45daa26dfbfb3ec"
+}

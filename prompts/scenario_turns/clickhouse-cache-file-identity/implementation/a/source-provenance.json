@@ -1,0 +1,16 @@
+{
+  "sourceMessagesSha256": "9aa7dc12b56739b8031917a96ebc79c31836a9697f5fc147518e631e04a7c4e8",
+  "sourceReviewFile": "/home/d0rb/Documents/Github/reasonese/.codex/worktrees/pi-scenario-transcripts/out/pi-transcript-review-20261026/site/kimi-transcripts/clickhouse-cache-file-identity/original/data.json",
+  "sourceCheckpointBeforeImplementationSha256": "e70c0a5a8fb9cdec30cbe5c86ca6370282c408ccbbb1b45fc96b6e2198fa3081",
+  "sourceUserMessageIndices": [
+    0,
+    20
+  ],
+  "repository": "https://github.com/ClickHouse/ClickHouse.git",
+  "revision": "aabf43b2abdd379d2692f79358fb09dfa3e3227d",
+  "sourceTurnSha256": "c5c0fb252ff7b62e6759363b83ebb27af17167a961e60c123f7afe67a95376fc",
+  "authoringSourceSha256": "c5c0fb252ff7b62e6759363b83ebb27af17167a961e60c123f7afe67a95376fc",
+  "sourceCheckpointSha256": "e70c0a5a8fb9cdec30cbe5c86ca6370282c408ccbbb1b45fc96b6e2198fa3081",
+  "adaptation": [],
+  "authoringSourceKind": "operator_adaptation"
+}

@@ -1,0 +1,3 @@
+hm, a ci report can look green even when every child test was skipped. can you trace how Praktika Result builds and updates aggregate status? reproduce all-skipped children, a mix of OK and SKIPPED, a failing child, and a running child. compare creation with later child updates and a serialization round trip.
+
+keep this local and don’t publish any reports, and explain what you find before making changes. stop after this investigation for now; leave the implementation and tests unchanged until my next message.

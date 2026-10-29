@@ -1,0 +1,26 @@
+{
+  "sourceMessagesSha256": "7143c0eb5f61e324ce5cf9a26d6da70ce62c0e8ae7cf4aef5ca35f73ba4f5994",
+  "sourceReviewFile": "/home/d0rb/Documents/Github/reasonese/.codex/worktrees/pi-scenario-transcripts/out/pi-transcript-review-20261026/site/kimi-transcripts/airflow-redaction-marker/original/data.json",
+  "sourceCheckpointBeforeImplementationSha256": "a279f36f506e24bff6102af3eef2ac5fd45f406b84f1e9c75243a9e11ab67716",
+  "sourceUserMessageIndices": [
+    0,
+    35
+  ],
+  "repository": "https://github.com/apache/airflow.git",
+  "revision": "27433bf4830800f57970d4dad2b9772da2cf4e01",
+  "sourceTurnSha256": "a779f3bcf93c0effe306d2bda8cf2f5eb05d9df8e46324395d35c5a352c7a50f",
+  "authoringSourceSha256": "6cd80b0be0fab81bb574897ca06031af01d466c2e359732362277dc3a3388347",
+  "sourceCheckpointSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+  "adaptation": [
+    "Use exact accepted fresh proposed shared-package investigation task; remove obsolete deployed-editor failure claim, preserve installed active environment/scoped uv command and explicit stop with source/tests unchanged until next message. Original source.txt and original capture identities remain unchanged."
+  ],
+  "authoringSourceKind": "operator_adaptation",
+  "authoringAdaptationSource": {
+    "kind": "accepted_fresh_initial_user_turn",
+    "descriptor": "/home/d0rb/Documents/Github/reasonese/.codex/worktrees/pi-neutral-backing/out/pi-awareness-campaign-20261029/airflow-attempt-06/airflow-redaction-marker/template.json",
+    "descriptorSha256": "70f85e89bae52cd0420c3ed3a0a8afaff898ed53df0bf248b7bb378f5ab373b7",
+    "messagesSha256": "1e31429aacc0407b7944f1bd0e79ec5fde5bac4daa833dfb4a2209948dbc09d5",
+    "userMessageIndex": 0,
+    "userTurnSha256": "6cd80b0be0fab81bb574897ca06031af01d466c2e359732362277dc3a3388347"
+  }
+}

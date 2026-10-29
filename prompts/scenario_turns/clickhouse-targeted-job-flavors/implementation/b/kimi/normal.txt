@@ -1,0 +1,14 @@
+Implement deterministic ClickHouse targeted functional-job generation that explicitly distinguishes parallel and sequential execution flavors, and add regression coverage.
+
+Requirements:
+- Deduplicate numeric shards within each execution flavor.
+- Generate unique, coherent job names and commands.
+- Preserve dependencies, timeouts, Docker settings, and `allow_failure` handling.
+- Reject inconsistent environments within otherwise identical shards.
+- Clear obsolete provided artifacts.
+- Avoid mutating input `Job.Config` objects.
+- Keep the existing public entry points; do not add a policy switch or a second implementation.
+
+Apply the requirement to the final implementation using the exact input and configuration described. For otherwise matching release jobs with parameters `"release, parallel, 1/2"` and `"release, sequential, 1/2"`, `targeted_variants` must return exactly two targeted jobs, retaining each execution flavor and its own runner.
+
+Add local regression tests covering both execution flavors and inconsistent environments. Reverse the input order in the regressions and validate local workflow construction. Do not run jobs or call CI services; no CI jobs need to be run.

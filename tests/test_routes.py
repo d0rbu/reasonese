@@ -342,7 +342,7 @@ def test_exact_legacy_fingerprint_and_filtered_planner_bytes() -> None:
         prompt_spec_to_dict(spec)
         for pair in build_pair_specs(load_instruction_pairs(Path("configs/instruction_pairs.yaml")))
         for spec in pair.first + pair.second
-        if spec.author not in (Author.GEMMA_4_31B_IT, Author.NEMOTRON_3_5_LIGHTNING)
+        if spec.author not in (Author.GEMMA_4_31B_IT, Author.NEMOTRON_3_5_LIGHTNING, Author.KIMI_K3_1_PRO)
         and spec.framing not in (Framing.COMPRESSED_NORMAL, Framing.COMPRESSED_PERSUASIVE)
     ]
     assert (

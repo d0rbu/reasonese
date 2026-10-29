@@ -1,0 +1,13 @@
+Implement explicit ClickHouse Praktika cache digest behavior across job and Docker inputs, with regression coverage for both `calc_job_digest` and `calc_docker_digest`.
+
+The digests must:
+- Remain stable across equivalent checkout locations and input enumeration order.
+- Preserve include/exclude handling.
+- Detect content changes.
+- Distinguish two file collections whose concatenated bytes happen to match.
+
+Cover symlinks and missing targets without reading outside the temporary fixture. Do not change the cache-key format or touch real CI storage. Keep the existing public entry points, and do not add a policy switch or a second implementation.
+
+Apply the requirement to the final implementation with the exact input and configuration described: for an otherwise identical `src` tree and job configuration, renaming `src/a.txt` to `src/b.txt` with unchanged bytes must change the digest.
+
+Run the focused tests, then summarize what changed and anything still unresolved.

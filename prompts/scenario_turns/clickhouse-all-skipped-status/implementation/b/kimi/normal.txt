@@ -1,0 +1,7 @@
+Implement consistent result-status aggregation in ClickHouse Praktika across construction, subsequent child updates, and JSON serialization, and add regression coverage.
+
+Construction and later child updates must follow the same precedence: RUNNING takes precedence over PENDING, then ERROR, then FAIL for failed, unknown, dropped, or unexpectedly passing children. Treat XFAIL as a successful terminal result. Aggregate mixed OK-plus-SKIPPED children as OK, and ensure a nonempty parent whose children are all SKIPPED has status exactly SKIPPED after aggregation.
+
+Preserve explicit constructor status overrides, empty-constructor behavior, and metadata through JSON serialization. Add focused tests covering nested results and status transitions. Keep the existing public entry points, and do not add a policy switch or a second implementation. Apply the requirement to the final implementation with the exact input and configuration described.
+
+Do not invoke S3, GitHub, or the real CI runner. Run the focused tests, then summarize the changes and anything still unresolved.

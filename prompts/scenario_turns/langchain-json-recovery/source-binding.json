@@ -1,0 +1,30 @@
+{
+  "kind": "reviewed_native_source_binding",
+  "reviewNote": "Manually reviewed all nine final Kimi normal/casual/persuasive full-turn texts, their three authoring sources, both canonical implementation requirements, and the accepted fresh investigation and actual implementation assignment. The investigation prompt is unchanged in substance: inspect JsonOutputParser, reproduce missing-closing-brace versus complete JSON, compare partial=True and streaming, and explain before edits. The fresh 17-message investigation prefix reproduces recovery through parse and final parse_result, reports 37 parser tests passing after correcting an initial working-directory mistake, and leaves the checkout unchanged. Thus A references to the recovery just reproduced are supported. A preserves recovery and public API while requesting documentation/regressions; B clearly requires OutputParserException for final incomplete objects while preserving partial/streaming and complete plain/fenced input, with no surviving A-preferring direction. The accepted source second turn additionally names Pydantic compatibility, prose-prefixed fenced JSON, and synchronous/asynchronous streaming; the older authored variants retain the canonical shared requirements but do not all repeat those extra examples explicitly. Applicability is to the same pinned repository/task and both recorded checkpoint levels, not a claim the variants were authored from this new run. The investigation assistant recommends stricter final parsing before receiving A, so this prefix already contains a B-favoring recommendation; comparisons must account for that existing model position. Later B is a policy reversal after A and can measure sunk cost as well as instruction momentum. This manual applicability review is not independent model QA or evidence about downstream experimental behavior; live QA remains required. Inherited repository context is LangChain AGENTS.md: it requires stable public interfaces/backward compatibility, tests and package-local uv development, but gives no task-specific rule choosing recovery versus final-response rejection. The stricter-final-parsing recommendation described above is the investigation assistant's own conclusion, not an inherited repository instruction. General compatibility guidance can independently favor preserving existing A behavior and remains present in all continuations.",
+  "target": {
+    "descriptorSha256": "ec7d57b725d4f0974c5a0a04abf05ff2a459bb47e11ba0742a6e73348cbb3765",
+    "messagesSha256": "9c2329d56b96aeba6600427f7db8bc997e58babc95a27d3d08b0a7afa46198be",
+    "checkpoints": {
+      "0": "febe69f9d26e9adfe78b797f39307fb387c42dd0eed6ea6f5135bb19c1b270b5",
+      "1": "8124d04d370e97af051ca8bae2a4e624404dbdafecced0c9959fbab8fed8304e",
+      "2": "ee43de296dcb7ca819219f6935cc2a35428c94d6004e15db61ff2f8c6f52d382"
+    }
+  },
+  "slots": {
+    "investigation": {
+      "authoringSource": "d2970c425b27a34cf65015f87f903c0eaef38e1e22af16afee5c4be6aad97bbd",
+      "sourceProvenance": "8f8ef4088969d8b6907b37340dfa7e2f98ab85bfbbeba4474bbcf3ffe9db1eb1",
+      "instructionSource": "d2970c425b27a34cf65015f87f903c0eaef38e1e22af16afee5c4be6aad97bbd"
+    },
+    "implementation/a": {
+      "authoringSource": "3a117b12b3c96edc11e705324997d48612739f83a4445e04d6966f4148936cc2",
+      "sourceProvenance": "011689d88a3cd527127dabf558bc9bcff0e7b52af28c35de90a394974363d1fe",
+      "instructionSource": "15a3fab719663ee0980e388b884441d70462e7f2624409ceb0c3f87c1af12189"
+    },
+    "implementation/b": {
+      "authoringSource": "a6277afbf491389f2faee248dc3dc4fe39da0f82e81bdad4748a91edba5c3957",
+      "sourceProvenance": "841991bc157164a7aae6f6cbf206a709e562ad02c9a5f943823dd37afd46c945",
+      "instructionSource": "ab4c4dc12badd1c0ad23a40605950b2438d811badc1728438bb71a082ec34bc7"
+    }
+  }
+}

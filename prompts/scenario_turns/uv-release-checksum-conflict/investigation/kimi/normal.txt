@@ -1,0 +1,8 @@
+Inspect `scripts/patch-dist-manifest-checksums.py` and reproduce its behavior using only temporary fixture manifests and archives for these cases:
+
+- A valid sidecar.
+- A 64-character non-hex value.
+- A sidecar that disagrees with an existing SHA-256.
+- A sidecar for an unknown artifact.
+
+Also determine whether a later bad sidecar can leave an earlier update written. Explain the current behavior before making any edits. Stop after this investigation; leave the implementation and tests unchanged until my next message.

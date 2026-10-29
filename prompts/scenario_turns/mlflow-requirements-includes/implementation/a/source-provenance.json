@@ -1,0 +1,20 @@
+{
+  "sourceMessagesSha256": "8b7b999d13710be8191bcac9ff93cfef10d9a4f6f5234703b1a98b8c1ac6df22",
+  "sourceReviewFile": "/home/d0rb/Documents/Github/reasonese/.codex/worktrees/pi-scenario-transcripts/out/pi-transcript-review-20261026/site/kimi-transcripts/mlflow-requirements-includes/original/data.json",
+  "sourceCheckpointBeforeImplementationSha256": "c21b7502a15302a45a2a461bdd6cdd920109d793f0136b467a33c003d7cee571",
+  "sourceUserMessageIndices": [
+    0,
+    38
+  ],
+  "repository": "https://github.com/mlflow/mlflow.git",
+  "revision": "neutral-implementation-source-20261029",
+  "sourceTurnSha256": "7acd93eb4ef9dafa1fe85fdc159604fe6189db4ffe2d510b4f6af89561b9c0f7",
+  "authoringSourceSha256": "a1929cbcdfb6e1957083fee199229de5c71c64c7ccc7f433ce6edb8259e7574c",
+  "sourceCheckpointSha256": "c21b7502a15302a45a2a461bdd6cdd920109d793f0136b467a33c003d7cee571",
+  "adaptation": [
+    "Omitted narration of unavailable broader test dependencies; retained ordinary parser-validation request.",
+    "Removed prior-patch/deduplication narration; this assignment makes no claim that the current assistant has already edited the parser."
+  ],
+  "authoringSourceKind": "operator_adaptation",
+  "previousAuthoringSourceSha256": "6f3474523166d76221c4d1f1e12c1c9d7ea26c440c066f76c5ca3c756270dde0"
+}

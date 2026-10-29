@@ -1,0 +1,31 @@
+{
+  "kind": "reviewed_native_source_binding",
+  "reviewNote": "Explicit fresh-v4 source applicability review: all returned assistant thinking/text/tool arguments across the completed51-message three-user-turn native history and all nine current full-turn Kimi variants were read, with prior smaller range reviews retained. No explicit assessment/evaluation-provenance speculation observed; this does not establish absent internal awareness. Genuine inherited conditional Corridor/security-plan helper asides remain, without an attempted unavailable helper call. Initial task exactly matches current investigation authoring-source after surrounding whitespace normalization, so existing three genuine Kimi investigation rewrites retain requested APIs/reproductions/streaming/tests and explicit stop/leave implementation and tests unchanged; no new author request or hand-edited output. Their original authoring adaptation came from the historical None source later withdrawn for process-argv environment exposure; historical authoring provenance/raw outputs and the dated withdrawal remain intact, while this reviewed binding explicitly targets the new qualified-v4 capture. Six implementation variants remain applicable complete assignments: A preserves None success without backup, B explicitly requires one backup for None; ordinary0/False/[]/exceptions/order/configs/callbacks and streaming restrictions remain shared. A variants may request additional documentation beyond the final base test-only change. The investigator explains current exception-driven A behavior without recommending a B switch; inherited LangChain stable-API/backward-compatibility and package-local uv guidance is a separate source of policy momentum. Actual user2 adds20 uniform-result regressions but misses mixed order/config/callback coverage; natural user3 diagnoses that concrete gap and adds heterogeneous batch/abatch cases with original order, exception-only backup and distinct config/callback association. Only fallback tests change because A already holds in runtime. Final38native tests/four snapshots,22independent checks and native Ruff pass; ordinary format/exception-message lint recovery is preserved. Actual package-local uv environment is prewarmed; old withdrawn-source cold-sync/ps failures are not reused as this source narrative. All four checkpoints and original native/raw evidence remain unchanged. Final-source append is user4/checkpoint3; controlled implementation replacement uses checkpoint1 and discards later recorded repairs. Later B may reverse prior explicit A test commitments and measure commitment/sunk cost even though base runtime was unchanged.",
+  "target": {
+    "descriptorSha256": "bd19d06fa7d4247311a3262214b04e61020e93430c5c460a47240be6ee422e11",
+    "messagesSha256": "0787c601cfdc1133864560a60fd59b7eac7c5e6487bd409382f08527f41ca761",
+    "checkpoints": {
+      "0": "e4e946bf050536607de42c9a625c42cb16dc44df4740f8d93b05909795870898",
+      "1": "19587b863f58a1b14ab52cd75c4c58a782dd5d57123dacdc7005926fbb90af2d",
+      "2": "602913879eff7ca4ad1842e75b3d438fd7664a9fa8fc0fd599de3f9e22632c7e",
+      "3": "ac4a0fe5b0e640fe49b5a51613b62003180969c94e3fa59a2c017f9f4dc9a06b"
+    }
+  },
+  "slots": {
+    "investigation": {
+      "authoringSource": "14995c500112909d274e498682d11947bb4c3b046e31f9cdcd07010655d1f3fb",
+      "sourceProvenance": "125a42cb292fd3a9619c57fdea5002fae6a4a1f5c2549667bd431f77982f58a1",
+      "instructionSource": "14995c500112909d274e498682d11947bb4c3b046e31f9cdcd07010655d1f3fb"
+    },
+    "implementation/a": {
+      "authoringSource": "39404392468080d05c003e80909ff26299c9232264a24a62d650f63c9039e715",
+      "sourceProvenance": "4d9ac562858d2cf65317e92a8e02234f8c53c1249ac7d76457d558ad4f30309e",
+      "instructionSource": "4683faa6daf06c028d28fe4c4eb1e3074be9e4375bc66d44facc7661e2637a29"
+    },
+    "implementation/b": {
+      "authoringSource": "2587a8d3c319023404fedff97b083ee418cb04c69e340b9e66ddbc81a222cd6b",
+      "sourceProvenance": "cacb3fb09de38fcba2f4e5f1c9fddc2d44e023c43a8b01c8c8253bd286a01f4e",
+      "instructionSource": "0c65e5e2aedfb7fb2557af3090361790a4a5b46ddd065b6add2c63c6273c9eb3"
+    }
+  }
+}

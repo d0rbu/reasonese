@@ -1,0 +1,2576 @@
+{
+  "kind": "pi_native_source_catalog",
+  "status": "reviewed_selected_sources",
+  "assistant": {
+    "display": "Kimi K3.1 Pro",
+    "model": "moonshotai/kimi-k3.1-pro",
+    "thinking": "high",
+    "piVersion": "0.73.1"
+  },
+  "selection": "Genuine first-requirement-only Pi sessions selected for scoped task completion and absence of observed verbalized evaluation awareness after lexical and contextual review. Adaptive task/setup corrections and screens preclude estimating unselected prevalence or claiming causal environment effects. Originals, failed attempts and post-freeze withdrawals remain retained separately.",
+  "usage": "Context-only downloads support reading and authoring. Full source downloads include checkpoint archives; matching immutable runtimes are still required. Downloading and planning make no model calls. Human placeholders are offline-only; live execution requires exact-text message QA and separate authorization.",
+  "promptBank": {
+    "path": "prompts/scenario_turns",
+    "humanPrimaryImplementationSlots": 72,
+    "humanOptionalInvestigationSlots": 36,
+    "kimiWrittenSlots": 108
+  },
+  "artifacts": [
+    {
+      "scenario": "airflow-redaction-marker",
+      "sha256": "9dc24cb0f1423b1d66d858808d09ade9fbccdabc5ef975cf0488aad89c167f93",
+      "bytes": 738274072,
+      "sourceDescriptorSha256": "70f85e89bae52cd0420c3ed3a0a8afaff898ed53df0bf248b7bb378f5ab373b7",
+      "sourceMessagesSha256": "1e31429aacc0407b7944f1bd0e79ec5fde5bac4daa833dfb4a2209948dbc09d5",
+      "contextOnlyBundle": {
+        "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/airflow-redaction-marker.context.tar.gz",
+        "sha256": "49029c423b787fd92a5117c76757835c0fdc7702dbbd3a7a1e90be7729a0c59c",
+        "bytes": 15713056
+      },
+      "parts": [
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/airflow-redaction-marker.source.tar.gz.part-0001",
+          "sha256": "df408e9b6344185e46dd65121ca0b955cf2678121e213f55cd0fb8a70391bcc9",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/airflow-redaction-marker.source.tar.gz.part-0002",
+          "sha256": "8aabcd18e49f1626d065d25083ce6a2932374a469375ec7c07d1b7f245226e25",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/airflow-redaction-marker.source.tar.gz.part-0003",
+          "sha256": "c208aa526f941298cf87ca857b72cc7307ce6b255e5f66a83da3d82b1dea4f06",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/airflow-redaction-marker.source.tar.gz.part-0004",
+          "sha256": "3ebda7143fbe8c7fb3b576d9649c6b3ebe20f5c62e0d2fea06063a82e67b8ce6",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/airflow-redaction-marker.source.tar.gz.part-0005",
+          "sha256": "c34b2d861dc2721f556a3d7f80b8a3cd8ba9da8f26b67622639836a27fd37f5e",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/airflow-redaction-marker.source.tar.gz.part-0006",
+          "sha256": "70ac427d732a76ef67d6e5e35f04b955ec325807a2d4bcfb597d29038bc48c3b",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/airflow-redaction-marker.source.tar.gz.part-0007",
+          "sha256": "00c3f5256d39779f70afbcc647874c49eb86c3f67dff5ec4efd6be21b64a29a6",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/airflow-redaction-marker.source.tar.gz.part-0008",
+          "sha256": "4677c996c92052a1736fa15fb061c80472bc0ff211486db2f1b8bfba0f38c8ba",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/airflow-redaction-marker.source.tar.gz.part-0009",
+          "sha256": "4508ac5c5d7adf50353f288cd795de8ddbcdbdc175c76a4ba02b8e2207e1670f",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/airflow-redaction-marker.source.tar.gz.part-0010",
+          "sha256": "c767b751d1157710ccab6dfeed8050a6c4b8ce43ce3efabce888caa39e65f1ef",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/airflow-redaction-marker.source.tar.gz.part-0011",
+          "sha256": "86f461eed6787478e8eba3d2b753adcc9919190d34a114142472a0738bf419c8",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/airflow-redaction-marker.source.tar.gz.part-0012",
+          "sha256": "6da08b43acb1d713da89257b3c15faf29e59920ede3346e1ffc32d8094d9716c",
+          "bytes": 76568
+        }
+      ],
+      "sourceUserTurns": 2,
+      "finalUserTurn": 2,
+      "investigationCheckpoint": 1,
+      "sourceBinding": {
+        "path": "prompts/scenario_turns/airflow-redaction-marker/source-binding.json",
+        "sha256": "ad634d78b133327bfc5f29abfb1db551af55a2f5487e219f26b88390e3649a75"
+      },
+      "captureEnvironmentVersion": 2,
+      "captureCode": {
+        "commit": "ee348d13d4ad422bc8f8630114ac7cbcc13fb15a",
+        "tree": "aa7657a518f0384195f9be2f47f39b4dcfcc638d"
+      },
+      "sourceLimits": {
+        "maxModelCalls": 80,
+        "maxOutputTokens": 8192,
+        "maxRequestBytes": 400000,
+        "timeoutSeconds": 2400,
+        "toolTimeoutSeconds": 120,
+        "maxUserTurns": 4
+      }
+    },
+    {
+      "scenario": "bun-svelte-target-precedence",
+      "sha256": "9e818fe42317c2142aedbb9cbc0cce4a279dd5a8e88f67a99e7806cc6ae9feac",
+      "bytes": 741005852,
+      "sourceDescriptorSha256": "d008f02b3ddd42e327d32752c5b688a8d82ffd01fba2dc40fec4f99006d93a24",
+      "sourceMessagesSha256": "cb05f5f8681306d36c713dfe1e720cf46b892e2b6ca1641c016760f4239422ea",
+      "contextOnlyBundle": {
+        "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/bun-svelte-target-precedence.context.tar.gz",
+        "sha256": "98afe850d01424ec202f61be820c0121682d37915458a9f0fc05b526ba4ca563",
+        "bytes": 9646523
+      },
+      "parts": [
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/bun-svelte-target-precedence.source.tar.gz.part-0001",
+          "sha256": "79200b9674e09a6dfc2caf4e094c549152245cd3a87327d6f7dabb5be55197eb",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/bun-svelte-target-precedence.source.tar.gz.part-0002",
+          "sha256": "68f672f758e658490f3c44273a057c7ecc807f916e1ff4cfceb81d4accdf83ef",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/bun-svelte-target-precedence.source.tar.gz.part-0003",
+          "sha256": "de4f7a4cbf5cfba80c9abf9fb1867770bab42938c094243510a131b8849cc822",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/bun-svelte-target-precedence.source.tar.gz.part-0004",
+          "sha256": "97d6358599a7e4a479700c2c701694b99eab43bcbf871e65b00fdf293c578a6b",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/bun-svelte-target-precedence.source.tar.gz.part-0005",
+          "sha256": "59f7e9cebd29972dd7b0ba7340074dee9fdce22b51e4809ddb0c98e873c1884c",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/bun-svelte-target-precedence.source.tar.gz.part-0006",
+          "sha256": "5db567a9149fc9e67f643cb4c78e22039408e456f1f0867febc24966e0f3716c",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/bun-svelte-target-precedence.source.tar.gz.part-0007",
+          "sha256": "e2370766b07e490095ea8ae5334172e82bf12b27f8f6d659e6b73b3ee8849b31",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/bun-svelte-target-precedence.source.tar.gz.part-0008",
+          "sha256": "162c29f6fef907c86e89adc049cfdec8e6ea08213ef345b0237e881f90359093",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/bun-svelte-target-precedence.source.tar.gz.part-0009",
+          "sha256": "9f1b1b57889d27bed57af18f742d0151b4e07480b7983d73556da3de73907658",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/bun-svelte-target-precedence.source.tar.gz.part-0010",
+          "sha256": "7a538c26e17c1428593d5ad9e7d4987081a848a515b309d6028241e36392ffa6",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/bun-svelte-target-precedence.source.tar.gz.part-0011",
+          "sha256": "d021c491425a67559c50edaec110524fceb3e39a34d15437eaf6898dae2e855e",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/bun-svelte-target-precedence.source.tar.gz.part-0012",
+          "sha256": "eeebeb6aceac47ebede3448651b4d8349648cb6bd80165a996c5937a7478a85b",
+          "bytes": 2808348
+        }
+      ],
+      "sourceUserTurns": 2,
+      "finalUserTurn": 2,
+      "investigationCheckpoint": 1,
+      "sourceBinding": {
+        "path": "prompts/scenario_turns/bun-svelte-target-precedence/source-binding.json",
+        "sha256": "a6969259c417bdd6168ca161679f43e9f02f8c9c7e26595fc4b0964ce37afd4f"
+      },
+      "captureEnvironmentVersion": 2,
+      "captureCode": {
+        "commit": "ee348d13d4ad422bc8f8630114ac7cbcc13fb15a",
+        "tree": "aa7657a518f0384195f9be2f47f39b4dcfcc638d"
+      },
+      "sourceLimits": {
+        "maxModelCalls": 80,
+        "maxOutputTokens": 8192,
+        "maxRequestBytes": 400000,
+        "timeoutSeconds": 2400,
+        "toolTimeoutSeconds": 120,
+        "maxUserTurns": 4
+      }
+    },
+    {
+      "scenario": "clickhouse-all-skipped-status",
+      "sha256": "b1ff711fbb52f35dce5d7b67be19da0a331140649854f398ac383440390b1591",
+      "bytes": 3239047884,
+      "sourceDescriptorSha256": "548d072d1ad183ef8099dd3f1f6b8f8c0ea7979f1f9726b6491e327773a485d9",
+      "sourceMessagesSha256": "ae531996a487b25f92e6bcc990b4750e6ab33e3a2c7ff6ebe05e8314c27f4073",
+      "contextOnlyBundle": {
+        "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.context.tar.gz",
+        "sha256": "0bd59087baaf1b5dc381d3eae85dbd3b21148f05db97faf3a9e3d00e6533280c",
+        "bytes": 6297523
+      },
+      "parts": [
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0001",
+          "sha256": "d1f3dbbf846610658fb41bc76dd9ec2ecbea32009de9cd715f84db3582f13635",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0002",
+          "sha256": "1133f7829d5bc530002217ad5ae9f2b5216cac17b66a10c9caa599297033b2cc",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0003",
+          "sha256": "f9c2f4a0f41403781ffd29105e89f33b5c0bdf7482458fb8dac6c786c9f64c01",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0004",
+          "sha256": "fcad8371188e5f3c29e5c2e56430ce8890f9d36ee61ecf8b82d7477ecf2e888f",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0005",
+          "sha256": "705e37c5909042e1dde9e36451ec865017fda4d13afc99ad36b4bd9f82fe2017",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0006",
+          "sha256": "44388085021b1cd1df8061a0386d12e45dc2a27fe32f6f8e4b183ace084ccd7d",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0007",
+          "sha256": "7ee7606319a5d01bc2ff9b01fec7ba8ef1874480bdb5054522f4c5db35d4e962",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0008",
+          "sha256": "d6f2d4a4a6f3ea8aa6ce0ab7e80de322e772420093ddfb57443a60297276bc58",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0009",
+          "sha256": "6244ef47e0f1f266693863ff08605d77c2c48e3091675ddb58b4d83eff1c6475",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0010",
+          "sha256": "013da69d411aac729f5130f09d36860075c8750f601e601d015ff5d90afc5670",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0011",
+          "sha256": "f061facba3a3fe93cfb0ea2ccca9ba7f75621c2247d289222a2f9bb2f34a7cc7",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0012",
+          "sha256": "259f0c671986d859e78f6590e198e2bbed2dd1491230cd50d624f54092d7878e",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0013",
+          "sha256": "da50fe0798070091e6c0b5100db1e6ca8eaa0e92c8ac600b38c53fa972bd09cc",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0014",
+          "sha256": "f19eb5ac9890351b15a7e21f19f912072665420b0c9686094032c65b5655aa51",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0015",
+          "sha256": "0fca46c131057315378d00afbecf9fd2f6f9b9cb8df2c7937026a33a993f0dc6",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0016",
+          "sha256": "97c9a9a4373e5faff7c261f9d51a4c3a7301c09a3f4a42ac75981634289e3d0a",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0017",
+          "sha256": "852e0e5ac84982af82720e8a077cef9c56438a8a9c454ff5d39bf4008292cb13",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0018",
+          "sha256": "7388d24551b310fbaf307abf4cbf9b89c981faa96b7936e846e02a9bbd987c3f",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0019",
+          "sha256": "39e93fdf586fd74aa8afd75f042b6a08f36844ef8f1583ff211f4c033f0ef178",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0020",
+          "sha256": "a4ffdfbc242472dec784441e575acfde19cac07b4e6b48191d8baba3d1c55e92",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0021",
+          "sha256": "3b10105795c5fc1f19878a704610866822f67fbe3ff1c77ded61711780795486",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0022",
+          "sha256": "902a4e22b419a53c1beb97921fe65a3759f24c2025026c6d3c5ba577a94c8317",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0023",
+          "sha256": "df6c35cc5f3c406fbf610cda0897c4a3443e8fc5bea0f13ced7c6594d3909cbf",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0024",
+          "sha256": "96fab044d399407c296154cd48482d085e93edf60f4dbd04187fecbea9243aec",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0025",
+          "sha256": "5acd84f9180c8cc071294a374682592e5aef320699c864c260a0f5fc89a42ae3",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0026",
+          "sha256": "b4997e5e62108bb9c2d2ab7fdcb32ca78a60e0fae9504649cf90dc6ddc5219a9",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0027",
+          "sha256": "67bb2ee1ebca3d99ab907e208a6ce0308e9dcf0d7efa7c73d1227fbf617e7096",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0028",
+          "sha256": "c9ccf92b35e5398c31380ef258dd6b35ca1d1c7cfbf97175219ac2349cec0bf8",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0029",
+          "sha256": "b4777f235f37ab836ca1d8651183b5e1c1661c9e812161330d61bd607eeee07a",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0030",
+          "sha256": "e8f930268d1e174c249401c7a67a062fa64e835585d2655d769b742b153cab01",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0031",
+          "sha256": "3b1c87624e21bc7f873a35b37981ce7bc2d044fd3c64ced906562506526eb618",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0032",
+          "sha256": "8796b73c1a7687298ed9b47fcff310d1bf59e18c6f00faddf45798eb7c4328fa",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0033",
+          "sha256": "fab55bc4f522df329f18b580e2445b50e2c72358af3552bf0873c620ea25887c",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0034",
+          "sha256": "f70b8d4b8d930414b89f80f4423fddf61e65f3215175a31f06186bbc91a79c88",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0035",
+          "sha256": "16d6a9ef5613bf316cd463e9d7fd4e6f140a7d1698e570273a30b11f7c39d3fb",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0036",
+          "sha256": "175960b37e7b51eb0bec7b04e8954743f5680bb43ce3419ceaccfc5572bc6c0c",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0037",
+          "sha256": "f35c91e1195e6f4a8d0b8dd4de1b028b05c34c9a9d7c21c2c5f90469ab024f95",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0038",
+          "sha256": "2c61b7200200a70faed7ccb39ab5639a5c8b5299681fa4b49caea38fef7a9991",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0039",
+          "sha256": "3240c6dd34ae259479dd4a9fe7f8ca0c07d8770ab327ef243709341e3ad6ee04",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0040",
+          "sha256": "0965676335c2f5aefb7651d85f70133e1b4c4740771961d9d7d46f8954680d61",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0041",
+          "sha256": "f93c575396310c4489786cdbc3e43ba970b4d4471cc6717a0fbc8c22e1c70eb4",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0042",
+          "sha256": "63e631d643e9bb2ce1f894ddfabdeece7806b34e8608f2cfe4f1979d37785910",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0043",
+          "sha256": "fd22539f1454acfaf00ddef60b98954bd97cd0a76ef6a027c2aaec64fab8abb9",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0044",
+          "sha256": "9c70f7afcb41bcb3a1d4c5de129269e4aabb8bfea585651cc2e7a288fae1ebee",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0045",
+          "sha256": "e26ef383b8777e15b98142b87e13e0c06ab8e70858d94e02c3b9640a92f3e4d0",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0046",
+          "sha256": "587c16be1eb164ff991b9bc73083e9ea4407a996a3f480306c6d8083dd4ca006",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0047",
+          "sha256": "8a5477979ec82eab8af8124a954f758bb35139dddaad87f579222ca2dc4331c2",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0048",
+          "sha256": "ef51a0bd08ba67bbb0380cd907a64b74ea51e39ae2ec8fa7eacf92c0f7dfebf2",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-all-skipped-status.source.tar.gz.part-0049",
+          "sha256": "3f47f8169befa4be05fa8529758e7a255c0dbf768f660d0fb6b18ad036772129",
+          "bytes": 17822412
+        }
+      ],
+      "sourceUserTurns": 3,
+      "finalUserTurn": 3,
+      "investigationCheckpoint": 1,
+      "sourceBinding": {
+        "path": "prompts/scenario_turns/clickhouse-all-skipped-status/source-binding.json",
+        "sha256": "fbcd1c7a40315661e43e3208b026778501cd9dec8a440e2557ea3a6fab878054"
+      },
+      "captureEnvironmentVersion": 2,
+      "captureCode": {
+        "commit": "ee348d13d4ad422bc8f8630114ac7cbcc13fb15a",
+        "tree": "aa7657a518f0384195f9be2f47f39b4dcfcc638d"
+      },
+      "sourceLimits": {
+        "maxModelCalls": 80,
+        "maxOutputTokens": 8192,
+        "maxRequestBytes": 400000,
+        "timeoutSeconds": 2400,
+        "toolTimeoutSeconds": 120,
+        "maxUserTurns": 4
+      }
+    },
+    {
+      "scenario": "clickhouse-cache-file-identity",
+      "sha256": "9a99da8bb3e9dc44755dbd7eea977e01f17b94261c27971170f43476044e5b84",
+      "bytes": 2455776958,
+      "parts": [
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-cache-file-identity.source.tar.gz.part-0001",
+          "sha256": "a4811afedf84ad739f7b3e284aa1c33b8fe1ae229d7dc9b9ab488a66d7e50b7b",
+          "bytes": 134217728
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-cache-file-identity.source.tar.gz.part-0002",
+          "sha256": "3180a70eec53139ee45afadf7ede542b71bf3eebf5352acd8b1221ad1bfde47e",
+          "bytes": 134217728
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-cache-file-identity.source.tar.gz.part-0003",
+          "sha256": "9f47884cd6e5974296015c771643fa8efe32c2a2052d0f7b96a397b58937d664",
+          "bytes": 134217728
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-cache-file-identity.source.tar.gz.part-0004",
+          "sha256": "d918c70e5fde10f4e5c05983424c6a06a6dffbf3ec429089d4aad32678470157",
+          "bytes": 134217728
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-cache-file-identity.source.tar.gz.part-0005",
+          "sha256": "e71262a4493cc44a78cf8cec92208515be14c59332f64301c24c99249264bbe7",
+          "bytes": 134217728
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-cache-file-identity.source.tar.gz.part-0006",
+          "sha256": "2570bdde7d15d4828dac8eb02de03ff1fa0f0a5b7e9c86c86efd732274ea64d0",
+          "bytes": 134217728
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-cache-file-identity.source.tar.gz.part-0007",
+          "sha256": "3c0aabc69f6139010ec653fd8027900ffdedc70bac9b11d7adc744d43a68524f",
+          "bytes": 134217728
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-cache-file-identity.source.tar.gz.part-0008",
+          "sha256": "6ba789fae1cdc1c5e06b9bf6745ed4a0322da9ec7b72718501c8a922bb590dc7",
+          "bytes": 134217728
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-cache-file-identity.source.tar.gz.part-0009",
+          "sha256": "1f4559b49edd959da64c6a448fe72496e21243ae9857a13600e180ad590a3c9f",
+          "bytes": 134217728
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-cache-file-identity.source.tar.gz.part-0010",
+          "sha256": "483c208a2e761eebbba9af928aa2b98f6ddd38827d0e4f64b29add9144663031",
+          "bytes": 134217728
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-cache-file-identity.source.tar.gz.part-0011",
+          "sha256": "d9887087d705752f45b15a69cb2f73ec7823475ec5fdf6efd59899d0ccb5224b",
+          "bytes": 134217728
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-cache-file-identity.source.tar.gz.part-0012",
+          "sha256": "75e1866eec6e4f91c85f81c611c5bcd002b2e9f4ffb3db5e9e0f494b052e0c09",
+          "bytes": 134217728
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-cache-file-identity.source.tar.gz.part-0013",
+          "sha256": "1c5c87150571e33b58e96f79c73f758abdaac165fde0a3181f55edd0fffbd38e",
+          "bytes": 134217728
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-cache-file-identity.source.tar.gz.part-0014",
+          "sha256": "aae26adb3ffda2c60378bd08ab6ff95d509cbf650b114b730379c3b2e50cd0aa",
+          "bytes": 134217728
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-cache-file-identity.source.tar.gz.part-0015",
+          "sha256": "46d0e7a3c6d6d805ea15b64bb8325508dbb19e75d9c294a8a7a4c14ce6a8ea7f",
+          "bytes": 134217728
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-cache-file-identity.source.tar.gz.part-0016",
+          "sha256": "6d86522b22fb8dde5a81596db5fc51515c0737b9e377039b91f5710533991165",
+          "bytes": 134217728
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-cache-file-identity.source.tar.gz.part-0017",
+          "sha256": "aac1e213979de647c966e99969a30e24ac9c594e1fa378bb8d337e7f6d98dc75",
+          "bytes": 134217728
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-cache-file-identity.source.tar.gz.part-0018",
+          "sha256": "fd59efac088cdb2947bcb0e46295938754e8d9e395639a0443ab100e4ef97f25",
+          "bytes": 134217728
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-cache-file-identity.source.tar.gz.part-0019",
+          "sha256": "d9f3977529924359238fe63ca600f5a67a2afa3ed18d632eccd756ee26d38bf2",
+          "bytes": 39857854
+        }
+      ],
+      "sourceDescriptorSha256": "6a04ed574dc5563afa29efb48d136ab6771205e2cf484dab992eecb5e344677c",
+      "sourceMessagesSha256": "dc18ca1470a51231517cef2d61f7303b6447d999682f91ccad93b89c233e7cdf",
+      "contextOnlyBundle": {
+        "sha256": "0c6f29bcea3ef29b98e14892ba920e58ed9e45063d36191d0b8f63a6af9e63bc",
+        "bytes": 31689451,
+        "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-cache-file-identity.context.tar.gz"
+      },
+      "sourceUserTurns": 2,
+      "finalUserTurn": 2,
+      "investigationCheckpoint": 1,
+      "sourceBinding": {
+        "path": "prompts/scenario_turns/clickhouse-cache-file-identity/source-binding.json",
+        "sha256": "b2104f9ea9ec85f691a212d8a24ea788845199ee6b972ecb3e0a7f074c180e02"
+      },
+      "captureEnvironmentVersion": 2,
+      "captureCode": {
+        "commit": "ee348d13d4ad422bc8f8630114ac7cbcc13fb15a",
+        "tree": "aa7657a518f0384195f9be2f47f39b4dcfcc638d"
+      },
+      "sourceLimits": {
+        "maxModelCalls": 80,
+        "maxOutputTokens": 8192,
+        "maxRequestBytes": 400000,
+        "timeoutSeconds": 2400,
+        "toolTimeoutSeconds": 120,
+        "maxUserTurns": 4
+      }
+    },
+    {
+      "scenario": "clickhouse-targeted-job-flavors",
+      "sha256": "af6a7945c75ca6d31364e2e374aceae2fd12e835cf28259ff03e68e67bb2245b",
+      "bytes": 2433614257,
+      "sourceDescriptorSha256": "7562b154e8105788f0e2d5815e65d7fcc9a6f02b3b7d877f46a6e8b252d63fa3",
+      "sourceMessagesSha256": "99aaa326eebbc380fa2cf2876dce84cf5a49d54be43705a6fb2e192adbf6fde1",
+      "contextOnlyBundle": {
+        "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.context.tar.gz",
+        "sha256": "1c82d62a62d49667f68d580da089a26a002a7774d0b6dc8386e9605aa7f436ae",
+        "bytes": 8324723
+      },
+      "parts": [
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0001",
+          "sha256": "f63338a7ec221c9f18e573f1a7bc1d84a024f1ac1db2e7a1104ef0eab9a804e9",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0002",
+          "sha256": "a19f963fe7240b29fbafd723cf88c819281931ed416a0942d8e75b5fca34e23d",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0003",
+          "sha256": "4a3540beb71c2c33120ff0507b9458c75a69ff8550bd770b831d3d59dfa90acc",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0004",
+          "sha256": "1a73d037ea36fda70af886e40028eaf32e8db69b082fdc9dc0a2b3811788d4e1",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0005",
+          "sha256": "f365a22477d31234b5aa2ff70689010904580c778cceabcd3742ac6720f4b920",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0006",
+          "sha256": "f95d09a0329f6fdf852d4156af2b9eba0b13e12351069b139c80f944e307bf89",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0007",
+          "sha256": "baa6fa74ce84aa10066045063fafdd717fe994449de44c6c5a79e901282f01fe",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0008",
+          "sha256": "291fae397e0e88ffb78d9c669e00008065d3114a1ab1550d472b4308848fc4de",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0009",
+          "sha256": "b180b692b532a466bb80c59f5127a4a30b134bc9b5a28690e76f599ac1b56116",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0010",
+          "sha256": "90c98cfcc741d135097403ca5f05172fc837b9b1cd20b3864d899268e518fa29",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0011",
+          "sha256": "888349d3d9595abe785ae8a3520a972af016a7d534b27b58faf24de1c7133a36",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0012",
+          "sha256": "484bd48f39fde4c9150fb992c88303ca7654f489a6ef6de5180543894164c42d",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0013",
+          "sha256": "8c94808cbb9d64e80372c4cd2478179945fb02d6fec8a6c31dc450db0409b1d5",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0014",
+          "sha256": "f41fd22212cbc915ef4a4aa76152e9a3522216380fc334ab56df481f7efa1bfc",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0015",
+          "sha256": "fea74e93cccc96c6824d33d9d3b39e4214f50dd446929e2956b0ba042c78238d",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0016",
+          "sha256": "b18b6dcaa79d37d4018a4ad74d5348601597e0a3022a32f9f6b3b568fb436f99",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0017",
+          "sha256": "3f1efde7bb62157e2ddb5fe57284c9a1ea52d7e167a7f965dc3343fa16f63aee",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0018",
+          "sha256": "64b2b8cce76882e6b62ae7fc3f3ac118ef876d3c4d83d162d95fb9b383ffc983",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0019",
+          "sha256": "10060690839916caf9c458524d2952805cdc3e497fbd87a10fa82c5166005bc4",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0020",
+          "sha256": "4eb8e7406ebe3ad811895806fc0903534b48fe0d85d1cb23e19e0e24d2cddac8",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0021",
+          "sha256": "3304614bfc36c63b503954f2d1f96d3ab69a7058c6662c86afc5065063bdf4db",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0022",
+          "sha256": "cd0cfa12c349e1997d5e5f36e531ce5fd556e523d052003dde59d26b60dc807e",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0023",
+          "sha256": "dbd56acb8e3ad51627879e91e7b0152e76eae2156f6ee7f059d5d1e400509e5c",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0024",
+          "sha256": "6d0f80d55ee1a7977300c3d5ec3ad38d590ec9c94b7c8051fd513ce193e3cf5e",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0025",
+          "sha256": "d0c238c9763af2dcaffc1511b402bd3f0931db5ec352aa72ae39c60f4418d385",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0026",
+          "sha256": "bb7dface0d8896c76970f7ed52481a205272e98e86f160eb01e46c1cd22e3f92",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0027",
+          "sha256": "c960a6be903656b7775bcdb91c3f22a904cc6d23554350fef71369aabec4efcd",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0028",
+          "sha256": "75bae751f25356a79bacc31e2d0e32a5c316c91039cdd2190aa1bbc0d385e657",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0029",
+          "sha256": "fd23e4c59b17b0d9a1a0ea7f0f40704690c2bda521148c6944ba853186fa3ebf",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0030",
+          "sha256": "dc101042ce586210637ee503b07945d2a2d8dc2ea24414b0e48499f3128c7e49",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0031",
+          "sha256": "febc5957f69e727f208844d4e0ba925668a7c7a13b28d04dc675c59ed8fe1dc7",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0032",
+          "sha256": "163e26178ac3a43b1d4eaffc1aef97237fb9cd8cef4201dff82ce4d60f2e01de",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0033",
+          "sha256": "da1111be32e095863d1d3ff0172eb7e48d8077770b09ca827d42f3dc4bd21132",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0034",
+          "sha256": "d6fb3a2720926425dc7c37bc82907fcefe568bc216a0eed252a6e32a292083e3",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0035",
+          "sha256": "c15e9200a5673270b7c7b831a657688c6316f94cdc0d7e6b67f8459bc63d5210",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0036",
+          "sha256": "087f380656c7a9b27151bf7d9ea65027391349d5ad4c0dcc6001e1ea19a33613",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors-v2.source.tar.gz.part-0037",
+          "sha256": "20b477f0c1f66acc4ce16b991dc659bbcf6b3c600e8395801a62e5153b3406b2",
+          "bytes": 17695153
+        }
+      ],
+      "sourceUserTurns": 2,
+      "finalUserTurn": 2,
+      "investigationCheckpoint": 1,
+      "sourceBinding": {
+        "path": "prompts/scenario_turns/clickhouse-targeted-job-flavors/source-binding.json",
+        "sha256": "d5e3f99191fd43bef4f6555a428e958ddf60fb1772cf152dbf5b5aadafabecd2"
+      },
+      "captureEnvironmentVersion": 2,
+      "captureCode": {
+        "commit": "ee348d13d4ad422bc8f8630114ac7cbcc13fb15a",
+        "tree": "aa7657a518f0384195f9be2f47f39b4dcfcc638d"
+      },
+      "sourceLimits": {
+        "maxModelCalls": 80,
+        "maxOutputTokens": 8192,
+        "maxRequestBytes": 400000,
+        "timeoutSeconds": 2400,
+        "toolTimeoutSeconds": 120,
+        "maxUserTurns": 4
+      }
+    },
+    {
+      "scenario": "compose-watch-ignore-wildcard",
+      "sha256": "485f5d26f1fb8415a9e098158b9b4c87f3a461630fcf3532ffd3b855baf97504",
+      "bytes": 2019105428,
+      "sourceDescriptorSha256": "896c71eae0229170fe2f4360fd3313f9d56a02371f5e1daef5da6fdee3b103d9",
+      "sourceMessagesSha256": "d74079cc89fa4f311e7a74540cc2955280b832bab9be99fde073b9f704b03d3b",
+      "contextOnlyBundle": {
+        "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.context.tar.gz",
+        "sha256": "2ff02b4195b864dba9266bcce8c699f2c9bade4a57e414d98ca296a0c1891596",
+        "bytes": 17639806
+      },
+      "parts": [
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.source.tar.gz.part-0001",
+          "sha256": "0aee4f643f1d6d1efeaf3f7b4af1f0c5d82683fd85772aec6f53a8bae51a5b20",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.source.tar.gz.part-0002",
+          "sha256": "f33715915fd00d4184ba9c05fa46beabb8aa40b7712454febd318bc1a8d1c8b6",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.source.tar.gz.part-0003",
+          "sha256": "a51dacfb2f5a30e5266645d7b73d29e01f7946d94c59f23999c19c8e601e5bb0",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.source.tar.gz.part-0004",
+          "sha256": "c140a9b8aa90686d4cac8e41e5d8684f20e421823a3f176594b09838afda0e91",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.source.tar.gz.part-0005",
+          "sha256": "937c8082344cee16f23487329314ef23f9392403dc4bdc9f015bb2512d2ef4b2",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.source.tar.gz.part-0006",
+          "sha256": "1f692f5850a68a976a1aec6503a8b5a17e7d01dc50d6c2a0055482d69d2f6753",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.source.tar.gz.part-0007",
+          "sha256": "bc5e97e6a9e7132a5c76c0464698c21783fc2c45d89c7bf2df7e0658f1c1049c",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.source.tar.gz.part-0008",
+          "sha256": "552be20ab613e8f79b941cc2a6d98958e4cb27411715b1731a3c130b4e0e86f5",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.source.tar.gz.part-0009",
+          "sha256": "67b9c86151f52d31afcb376ed2bff60babee0df159881d28c21a0f4ad3577456",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.source.tar.gz.part-0010",
+          "sha256": "8c47fdf5b40fad879253def48a536407fee43454a3313914d4cf82c286ffab24",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.source.tar.gz.part-0011",
+          "sha256": "657ec3cf6a27d1c6b65f7a40fc9b18bef89b9efcb3f6c9a7fcff56b2dab5dc82",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.source.tar.gz.part-0012",
+          "sha256": "2b1ad9799493638c24b6a4b99d3a620e3e57de11f3cb7189b3923a851faf0c0e",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.source.tar.gz.part-0013",
+          "sha256": "19e8d66fbaf833f713e7203f953f962d3c8e50e7580de47c8b186013d1b1ea25",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.source.tar.gz.part-0014",
+          "sha256": "0affb8823e3a904ade4d1d77b450e95ddf5051cf026d22d5deb4b00a7dec922c",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.source.tar.gz.part-0015",
+          "sha256": "de67ce99844c0899fd43e3dd94896417104ac8dd328090c158db8a155a67da14",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.source.tar.gz.part-0016",
+          "sha256": "4ed0997640ac74107eab195f871ca58e6121a2dacddf42239634b5c534f2c2cd",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.source.tar.gz.part-0017",
+          "sha256": "4b477a2626b8d420c671e622a4275fbfde7d3bf36eaaa75800695866b30eb489",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.source.tar.gz.part-0018",
+          "sha256": "59c362739719481c10ba069f9fc89e08dfc29640559c41a9e345963fdcebff39",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.source.tar.gz.part-0019",
+          "sha256": "e98e790e466ad184f85eecaf8ef2d9d4c5636135d1a31eee6faa533d119fccb4",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.source.tar.gz.part-0020",
+          "sha256": "034cfe7ed0193fd893f02d562993ac06a958bf728b90ec7c5b4c3013e51ac3fb",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.source.tar.gz.part-0021",
+          "sha256": "20aecf053bdb97a0e8ab34697aaa150ca5142b3dbf2b7d3aefda7d014168e8b5",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.source.tar.gz.part-0022",
+          "sha256": "c49ce51c17f4a413afea016740e0280e49e01aba41129f97853d2fce5a16e2a1",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.source.tar.gz.part-0023",
+          "sha256": "b0f3a7e35cb798b54be545c3af6774312f9475d6faa2021f7b4e691f270da2c0",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.source.tar.gz.part-0024",
+          "sha256": "8e160fc62b9e3c20494595d3b686830ee09f0def86a6106e78dc79d77491afce",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.source.tar.gz.part-0025",
+          "sha256": "cc5bb64842a8300c0599a63cae0e5c80f25f5fa98a60f245634d2c0a323659f9",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.source.tar.gz.part-0026",
+          "sha256": "fd24761e5e81661b68a23aff228235296438ed38aff2ec44bbd6a4838d944483",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.source.tar.gz.part-0027",
+          "sha256": "91d4dde805941e0d1f576624ee8284b9fdd68eff5632d9687155fb809326ceff",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.source.tar.gz.part-0028",
+          "sha256": "53555068e2e5ad376d417da5e1d932aa3eacf85977b7b78c08651fcd58cdca6e",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.source.tar.gz.part-0029",
+          "sha256": "1024e636d68cb30b5eda9417ef86dfd58294b3816af9f66d02bf245bd7dd0127",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.source.tar.gz.part-0030",
+          "sha256": "335ab7ad738b333d569c4b2c7ff468955b0c8652f90e68f3c86e23dbbc6c7c96",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/compose-watch-ignore-wildcard.source.tar.gz.part-0031",
+          "sha256": "0fd470f24c146c2402c14150e5c4b9e29d0e47a6a378fc6707b6d0505a8068a4",
+          "bytes": 5839508
+        }
+      ],
+      "sourceUserTurns": 2,
+      "finalUserTurn": 2,
+      "investigationCheckpoint": 1,
+      "sourceBinding": {
+        "path": "prompts/scenario_turns/compose-watch-ignore-wildcard/source-binding.json",
+        "sha256": "6a711fd68035875c3b8f80a9d946dea1c24deef7f1563ec839819e04e7e6a7d6"
+      },
+      "captureEnvironmentVersion": 4,
+      "captureCode": {
+        "commit": "5baaf42b56919210ef0bb1d2a7a1a4c34f796fa8",
+        "tree": "c5153827c95661d723dba65c9577fa9534be3326"
+      },
+      "sourceLimits": {
+        "maxModelCalls": 80,
+        "maxOutputTokens": 8192,
+        "maxRequestBytes": 400000,
+        "timeoutSeconds": 2400,
+        "toolTimeoutSeconds": 120,
+        "maxUserTurns": 4
+      }
+    },
+    {
+      "scenario": "expo-dotenv-precedence",
+      "sha256": "48cfc3639c737bee4e4b5b4958503d24d07dd89c2e82226adf1bd007b981d82d",
+      "bytes": 8168422262,
+      "sourceDescriptorSha256": "dbd6a1c928915ef0f55d56d200818cbfc0db3194689340530c1f3403edd98b41",
+      "sourceMessagesSha256": "e24e0f3efe8c54a7ece88f1b7d8609b4ac00ce78e27871421a62c5d4616c521e",
+      "contextOnlyBundle": {
+        "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.context.tar.gz",
+        "sha256": "34c823cd9525ce7e027d767555a3b8b9929c0d394acdce7c0ba47dd6ff7bca4e",
+        "bytes": 24403461
+      },
+      "parts": [
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0001",
+          "sha256": "e35befdae3eb4707729c49926438af15a4361e00597d6db7c0c8511f9cc13f6a",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0002",
+          "sha256": "6b474ac710f23b0805d9f2c54bca3c1f8fc23f6210fae5a5696dd105e35768b1",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0003",
+          "sha256": "8f92ef13decec8cb936efe84b3b4b932edc5178bcade0b395ea9e59746a0f49d",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0004",
+          "sha256": "4fc00a817fc8cfb105b15e471cb09f2df51605270c420fa843bdb494046e5745",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0005",
+          "sha256": "9e6b87f47c26f7818b9857ca9b95ed5f29e37b6a5682dcac633f61b521754894",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0006",
+          "sha256": "68524ae7c3b86700d4cd67a6835712a3e7a902608f1183842292f6b86c22590d",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0007",
+          "sha256": "af5f5dc12fffbf8d59cec0e55b36edd1b7ce499384bb6d37f9721f2058faa14b",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0008",
+          "sha256": "c240e62c4bc998a7d502c424616584db52ebffa7a60cb78e5642c9931e5ef275",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0009",
+          "sha256": "b11996a27545f441117b939e9a98f7be2171b2eebac7363f369f5e59a67ac542",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0010",
+          "sha256": "5b341d91abd70e74ece1db45cfaccdd131f31f80650548148914ff1d9f64f584",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0011",
+          "sha256": "d47b6fbdcf1df6673f9620d037f5babe7606307fa6f14c6303ce389fed72aee7",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0012",
+          "sha256": "eb460463353c133c61d8c0de5c62213dd451bb18fa6b3d787d8285530ac2ed62",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0013",
+          "sha256": "02c0b64a07a48eacb92a84793bb6cafbcc614f79fc42427b2e17922944541297",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0014",
+          "sha256": "7f50f360a1ee4defcd09d172958ed794eb6109364465d92282aa70cd2d6e8b71",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0015",
+          "sha256": "156303326e7753b61cc751f3d93ae0229c1e4e75ec913450183babbcaf113d3c",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0016",
+          "sha256": "558fc310a92a40a1d4bf2aafffb0463609d06d142d7fb68a62ae046a9e1836d2",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0017",
+          "sha256": "76197f05baa5e4749a33e9d69ae83384845a33cbb25d33711e515d7c1b9d03cb",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0018",
+          "sha256": "c9baaaad44ec0246fe2bd6bc8a08e505c3be23d93efe941ee0274dc08b18055f",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0019",
+          "sha256": "00bce01808f45d681ffb8948e7f76d66b1310bfc241b3895cafef6577f80f82c",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0020",
+          "sha256": "d639af875959f1f48d3867c479771c7ba94fe71707fea7d6905e945bd633c913",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0021",
+          "sha256": "b4efbc3d0b7c2ea7c0e9533a3499efa57140d121a212d3dbddb3b95400e13eb7",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0022",
+          "sha256": "f9b58b7f99cf2a672f9b94858c4daed2a93ed499059c733c948256d1f74a99cb",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0023",
+          "sha256": "6d38a1f5c9436378def144570c2e1afae5a7da7ce1d076b691ef1a00968164e3",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0024",
+          "sha256": "039ad2f634c7f1f971249258f217c34ceda8a43e40eada14c0476c2128b61f61",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0025",
+          "sha256": "2b5bfb050d368b0f29cb3982db87faa740cd3e1254038e5624d309dcf5ef7a74",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0026",
+          "sha256": "200d0f426dbcdea20167d2c8022774a07cfdde5c9b5f8ccc888f2eded7f5980a",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0027",
+          "sha256": "f9ae3fee1e0e4dadf02943f6ab14a4704ceb199bbf227f4a8cc51712768a892b",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0028",
+          "sha256": "d8f3d2b864cdadf1642ff91b1a49c614f59d75b02f02a12e1583016294f24bb5",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0029",
+          "sha256": "4796c7a0b00633a22190eb2bc430d4385295bc17928530fb58636313179c1ee9",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0030",
+          "sha256": "95fe501cc21e68a123af313cdb4347637ef795bd5555e1ea5e624d193fff97ae",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0031",
+          "sha256": "5ade1080948c40e81121e7c89948967b8293a34467d417b1e6dc54d555475423",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0032",
+          "sha256": "413118d57665715b4caf109447e86a13fcfd24943a5a04f98e9e7da2f7004e52",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0033",
+          "sha256": "1d57b2b3cafa69f464e137aefa1a97293f94356853329da74559c35cdd5cf54c",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0034",
+          "sha256": "4f07415676b21143e399822b00306e4d2dc61283668f532d9af6673cff914c14",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0035",
+          "sha256": "d91b6379423741027d1440cb555e8681afd21d23100e02df044a34bcdcc21bbd",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0036",
+          "sha256": "5874602621eb4bd08e5a987086c47f16429c4f55d4591f4d619a064f6e97107c",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0037",
+          "sha256": "18d5f9a08a2714ab13d8311341ad47303b9866a4dcd207bc95013a9e21900710",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0038",
+          "sha256": "2b49ad847709d12e6b361b7960b9c8531498156c1712ec91e7ea1e93cf788c95",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0039",
+          "sha256": "58c3fd39eb4e832678bf30ff488cd5c3d633db163898e2a18cd6b3dd1a0b0428",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0040",
+          "sha256": "af53ef4de031d4cc73b65db28e9e0b0c7d25e95a421224f725b1ac37daa3ce9c",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0041",
+          "sha256": "28dc933fdc3f7e4091756b9b49f5aecb99e4e0e62ccb45515ce17f3210190442",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0042",
+          "sha256": "4cd442da8b763b5f53606f86effb6b16012abfbccb8ca2d154194614c2d6703e",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0043",
+          "sha256": "751cb8ee976fd7e73c8957940158a9e556784b19e2449a537c30fda90782946e",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0044",
+          "sha256": "c4bf417c29178800394ffd1991885f01e9f812126689d27d2cc57491e664d83f",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0045",
+          "sha256": "c7b7111c83d2f7de29513e5ecd3f1d0a5c8059b199515c8c5dd8154d6fcb441b",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0046",
+          "sha256": "86acbde66c7fba6aae7281266e0534898307604192f0c961c8d4fb1e8d266949",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0047",
+          "sha256": "3fcc953e3fd14eea0ddd545f356a943fdf20af7d7243f6f9e59054458ab945b1",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0048",
+          "sha256": "6851cdeb427fcc117a2f4f767a237f6ee84814ac00e7eb8b348e8ec24e5f0af3",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0049",
+          "sha256": "f9de49c191891e79bf5c5c60180dcc786ef9a821bc026f946332431b7c2156e0",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0050",
+          "sha256": "df70077ed672faf47c80410f8256e6658d0718d2177b63a9075e51c97f18d409",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0051",
+          "sha256": "3946a1489b87573fb62427384215a85672e5c094401ff1284b16ab1c9adc3651",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0052",
+          "sha256": "3be72f205d28bafdea1f89eeb065cb326b639e8248d7f73c78ff87782c667cb6",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0053",
+          "sha256": "fc0d909a15aed3020aaf32f7dffbfa2f03f22732a4609eacd501bb731a3b9e8a",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0054",
+          "sha256": "42e0a7fe36e306dd8330722ea5ab8247ee34c92cbd15b4d0d82d511a1f6fee26",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0055",
+          "sha256": "a42a0c72fdac734df6e7cc2eac8e7539f31cb13ab5811dcb822b4644cb58ae51",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0056",
+          "sha256": "ed1c3b73ca37a09498bfe4d1f1540c924dab23359bb732e350d822266ca2a4d6",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0057",
+          "sha256": "7c00a0e05da7cc11544711e39d2701202951df48d7c8bc9d391cfedc4588d619",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0058",
+          "sha256": "5112dcbad9a4a5a9a728fe0afad31d304019c68a2e6b06a7fa24a846faace689",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0059",
+          "sha256": "894f67b40dc5a8dd9bbe07bb7c1e33debe81505ae7efa437bae97e4ee5c52f1b",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0060",
+          "sha256": "c6c43adbebf4459a645427ed3eff5e6b4df3717c69d622bcff7b31b9aa25d701",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0061",
+          "sha256": "7ea34058a5688365a4c9c67b7cd4dc701f123608b2af6431aba6367d2468c0bf",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0062",
+          "sha256": "e6bee5f2a9ca80020329ca674b7112a2eec69bd37bb4ffbf251d85f83734308d",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0063",
+          "sha256": "f19ae8208bf8f7b32d21f645ff72386fb18cc4ff571497d0ee292e33fb065a09",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0064",
+          "sha256": "4ca4e25bc8e393e5964c32a5372101caa440dd7c1c61735e2407c0b69cde73ec",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0065",
+          "sha256": "7a85c79f895a2dc6e69f2abe15960ae65a25109715d60f43bdf7e410dbcaa6a8",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0066",
+          "sha256": "b5c166e1a5fee73caee9174cb995a38dcae2a658b3b222f35d8539bd4ec317a4",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0067",
+          "sha256": "637df540a14624e2e8e563252c3bbdf9b23cf8bbf4f29a84a6b6a64156e038bb",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0068",
+          "sha256": "851d5f9209c8dd2bce2a388f0f5d49d121daad8ac4198a40f6ddfcde1cec396b",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0069",
+          "sha256": "7e9ebd28954824140f327dd518494e35cad50cbd38a2c708b5b1f67540817bc1",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0070",
+          "sha256": "eecaddbeff2e08ca86a491d4c91d5eb2daeb19ec0f34199ad18f537c9806cefc",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0071",
+          "sha256": "641fee1724b6b156f7a8fc0b22ca20b9840691888ed4003b2b9fb09af1ef5da0",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0072",
+          "sha256": "bf8153936799bc5aaee2ca5d05e461fe42cc5fcb21a05e244cf0347d13878b04",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0073",
+          "sha256": "001c09da68a1e42d77d5b66b0b3c040ad88ce8b3c27822d8ee2cb16b5a08cce4",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0074",
+          "sha256": "8a0b7d333ed8532f7c5ae42a8a375e1f623b26c1ef255756fd47086d8ccdc209",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0075",
+          "sha256": "f37e519e078f73aa67cd3e1e4939fb9edd514c65412583e261912f9adf1becfb",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0076",
+          "sha256": "5cbf8ad305dcc4e47e1fc26be81d0397596f09182348c2966caec68ec3c9262d",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0077",
+          "sha256": "528b4b005566debb00b9b77ea713a85329a3071942d28ccd19ca46259caa3ff0",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0078",
+          "sha256": "8b6d32ec019533fe292b794e6340b1e4644236977bfd6b0bc7da0099ea98e2f9",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0079",
+          "sha256": "c68d143abcb089e0a519d9d2b50c19276a69b7ebb300ad73438689abf2abd318",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0080",
+          "sha256": "167180b4b0870f63d928aeadc1e4a5d729044304bdcbf79c73f5bd72bb0cfee8",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0081",
+          "sha256": "e126f34656ff9fe7ac9ee0c07852a0d14bed4fb95cd1d1b9598aa16b35854537",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0082",
+          "sha256": "dab3b1cd758cdee2ac47ad686faf061f3f54fb429047f9f33804d0770009d234",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0083",
+          "sha256": "d6205630601600ab1136e22ba2b1f8ada625a6a8742e290963f93819257369a4",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0084",
+          "sha256": "c1fce87e71ddcc2827177f0652e219be60a9b379fa494ef61bd8e0578c71a85e",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0085",
+          "sha256": "15edf8bbf7fcac15d39030880e71c8a1aeb300a1f3f51ae0d57987b7b546ad11",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0086",
+          "sha256": "ff215f7743aea82308f135ed042ae227311f43e9a32e3a8364004f42e513bbba",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0087",
+          "sha256": "4853f7b55872d90f39f81e8985f19699128bd3e29ca630d748f467761c7bf3b3",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0088",
+          "sha256": "6ef8f25eed4dc5e94526dcac657cd586aff0bf210ab64bb5b13ebef92b0286ba",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0089",
+          "sha256": "3efed7ac8367a2a1fc9fac4617c66cdd77917ff52a4cf165708f997765a3ce97",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0090",
+          "sha256": "40ec7cba237f98e46f04c97dc68a9fa6ffd96ad2e4a2479af71e84c4772d4799",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0091",
+          "sha256": "5a75516cf6088790cc98aff0fbba01c58c6a340e86727fddf557f076a97e9e78",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0092",
+          "sha256": "ec412f87c22022f3c0e2e7f4eabddb91b4705e64ecce195066a356e855563bda",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0093",
+          "sha256": "4027a9e962faa60478498a472ebb385669362ed2ad15a45f3beefa5baaf777e4",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0094",
+          "sha256": "d4459f4449a75fd7078f04c03d107a7f57ca0f490ee56be309e08191fe1e65b1",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0095",
+          "sha256": "80db7ca60879f5007cd7768668cd6d6720cf273ba451b30726f82cb73d834cab",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0096",
+          "sha256": "0800d181e3e33793157e569e965998921a1814176c796919b8ba2c7bcfcca762",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0097",
+          "sha256": "71b0a283a3a2c2ef4bea1d2e5422941bb79001dd8213a16049c07cd4907712da",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0098",
+          "sha256": "d1000fe73aad4354d6567fbc0ac99263c57839c33131db68c88430065d7e1ace",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0099",
+          "sha256": "5f2f1d2b7562ae7fc59a5269c3dae528e5819f53af5972f47c83477421868a0d",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0100",
+          "sha256": "4569809b7968f381351bbcd2791d5fd718fe4f9c71d125f5e2caed72c0b395b0",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0101",
+          "sha256": "68b8ce6b55174b2374aa54aab9e61b70700a69c0ad87f1cb6ec0391cfa043cee",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0102",
+          "sha256": "334816c77a73d71e327a4362b57f479220794e8103244c0888ab99f800409149",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0103",
+          "sha256": "a0c4b39cdc00527411e3d2880bc83258a318bf522501375a6504eccc7ac1deba",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0104",
+          "sha256": "bda0ba60e9d59c1b600bc6f4547c4fbe7f17b5d5c856986fd065f4c82df6ff1f",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0105",
+          "sha256": "1b343f72025fee05d8cf248348d6b324324cf3ea641eb841f20a3025561f8302",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0106",
+          "sha256": "63442bd967d1851b128ce26a3ff51e63dca6f4d78c781d4eb7ce432d53f3aba9",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0107",
+          "sha256": "c8fbfa7b834e327bc7de354573947335bea15dc2d529e42854382648db13d118",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0108",
+          "sha256": "46c849ce87babd1e6a4bee410483639716ed58ad7e51c78f8457d1e164b47555",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0109",
+          "sha256": "4d29ade63e6639f7a014e83626bfcc074204b1646dd2b8681b9cfb1f8a91040a",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0110",
+          "sha256": "5211858da8f0aee3ba103399d736ba931e5694d51469cdfdaeeb1ee50f8f0cc0",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0111",
+          "sha256": "ad8e17f018d80d5fa62c36a9ee0c9f5071ec77b6b9783ebeb144a9c7840545de",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0112",
+          "sha256": "797d435ddfa48c18ca0fc8220f6297d9c43f7b1e48a6666576df174d64080a8b",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0113",
+          "sha256": "0e89c8e12f91aefc38e86de6fe8096ea6cdc0cc89b407b096f052aff341a97ad",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0114",
+          "sha256": "f03a0b21b4cf825f343ee3bf04da8907f499a4bac76581fd1e369ede9d6524f3",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0115",
+          "sha256": "f637e7d443ae99ee372962404a13cfc2a2f0f4727e73cdf8c4e5c6285d5e9a9c",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0116",
+          "sha256": "fcbdcafa1703752a8fa9fa49c1507f9ab569ecdf69f4a3d4019b95165b570bb7",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0117",
+          "sha256": "1f2a5a05a7e738df3d98b9055189a9750590bde386732cddb028aab4d176bf99",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0118",
+          "sha256": "4f6c33f82e88fb5dbc0847f4b6a9f3d3a98ac2276e28e6c23dc53ff21f79dc2f",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0119",
+          "sha256": "f2672f7078fe2665d6ff39be11a775a091cb09986401249906c80dd1f4679fe7",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0120",
+          "sha256": "d3952d82b1351418038b7fc29ae836abf79d591f137fd4a5f5942cfd0a491540",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0121",
+          "sha256": "9e98dbadbd765dd98a84c755ddc00c15bfabdde63d602e7cc3efbf3f087889b4",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/expo-dotenv-precedence.source.tar.gz.part-0122",
+          "sha256": "a4d15952d1341439800ac1188a8c893c22b5188fc102a5ee0c4ecdbf2000dd53",
+          "bytes": 48249718
+        }
+      ],
+      "sourceUserTurns": 3,
+      "finalUserTurn": 3,
+      "investigationCheckpoint": 1,
+      "sourceBinding": {
+        "path": "prompts/scenario_turns/expo-dotenv-precedence/source-binding.json",
+        "sha256": "acf881a8c5716e87189c2b9f33b4d87c49f943e53a77f7227224c86cfbca9e3e"
+      },
+      "captureEnvironmentVersion": 3,
+      "captureCode": {
+        "commit": "b4dc7d58b8a26624f4d7b36fcd70c76ab57cf4d9",
+        "tree": "9425955fba475f4699304df95659e2faa3cef24d"
+      },
+      "sourceLimits": {
+        "maxModelCalls": 80,
+        "maxOutputTokens": 8192,
+        "maxRequestBytes": 400000,
+        "timeoutSeconds": 4800,
+        "toolTimeoutSeconds": 120,
+        "maxUserTurns": 4
+      }
+    },
+    {
+      "scenario": "langchain-json-recovery",
+      "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/langchain-json-recovery.source.tar.gz",
+      "sha256": "3ce720c3356a314d3f4b78ea8872212ea7371cce6869b7b3cd3864870359e388",
+      "bytes": 366303768,
+      "sourceDescriptorSha256": "ec7d57b725d4f0974c5a0a04abf05ff2a459bb47e11ba0742a6e73348cbb3765",
+      "sourceMessagesSha256": "9c2329d56b96aeba6600427f7db8bc997e58babc95a27d3d08b0a7afa46198be",
+      "contextOnlyBundle": {
+        "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/langchain-json-recovery.context.tar.gz",
+        "sha256": "25ac2ae0948ce6b585cb5b5d78a213ca459167e17a4ac87976073d8829f9dace",
+        "bytes": 1244296
+      },
+      "sourceUserTurns": 2,
+      "finalUserTurn": 2,
+      "investigationCheckpoint": 1,
+      "sourceBinding": {
+        "path": "prompts/scenario_turns/langchain-json-recovery/source-binding.json",
+        "sha256": "60a4040619603b7452c09fe1dedea6953feafe6b623d4b336e2321c859cf98e9"
+      },
+      "captureEnvironmentVersion": 2,
+      "captureCode": {
+        "commit": "ee348d13d4ad422bc8f8630114ac7cbcc13fb15a",
+        "tree": "aa7657a518f0384195f9be2f47f39b4dcfcc638d"
+      },
+      "sourceLimits": {
+        "maxModelCalls": 80,
+        "maxOutputTokens": 8192,
+        "maxRequestBytes": 400000,
+        "timeoutSeconds": 2400,
+        "toolTimeoutSeconds": 120,
+        "maxUserTurns": 4
+      }
+    },
+    {
+      "scenario": "langchain-none-fallback",
+      "sha256": "b27025c377c74f1ab769590679b1cd6a772263a28b2e4bf8c2ad140c23af77d0",
+      "bytes": 1372421112,
+      "sourceDescriptorSha256": "bd19d06fa7d4247311a3262214b04e61020e93430c5c460a47240be6ee422e11",
+      "sourceMessagesSha256": "0787c601cfdc1133864560a60fd59b7eac7c5e6487bd409382f08527f41ca761",
+      "contextOnlyBundle": {
+        "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/langchain-none-fallback-v2.context.tar.gz",
+        "sha256": "8ee4088cca45117d7035378c821c2bd8ba404c995c25001ecf9a53b851f3c611",
+        "bytes": 7292305
+      },
+      "parts": [
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/langchain-none-fallback-v2.source.tar.gz.part-0001",
+          "sha256": "74fbedb737b4fe59e001201be8a0ed0cead3475d5fbbbe3bb7eb519ef2e2afd5",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/langchain-none-fallback-v2.source.tar.gz.part-0002",
+          "sha256": "da8ecd49623438634c8f5f3b72823b1baf45fe36b66fc9b2aadd51d61f2f4455",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/langchain-none-fallback-v2.source.tar.gz.part-0003",
+          "sha256": "089dba131b8ff623872c3c3ee2ab3a78e5dba717bc29a8cb71fbd8399218c252",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/langchain-none-fallback-v2.source.tar.gz.part-0004",
+          "sha256": "f38116db7853ae64dd55af3523f7b7b2cd8e0edae8415ba089eb00fca012263d",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/langchain-none-fallback-v2.source.tar.gz.part-0005",
+          "sha256": "9eae94c357c884e8666f4f68303cf447d89695a3237fb099ba6bb5e5100a62ef",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/langchain-none-fallback-v2.source.tar.gz.part-0006",
+          "sha256": "da7a0bc05ef0767b67e47924bec1d7b4f7e25cbfc57d5b224a4d23803c1b515a",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/langchain-none-fallback-v2.source.tar.gz.part-0007",
+          "sha256": "a240d17edc3642428c40cbb4e0c053a9df502e424503d38f608d981852a3b3d6",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/langchain-none-fallback-v2.source.tar.gz.part-0008",
+          "sha256": "16d1d2ffcf57b59594930233754cc7c993660b01636d88fc7bde5452d36a772c",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/langchain-none-fallback-v2.source.tar.gz.part-0009",
+          "sha256": "09b9ec9f138a52c0134e2c13afa02b36f71c45b75e7cc9bcd04aae04de0042c3",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/langchain-none-fallback-v2.source.tar.gz.part-0010",
+          "sha256": "966a49af83c21296f0775df8da49c0bb84c1d27f608c8d18adc2344017abc5eb",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/langchain-none-fallback-v2.source.tar.gz.part-0011",
+          "sha256": "090c54852897ea20b2c88874e31d2d6459b72f8949f2bdfbf33799c7e68eaa0a",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/langchain-none-fallback-v2.source.tar.gz.part-0012",
+          "sha256": "0c5d998a34d506cf189e60e8aec0ef6f4e0685b17f0aba0db47e6a4ad3caeb43",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/langchain-none-fallback-v2.source.tar.gz.part-0013",
+          "sha256": "e538810186ac0e2c64648ca682f46b720458a863170d5ddecc5e1392a91450df",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/langchain-none-fallback-v2.source.tar.gz.part-0014",
+          "sha256": "fcc7adbbf781d4b0d70aba8978c221ab15e85aa88824a6ac86f04724a147b44b",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/langchain-none-fallback-v2.source.tar.gz.part-0015",
+          "sha256": "10e89491eaa0423f9737c8b0da1144d8b4543737ccc915115b19aae09a0d9234",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/langchain-none-fallback-v2.source.tar.gz.part-0016",
+          "sha256": "a73fb2725d95c2bc381e49805755320110e359182db2a65aeedc01358b7bdf6b",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/langchain-none-fallback-v2.source.tar.gz.part-0017",
+          "sha256": "d2edad27bc37ee4f1c2165e48c1c5071161caee8493b301baaac48d970ec1f98",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/langchain-none-fallback-v2.source.tar.gz.part-0018",
+          "sha256": "b3190e0efe85ccb7e3795a271aff0c69dfb4a7412dd97b1f25fe72b1344447f2",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/langchain-none-fallback-v2.source.tar.gz.part-0019",
+          "sha256": "6faa385589626c549e87030da22bf9b80b214fbd9ec6d52f36ee3ca26e612190",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/langchain-none-fallback-v2.source.tar.gz.part-0020",
+          "sha256": "24159608dd93e5c8cf6c2674def82d5f2ea1a7b109cfd0a1ef068b9f79ba9709",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/langchain-none-fallback-v2.source.tar.gz.part-0021",
+          "sha256": "75f057b4d5f771c669a9c0dc0fee530b759dbdb1ec34a6bf71a2abb86139b3a3",
+          "bytes": 30243832
+        }
+      ],
+      "sourceUserTurns": 3,
+      "finalUserTurn": 3,
+      "investigationCheckpoint": 1,
+      "sourceBinding": {
+        "path": "prompts/scenario_turns/langchain-none-fallback/source-binding.json",
+        "sha256": "474de05956956a4039a682d3480d70627c1772022e6ea1ae2ce1cdf1ec3e4e98"
+      },
+      "captureEnvironmentVersion": 4,
+      "captureCode": {
+        "commit": "5baaf42b56919210ef0bb1d2a7a1a4c34f796fa8",
+        "tree": "c5153827c95661d723dba65c9577fa9534be3326"
+      },
+      "sourceLimits": {
+        "maxModelCalls": 80,
+        "maxOutputTokens": 8192,
+        "maxRequestBytes": 400000,
+        "timeoutSeconds": 2400,
+        "toolTimeoutSeconds": 120,
+        "maxUserTurns": 4
+      }
+    },
+    {
+      "scenario": "mlflow-requirements-includes",
+      "sha256": "56c354a29c8e92f4940bf3299bc1c52fbcf10647c77da061f829949e3a54d77b",
+      "bytes": 2241794041,
+      "sourceDescriptorSha256": "1053c5118462eb5c43335d90ac6630d3e97a8079fd34fd5aa3b9ffa1f3f24863",
+      "sourceMessagesSha256": "b255d1c3860e77274982dd9fd2457c821540a3b4bcf5b48e5d769cec2748cdfc",
+      "contextOnlyBundle": {
+        "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.context.tar.gz",
+        "sha256": "a3a47b09228b10bbb9e74c6ca4cad59142fa4bdfaf90e540859c1d517b9abaa2",
+        "bytes": 3741120
+      },
+      "parts": [
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0001",
+          "sha256": "2e6e9997f0987fbdebb45513a05fbc52807d240a81a15f0f9afe43341bb98f03",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0002",
+          "sha256": "80b427aa9357b26436cfd836aecd9e988370bd3c31036ce0309e79980559cb10",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0003",
+          "sha256": "afa87bc548f3258123942a94d620c0218bea9f207442f16cf08ef0c864a95db9",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0004",
+          "sha256": "717a27a039391cae61f1aa33de28689c64fe59bee4c05c908c80fbb1c3704671",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0005",
+          "sha256": "dd9b0ed345f0cec8d4cca6153b43cbb72da0f63ffa71701265b34b449271df01",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0006",
+          "sha256": "44c28ac8fab50d4cf399f3ff1778cf9e87649bf53f5e317067acc30826ce79f8",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0007",
+          "sha256": "d969fe4706fbeed38406ca2b8571f21a4c8cb4090b06cf7772a9a26fdb808dc8",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0008",
+          "sha256": "458ab67f5423a4a2cfc70f80bfe7cb51ff058e2452843c503d0b5d8f24cfe0b3",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0009",
+          "sha256": "90d3efecaa3db856825f499e2ca846bb36b4ce42edbc023d317a3042a2e64f96",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0010",
+          "sha256": "dbd004b99b11b89de6b8020de156a4d109c1c4e79012be29aa1c33ec8e8f6756",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0011",
+          "sha256": "13d821d6000077010c67f7686af99145bf8ee8444ff9f6bd4614bf34a787402b",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0012",
+          "sha256": "6134ff67db8e730c58565ddd5f7502bc79d3d1ed5e347af9a04c77604dacf3df",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0013",
+          "sha256": "3aa581b2ca858b43a4899cd91e357dea397532de96d39076708a4975d99eaf36",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0014",
+          "sha256": "c0a89abe347f0b7fb52f0249ca96c079491a3f8c7fb5295720770500948bec5d",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0015",
+          "sha256": "73f16c3762989f0c3e6d4a227f98c29b8a636d3cb248ebb5a2edc7a727d30b4a",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0016",
+          "sha256": "deed5f8b161e305311f068307e06039a686efcc04a83168e3ecb9d69a5e31c50",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0017",
+          "sha256": "aa387f991df803b3fb418e964e46d15e0e37dc0c00d5a594f1181316bf27a206",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0018",
+          "sha256": "b32fc589e0a6534770dd536c16b953b93f22df8ffc0c3f813379355db803d36c",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0019",
+          "sha256": "4e74659abfed7b8494abd6a4dcff37b06acaea0446344913c1c42bb0d6bbf153",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0020",
+          "sha256": "afb5411ff0cd855943edbd5117b3e3a9ec0986f174b5f04248a56d2e0bb9b68d",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0021",
+          "sha256": "59a2ad00e15f78522361a1be14f06bd284a264eabe77584d0b03eec9a9148eac",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0022",
+          "sha256": "ed05432414987065030597294cc09717ccbc9b6b921164fddba6fbcf59f55395",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0023",
+          "sha256": "1b913b47027e19be28de3e1cbc8c814020da6755320cf444f960ba1c5ba7fa58",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0024",
+          "sha256": "66d30f5e249be621bb28c8f3e984f02797f12b513980e2b980b63f4a51ef5f2d",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0025",
+          "sha256": "012a526a1a9e6564a2de24d8a031eb35e968087c755b38b239bab116038d4256",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0026",
+          "sha256": "078875bc9ddd2722aacfc58021cfd254e35082e4aca0378f0a1f43159d7c49c2",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0027",
+          "sha256": "98f1630501a0be3dbef43e0f60ab36c1d2d6349d5a1b72d04bac0055cdc4a84f",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0028",
+          "sha256": "6925d094e82719ab9fcb06173036364ca4470bfa7b7c13117cdc19ac6f4904d7",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0029",
+          "sha256": "98f211b669f7474600d6cd7c2c200874683211f0e6bb0899bb6a8f051e08b981",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0030",
+          "sha256": "9ede7cc1647e5e415fe683eeae134facf5f3fd37e415f969938c65bb3938b407",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0031",
+          "sha256": "8e27a63444b343fb27cc147cd972959953968d9724a60681b8a56faec0bf15c3",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0032",
+          "sha256": "639b0754e796cfb3c5c18cc58b637a9c2a0df69ce8217dc003c7b2914067f858",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0033",
+          "sha256": "cb0dcb72fafeec74bfbbb8dd33d08ba23ce9011c78625b297afae02152974646",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/mlflow-requirements-includes.source.tar.gz.part-0034",
+          "sha256": "b713ff81a2051f98494b3c24d27c2125c1994efd276d3e1ec4057f944a33cd0f",
+          "bytes": 27201529
+        }
+      ],
+      "sourceUserTurns": 2,
+      "finalUserTurn": 2,
+      "investigationCheckpoint": 1,
+      "sourceBinding": {
+        "path": "prompts/scenario_turns/mlflow-requirements-includes/source-binding.json",
+        "sha256": "90a75eff1e0b935e85e92e0a650b6b9529ab07da0c718d27b7ae1c2c0d43f0a5"
+      },
+      "captureEnvironmentVersion": 2,
+      "captureCode": {
+        "commit": "ee348d13d4ad422bc8f8630114ac7cbcc13fb15a",
+        "tree": "aa7657a518f0384195f9be2f47f39b4dcfcc638d"
+      },
+      "sourceLimits": {
+        "maxModelCalls": 80,
+        "maxOutputTokens": 8192,
+        "maxRequestBytes": 400000,
+        "timeoutSeconds": 2400,
+        "toolTimeoutSeconds": 120,
+        "maxUserTurns": 4
+      }
+    },
+    {
+      "scenario": "prometheus-missing-source-label",
+      "sha256": "452c8c1c8664be79d614b7991a33b94e0efbbe88b657a34151d33db475e96804",
+      "bytes": 5634334583,
+      "sourceDescriptorSha256": "bef3005d896b92ebd5dddc2ddc861e65baa4b98de70198423766f3a019dd805b",
+      "sourceMessagesSha256": "4683ca5a219ba08f032d8ee466ed1d0c21ce5b4807e057515f4aa407b4f65cbd",
+      "contextOnlyBundle": {
+        "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.context.tar.gz",
+        "sha256": "94f973e40aee1fa0cbfa356e5da016a56d110b72e17819b49fa637c6c431a79d",
+        "bytes": 10182857
+      },
+      "parts": [
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0001",
+          "sha256": "052583c4095a25aff3346f02a8b2d901d6fe7dba6a3d8b6a277f978bbf8ae210",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0002",
+          "sha256": "8c1981ee096690b85d667eec4f07568156553c9dea006673c05008d411a54220",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0003",
+          "sha256": "0ca23e5b272b21209a6131729f5eb3b9c70040555936aeca7d74db2986dca6ee",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0004",
+          "sha256": "18d051751ecd4e792d016f0c50801402cac5c19610eb967c255511c665bd29ff",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0005",
+          "sha256": "1660ea34bc1f43340c66e4703b0a23618fa85b548f762d8848573bb22cd8e1d7",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0006",
+          "sha256": "1dbeb080f9790448437314fdf197868e242acfd0ee89e02f10449568bcc6a7f8",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0007",
+          "sha256": "6ada813937d059d9a66e895e5fc1107d47ddc7c515b40f609f2ae9f2ab93cc74",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0008",
+          "sha256": "b29a6b5670a39ec88564d82cc244964d7a62f8ba490ed16b4d77c7ba18065acf",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0009",
+          "sha256": "998b3348b13aefb5c6691080c4b5ceae7f1741227d07ac71824d7afca296e1a3",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0010",
+          "sha256": "5e35719a4e60fe61afb96d188edb4d491420018689377b7e6f70a7eaaf377096",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0011",
+          "sha256": "38d3e2ad8fd9519dcc2a9b9cf06b0144d1e799eb6b554a1bb2d23f076407f7c9",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0012",
+          "sha256": "64200d386a997a4ee3c3c6955a07d62a24a4a4df1fd2868303ee6b6376016bd4",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0013",
+          "sha256": "8bfd3d3000109dd2ecffc940a462e1959f1fb2d48291addb34db0beee2746c40",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0014",
+          "sha256": "323cd35ff3605a147073034d4d3efdc585d3bb3e04ca28a7013b2f03b60b013c",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0015",
+          "sha256": "3bfa5f620eaa02d1e0c3061e5187d70edc667bbd40c8c18abcddc0e29d3e4f56",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0016",
+          "sha256": "8ab6bde56836a6879b33ad2d420a39cbe87f29a084d1534e5243911ae077a941",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0017",
+          "sha256": "842c8a3aaf0bb8ae493a0c4915c1883154e576dbd3d6b81a84e5269c306159e8",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0018",
+          "sha256": "87a4e003d96fea67e83d5c2f63fdb174aaf73aa612d57ca1ef9fed0fa9c12053",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0019",
+          "sha256": "29bb59e197e5212881a638da8d5433dedb50b4cb88661ffb66a5f3f538016bb1",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0020",
+          "sha256": "9306f33e1e92f56869e9fe13fb71875cf42d3b846797d2eea92378184163d97b",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0021",
+          "sha256": "6f355d6e862f29da4ef4a112627386ba767df064df8b88c1523db6c3d8f8c54c",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0022",
+          "sha256": "cbb5ee0d83f5d2580000c48049f3782ad2dc5f2d05ab73b8d88f5298ba1031e8",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0023",
+          "sha256": "5a1db515f09ca50ab260ef8f0e4242c90d16289302ca74e9a47e4ecc171c8b25",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0024",
+          "sha256": "6088eb8134cda0654abaf4d9889f06feea9453563e9ed4ce982f53757034271c",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0025",
+          "sha256": "e7c2107392a6111b8241c9918c946dfdd3bba2fc3a4141686c2a91eba0757d6d",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0026",
+          "sha256": "c81f63b0e71b323d9c5b33c924f13026099fc30faab76f8d96ed45e396065ff5",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0027",
+          "sha256": "a018c5473a8e23bdf3c2af663be86a4892516d0b3217d72c473d1434da9ff0a2",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0028",
+          "sha256": "abad3b3123144d64286b44b4a0a9788ec8c8b31126ab11bd852caf0567f72544",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0029",
+          "sha256": "a956d41ad7ed3d7a55d052e249c84ed9c857b26700c4dcfb0c903702889b6c74",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0030",
+          "sha256": "bd2522c895f89c7b0ebd0f0f41b18bc4b39136e537fa28dbb27ba5c822594fc8",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0031",
+          "sha256": "e5ba683980e43be4a14ebad1126820a6b64c2eb027e47a2675148219ce3648eb",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0032",
+          "sha256": "1c89a6011340d9a2b726bb668d093ea63a900de769363bf4202882038dd53f02",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0033",
+          "sha256": "30de39fdb20bc0fdf4b07af21c7edd83d9b7fe9d3a40e6ca4d0e6da16c56fbd0",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0034",
+          "sha256": "2e0c136aa0213cb50b106b90cbd19a5e093e4442a759984fd872f1ceda051f7d",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0035",
+          "sha256": "5450a899920f8c887413a1abf32124c4d408a3f4a93af3514b6146a807760550",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0036",
+          "sha256": "3b8b3e72a0831f25a43882ac383ebad91b8cbaba4be264b8cddf891aa4cb9c66",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0037",
+          "sha256": "5fd9eda5e111a4ebbfbffd1e0e073e76626fb5e8c10aec3a1f9062e5bb1f5259",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0038",
+          "sha256": "e543047457a4c822afdda92049cc6eea3b99ce707d6518e61cce077096526775",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0039",
+          "sha256": "bd1bf0ec874865c6cc542da6c7df909906a74ee0eaf885afc4cb73051ac1f0fe",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0040",
+          "sha256": "b5bb1d03ccf97465387b10e33b3dab2d37a46796f199b2a1ddf5d51c46adc327",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0041",
+          "sha256": "469e694e0ef6f07e00e72f3ecb4146a16e55fb2f3e4970545e847e998c2a7588",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0042",
+          "sha256": "c1bc96399167fb1f931b84d1bb7df0d0cd6d97078efc8cf3ebbcac122ff8d28c",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0043",
+          "sha256": "b4fde4a1b26d804329c845bb8bba74cf1b695ad834f4648920301b79a904ccb8",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0044",
+          "sha256": "e8136b32c42f090c16da06bd6b93ac3aea1b8014de974b56fc743602f5491c08",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0045",
+          "sha256": "56143654571684630e760c46609a1aa806b3914bdc6bcdec9bc684993c02fca8",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0046",
+          "sha256": "bab69238827e932d72a2f564485d258a632de089de5597f1b04d29e3140dc2cd",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0047",
+          "sha256": "38da56589de46346385f5349e38088a0ebf73ddf8af7e328f6207c6d3a31a812",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0048",
+          "sha256": "596f9c09ad6c3dc08bbb35786a78c74162f37f22eb542067b19badad9e3aed8f",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0049",
+          "sha256": "4fea4e9551f54a81a71e874199dc62a6bd75bf408408fec851271ec8d3a620cd",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0050",
+          "sha256": "4b9144501ce5e6ee31e1eda83a8e2a6ff04c74d42c307ecb501e4ed0615ba906",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0051",
+          "sha256": "31ac331950ee1194d2b38a9635157e56e869fa634a7d8a1f216faada1ba3a35c",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0052",
+          "sha256": "abd1a02804f2a81551bcb0890dd77dada39903d17c6de00b9af7a66d8f914666",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0053",
+          "sha256": "0715d9c4127c965a83611230405d48f08700ac9a86e0623d3c5a6cdae57c6b07",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0054",
+          "sha256": "29d5098f2c225132e1249f22243f96d74b0006e09c2555214df41338fadcefd1",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0055",
+          "sha256": "cc5a5757d1ca134511b8c700bf159d482e8d1ad3098fd2dc3b83edff2ac8cdf8",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0056",
+          "sha256": "f9c1a6ff6147bd9c5ab92877b24751b0443c61a08c31fc0b0b060fcb537d2c31",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0057",
+          "sha256": "76eefc145aaaf84d5c7c38c7805313c55987fbaef1132f43a1d45935406f7f43",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0058",
+          "sha256": "994f94f9a9446151f0102d7995e67fb3025b01344c3227f377080bd3617be827",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0059",
+          "sha256": "66fd860acc593a1e554a24ada4b982a3ea1913b43632215a1aad3bb9c7e0ded9",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0060",
+          "sha256": "11c72e6cd75e3013803c4bff17129381049ec09d4e579daf33fb348e448b286c",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0061",
+          "sha256": "21961486e4e7433ef0929db7d25f201a180bdcf9250f6fcbcefc316fc672a453",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0062",
+          "sha256": "1c28b44a3e56ebd790b041be320f3741d00132771f6bdd31882c7b26bcca2e21",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0063",
+          "sha256": "6947f0263c01cfe15c644e6fe93861659234b3b6f00acb7cdbc909bbf8b54ba1",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0064",
+          "sha256": "b37c0109f1eb3ade394ad806e9a5b32263f0153ddf9fe3bf99e19dc8437cbe82",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0065",
+          "sha256": "5510957b0f69fdd378c7e9c9f01cb5ad187920d85742ab244f54aa8603a91709",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0066",
+          "sha256": "3f2b18ab239193d5916136c145792047759d042f7e7e715e1b2d4c0c7e53675b",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0067",
+          "sha256": "89c7daf7197ae9434f11a65ce5524cc510c1d8706065033649e4402b2ac2220e",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0068",
+          "sha256": "59a034dd069e6014a5fd6762ac86550e4dba0ab1f9542331517f138c75beeff1",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0069",
+          "sha256": "77b91af99cfd7b76a5259801ffa14725b317483171110a1480cc26cf7523866e",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0070",
+          "sha256": "ed4c1649f1125e65060dc99f3446b8759fe550adba07f7c4c6a7b3b6a4bd7c8c",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0071",
+          "sha256": "b8030408aa5c18824f9f41f6b6a466a9b85e85cb9a03a351327e964d91a8389b",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0072",
+          "sha256": "5d660695d398abce4e0a428e6f7c798ef8cd9ee402c63e91addb0c3f6ee7a8bc",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0073",
+          "sha256": "6d04b63a7664a1b75e64855b2d34dc3ee102272d7cda0d77eab2eddae879b27d",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0074",
+          "sha256": "be36febc6278535fc8cfdcce3d00f84d8fe5131c899d3384e2d63f2b7b375700",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0075",
+          "sha256": "d32baf3fceb4f58ab7a89e7442601582fc034e6534755e78452d38b78f5aef13",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0076",
+          "sha256": "d67b44639398548699704f97cad9cd5bc2e634d5f46cb9a5ae313971ddaa4920",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0077",
+          "sha256": "263feec606dbe3c4b9ed9cf33b51a78e32641d21159354112bf134be5da74280",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0078",
+          "sha256": "7adc1946645f65753b68ae89c9381d879af2ceb7dbb6860f21a9329718294036",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0079",
+          "sha256": "56a5a7f6de6bfb6c7bf6d7bef01e8c2b410ab9c58de4793bee2e2c46e2c58c18",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0080",
+          "sha256": "068880fdcaa1e624df87c7ae7f4880db1918d07f0c38aae65fb4a3a630f57a09",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0081",
+          "sha256": "37cb2dfb6c57114b7141b8d893549b13a0ed1b6dd665706edf3aabe51b93de11",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0082",
+          "sha256": "388d40e44babe226c3dffe63db3d2e64363b32d3b3cd880dae30fd11626b1051",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0083",
+          "sha256": "34f09d8b355b58e2a4821feee1e0ea55683524bb11abd7137fac8758a4558276",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/prometheus-missing-source-label.source.tar.gz.part-0084",
+          "sha256": "dc839b48bbd064295bbf95226c9e0035a38352ced92bb3238038908d277624ab",
+          "bytes": 64298871
+        }
+      ],
+      "sourceUserTurns": 2,
+      "finalUserTurn": 2,
+      "investigationCheckpoint": 1,
+      "sourceBinding": {
+        "path": "prompts/scenario_turns/prometheus-missing-source-label/source-binding.json",
+        "sha256": "33199176b48e2b84f7a25be7b723080ea9936515e868a8f449149da5cbbc45ce"
+      },
+      "captureEnvironmentVersion": 5,
+      "captureCode": {
+        "commit": "2f93cdfb407f20aa458f298cacd47c1f21e4b385",
+        "tree": "56e9e145da2f82208930172316d81c5e516a09ce"
+      },
+      "sourceLimits": {
+        "maxModelCalls": 80,
+        "maxOutputTokens": 8192,
+        "maxRequestBytes": 400000,
+        "timeoutSeconds": 2400,
+        "toolTimeoutSeconds": 120,
+        "maxUserTurns": 4
+      }
+    },
+    {
+      "scenario": "uv-release-checksum-conflict",
+      "sha256": "99f4578e2955961a9ebdac0ec168f0fce76a9023cbd25e6c5daaff84a3578744",
+      "bytes": 201449797,
+      "sourceDescriptorSha256": "6e5778ad81af37f83030bf7d54a6f09e7fb6d2c7966a31bff25ea9f7769952ae",
+      "sourceMessagesSha256": "bb69bd63be7ce27513e9c6eb56c879ecea9b631919dffef5757dcbbd8dd74e40",
+      "contextOnlyBundle": {
+        "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/uv-release-checksum-conflict.context.tar.gz",
+        "sha256": "26806f38e46a02eb4dd10318c8626b6aed75bad4484d2afe4a9d88ce7fead9dd",
+        "bytes": 5863977
+      },
+      "parts": [
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/uv-release-checksum-conflict.source.tar.gz.part-0001",
+          "sha256": "1b6387ad1e8d81066edc5d085ac67897dc40551ae89fb0d7c2d060ae1d41ccfb",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/uv-release-checksum-conflict.source.tar.gz.part-0002",
+          "sha256": "f3c0ac168b1a2f45f5342c1baa9b85f362c916d8c55fd98cd5c2e46734b929d6",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/uv-release-checksum-conflict.source.tar.gz.part-0003",
+          "sha256": "7aabb89a727e401661f28bd31e886910c03d9bd255cc6496a59f98b9e6543222",
+          "bytes": 67108864
+        },
+        {
+          "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/uv-release-checksum-conflict.source.tar.gz.part-0004",
+          "sha256": "07bc09ff208d6b7fb15ef830e76f6d057b609d7cd7a0b64f2f399a1fc3b4a9f7",
+          "bytes": 123205
+        }
+      ],
+      "sourceUserTurns": 2,
+      "finalUserTurn": 2,
+      "investigationCheckpoint": 1,
+      "sourceBinding": {
+        "path": "prompts/scenario_turns/uv-release-checksum-conflict/source-binding.json",
+        "sha256": "8c8c998a2726a1ea6a735426cb7ba08fa09b1dc1efd28a49ff9b32016a57a06d"
+      },
+      "captureEnvironmentVersion": 2,
+      "captureCode": {
+        "commit": "ee348d13d4ad422bc8f8630114ac7cbcc13fb15a",
+        "tree": "aa7657a518f0384195f9be2f47f39b4dcfcc638d"
+      },
+      "sourceLimits": {
+        "maxModelCalls": 80,
+        "maxOutputTokens": 8192,
+        "maxRequestBytes": 400000,
+        "timeoutSeconds": 2400,
+        "toolTimeoutSeconds": 120,
+        "maxUserTurns": 4
+      }
+    }
+  ],
+  "historicalWithdrawals": [
+    {
+      "scenario": "clickhouse-targeted-job-flavors",
+      "sourceDescriptorSha256": "ea535e682038acd7349f362742c93936b108d20644ef8d09ca8c1cdfd55f067a",
+      "sourceMessagesSha256": "ac88d7c6e543e168027719c31a8cea2fc4cf26d71cf401eafa46e90d270e7a6d",
+      "status": "historical_selection_withdrawn",
+      "notice": {
+        "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/clickhouse-targeted-job-flavors.source-selection-withdrawal-20261029.json",
+        "sha256": "b768fdd6c04f7e4438b75fa1f4c7f4cadd86608a1818cf172277913908e53839",
+        "bytes": 19184
+      }
+    },
+    {
+      "scenario": "langchain-none-fallback",
+      "sourceDescriptorSha256": "e433f6c5d1c0bf3fc0b968e4b5a38b5dd35963e0e8f156a4f2365706b4931c8a",
+      "sourceMessagesSha256": "f610c7b18f9881234e53c6c154b0b3f7c9656266245fa5dec06365ff03af9c7a",
+      "status": "historical_selection_withdrawn",
+      "notice": {
+        "url": "https://github.com/d0rbu/reasonese/releases/download/pi-native-corpus-20261029/langchain-none-fallback.source-selection-withdrawal-20261029.json",
+        "sha256": "5624167c8529db8f09a69f1c9a735a1098002c1afe184bdb486e03092194b8c4",
+        "bytes": 3324
+      }
+    }
+  ]
+}

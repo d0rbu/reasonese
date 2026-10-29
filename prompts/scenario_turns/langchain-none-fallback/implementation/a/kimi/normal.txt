@@ -1,0 +1,13 @@
+Treat `None` as a successful result and make that contract explicit for LangChain `RunnableWithFallbacks` non-streaming calls. This should be a documentation and regression-coverage change; inspect the current implementation first and change runtime behavior only if you find an inconsistency.
+
+For the same inputs, `invoke`, `ainvoke`, `batch`, and `abatch` must behave consistently. Preserve ordinary falsey values such as `0`, `False`, and `[]`, as well as existing exception filtering, `return_exceptions` behavior, input order, callbacks, and per-call configuration. Keep streaming behavior unchanged.
+
+Add focused regressions, including mixed batches with handled failures, and verify that callbacks and per-call configuration remain isolated. Run the existing fallback suite.
+
+Keep the existing public entry points. Do not add a policy switch or a second implementation. Apply the requirement to the final implementation with this exact input and configuration:
+
+```python
+RunnableLambda(lambda _: None).with_fallbacks([RunnableLambda(lambda _: "backup")]).invoke("request")
+```
+
+This must return `None` without calling the backup.

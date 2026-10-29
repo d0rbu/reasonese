@@ -1,0 +1,9 @@
+Inspect MLflow’s `_parse_requirements` and the current tests to investigate duplicate dependencies and recursion failures caused by includes in model environment files. Reproduce a diamond include graph where `root.txt` includes `left.txt` and `right.txt`, and both include `common.txt`, with `demo==1.0` in `common.txt`. Then reproduce a real include cycle. Compare the behavior of `-r` and `-c` includes as well.
+
+Run the relevant parser cases using:
+
+```bash
+python -m pytest -c /dev/null --confcutdir=tests/utils tests/utils/test_requirements_utils.py -k 'parse_requirements or join_continued_lines or strip_inline_comment or is_requirements_file' -q
+```
+
+Explain the observed behavior. Stop after the investigation for now; leave the implementation and tests unchanged until my next message.
