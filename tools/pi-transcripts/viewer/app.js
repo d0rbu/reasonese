@@ -53,7 +53,7 @@ function renderMessage(message, index) {
   const card = el('div', 'event-card');
   const blocks = Array.isArray(message.content) ? message.content : [{ type: 'text', text: String(message.content ?? '') }];
   for (const block of blocks) {
-    if (block.type === 'thinking') card.append(details('Kimi reasoning · plaintext returned by provider', block.thinking ?? json(block), 'reasoning'));
+    if (block.type === 'thinking') card.append(details(data.normalization ? 'Kimi reasoning · paths normalized' : 'Kimi reasoning · plaintext returned by provider', block.thinking ?? json(block), 'reasoning'));
     else if (block.type === 'text') card.append(message.role === 'toolResult' ? el('pre', 'tool-output', block.text) : prose(block.text));
     else if (block.type === 'toolCall') {
       const tool = el('div', 'tool-call'), title = el('div', 'tool-title');
@@ -68,7 +68,7 @@ function renderMessage(message, index) {
       card.append(tool);
     } else card.append(details(`${block.type ?? 'Additional'} content`, json(block), 'raw-message'));
   }
-  card.append(details('Raw message JSON', json(message), 'raw-message'));
+  card.append(details(data.normalization ? 'Message JSON · paths normalized' : 'Raw message JSON', json(message), 'raw-message'));
   body.append(card);
   if (message.usage) body.append(el('div', 'event-meta', `${number(message.usage.totalTokens)} total tokens · ${message.stopReason === 'toolUse' ? 'tool use' : message.stopReason}`));
   article.append(body); return article;
@@ -102,6 +102,16 @@ function provenance(label, value, href) {
 async function init() {
   const response = await fetch('data.json', {cache: 'no-store'}); if (!response.ok) throw new Error(`Transcript data: HTTP ${response.status}`);
   data = await response.json();
+  if (data.normalization) {
+    const note = $('#normalization-note'); note.hidden = false;
+    note.append(el('strong', '', 'Paths normalized after collection'), el('p', '', data.normalization.notice));
+    if (data.normalization.streamNotice) note.append(el('p', '', data.normalization.streamNotice));
+    for (const [label, href] of [['Download context for reuse', data.normalization.context], ['Path changes & cue audit', data.normalization.audit], ['Original captured transcript', data.normalization.originalReview], ['Original evidence bundle', data.normalization.originalBundle]]) {
+      const link = el('a', 'artifact-link', label); link.href = href; note.append(link);
+    }
+    note.append(el('p', '', 'The audit flags remaining evaluator speculation and environment restrictions. Read the collection-wide findings at the link below.'));
+    const report = el('a', '', 'Read the environment audit →'); report.href = '/kimi-transcripts/environment-audit.html'; note.append(report);
+  }
   const catalogResponse = await fetch('/kimi-transcripts/catalog.json', {cache:'no-store'});
   if (!catalogResponse.ok) throw new Error(`Scenario list: HTTP ${catalogResponse.status}`);
   const catalog = await catalogResponse.json();
@@ -160,7 +170,7 @@ async function init() {
   $('#patch').textContent = data.patch;
   data.files.forEach(file => {
     const card = el('details', 'evidence-details'); card.append(el('summary', '', file.path), el('pre', '', file.content));
-    const link = el('a', 'action', 'Download exact file ↓'); link.href = `files/${file.path}`; link.download = file.path.split('/').at(-1);
+    const link = el('a', 'action', 'Download file ↓'); link.href = `files/${file.path}`; link.download = file.path.split('/').at(-1);
     card.append(link, el('p', 'file-footer', `SHA-256 ${file.sha256}`)); $('#files-list').append(card);
   });
   $('#repo-context').textContent = data.provenance.context.content;
@@ -175,7 +185,8 @@ async function init() {
   provenance('Reported model', data.reportedModels.join(', '));
   provenance('Inference provider', data.reportedProviders.join(', '));
   provenance('User-message author', 'Codex operator · adaptive, not a human session log');
-  provenance('Transcript SHA-256', data.outcome.messagesSha256);
+  provenance('Original transcript SHA-256', data.outcome.messagesSha256);
+  if (data.normalization) provenance('Edited messages SHA-256', data.normalization.messagesSha256);
   provenance('Environment', 'Prepared task dependencies; network-isolated tools');
   data.artifacts.forEach(artifact => { const a = el('a', 'artifact-link'); a.href = `evidence/${artifact.name.split('/').map(encodeURIComponent).join('/')}`; a.download = artifact.name.split('/').at(-1); a.append(el('span', '', artifact.name), el('small', '', `${number(artifact.bytes)} B ↓`)); $('#artifact-list').append(a); });
   $('#search').addEventListener('input', renderTimeline);

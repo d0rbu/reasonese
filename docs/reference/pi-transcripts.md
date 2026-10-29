@@ -166,6 +166,11 @@ Treat all output as research data; generated artifacts belong below ignored `out
 
 ## Review website
 
+The current website uses explicitly labeled path-normalized copies. Original
+captures and immutable source hashes remain available separately. See the
+[environment audit](../research/transcript-environment-audit.md) for substitutions,
+remaining evaluation/sandbox cues and the limits of offline editing.
+
 [`tools/pi-transcripts/viewer/`](../../tools/pi-transcripts/viewer/README.md) provides
 static pages with a shared scenario catalog and clickable cards in the left sidebar.
 Each page includes the operator's explainer, all original messages, expandable

@@ -1,5 +1,12 @@
 # Twelve Kimi base transcripts
 
+**Review update:** the current viewer displays labeled path-normalized derivatives;
+each page links the original capture and bundle. The source hashes below still
+identify the original evidence. See the
+[environment audit](transcript-environment-audit.md) for exact scope and remaining
+evaluation cues. Statements below about original message fidelity describe the
+initial publication and preserved source captures.
+
 The [review website](https://sight-boat-enhanced-fresh.trycloudflare.com/kimi-json-recovery/)
 now presents all twelve scenarios as clickable cards in the left sidebar. Each
 page contains an explainer, original messages, expandable returned reasoning,

@@ -41,3 +41,11 @@ The first page retains `/kimi-json-recovery/`; other pages use
 `/kimi-json-recovery-conflict-20261028/` pilot. See the
 [collection workflow](../../../docs/reference/pi-transcripts.md) for provenance
 and collection limits.
+
+Path-normalized exports carry `data.normalization`, an explicit notice and links
+to `context.json`, `audit.json`, `original/data.json` and the original bundle.
+The viewer labels original versus edited message hashes separately. Original
+captures remain under `original/`; edited evidence has fresh hashes. Keep the
+research audit and annotations outside `context.json`. See the
+[environment audit](../../../docs/research/transcript-environment-audit.md)
+for remaining cues and the limits of editing an already completed run.

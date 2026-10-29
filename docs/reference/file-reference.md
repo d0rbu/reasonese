@@ -14,6 +14,8 @@
 | `tools/pi-transcripts/environments.mjs` | Scoped dependency setup and recorded read-only runtime mounts |
 | `tools/pi-transcripts/baseline_*` | Executable untouched-source observations, not post-change success oracles |
 | `tools/pi-transcripts/viewer/` | Static transcript review pages with scenario cards, reasoning, checks and evidence downloads |
+| `tools/pi-transcripts/neutralize.mjs` | Offline path-only derivatives and exhaustive string-surface cue audit |
+| `docs/research/transcript-environment-audit.md` | Path edits, remaining evaluation/environment cues and source-versus-derivative limits |
 | `configs/pi_langchain_kimi_review.json` | Archived Kimi conflict-pilot manifest; not for base collection |
 | `docs/research/langchain-json-recovery.md` | Historical JSON parser conflict pilots, original pair and observed results |
 | `docs/research/langchain-json-base.md` | First-instruction-only Kimi source session, independent checks and viewer |
