@@ -1,7 +1,7 @@
 // Dependency setup is explicit and runs before collection; tools retain public network access.
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, readlinkSync, readdirSync, realpathSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, readdirSync, realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 import { promisify } from "node:util";
@@ -13,6 +13,10 @@ const exec = promisify(execFile);
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const GO_VERSION = "1.26.9";
 const GO_SHA256 = "42d158b4d8f7b61ac0a830567c940a86098fb7aac52e467a5ebec03ef5cc2f8d";
+export const UV_VERSION = "0.13.6";
+export const UV_WHEEL_URL = "https://files.pythonhosted.org/packages/5c/43/0688ff5142934238f2812e348f4a24e09b57d48bfb38dd8f850325a0d9de/uv-0.13.6-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl";
+export const UV_WHEEL_SHA256 = "22759b8895e1103578de6fb4cd27e94b4399d021023378d29f01333717751fba";
+export const UV_BINARY_SHA256 = "23803452c0fbe125033054cd9ff245f1d649fb65b4b73f68429f4abda432436d";
 const relativePath = (value) => typeof value === "string" && value.length > 0 &&
   !isAbsolute(value) && !value.split(/[\\/]/).includes("..");
 
@@ -35,14 +39,66 @@ export function validateEnvironment(scenario) {
   if (scenario.baselineCommand !== undefined && (typeof scenario.baselineCommand !== "string" || !scenario.baselineCommand.trim())) throw new Error("Empty baselineCommand");
 }
 
+function verifiedFile(path, expected, label) {
+  let stat;
+  try { stat = lstatSync(path); } catch (error) { if (error.code === "ENOENT") return false; throw error; }
+  if (!stat.isFile() || hash(readFileSync(path)) !== expected) throw new Error(`${label} checksum mismatch: ${path}`);
+  return true;
+}
+function publishVerifiedFile(path, bytes, expected, label, mode = 0o644) {
+  if (hash(bytes) !== expected) throw new Error(`${label} checksum mismatch`);
+  mkdirSync(dirname(path), { recursive: true });
+  const stage = mkdtempSync(join(dirname(path), ".verified-"));
+  try {
+    const candidate = join(stage, "artifact");
+    writeFileSync(candidate, bytes, { mode });
+    // Publish a complete file without overwriting a concurrent preparation.
+    try { linkSync(candidate, path); } catch (error) { if (error.code !== "EEXIST") throw error; }
+    verifiedFile(path, expected, label);
+  } finally { rmSync(stage, { recursive: true, force: true }); }
+}
+export async function downloadVerifiedFile(path, url, expected, fetcher = fetch) {
+  if (verifiedFile(path, expected, "Cached download")) return path;
+  const response = await fetcher(url, { signal: AbortSignal.timeout(120_000) });
+  if (!response.ok) throw new Error(`Dependency download: HTTP ${response.status}`);
+  publishVerifiedFile(path, Buffer.from(await response.arrayBuffer()), expected, "Downloaded artifact");
+  return path;
+}
+export async function prepareUv({ cacheRoot = join(backingRoot, "runtimes"), fetcher = fetch } = {}) {
+  if (process.platform !== "linux" || process.arch !== "x64") throw new Error("Prepared uv runtime requires Linux amd64");
+  const root = join(cacheRoot, `uv-${UV_VERSION}`), binary = join(root, "bin/uv");
+  const hasBinary = verifiedFile(binary, UV_BINARY_SHA256, "Cached uv binary");
+  const wheel = join(root, UV_WHEEL_URL.split("/").at(-1));
+  await downloadVerifiedFile(wheel, UV_WHEEL_URL, UV_WHEEL_SHA256, fetcher);
+  if (!hasBinary) {
+    const script = `import sys,zipfile\nwith zipfile.ZipFile(sys.argv[1]) as wheel: sys.stdout.buffer.write(wheel.read('uv-${UV_VERSION}.data/scripts/uv'))`;
+    const extracted = await exec("/usr/bin/python3", ["-c", script, wheel], {
+      encoding: "buffer", maxBuffer: 128 * 1024 * 1024, timeout: 120_000,
+      env: { PATH: "/usr/bin:/bin", LANG: "C.UTF-8" },
+    });
+    publishVerifiedFile(binary, extracted.stdout, UV_BINARY_SHA256, "Extracted uv binary", 0o755);
+  }
+  const { stdout } = await exec(binary, ["--version"], { timeout: 10_000,
+    env: { PATH: "/usr/bin:/bin", LANG: "C.UTF-8" } });
+  const observedVersion = stdout.trim();
+  if (observedVersion !== `uv ${UV_VERSION} (x86_64-unknown-linux-gnu)`) throw new Error(`Unexpected uv version: ${observedVersion}`);
+  return { path: binary, version: UV_VERSION, observedVersion, wheelUrl: UV_WHEEL_URL,
+    wheelSha256: UV_WHEEL_SHA256, executableSha256: UV_BINARY_SHA256,
+    modelAccess: "read-only runtime mount; preserve wheel and executable with source evidence" };
+}
+
 export async function prepareEnvironment(scenario, caseDir, cwd) {
   const environment = { mounts: [], path: [], env: {}, baselineEnv: {}, dependencies: {} };
+  const uv = await prepareUv();
+  environment.mounts.push({ source: uv.path, target: "/opt/bin/uv" });
+  environment.path.push("/opt/bin");
+  environment.dependencies.uv = uv;
   environment.baselineEnv.PI_BASELINE_PROBE = fileURLToPath(new URL("baseline_probe.py", import.meta.url));
   environment.baselineEnv.PI_BASELINE_DIR = dirname(environment.baselineEnv.PI_BASELINE_PROBE);
   const setupHome = join(caseDir, "setup-home");
   mkdirSync(setupHome, { recursive: true });
   // Public dependency installation does not inherit provider credentials or user config.
-  const setupEnv = { PATH: process.env.PATH, HOME: setupHome, LANG: "C.UTF-8",
+  const setupEnv = { PATH: `${dirname(uv.path)}:${process.env.PATH}`, HOME: setupHome, LANG: "C.UTF-8",
     UV_CACHE_DIR: join(backingRoot, "downloads/uv"), UV_LINK_MODE: "copy",
     UV_PYTHON_INSTALL_DIR: join(backingRoot, "runtimes/python"),
     npm_config_cache: join(backingRoot, "downloads/npm") };
@@ -64,14 +120,14 @@ export async function prepareEnvironment(scenario, caseDir, cwd) {
     const path = join(caseDir, "python-env");
     const project = join(cwd, scenario.pythonProject ?? scenario.pythonEditable ?? ".");
     if (scenario.pythonProject) {
-      await run("python-setup", "uv", ["sync", "--locked", "--no-default-groups", "--group", "test", "--project", project],
+      await run("python-setup", uv.path, ["sync", "--locked", "--no-default-groups", "--group", "test", "--project", project],
         { env: { ...setupEnv, UV_PROJECT_ENVIRONMENT: path } });
     } else {
-      if (!existsSync(join(path, "bin/python"))) await run("python-venv", "uv", ["venv", "--python", "3.13", path]);
-      if (scenario.pythonEditable) await run("python-setup", "uv", ["pip", "install", "--python", join(path, "bin/python"), "-e", project, ...(scenario.pythonPackages ?? [])]);
+      if (!existsSync(join(path, "bin/python"))) await run("python-venv", uv.path, ["venv", "--python", "3.13", path]);
+      if (scenario.pythonEditable) await run("python-setup", uv.path, ["pip", "install", "--python", join(path, "bin/python"), "-e", project, ...(scenario.pythonPackages ?? [])]);
     }
-    await run("python-development-tools", "uv", ["pip", "install", "--python", join(path, "bin/python"), "pip==25.3", "ruff==0.15.2", ...(!scenario.pythonProject && !scenario.pythonEditable ? ["pytest==9.1.1"] : [])]);
-    const packages = await run("python-freeze", "uv", ["pip", "freeze", "--python", join(path, "bin/python")]);
+    await run("python-development-tools", uv.path, ["pip", "install", "--python", join(path, "bin/python"), "pip==25.3", "ruff==0.15.2", ...(!scenario.pythonProject && !scenario.pythonEditable ? ["pytest==9.1.1"] : [])]);
+    const packages = await run("python-freeze", uv.path, ["pip", "freeze", "--python", join(path, "bin/python")]);
     const executable = realpathSync(join(path, "bin/python"));
     const runtime = dirname(dirname(executable));
     const version = readFileSync(join(path, "pyvenv.cfg"), "utf8").match(/^version(?:_info)? = (.+)$/m)?.[1];

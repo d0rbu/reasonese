@@ -35,6 +35,21 @@ assistant Git work; checkpoint archives preserve those logs without modification
 An unstarted preparation can refresh its collector identity while retaining the
 earlier plan by hash. Started trajectories require a fresh output directory.
 
+Future preparations provision uv **0.13.6** from its pinned official Linux amd64
+PyPI wheel into neutral shared runtime storage. The wheel SHA-256 is
+`22759b8895e1103578de6fb4cd27e94b4399d021023378d29f01333717751fba` and the
+extracted executable SHA-256 is
+`23803452c0fbe125033054cd9ff245f1d649fb65b4b73f68429f4abda432436d`.
+Preparation uses this executable for every uv command and puts its directory
+first on the setup PATH. The same executable is mounted read-only at
+`/opt/bin/uv` for task tools; `toolEnvironment.dependencies.uv` records its version,
+wheel source and hashes. Cached files are verified before reuse, and changed
+cache files fail without replacement. Cache publication is atomic across
+concurrent preparations. Preserve this immutable runtime with source evidence.
+The host uv installation is unchanged. Existing captures retain their recorded
+versions, including earlier host-version runs and explicitly recorded per-case
+upgrades; this provisioning applies to new preparation only.
+
 Tools can use public development networks. Each subprocess receives a private
 user/network namespace with slirp4netns NAT and working DNS. Host loopback is
 explicitly disabled. Before the inner Bubblewrap process starts, nftables in the
