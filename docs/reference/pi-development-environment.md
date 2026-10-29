@@ -26,8 +26,8 @@ shared-library hashes are recorded too. New managed interpreter downloads use
 neutral shared runtime storage; previously prepared interpreter locations are
 preserved as read-only dependencies and must accompany source evidence. `UV_LINK_MODE=copy` keeps writable task packages independent
 of the host dependency cache. Go module, Python, Node and user caches are writable
-and retained. Node dependency symlinks and Expo's scoped Jest configuration point
-to their actual neutral mount paths; `JEST_CONFIG` identifies Expo's configuration.
+and retained. Scoped Node dependency symlinks point to their actual neutral mount
+paths. Older Expo captures retain their recorded focused Jest configuration.
 Prepared Git authorship is `Developer <developer@localhost>`. Preparation removes
 only pre-collection clone/setup reflogs, which otherwise retain private cache
 paths and the host clone identity. Ordinary reflogs are enabled for subsequent
@@ -49,6 +49,32 @@ concurrent preparations. Preserve this immutable runtime with source evidence.
 The host uv installation is unchanged. Existing captures retain their recorded
 versions, including earlier host-version runs and explicitly recorded per-case
 upgrades; this provisioning applies to new preparation only.
+
+Fresh Expo `packages/@expo/env` preparations use the upstream pnpm workspace and
+native package checks, instead of the former standalone Jest 29/TypeScript 5
+environment. The task-owned toolchain is Node **24.22.2**, whose official Linux
+amd64 archive SHA-256 is
+`48cc0e21e048790e54c0cf5749c2725005313d652651c40b7a21feb9697aaf75`, and pnpm
+**12.2.1**. Preparation runs `SKIP_SKIA_DOWNLOAD=1 pnpm install --frozen-lockfile`
+and `node ./tools/bin/expotools.js check-packages @expo/env`. The Skia setting
+matches upstream JavaScript CI and avoids an unrelated native binary download.
+The package check runs build, typecheck, depscheck, tests, lint and formatting
+checks using the pinned repository scripts and lock. `JEST_CONFIG` points to the
+repository's own Jest config; no substitute transform or typecheck suppression
+is generated. Legacy `nodePackages` values are not installed on this workspace
+path. Other Node projects retain their existing scoped package setup.
+
+The Expo task runtime, package manager, writable download/store caches and
+workspace dependencies live under checkpointed `node-env` and `workspace`
+roots. Task `node`, npm and pnpm use the task runtime, including the isolated
+tool worker; the host Pi controller retains its separately recorded Node
+runtime. `dependencies.node` records both versions, the task executable and
+archive hashes, pnpm lock, upstream workspace lock/config and check-log hashes.
+Continuation relocates the task runtime and verifies its binary hash, selected
+mount and actual version before any provider lookup; older captures keep their
+original controller-version check. Preparation checks free disk before each
+large command and every five seconds while it runs, stopping below 40 GiB free.
+Full workspace dependency and checkpoint sizes must be measured per preparation.
 
 Tools can use public development networks. Each subprocess receives a private
 user/network namespace with slirp4netns NAT and working DNS. Host loopback is
@@ -85,11 +111,18 @@ Before the initial prompt and after every user turn, the collector records
 `turns/NNN.workspace.tar.gz` and its SHA-256/size/root/Git-state receipt. These
 archives retain the complete independent Git directory, tracked/untracked/ignored
 workspace files, mutable Python/Node/Go dependencies and tool-state home/tmp.
+Fresh archives use gzip level 1, recorded explicitly in the checkpoint receipt.
+This reduces compression time for complete workspace dependency trees; it does
+not omit caches, build output, task runtimes or other files from those roots.
 Symlinks are stored without dereferencing them; dependency installations and
 ignored task fixtures are not silently omitted. Shared immutable runtime versions
 remain bound by provenance. The initial checkpoint is staged before the inference
 timer starts; later checkpoint work is included in the active-turn bound, and
-archive commands have their own ten-minute timeout.
+archive creation and extraction each have their own thirty-minute timeout,
+recorded with compression settings in each new checkpoint receipt. Complete Expo
+dependency state is about 5.2 GB before compression and can be limited by disk
+throughput. Fresh Expo pilots allow 4800 seconds of active trajectory time while
+retaining 80 model calls, 8192 output tokens per request and 120 seconds per tool.
 
 `restoreCheckpoint(archive, destination, {sha256, sourceCaseDir, prepared})` in
 `checkpoints.mjs` verifies the SHA-256 and extracts into a fresh absolute private

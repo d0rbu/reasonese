@@ -39,6 +39,9 @@ test("checkpoint restores Git, ignored files, dependencies, home/tmp and install
   assert.equal(existsSync(join(source, "tool-state/runtime/python/task/metadata", version, "host.pth")), false);
   const status = execFileSync("git", ["-C", cwd, "status", "--porcelain"], { encoding: "utf8" });
   const receipt = await snapshotWorkspace(source, join(dir, "turn"), { status });
+  assert.deepEqual(receipt.compression, { program: "gzip", level: 1 });
+  assert.equal(receipt.archiveTimeoutSeconds, 1800);
+  assert.equal(readFileSync(join(dir, receipt.archive))[8], 4); // gzip's fastest-compression header flag.
   const restored = await restoreCheckpoint(join(dir, receipt.archive), destination, { sha256: receipt.sha256, sourceCaseDir: source, prepared });
   t.after(() => rmSync(dirname(restored.destination), { recursive: true, force: true }));
   assert.doesNotMatch(restored.destination, /reasonese|\.codex/);
