@@ -22,15 +22,15 @@ pass and does not exclude data. The pilot protocol keeps probes off.
 |---|---|
 | framing | `normal`, `casual`, `persuasive`, `subagent`, `reasonese-normal`, `reasonese-persuasive`, `compressed-normal`, `compressed-persuasive` |
 | channel | `system prompt`, `user message`, `README.md` |
-| author | `user`, `Qwen3.8 Flash`, `Qwen3.8 2.4T`, `Inkling`, `Inkling Small`, `Gemma 4 31B`, `Nemotron 3.5 Lightning` |
+| author | `user`, `Qwen3.8 Flash`, `Qwen3.8 2.4T`, `Inkling`, `Inkling Small`, `Gemma 4 31B`, `Nemotron 3.5 Lightning`, `Kimi K3.1 Pro` |
 
 Framing and author are independent. “Normal” is the author's default rendering in clear
 prose. A `user`-authored input is treated as already written and used verbatim, and it exists
 only for the `normal`, `casual`, and `persuasive` framings; model authors rewrite the base
 instruction according to any of the eight framings.
 
-With all supported authors selected, eight framings for each of the six model authors plus three framings for the `user` author, across
-three channels, produce `(8 × 6 + 3) × 3 = 153` specifications per base instruction. A
+With all supported authors selected, eight framings for each of the seven model authors plus three framings for the `user` author, across
+three channels, produce `(8 × 7 + 3) × 3 = 177` specifications per base instruction. A
 specification is just a four-field dataclass containing those axes.
 
 Instruction is not a treatment axis. Instructions come in 24 mutually exclusive pairs, and a
@@ -235,10 +235,10 @@ replaces exactly `components - 1` redundant cycle edges, the minimum possible re
 same-stratum replacements. Seeds derive from the pair id, so reordering the bank does not change
 any design.
 
-With all axes enabled, each of the 24 pairs has 306 cells (`2 × 153`) and
-`153 × 153 − 102 × 102 = 13,005` eligible pairings, for 312,120 eligible pairings per assistant. The
-minimum connected design uses 305 pairings per pair. The pilot default of 720 gives every cell an
-average degree of about 4.71 (1,224 pairings would give degree 8).
+With all axes enabled, each of the 24 pairs has 354 cells (`2 × 177`) and
+`177 × 177 − 118 × 118 = 17,405` eligible pairings, for 417,720 eligible pairings per assistant. The
+minimum connected design uses 353 pairings per pair. The pilot default of 720 gives every cell an
+average degree of about 4.07 (1,416 pairings would give degree 8).
 
 Connectivity is required within a pair and is impossible between pairs, so the comparison graph
 has exactly one component per `(pair, assistant)`.
@@ -398,3 +398,6 @@ uv run pre-commit run --all-files
 ## License
 
 MIT. See [`LICENSE`](LICENSE).
+
+Real Pi histories can be used with [native user-turn templates](docs/reference/native-pi-experiments.md).
+The [human/Kimi prompt bank](prompts/scenario_turns/README.md) is the editing handoff for the realistic pilot.

@@ -1,0 +1,20 @@
+{
+  "sourceMessagesSha256": "74136c9c0840ed3c8b7beb4fd93309702aaa59cde807a94168ff5073aea58301",
+  "sourceReviewFile": "/home/d0rb/Documents/Github/reasonese/.codex/worktrees/pi-scenario-transcripts/out/pi-transcript-review-20261026/site/kimi-transcripts/expo-dotenv-precedence/original/data.json",
+  "sourceCheckpointBeforeImplementationSha256": "9f80afd5fe28b2e9b71be4f2c9dd25125d8655bc657b857701039c5a90e9282e",
+  "sourceUserMessageIndices": [
+    0,
+    77
+  ],
+  "repository": "https://github.com/expo/expo.git",
+  "revision": "neutral-implementation-source-20261029",
+  "sourceTurnSha256": "13d25d3849045dbbe20b4c32114f1b64cfbd585d4929287bb569015729a5c66a",
+  "authoringSourceSha256": "bfdcfe003499d417aea0dacb003e1e53f3faa3dad8b9d71f20682484c1951deb",
+  "sourceCheckpointSha256": "9f80afd5fe28b2e9b71be4f2c9dd25125d8655bc657b857701039c5a90e9282e",
+  "adaptation": [
+    "Replaced private prepared-configuration variable with ordinary env-package test request.",
+    "Removed claims about an existing reload change and observed CI/local parsing mismatch; this is a neutral complete implementation assignment."
+  ],
+  "authoringSourceKind": "operator_adaptation",
+  "previousAuthoringSourceSha256": "4aa0c7787d7e59a89e8705e5fccc1e3c1e004f4ddb9043d0661070bdeab60fcc"
+}

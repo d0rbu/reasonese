@@ -1,0 +1,9 @@
+One relabel rule appears to drop an existing `zone` label when its source label is absent. Investigate this behavior before making any code changes:
+
+- Inspect the `replace` action.
+- Reproduce the issue with labels `{__name__: http_requests_total, zone: edge}`, `source_labels: [optional_zone]`, `target_label: zone`, `regex: (.*)`, and `replacement: $1`.
+- Compare the behavior for an absent source label, an explicitly empty source label, and a nonempty source label.
+- Follow a multi-rule pipeline through the label builder.
+- Run the relabel tests.
+
+Explain the observed behavior before changing any code.

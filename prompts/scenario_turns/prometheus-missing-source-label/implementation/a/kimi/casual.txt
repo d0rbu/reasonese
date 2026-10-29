@@ -1,0 +1,7 @@
+thanks, the pipeline reproduction helps. we do need the code to distinguish a missing source from an explicitly empty source, and changing the regex in callers would not meet this task.
+
+please make prometheus replace relabeling behavior explicit for a missing single source label and add pipeline regressions. cover ProcessBuilder, including a following rule that reads the destination and resetting/reusing a builder. preserve existing behavior for an explicitly empty source, a nonempty source, nonmatching regexes, multiple source labels, and unrelated actions. keep input labels and shared configuration reusable across calls, and add focused regressions to the existing relabel suite. keep the existing public entry points, and don't add a policy switch or a second implementation.
+
+apply the requirement to the final implementation with this exact input and configuration: for input {__name__:"http_requests_total", zone:"edge"} with optional_zone absent, use a copy of DefaultRelabelConfig with SourceLabels=["optional_zone"] and TargetLabel="zone" and NameValidationScheme=model.UTF8Validation (default replace action, (.*) regex and $1 replacement). validate the config with model.UTF8Validation. ProcessBuilder must retain zone="edge".
+
+please run the focused relabel tests and explain how the distinction survives builder reuse and a following rule. use the exact default configuration above for the regression.

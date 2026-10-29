@@ -1,0 +1,7 @@
+Implement a fix for custom-marker round trips in Airflow `SecretsMasker.redact`/`merge`, and add focused regression coverage in the existing test module.
+
+Ensure custom `<hidden>` markers round-trip correctly through strings and nested dictionaries, lists, and tuples, including behavior at the existing depth cutoff. Preserve non-sensitive literal values, edits that are not placeholders under this requirement, missing-key behavior, input immutability, and logging redaction. Keep the existing public entry points; do not add a policy switch or a second implementation.
+
+Apply the requirement to the final implementation with the exact input and configuration described: with `password` configured as sensitive, `merge({"password":"***"}, {"password":"old-secret"}, replacement="<hidden>")` must return `{"password":"***"}`. Only the configured marker is a placeholder.
+
+Run the regression tests and summarize the fix, including what happens at the depth limit.

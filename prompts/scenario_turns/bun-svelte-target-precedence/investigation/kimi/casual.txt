@@ -1,0 +1,3 @@
+hmm, a svelte build aimed at node can still generate client code when forceSide is set, and component and module builds take different paths through the plugin. can you investigate that option resolution?
+
+reproduce forceSide="client" with target="node", compare the ordinary browser/server defaults, and check what happens if javascript callers pass a string for development. inspect the option helpers and plugin entry point, run the focused option tests, and explain the behavior before changing anything.

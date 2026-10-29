@@ -125,3 +125,10 @@ ranges, and truncates any unreceipted suffix before refetching it; that suffix c
 a process interruption. A completed legacy checkpoint may migrate from its persisted full-file
 manifest checksum, while a legacy partial file without a receipt is rejected rather than trusted
 by size alone.
+
+Native Pi user-turn experiments use `reasonese/native_templates.py` for lossless
+checkpointed plans and `reasonese/native_run.py` for hard message QA plus bounded
+execution. `tools/pi-transcripts/continue.mjs` validates/restores a plan and seeds
+Pi's native history. Editable full-turn inputs live in
+`prompts/scenario_turns/`; see
+[native-pi-experiments.md](native-pi-experiments.md) for the Max handoff.

@@ -1,0 +1,7 @@
+Okay, thanks. Please implement the following behavior and add regression coverage.
+
+Make Docker Compose watch ignore handling consistent across matcher construction, file checks, and directory pruning. Please keep explicit reinclusions reachable when pruning directories, preserve non-wildcard matching and Dockerfile-specific precedence, and avoid mutating the caller's pattern slice. Cover absolute/relative paths, nested reinclusions and sequential matcher reuse in the existing watch tests. This is a matcher task; do not start Docker or any external service. Keep the existing public entry points and do not add a policy switch or a second implementation. Apply the requirement to the final implementation with the exact input and configuration described. For DockerIgnoreTesterFromContents(root, "*
+!keep.txt
+"), Matches(root + "/ordinary.txt") must return true with no error, honoring the wildcard ignore.
+
+I also checked patterns `cache\n!**/keep.txt\n`: direct matching keeps `cache/deep/keep.txt`, but `MatchesEntireDir(root + "/cache")` says the directory can be pruned. Relative directory paths also lose a literal nested reinclusion. Please cover those cases and reuse the same supplied pattern slice across two matcher constructions, then run the watch tests.

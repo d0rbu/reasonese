@@ -178,6 +178,7 @@ class _PendingBatch:
 
 
 _MODEL_ROUTES: dict[Author, ModelRoute] = {
+    Author.KIMI_K3_1_PRO: ModelRoute(OpenRouterModelId.parse("moonshotai/kimi-k3.1-pro"), None),
     Author.QWEN3_8_FLASH: ModelRoute(OpenRouterModelId.parse("qwen/qwen3.8-flash"), None),
     Author.QWEN3_8_2_4T: ModelRoute(
         OpenRouterModelId.parse("qwen/qwen3.8-2.4t-a95b"),

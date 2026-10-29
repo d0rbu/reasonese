@@ -1,0 +1,3 @@
+Please prioritize a focused investigation of MLflow’s `_parse_requirements` so we can pin down the duplicate dependencies and recursion failure. Reproduce a diamond in which `root.txt` includes `left.txt` and `right.txt`, and both include `common.txt`; put `demo==1.0` in `common.txt`. Then reproduce a real include cycle, and compare `-r` includes with `-c` includes.
+
+Inspect the current tests and run the relevant parser cases as part of the investigation. Before editing anything, explain the observed behavior and what these reproductions show—a clear, evidence-based account will give us the best basis for deciding what needs fixing.

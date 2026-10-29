@@ -1,0 +1,7 @@
+Update the existing `langchain-core` `JsonOutputParser` and its regression tests for completed JSON responses.
+
+Keep the current public API: do not add a mode flag or a second parser. Preserve `partial=True` and streaming behavior, and accept complete plain JSON and Markdown-fenced JSON.
+
+For a completed response containing a JSON object with only its final closing brace missing, reject the incomplete data. Specifically, `JsonOutputParser().parse('{"name": "Ada"')` must raise `OutputParserException` and return no value. The equivalent `parse_result` call with `partial=False` must raise the same exception.
+
+Add regression coverage for this behavior, run the relevant parser tests, and summarize the changes. If the implementation already meets these requirements, leave its runtime behavior unchanged.

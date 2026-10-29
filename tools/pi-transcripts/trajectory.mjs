@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import {
@@ -8,7 +9,7 @@ import { neutralCwd, sandboxGit, sandboxTools, toolDir } from "./sandbox.mjs";
 import { buildSystemPrompt } from "./node_modules/@mariozechner/pi-coding-agent/dist/core/system-prompt.js";
 import { isNeutralCase } from "./backing.mjs";
 import { snapshotWorkspace } from "./checkpoints.mjs";
-import { collectorIdentity, MODEL, readJson, sha256, sha256File, validateBaseCollection, verifyWorkspace, writeJson } from "./workspaces.mjs";
+import { collectorIdentity, contextFile, MODEL, readJson, sha256, sha256File, validateBaseCollection, verifyWorkspace, writeJson } from "./workspaces.mjs";
 
 function hasFinalAnswer(messages) {
   const last = messages.at(-1);
@@ -113,27 +114,34 @@ export function captureTransport(directory, manifest, baseUrl) {
 }
 
 export async function runTrajectory({ manifest, scenario, caseDir, metadata, apiKey,
-  fixtureEndpoint = null, nextTurn = null }) {
-  validateBaseCollection(manifest, [scenario]);
-  if ((scenario.maxUserTurns ?? 1) > 1 && !nextTurn) throw new Error("Multi-turn scenarios require an interactive operator");
+  fixtureEndpoint = null, nextTurn = null, continuation = null }) {
+  if (!continuation) validateBaseCollection(manifest, [scenario]);
+  if ((scenario.maxUserTurns ?? 1) > 1 && !nextTurn && !continuation) throw new Error("Multi-turn scenarios require an interactive operator");
   const baseUrl = fixtureEndpoint ?? "https://openrouter.ai/api/v1";
   if (fixtureEndpoint && !/^http:\/\/127\.0\.0\.1:\d+\/v1$/.test(fixtureEndpoint)) throw new Error("Fixtures must use localhost");
   if (metadata.id !== manifest.model) throw new Error("Wrong model metadata");
   caseDir = realpathSync(caseDir);
   if (!fixtureEndpoint && !isNeutralCase(caseDir)) throw new Error("Live collection requires neutral physical backing");
   const cwd = join(caseDir, "workspace");
-  const context = await verifyWorkspace(cwd, scenario);
+  const context = continuation ? contextFile(cwd, scenario) : await verifyWorkspace(cwd, scenario);
+  if (continuation?.checkpointGitState) {
+    const expected = continuation.checkpointGitState;
+    const head = (await sandboxGit(cwd, join(caseDir, "tool-state"), "rev-parse", "HEAD")).trim();
+    const status = await sandboxGit(cwd, join(caseDir, "tool-state"), "status", "--porcelain=v1", "--untracked-files=all");
+    if (head !== expected.head || status !== expected.status) throw new Error("Restored Git state differs from source checkpoint");
+  }
   const directory = join(caseDir, "trajectory");
   // An existing attempt, including a partial or failed one, is never rerun or overwritten.
   mkdirSync(directory);
   const provenance = {
-    kind: fixtureEndpoint ? "offline_test_fixture" : "live_pi_session", scenario,
+    kind: fixtureEndpoint ? "offline_test_fixture" : continuation ? "live_pi_continuation" : "live_pi_session", scenario,
+    continuation: continuation?.provenance, seededMessageCount: continuation?.prefix.length ?? 0,
     collectionPurpose: manifest.collectionPurpose,
     manifest, collector: collectorIdentity(), modelMetadata: metadata,
     context, startedAt: new Date().toISOString(), taskSuccess: "unjudged",
     pythonEnvironment: existsSync(join(caseDir, "prepared.json")) ? readJson(join(caseDir, "prepared.json")).pythonEnvironment : undefined,
     toolEnvironment: existsSync(join(caseDir, "prepared.json")) ? readJson(join(caseDir, "prepared.json")).toolEnvironment : undefined,
-    userAuthor: "Codex operator; authored task and adaptive follow-ups, not messages from a human participant",
+    userAuthor: continuation ? "Per-input variant authors; see hashed authoring inputs and source provenance" : "Codex operator; authored task and adaptive follow-ups, not messages from a human participant",
   };
   writeJson(join(directory, "provenance.json"), provenance);
   writeFileSync(join(directory, "prompt.txt"), scenario.prompt + "\n");
@@ -172,19 +180,26 @@ export async function runTrajectory({ manifest, scenario, caseDir, metadata, api
       systemPromptOverride: () => baseSystem, appendSystemPromptOverride: () => [],
     });
     await resourceLoader.reload();
+    const sessionManager = SessionManager.create(neutralCwd(), join(directory, "sessions"));
     ({ session } = await createAgentSession({
       cwd: neutralCwd(), agentDir, resourceLoader, authStorage, modelRegistry, model,
       thinkingLevel: manifest.thinking, settingsManager,
       tools: ["read", "bash", "edit", "write"],
       customTools: tools,
-      sessionManager: SessionManager.create(neutralCwd(), join(directory, "sessions")),
+      sessionManager,
     }));
-    writeFileSync(join(directory, "system.txt"), session.systemPrompt);
+    if (continuation) {
+      const definitions = session.agent.state.tools.map(({ name, description, parameters }) => ({ name, description, parameters }));
+      if (!isDeepStrictEqual(definitions, continuation.tools)) throw new Error("Continuation tool definitions differ from source");
+      session.agent.state.messages = structuredClone(continuation.prefix);
+      for (const message of continuation.prefix) sessionManager.appendMessage(structuredClone(message));
+    }
+    writeFileSync(join(directory, "system.txt"), continuation?.system ?? session.systemPrompt);
     writeJson(join(directory, "tools.json"), session.agent.state.tools.map(({ name, description, parameters }) =>
       ({ name, description, parameters })));
     session.subscribe((event) => appendFileSync(join(directory, "events.jsonl"), JSON.stringify(event) + "\n"));
     const stream = session.agent.streamFn;
-    session.agent.streamFn = (selectedModel, modelContext, options) => stream(selectedModel, modelContext, {
+    session.agent.streamFn = (selectedModel, modelContext, options) => stream(selectedModel, continuation ? { ...modelContext, systemPrompt: continuation.system } : modelContext, {
       ...options, maxTokens: manifest.maxOutputTokens, maxRetries: 0,
       timeoutMs: manifest.timeoutSeconds * 1000,
     });
@@ -195,7 +210,8 @@ export async function runTrajectory({ manifest, scenario, caseDir, metadata, api
       status: await sandboxGit(cwd, join(caseDir, "tool-state"), "status", "--porcelain=v1", "--untracked-files=all"),
     }));
     timer = setTimeout(() => interrupt("time_limit"), manifest.timeoutSeconds * 1000);
-    let turn = { prompt: scenario.prompt, rationale: "Initial task from the prepared manifest" };
+    const queued = continuation ? structuredClone(continuation.turns) : null;
+    let turn = queued ? queued.shift() : { prompt: scenario.prompt, rationale: "Initial task from the prepared manifest" };
     while (turn && !interruption) {
       if (typeof turn.prompt !== "string" || !turn.prompt.trim() || typeof turn.rationale !== "string" || !turn.rationale.trim()) {
         throw new Error("Each follow-up needs a nonempty prompt and operator rationale");
@@ -216,7 +232,7 @@ export async function runTrajectory({ manifest, scenario, caseDir, metadata, api
       if (interruption || !hasFinalAnswer(session.messages) || userTurns >= (scenario.maxUserTurns ?? 1)) break;
       // The same Pi session and workspace survive the operator's review. No synthetic
       // assistant history, hidden steering, or replacement tool results are inserted.
-      turn = await Promise.race([
+      turn = queued ? queued.shift() : await Promise.race([
         nextTurn({ turn: userTurns, messages: session.messages, directory, signal: controller.signal }),
         new Promise((resolve) => controller.signal.addEventListener("abort", () => resolve(null), { once: true })),
       ]);
@@ -249,9 +265,9 @@ export async function runTrajectory({ manifest, scenario, caseDir, metadata, api
     status, error: failure ?? last?.errorMessage ?? null, taskSuccess: "unjudged",
     startedAt: provenance.startedAt, finishedAt: new Date().toISOString(),
     modelRequests: transport?.state.requests ?? 0, captureErrors: transport?.state.captureErrors ?? [],
-    toolResults: messages.filter((message) => message.role === "toolResult").length,
+    toolResults: messages.slice(continuation?.prefix.length ?? 0).filter((message) => message.role === "toolResult").length,
     userTurns,
-    assistantUsage: messages.filter((message) => message.role === "assistant").map((message) => message.usage),
+    assistantUsage: messages.slice(continuation?.prefix.length ?? 0).filter((message) => message.role === "assistant").map((message) => message.usage),
     sessionFile: session?.sessionFile, finalGit,
     messagesSha256: sha256(readFileSync(join(directory, "messages.json"))),
     // Workspaces and tool-state remain alongside the evidence, including untracked/ignored outputs.

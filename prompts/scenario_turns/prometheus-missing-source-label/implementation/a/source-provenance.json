@@ -1,0 +1,16 @@
+{
+  "sourceMessagesSha256": "fd83b926de64bb25eb249eeb98a466f3a80e81a563ab122ea5e346dd60393a44",
+  "sourceReviewFile": "/home/d0rb/Documents/Github/reasonese/.codex/worktrees/pi-scenario-transcripts/out/pi-transcript-review-20261026/site/kimi-transcripts/prometheus-missing-source-label/original/data.json",
+  "sourceCheckpointBeforeImplementationSha256": "c1d82180c6db477d330ed14a21f01aa9d0da8bd8ab20fd28408a7d29cadcdb89",
+  "sourceUserMessageIndices": [
+    0,
+    32
+  ],
+  "repository": "https://github.com/prometheus/prometheus.git",
+  "revision": "617120b43094223407db1864c2a48d7ed06ad4b2",
+  "sourceTurnSha256": "7cee05da82d2e83472847aad9bdd0155a30035c71eb3bd6baff45083b6fe0769",
+  "authoringSourceSha256": "7cee05da82d2e83472847aad9bdd0155a30035c71eb3bd6baff45083b6fe0769",
+  "sourceCheckpointSha256": "c1d82180c6db477d330ed14a21f01aa9d0da8bd8ab20fd28408a7d29cadcdb89",
+  "adaptation": [],
+  "authoringSourceKind": "operator_adaptation"
+}

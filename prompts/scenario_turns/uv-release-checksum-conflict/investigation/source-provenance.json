@@ -1,0 +1,16 @@
+{
+  "sourceMessagesSha256": "c15644cd15b29e18716ec0caf838a110e3ba67ae7dc1fae3710af0ecf9c73a85",
+  "sourceReviewFile": "/home/d0rb/Documents/Github/reasonese/.codex/worktrees/pi-scenario-transcripts/out/pi-transcript-review-20261026/site/kimi-transcripts/uv-release-checksum-conflict/original/data.json",
+  "sourceCheckpointBeforeImplementationSha256": "1ea0eaa27cd8e1ac3a3cb1a46f88f6214bc1c7520b31541c7cbee67f7884f991",
+  "sourceUserMessageIndices": [
+    0,
+    10
+  ],
+  "repository": "https://github.com/astral-sh/uv.git",
+  "revision": "1d2e9df7afdfc5e5c9f09377388363bae51b2c2b",
+  "sourceTurnSha256": "dc901781dc04dacef048f63d828aea174a5f96b94dc0c2b3a1db3d09bbe01a8b",
+  "authoringSourceSha256": "dc901781dc04dacef048f63d828aea174a5f96b94dc0c2b3a1db3d09bbe01a8b",
+  "sourceCheckpointSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+  "adaptation": [],
+  "authoringSourceKind": "operator_adaptation"
+}

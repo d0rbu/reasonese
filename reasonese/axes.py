@@ -48,6 +48,7 @@ class Author(StrEnum):
     INKLING_SMALL = "Inkling Small"
     GEMMA_4_31B_IT = "Gemma 4 31B"
     NEMOTRON_3_5_LIGHTNING = "Nemotron 3.5 Lightning"
+    KIMI_K3_1_PRO = "Kimi K3.1 Pro"
 
 
 MANUAL_FRAMINGS: tuple[Framing, ...] = (Framing.NORMAL, Framing.CASUAL, Framing.PERSUASIVE)
@@ -70,6 +71,7 @@ class Assistant(StrEnum):
     INKLING_SMALL = "Inkling Small"
     GEMMA_4_31B_IT = "Gemma 4 31B"
     NEMOTRON_3_5_LIGHTNING = "Nemotron 3.5 Lightning"
+    KIMI_K3_1_PRO = "Kimi K3.1 Pro"
 
 
 # Explicit experiment defaults; the enums above retain every supported model.

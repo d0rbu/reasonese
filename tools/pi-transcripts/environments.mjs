@@ -74,7 +74,7 @@ export async function prepareEnvironment(scenario, caseDir, cwd) {
     const packages = await run("python-freeze", "uv", ["pip", "freeze", "--python", join(path, "bin/python")]);
     const executable = realpathSync(join(path, "bin/python"));
     const runtime = dirname(dirname(executable));
-    const version = readFileSync(join(path, "pyvenv.cfg"), "utf8").match(/^version = (.+)$/m)?.[1];
+    const version = readFileSync(join(path, "pyvenv.cfg"), "utf8").match(/^version(?:_info)? = (.+)$/m)?.[1];
     pythonEnvironment = { path, runtime: { path: runtime, version,
       executableSha256: hash(readFileSync(executable)),
       sharedLibraries: readdirSync(join(runtime, "lib")).filter(name => /^libpython.*\.so(?:\..*)?$/.test(name))

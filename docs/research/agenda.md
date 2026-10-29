@@ -77,8 +77,8 @@ routes can hold the authored text fixed. The comparison itself is deferred. If b
 free routes are development-only and pooling is inappropriate. Do not combine duplicate trial IDs
 from independent runs into one analysis file; analyze the matched runs separately.
 
-With the current 24-pair bank, selecting all seven authors (including user) and six assistants
-would require 3,745,440 exhaustive trials or 207,360 sampled trials at 720 pairings per pair
+With the current 24-pair bank, selecting all eight authors (including user) and seven assistants
+would require 5,848,080 exhaustive trials or 241,920 sampled trials at 720 pairings per pair
 and one rollout per ordering. The default selects only Nemotron 3.5 Lightning and Gemma 4 31B
 for both authoring and assistant evaluation, using registered `:free` routes. This gives 48
 conditions per instruction, 96 cells and 1,280 eligible pairings per pair, with a minimum of

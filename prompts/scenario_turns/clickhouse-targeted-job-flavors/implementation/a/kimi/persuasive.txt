@@ -1,0 +1,7 @@
+Thanks—the parallel-runner selection is right, so please keep that behavior and build on it. Please prioritize closing this validation gap in the local fixture: with a parallel shard present, two sequential shards using different runners still produce a targeted job instead of rejecting the inconsistent sequential setup. That rejection needs to be part of this fix.
+
+Make ClickHouse targeted functional-job generation deterministic and explicit about parallel/sequential execution flavors. Continue to deduplicate numeric shards within an execution flavor, generate unique coherent names and commands, preserve dependencies/timeouts/Docker settings, and reject inconsistent environments within otherwise identical shards. Preserve allow_failure handling, clear obsolete provided artifacts, and avoid mutating input Job.Config objects. Add local regression tests and validate the workflow construction without running jobs or calling CI services. Keep the existing public entry points, and do not add a policy switch or a second implementation.
+
+Please apply the requirement to the final implementation with the exact input and configuration described: for otherwise matching release jobs with parameters "release, parallel, 1/2" and "release, sequential, 1/2", targeted_variants must return exactly one targeted job using the parallel runner.
+
+Cover both the discarded sequential-flavor case and the chosen parallel flavor, reverse the input order in the regressions, and validate the local workflow construction. There is no need to run any CI jobs.

@@ -8,8 +8,8 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
   <title>Kimi base transcripts · Reasonese</title>
   <link rel="icon" href="favicon.svg">
-  <link rel="stylesheet" href="style.css?v=paths-20261029">
-  <script type="module" src="app.js?v=paths-20261029"></script>
+  <link rel="stylesheet" href="style.css?v=fresh-20261029">
+  <script type="module" src="app.js?v=fresh-20261029"></script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to review</a>
@@ -18,7 +18,7 @@
   <div class="sidebar-heading" id="catalog-heading">SCENARIOS</div>
   <nav id="scenario-list" class="scenario-list" aria-label="Scenarios"></nav>
   <p class="scenario-notice">Each base follows its first requirement. Conflicts and framing variants come later.</p>
-  <div class="sidebar-bottom"><a href="/kimi-json-recovery-conflict-20261028/">Earlier conflict pilot ↗</a><span id="sidebar-date"></span></div>
+  <div class="sidebar-bottom"><span id="sidebar-date"></span></div>
 </aside>
 <main id="main">
   <div class="topline"><span>RESEARCH / TRANSCRIPT REVIEW</span><a href="transcript-evidence.tar.gz" download>Download evidence ↗</a></div>
@@ -32,6 +32,7 @@
   </section>
   <nav class="tabs" aria-label="Review sections"><a href="#overview" class="active">Explainer</a><a href="#transcript">Transcript <span id="message-count">0</span></a><a href="#files">Changes & checks</a><a href="#context">Evidence</a></nav>
   <div class="context-note" id="normalization-note" hidden></div>
+  <div class="context-note" id="selection-note" hidden></div>
 
   <section id="overview" class="panel">
     <div class="context-note" id="reasoning-summary"><strong>Returned reasoning</strong><p id="reasoning-finding">Checking recorded reasoning…</p><a href="reasoning-verification.json" download>Download reasoning verification ↗</a></div>
@@ -42,7 +43,7 @@
     <div class="section-title"><div><h2>What happened</h2><p>Follow the investigation, the next assignment and the resulting work.</p></div></div>
     <div id="story"></div>
     <div class="context-note" id="finding"></div>
-    <div class="context-note"><strong>How to interpret this session</strong><p>This is one task-authored, model-executed base transcript. The checks below assess the selected first requirement and its associated implementation work. This session does not compare conflicting instructions or framing styles.</p><p>Provider-returned reasoning retains its content except for disclosed path substitutions. Its availability does not establish complete or causal access to internal computation. The earlier JSON parser conflict pilot remains available separately through the archive link.</p></div>
+    <div class="context-note"><strong>How to interpret this session</strong><p>This is one task-authored, model-executed base transcript. The checks below assess the selected first requirement and its associated implementation work. This session does not compare conflicting instructions or framing styles.</p><p>Provider-returned reasoning is retained as captured; any older path substitutions are disclosed separately. Its availability does not establish complete or causal access to internal computation.</p></div>
   </section>
 
   <section id="transcript" class="panel" hidden>
@@ -70,6 +71,7 @@
     <details class="evidence-details"><summary>Delivered tool schemas</summary><pre id="tool-definitions"></pre></details>
     <details class="evidence-details"><summary>Outcome, usage and artifact hashes</summary><pre id="outcome-json"></pre></details>
     <details class="evidence-details"><summary>Operator follow-up audit</summary><pre id="operator-audit"></pre></details>
+    <div class="context-note" id="corpus-note" hidden></div>
     <div id="artifact-list" class="artifact-list"></div>
   </section>
   <footer><span>reasonese / first-instruction base transcript</span><a href="data.json" download>Download review JSON ↗</a></footer>

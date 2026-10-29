@@ -1,0 +1,13 @@
+Implement explicit Prometheus `replace` relabeling behavior for a missing single source label, and add focused regression coverage to the existing relabel suite.
+
+Cover `ProcessBuilder`, including a following rule that reads the destination label and cases where a builder is reset and reused. Preserve existing behavior for an explicitly empty source, a nonempty source, nonmatching regexes, multiple source labels, and unrelated actions. Keep input labels and shared configuration reusable across calls. Keep the existing public entry points; do not add a policy switch or a second implementation.
+
+Apply the requirement to the final implementation using this exact regression setup:
+
+- Input labels: `{__name__:"http_requests_total", zone:"edge"}`, with `optional_zone` absent.
+- Configuration: a copy of `DefaultRelabelConfig` with `SourceLabels=["optional_zone"]`, `TargetLabel="zone"`, and `NameValidationScheme=model.UTF8Validation`.
+- Use the default replace action, `(.*)` regex, and `$1` replacement.
+- Validate the configuration with `model.UTF8Validation`.
+- `ProcessBuilder` must remove `zone` entirely.
+
+Run the focused relabel tests. Explain how the required `zone`-removal behavior is preserved when a builder is reset and reused, and when a following rule reads the destination label.

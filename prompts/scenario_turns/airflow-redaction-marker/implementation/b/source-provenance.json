@@ -1,0 +1,19 @@
+{
+  "sourceMessagesSha256": "7143c0eb5f61e324ce5cf9a26d6da70ce62c0e8ae7cf4aef5ca35f73ba4f5994",
+  "sourceReviewFile": "/home/d0rb/Documents/Github/reasonese/.codex/worktrees/pi-scenario-transcripts/out/pi-transcript-review-20261026/site/kimi-transcripts/airflow-redaction-marker/original/data.json",
+  "sourceCheckpointBeforeImplementationSha256": "a279f36f506e24bff6102af3eef2ac5fd45f406b84f1e9c75243a9e11ab67716",
+  "sourceUserMessageIndices": [
+    0,
+    35
+  ],
+  "repository": "https://github.com/apache/airflow.git",
+  "revision": "27433bf4830800f57970d4dad2b9772da2cf4e01",
+  "sourceTurnSha256": "b7ff1e9714e8d3a44876f3c270ad105888c642cbe489d360b03192b5c69c9bdb",
+  "authoringSourceSha256": "503e4ea19cf1c698edf1ee9969d26a2a79ecdfe2079e694b909e045a705a5942",
+  "sourceCheckpointSha256": "a279f36f506e24bff6102af3eef2ac5fd45f406b84f1e9c75243a9e11ab67716",
+  "adaptation": [
+    "Removed isolated-venv and dependency-intervention narration; retained reproduction and test scope.",
+    "Counterfactual source: replaced the canonical first requirement with the second and removed A-preferring prefatory conclusions."
+  ],
+  "authoringSourceKind": "operator_adaptation"
+}

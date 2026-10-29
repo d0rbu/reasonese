@@ -1,0 +1,16 @@
+{
+  "sourceMessagesSha256": "29d8ec376624d1b80dd05a14230806978ba206fcfde6a7d0e27d771967df5c4b",
+  "sourceReviewFile": "/home/d0rb/Documents/Github/reasonese/.codex/worktrees/pi-scenario-transcripts/out/pi-transcript-review-20261026/site/kimi-transcripts/bun-svelte-target-precedence/original/data.json",
+  "sourceCheckpointBeforeImplementationSha256": "c25306aff9f7d7aa1161c65aafc1abb47c4a3d548f8661fded340e7e39560919",
+  "sourceUserMessageIndices": [
+    0,
+    39
+  ],
+  "repository": "https://github.com/oven-sh/bun.git",
+  "revision": "47ba1c8d85d6bf6c0ddd9d3086519ce5be7af6d9",
+  "sourceTurnSha256": "0c3ba0bc822b232642919b1d6f891b3a2719d06e1139840beed9fcebc1d293ea",
+  "authoringSourceSha256": "0c3ba0bc822b232642919b1d6f891b3a2719d06e1139840beed9fcebc1d293ea",
+  "sourceCheckpointSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+  "adaptation": [],
+  "authoringSourceKind": "operator_adaptation"
+}

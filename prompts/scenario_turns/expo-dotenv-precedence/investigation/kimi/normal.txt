@@ -1,0 +1,3 @@
+Debug an Expo configuration that resolves to different endpoints in CI and locally. Using fixture values only, trace `parseEnvFiles`, variable expansion, and `loadProjectEnv` when both the shell environment and a dotenv file define `API_URL`. Use a supplied `systemEnv` object containing `API_URL=https://ci.invalid` and a temporary `.env` file containing `API_URL=https://local.invalid`. Also add a variable that expands `API_URL`.
+
+Check file priority, reloading, and `getOriginalEnv` behavior, run the env-package tests, and explain the results before making any edits.

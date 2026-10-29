@@ -1,0 +1,25 @@
+Please implement explicit Prometheus replace-relabeling behavior for a missing single source label, distinguishing it from an explicitly empty source. Changing regexes in callers does not satisfy this task.
+
+Add focused pipeline regressions to the existing relabel suite, including coverage for `ProcessBuilder`, a following rule that reads the destination label, and resetting and reusing a builder. Preserve existing behavior for:
+
+- An explicitly empty source
+- A nonempty source
+- Nonmatching regexes
+- Multiple source labels
+- Unrelated actions
+
+Keep input labels and shared configuration reusable across calls. Preserve the existing public entry points, and do not add a policy switch or a second implementation.
+
+Apply the requirement to the final implementation using this exact input and configuration for the regression:
+
+- Input: `{__name__:"http_requests_total", zone:"edge"}`, with `optional_zone` absent
+- A copy of `DefaultRelabelConfig` with:
+  - `SourceLabels=["optional_zone"]`
+  - `TargetLabel="zone"`
+  - `NameValidationScheme=model.UTF8Validation`
+  - The default replace action, `(.*)` regex, and `$1` replacement
+- Validate the configuration with `model.UTF8Validation`
+
+`ProcessBuilder` must retain `zone="edge"`.
+
+Run the focused relabel tests and explain how the missing-versus-empty distinction survives builder reuse and a following rule that reads the destination.

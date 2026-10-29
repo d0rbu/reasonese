@@ -1,0 +1,3 @@
+Please prioritize a careful investigation here: our connection editor uses `<hidden>` as its redaction marker, and saving an unchanged nested form appears to lose the original password. Investigate `SecretsMasker.redact` and `SecretsMasker.merge` in the shared `secrets-masker` package.
+
+Reproduce a round trip with `replacement="<hidden>"` and compare it with the default `"***"`, including dictionaries, lists, and a depth limit. Configure `password` as a sensitive field, use made-up values, and inspect the existing merge tests. A focused reproduction should help isolate the marker-specific behavior, so explain what happens before changing anything.

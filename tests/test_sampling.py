@@ -1,7 +1,7 @@
 """Tests for within-pair study sampling.
 
-These run against the real 24-pair bank at its real size: 153 conditions per
-instruction side, a 13,005-edge population per pair, and the 720-edge pilot
+These run against the real 24-pair bank at its real size: 177 conditions per
+instruction side, a 17,405-edge population per pair, and the 720-edge pilot
 default. Synthetic pairs are used only where a degenerate channel mix is needed
 that the real bank cannot express.
 """
@@ -59,9 +59,9 @@ from reasonese.sampling import (
 from reasonese.study import PositiveInteger, StudyInputs, study_to_dict
 
 BANK = Path("configs/instruction_pairs.yaml")
-# Eight framings for six model authors plus three for the user author, over three
-# channels: (8 * 6 + 3) * 3 = 153 conditions per instruction side.
-SIDE_SIZE = 153
+# Eight framings for seven model authors plus three for the user author, over three
+# channels: (8 * 7 + 3) * 3 = 177 conditions per instruction side.
+SIDE_SIZE = 177
 USER_CHANNEL_SIDE = SIDE_SIZE // len(Channel)
 POPULATION = SIDE_SIZE**2 - (SIDE_SIZE - USER_CHANNEL_SIDE) ** 2
 NODES = 2 * SIDE_SIZE
@@ -336,7 +336,7 @@ def test_minimum_request_produces_a_spanning_tree() -> None:
     sampled = sample_pair_inputs(
         pair_specs, PositiveInteger.parse(NODES - 1), Natural.parse(3)
     )
-    # 305 edges over 306 connected cells can only be an acyclic spanning tree.
+    # 353 edges over 354 connected cells can only be an acyclic spanning tree.
     assert len(sampled) == NODES - 1
     components = _components(pair_specs, sampled)
     assert len(components) == 1
@@ -619,7 +619,7 @@ def test_sides_reject_duplicate_and_overlapping_specifications() -> None:
 
 def test_sampling_rejects_requests_outside_the_valid_range() -> None:
     pair_specs = _first_pair()
-    with pytest.raises(ValueError, match="at least 305"):
+    with pytest.raises(ValueError, match="at least 353"):
         sample_pair_inputs(pair_specs, PositiveInteger.parse(NODES - 2), Natural.parse(0))
     with pytest.raises(ValueError, match="cannot exceed the valid population"):
         sample_pair_inputs(
@@ -638,12 +638,12 @@ def test_studies_share_one_design_across_assistants() -> None:
     studies = build_sampled_studies(
         specs,
         assistants,
-        PositiveInteger.parse(320),
+        PositiveInteger.parse(368),
         PositiveInteger.parse(1),
         Natural.parse(0),
     )
 
-    assert len(studies) == 2 * 2 * 320
+    assert len(studies) == 2 * 2 * 368
     by_assistant: dict[Assistant, list[StudyInputs]] = {}
     for study in studies:
         by_assistant.setdefault(study.assistant, []).append(study.inputs)
@@ -661,10 +661,10 @@ def test_full_pilot_design_has_the_expected_size() -> None:
         Natural.parse(0),
     )
     assert len(studies) == 24 * DEFAULT_PAIRINGS_PER_PAIR * len(Assistant)
-    assert len(studies) == 103_680
+    assert len(studies) == 120_960
     assert len(set(studies)) == len(studies)
     # Two orderings per study, one rollout each.
-    assert 2 * len(studies) == 207_360
+    assert 2 * len(studies) == 241_920
 
 
 @pytest.mark.parametrize(
@@ -685,7 +685,7 @@ def test_suite_construction_rejects_invalid_inputs(
         build_sampled_studies(
             specs,
             assistants,
-            PositiveInteger.parse(320),
+            PositiveInteger.parse(368),
             PositiveInteger.parse(1),
             Natural.parse(0),
         )
@@ -697,7 +697,7 @@ def test_suite_construction_rejects_duplicate_pair_ids() -> None:
         build_sampled_studies(
             duplicated,
             (Assistant.INKLING,),
-            PositiveInteger.parse(320),
+            PositiveInteger.parse(368),
             PositiveInteger.parse(1),
             Natural.parse(0),
         )
@@ -707,7 +707,7 @@ def test_study_suite_round_trip_and_validation(tmp_path: Path) -> None:
     studies = build_sampled_studies(
         _bank_specs()[:1],
         (Assistant.INKLING,),
-        PositiveInteger.parse(320),
+        PositiveInteger.parse(368),
         PositiveInteger.parse(1),
         Natural.parse(0),
     )

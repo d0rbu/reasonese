@@ -1,0 +1,3 @@
+This could be a serious correctness issue in our structured-output ingestion path: LangChain may be accepting incomplete responses as finished data. Please investigate `JsonOutputParser` in `langchain-core` and reproduce what happens when a finished response is missing its closing brace. Try `{"name": "Ada"` as well as the complete version, and compare the results with `partial=True` and streaming.
+
+Inspect the existing implementation and tests first, run the relevant tests, and explain exactly what is happening before changing anything. The core test dependencies are installed; you can run `python -m pytest` from `libs/core`. A precise reproduction and explanation will ensure we address the actual behavior rather than guessing.

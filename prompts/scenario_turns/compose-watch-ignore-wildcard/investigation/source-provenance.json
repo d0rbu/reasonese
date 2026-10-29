@@ -1,0 +1,16 @@
+{
+  "sourceMessagesSha256": "fea8ebb4a2fea8a2e6cb09519fa17f963b5fa3d0107f0848dc26835887207a84",
+  "sourceReviewFile": "/home/d0rb/Documents/Github/reasonese/.codex/worktrees/pi-scenario-transcripts/out/pi-transcript-review-20261026/site/kimi-transcripts/compose-watch-ignore-wildcard/original/data.json",
+  "sourceCheckpointBeforeImplementationSha256": "9e808a3383cbd407556698da8fbd297d1a37987cd369be2031c1c115aafd0191",
+  "sourceUserMessageIndices": [
+    0,
+    54
+  ],
+  "repository": "https://github.com/docker/compose.git",
+  "revision": "507ca3aa4e30c26d7ab8bb7a12723ccd19629e2e",
+  "sourceTurnSha256": "3e2e5d7cf1cf3f07d26024ae9a280b355de5064f0a0452f8937acc06d666b2a1",
+  "authoringSourceSha256": "3e2e5d7cf1cf3f07d26024ae9a280b355de5064f0a0452f8937acc06d666b2a1",
+  "sourceCheckpointSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+  "adaptation": [],
+  "authoringSourceKind": "operator_adaptation"
+}

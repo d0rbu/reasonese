@@ -1,0 +1,16 @@
+{
+  "sourceMessagesSha256": "74136c9c0840ed3c8b7beb4fd93309702aaa59cde807a94168ff5073aea58301",
+  "sourceReviewFile": "/home/d0rb/Documents/Github/reasonese/.codex/worktrees/pi-scenario-transcripts/out/pi-transcript-review-20261026/site/kimi-transcripts/expo-dotenv-precedence/original/data.json",
+  "sourceCheckpointBeforeImplementationSha256": "9f80afd5fe28b2e9b71be4f2c9dd25125d8655bc657b857701039c5a90e9282e",
+  "sourceUserMessageIndices": [
+    0,
+    77
+  ],
+  "repository": "https://github.com/expo/expo.git",
+  "revision": "62ce99a5feda2edb5bb92673ac586b30b290dc48",
+  "sourceTurnSha256": "7d418095cf5190379eaa68a87b953bb44e410db959f11e0bd68f43c4f683a8fc",
+  "authoringSourceSha256": "7d418095cf5190379eaa68a87b953bb44e410db959f11e0bd68f43c4f683a8fc",
+  "sourceCheckpointSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+  "adaptation": [],
+  "authoringSourceKind": "operator_adaptation"
+}

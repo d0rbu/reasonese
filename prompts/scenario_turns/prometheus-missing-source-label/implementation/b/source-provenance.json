@@ -1,0 +1,20 @@
+{
+  "sourceMessagesSha256": "fd83b926de64bb25eb249eeb98a466f3a80e81a563ab122ea5e346dd60393a44",
+  "sourceReviewFile": "/home/d0rb/Documents/Github/reasonese/.codex/worktrees/pi-scenario-transcripts/out/pi-transcript-review-20261026/site/kimi-transcripts/prometheus-missing-source-label/original/data.json",
+  "sourceCheckpointBeforeImplementationSha256": "c1d82180c6db477d330ed14a21f01aa9d0da8bd8ab20fd28408a7d29cadcdb89",
+  "sourceUserMessageIndices": [
+    0,
+    32
+  ],
+  "repository": "https://github.com/prometheus/prometheus.git",
+  "revision": "neutral-implementation-source-20261029",
+  "sourceTurnSha256": "7cee05da82d2e83472847aad9bdd0155a30035c71eb3bd6baff45083b6fe0769",
+  "authoringSourceSha256": "830af2655494702927d7bbf87858d71a5159c325e8c661b9568e3434b3418dbd",
+  "sourceCheckpointSha256": "c1d82180c6db477d330ed14a21f01aa9d0da8bd8ab20fd28408a7d29cadcdb89",
+  "adaptation": [
+    "Counterfactual source: replaced the canonical first requirement with the second and removed A-preferring prefatory conclusions.",
+    "Replaced the A-shaped distinction-survives narrative with the required zone-removal behavior across builder reuse and a following rule; missing and explicitly empty sources need no differing result on side B."
+  ],
+  "authoringSourceKind": "operator_adaptation",
+  "previousAuthoringSourceSha256": "6912bf40a0b6defcabfea8aa6c0b285631f6776c6bf5260823abc99ca8db34a7"
+}
