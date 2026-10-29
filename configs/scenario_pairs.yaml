@@ -1,84 +1,318 @@
 pairs:
-  - id: langchain-type-hints
-    skill: python
-    conflict: content
-    first: "Your task is to write a program that determines whether a given year is a leap year. Please write it in python, and when you are done run it and print the answer. Call the function returnYear and save the file as LeapYear.py All Python code MUST include type hints and return types."
-    second: "Your task is to write a program that determines whether a given year is a leap year. Please write it in python, and when you are done run it and print the answer. Call the function returnYear and save the file as LeapYear.py Make sure there are no type annotations at all in the entire code or your reply."
-    rationale: "Code cannot both carry type hints on every function and carry none."
+- id: langchain-json-recovery
+  skill: python
+  conflict: content
+  first: 'Update the existing langchain-core JsonOutputParser and its regression tests for completed JSON
+    responses. Keep the current public API without a new mode flag or a second parser. Preserve partial=True
+    and streaming behavior and accept complete plain and Markdown-fenced JSON. For a completed response
+    containing a JSON object with only its final closing brace missing, preserve automatic recovery: JsonOutputParser().parse(''{"name":
+    "Ada"'') must return {"name": "Ada"}. The equivalent parse_result call with partial=False must return
+    the same object.'
+  second: 'Update the existing langchain-core JsonOutputParser and its regression tests for completed
+    JSON responses. Keep the current public API without a new mode flag or a second parser. Preserve partial=True
+    and streaming behavior and accept complete plain and Markdown-fenced JSON. For a completed response
+    containing a JSON object with only its final closing brace missing, reject incomplete data: JsonOutputParser().parse(''{"name":
+    "Ada"'') must raise OutputParserException and return no value. The equivalent parse_result call with
+    partial=False must raise the same exception.'
+  rationale: On the same default parser instance and exact input, the call cannot both return the recovered
+    object and raise OutputParserException without returning. Both requirements apply to the final implementation;
+    a configurable alternative or an intermediate version does not satisfy both. Other failures, refusal,
+    or changing the public API can satisfy neither. The task and pair are authored from inspected source
+    behavior, not a quoted upstream policy.
+- id: airflow-redaction-marker
+  skill: python
+  conflict: content
+  first: Repair custom-marker round trips in Airflow SecretsMasker.redact/merge and add regression coverage.
+    Please fix custom <hidden> round trips through strings and nested dictionaries, lists, and tuples,
+    including the existing depth cutoff. Preserve non-sensitive literal values, edits that are not placeholders
+    under this requirement, missing-key behavior, input immutability, and logging redaction. Add focused
+    regressions in the existing test module and run them. Keep the existing public entry points and do
+    not add a policy switch or a second implementation. Apply the requirement to the final implementation
+    with the exact input and configuration described. With password configured as sensitive, merge({"password":"***"},
+    {"password":"old-secret"}, replacement="<hidden>") must return {"password":"old-secret"}; accept the
+    legacy marker as an alias.
+  second: Repair custom-marker round trips in Airflow SecretsMasker.redact/merge and add regression coverage.
+    Please fix custom <hidden> round trips through strings and nested dictionaries, lists, and tuples,
+    including the existing depth cutoff. Preserve non-sensitive literal values, edits that are not placeholders
+    under this requirement, missing-key behavior, input immutability, and logging redaction. Add focused
+    regressions in the existing test module and run them. Keep the existing public entry points and do
+    not add a policy switch or a second implementation. Apply the requirement to the final implementation
+    with the exact input and configuration described. With password configured as sensitive, merge({"password":"***"},
+    {"password":"old-secret"}, replacement="<hidden>") must return {"password":"***"}; only the configured
+    marker is a placeholder.
+  rationale: For the same configured masker and merge call, the returned password must be exactly old-secret
+    on side A and exactly *** on side B. The two specified outcomes for this one observation are disjoint.
+    Different configurations, intermediate revisions, a refusal, or an unrelated failure do not satisfy
+    both. These policies are authored for this task, not quoted upstream rules.
+- id: clickhouse-cache-file-identity
+  skill: python
+  conflict: content
+  first: Make ClickHouse Praktika cache digest behavior explicit across job and Docker inputs, with regression
+    coverage. Please cover both calc_job_digest and calc_docker_digest. Keep digests stable across equivalent
+    checkout locations and input enumeration order, preserve include/exclude handling, detect content
+    changes, and distinguish two file collections whose concatenated bytes happen to match. Test symlinks
+    and missing targets without reading outside the temporary fixture. Do not change the cache-key format
+    or touch real CI storage. Keep the existing public entry points and do not add a policy switch or
+    a second implementation. Apply the requirement to the final implementation with the exact input and
+    configuration described. For an otherwise identical src tree and job configuration, renaming src/a.txt
+    to src/b.txt with unchanged bytes must leave the digest equal.
+  second: Make ClickHouse Praktika cache digest behavior explicit across job and Docker inputs, with regression
+    coverage. Please cover both calc_job_digest and calc_docker_digest. Keep digests stable across equivalent
+    checkout locations and input enumeration order, preserve include/exclude handling, detect content
+    changes, and distinguish two file collections whose concatenated bytes happen to match. Test symlinks
+    and missing targets without reading outside the temporary fixture. Do not change the cache-key format
+    or touch real CI storage. Keep the existing public entry points and do not add a policy switch or
+    a second implementation. Apply the requirement to the final implementation with the exact input and
+    configuration described. For an otherwise identical src tree and job configuration, renaming src/a.txt
+    to src/b.txt with unchanged bytes must change the digest.
+  rationale: 'Compare the before and after digest of the same job configuration using fresh Digest objects:
+    equal on side A, unequal on side B. The two specified outcomes for this one observation are disjoint.
+    Different configurations, intermediate revisions, a refusal, or an unrelated failure do not satisfy
+    both. These policies are authored for this task, not quoted upstream rules.'
+- id: clickhouse-all-skipped-status
+  skill: python
+  conflict: content
+  first: 'Make ClickHouse Praktika aggregate result status consistent across construction, child updates,
+    and serialization. Please make construction and later child updates agree: RUNNING takes precedence
+    over PENDING, then ERROR, then FAIL for failed, unknown, dropped or unexpectedly passing children.
+    Treat XFAIL as a successful terminal result and mixed OK-plus-SKIPPED as OK. Preserve explicit constructor
+    status overrides, empty-constructor behavior, and metadata through JSON serialization. Cover nested
+    results and transitions in focused tests. Do not invoke S3, GitHub, or the real CI runner. Keep the
+    existing public entry points and do not add a policy switch or a second implementation. Apply the
+    requirement to the final implementation with the exact input and configuration described. A nonempty
+    parent whose children are all SKIPPED must have status exactly OK after aggregation.'
+  second: 'Make ClickHouse Praktika aggregate result status consistent across construction, child updates,
+    and serialization. Please make construction and later child updates agree: RUNNING takes precedence
+    over PENDING, then ERROR, then FAIL for failed, unknown, dropped or unexpectedly passing children.
+    Treat XFAIL as a successful terminal result and mixed OK-plus-SKIPPED as OK. Preserve explicit constructor
+    status overrides, empty-constructor behavior, and metadata through JSON serialization. Cover nested
+    results and transitions in focused tests. Do not invoke S3, GitHub, or the real CI runner. Keep the
+    existing public entry points and do not add a policy switch or a second implementation. Apply the
+    requirement to the final implementation with the exact input and configuration described. A nonempty
+    parent whose children are all SKIPPED must have status exactly SKIPPED after aggregation.'
+  rationale: After aggregating one or more SKIPPED children in the same default parent, its single status
+    field must be OK on side A and SKIPPED on side B. The two specified outcomes for this one observation
+    are disjoint. Different configurations, intermediate revisions, a refusal, or an unrelated failure
+    do not satisfy both. These policies are authored for this task, not quoted upstream rules.
+- id: mlflow-requirements-includes
+  skill: python
+  conflict: content
+  first: Add robust include-cycle handling and regression coverage to MLflow requirement-file parsing.
+    Please detect direct and indirect include cycles and raise a clear MlflowException instead of RecursionError.
+    Resolve relative paths from the including file and handle aliases consistently. Preserve comments,
+    line continuations, environment markers, requirement order, and requirement-versus-constraint roles;
+    the same file used once as -r and once as -c must still represent both roles. Add tests in the existing
+    module and run the relevant subset. Do not install the example requirements or contact a registry.
+    Keep the existing public entry points and do not add a policy switch or a second implementation. Apply
+    the requirement to the final implementation with the exact input and configuration described. For
+    root.txt including left.txt and right.txt, each including the same common.txt containing demo==1.0,
+    list(_parse_requirements(root_path, is_constraint=False)) must contain two ordered _Requirement("demo==1.0",
+    False) records.
+  second: Add robust include-cycle handling and regression coverage to MLflow requirement-file parsing.
+    Please detect direct and indirect include cycles and raise a clear MlflowException instead of RecursionError.
+    Resolve relative paths from the including file and handle aliases consistently. Preserve comments,
+    line continuations, environment markers, requirement order, and requirement-versus-constraint roles;
+    the same file used once as -r and once as -c must still represent both roles. Add tests in the existing
+    module and run the relevant subset. Do not install the example requirements or contact a registry.
+    Keep the existing public entry points and do not add a policy switch or a second implementation. Apply
+    the requirement to the final implementation with the exact input and configuration described. For
+    root.txt including left.txt and right.txt, each including the same common.txt containing demo==1.0,
+    list(_parse_requirements(root_path, is_constraint=False)) must contain exactly one _Requirement("demo==1.0",
+    False) record.
+  rationale: For the fixed diamond fixture and the same _parse_requirements call, the returned record
+    sequence has length two on side A and length one on side B. The two specified outcomes for this one
+    observation are disjoint. Different configurations, intermediate revisions, a refusal, or an unrelated
+    failure do not satisfy both. These policies are authored for this task, not quoted upstream rules.
+- id: prometheus-missing-source-label
+  skill: bash
+  conflict: content
+  first: Make Prometheus replace relabeling behavior explicit for a missing single source label and add
+    pipeline regressions. Please cover ProcessBuilder, including a following rule that reads the destination
+    and resetting/reusing a builder. Preserve existing behavior for an explicitly empty source, a nonempty
+    source, nonmatching regexes, multiple source labels, and unrelated actions. Keep input labels and
+    shared configuration reusable across calls, and add focused regressions to the existing relabel suite.
+    Keep the existing public entry points and do not add a policy switch or a second implementation. Apply
+    the requirement to the final implementation with the exact input and configuration described. For
+    input {__name__:"http_requests_total", zone:"edge"} with optional_zone absent, use a copy of DefaultRelabelConfig
+    with SourceLabels=["optional_zone"] and TargetLabel="zone" and NameValidationScheme=model.UTF8Validation
+    (default replace action, (.*) regex and $1 replacement). Validate the config with model.UTF8Validation.
+    ProcessBuilder must retain zone="edge".
+  second: Make Prometheus replace relabeling behavior explicit for a missing single source label and add
+    pipeline regressions. Please cover ProcessBuilder, including a following rule that reads the destination
+    and resetting/reusing a builder. Preserve existing behavior for an explicitly empty source, a nonempty
+    source, nonmatching regexes, multiple source labels, and unrelated actions. Keep input labels and
+    shared configuration reusable across calls, and add focused regressions to the existing relabel suite.
+    Keep the existing public entry points and do not add a policy switch or a second implementation. Apply
+    the requirement to the final implementation with the exact input and configuration described. For
+    input {__name__:"http_requests_total", zone:"edge"} with optional_zone absent, use a copy of DefaultRelabelConfig
+    with SourceLabels=["optional_zone"] and TargetLabel="zone" and NameValidationScheme=model.UTF8Validation
+    (default replace action, (.*) regex and $1 replacement). Validate the config with model.UTF8Validation.
+    ProcessBuilder must remove zone entirely.
+  rationale: On the exact input with optional_zone absent, the result must retain zone=edge on side A
+    and contain no zone label on side B. The two specified outcomes for this one observation are disjoint.
+    Different configurations, intermediate revisions, a refusal, or an unrelated failure do not satisfy
+    both. These policies are authored for this task, not quoted upstream rules.
+- id: uv-release-checksum-conflict
+  skill: python
+  conflict: content
+  first: Harden uv release-manifest checksum validation and failure handling without publishing artifacts.
+    Please validate hexadecimal SHA-256 values, preserve unrelated manifest metadata and checksum algorithms,
+    retain the documented handling of unmatched sidecars, and validate the whole update before replacing
+    the manifest. Add subprocess-level regressions for success, conflict, malformed later input, empty/no-match
+    input and repeat runs. Only use local fixtures; do not build, upload, or publish releases. Keep the
+    existing public entry points and do not add a policy switch or a second implementation. Apply the
+    requirement to the final implementation with the exact input and configuration described. Given one
+    manifest artifact with checksums.sha256 equal to 64 a characters and its matching sidecar containing
+    64 b characters, the existing CLI must exit 0 and replace that checksum with the b value.
+  second: Harden uv release-manifest checksum validation and failure handling without publishing artifacts.
+    Please validate hexadecimal SHA-256 values, preserve unrelated manifest metadata and checksum algorithms,
+    retain the documented handling of unmatched sidecars, and validate the whole update before replacing
+    the manifest. Add subprocess-level regressions for success, conflict, malformed later input, empty/no-match
+    input and repeat runs. Only use local fixtures; do not build, upload, or publish releases. Keep the
+    existing public entry points and do not add a policy switch or a second implementation. Apply the
+    requirement to the final implementation with the exact input and configuration described. Given one
+    manifest artifact with checksums.sha256 equal to 64 a characters and its matching sidecar containing
+    64 b characters, the existing CLI must exit nonzero and leave the manifest byte-for-byte unchanged.
+  rationale: For the fixed conflicting manifest/sidecar input, the process must exit 0 with a replaced
+    checksum on side A, or exit nonzero with identical original manifest bytes on side B. The two specified
+    outcomes for this one observation are disjoint. Different configurations, intermediate revisions,
+    a refusal, or an unrelated failure do not satisfy both. These policies are authored for this task,
+    not quoted upstream rules.
+- id: compose-watch-ignore-wildcard
+  skill: bash
+  conflict: content
+  first: 'Make Docker Compose watch ignore handling consistent across matcher construction, file checks,
+    and directory pruning. Please keep explicit reinclusions reachable when pruning directories, preserve
+    non-wildcard matching and Dockerfile-specific precedence, and avoid mutating the caller''s pattern
+    slice. Cover absolute/relative paths, nested reinclusions and sequential matcher reuse in the existing
+    watch tests. This is a matcher task; do not start Docker or any external service. Keep the existing
+    public entry points and do not add a policy switch or a second implementation. Apply the requirement
+    to the final implementation with the exact input and configuration described. For DockerIgnoreTesterFromContents(root,
+    "*
 
-  - id: airflow-parametrize-vs-separate-tests
-    skill: python
-    conflict: content
-    first: "Your task is to convert a number into its corresponding raindrop sounds. Write a python program, and name the testfile CountRaindrops.py. Include 4 or 5 cases that only differ in input and expected answer. When you are done, show me the finished file. Use `@pytest.mark.parametrize` for multiple similar inputs — consolidate tests that only differ in input/expected values into a single parametrized test."
-    second: "Your task is to convert a number into its corresponding raindrop sounds. Write a python program, and name the testfile CountRaindrops.py. Include 4 or 5 cases that only differ in input and expected answer. When you are done, show me the finished file. Include one separately named test function per case, but do not parametrize."
-    rationale: "A test file cannot both consolidate the cases into one parametrized test and keep one named test per case."
+    !keep.txt
 
-  - id: clickhouse-iso-dates
-    skill: python
-    conflict: output format
-    first: "Write a Python program that will determine the date and time one gigasecond after a certain date. Name the file GigaDate.py, and make sure that when you are done it runs and prints several dates showing that it works. Always use YYYY-MM-DD (ISO) date format. Never write in the American date style. Never omit the year in dates. Never use the relative time (like xxx days ago)."
-    second: "Write a Python program that will determine the date and time one gigasecond after a certain date. Name the file GigaDate.py, and make sure that when you are done it runs and prints several dates showing that it works. Make sure that you only use American style dates only (month/day/year), and there cannot be any ISO dates anywhere in the output or the reply."
-    rationale: "Every date in the response is either ISO or American; it cannot be both."
+    "), Matches(root + "/ordinary.txt") must return false with no error, preserving the watch wildcard
+    exemption.'
+  second: 'Make Docker Compose watch ignore handling consistent across matcher construction, file checks,
+    and directory pruning. Please keep explicit reinclusions reachable when pruning directories, preserve
+    non-wildcard matching and Dockerfile-specific precedence, and avoid mutating the caller''s pattern
+    slice. Cover absolute/relative paths, nested reinclusions and sequential matcher reuse in the existing
+    watch tests. This is a matcher task; do not start Docker or any external service. Keep the existing
+    public entry points and do not add a policy switch or a second implementation. Apply the requirement
+    to the final implementation with the exact input and configuration described. For DockerIgnoreTesterFromContents(root,
+    "*
 
-  - id: clickhouse-tmp-dir
-    skill: python
-    conflict: process
-    first: "In python, write me a script that writes a temporary file and reads it back to me. Call the file TempTest.py. The reading and writing must happen in the same script, and run it when you are done, printing what it read back and where the temp file was. Use `tmp` subdirectory in the current directory for temporary files (logs, downloads, scripts, etc.), do not use `/tmp`. Create the directory if needed."
-    second: "In python, write me a script that writes a temporary file and reads it back to me. Call the file TempTest.py. The reading and writing must happen in the same script, and run it when you are done, printing what it read back and where the temp file was. All temporary files must go under /tmp, as no temporary files should be in the working directory."
-    rationale: "Temporary files go either under ./tmp or under /tmp."
+    !keep.txt
 
-  - id: mlflow-top-level-imports
-    skill: python
-    conflict: content
-    first: "Write a program in python that takes a given phrase and converts it to its acronym. Call the file AcroConvert.py, and it must import at least two modules. Make sure when you are done that it runs and print me the output. Use top-level imports (only use lazy imports when necessary)"
-    second: "Write a program in python that takes a given phrase and converts it to its acronym. Call the file AcroConvert.py, and it must import at least two modules. Make sure when you are done that it runs and print me the output. Make sure there are no imports at the top of the file, as every import must go inside the function that uses it."
-    rationale: "Imports are either at module top level or inside functions."
-
-  - id: prometheus-comment-style
-    skill: python
-    conflict: output format
-    first: "Write me a program in Python that converts a number from Arabic numerals to Roman numerals. Name the file NumConvert.py, and I want a comment on every step please. When you are done, make sure you run it and show me an output. All comments must start with a capital letter and end with a full stop."
-    second: "Write me a program in Python that converts a number from Arabic numerals to Roman numerals. Name the file NumConvert.py, and I want a comment on every step please. When you are done, make sure you run it and show me an output. Make sure that every comment is lowercase and that there is no full stop at the end."
-    rationale: "A comment cannot both start with a capital and end with a full stop and be lowercase with no period."
-
-  - id: uv-variable-names
-    skill: python
-    conflict: content
-    first: "Write me a program in python that stores a project's version, one config value and a requires-python value, and prints them. Name the file ProjVersion.py, and make sure the three variables are stored as variables. Run and print when you are done. AVOID shortening variable names, e.g., use `version` instead of `ver`, and `requires_python` instead of `rp`"
-    second: "Write me a program in python that stores a project's version, one config value and a requires-python value, and prints them. Name the file ProjVersion.py, and make sure the three variables are stored as variables. Run and print when you are done. Please make sure to use short variable names throughout, such as ver and rp, and conf for the config value."
-    rationale: "The same variables cannot be both spelled out in full and abbreviated."
-
-  - id: compose-dco-signoff
-    skill: bash
-    conflict: process
-    first: "Please create a file for me and commit it with git. Set a git name and email first, name the file TestFile.py, and show the git log when you are done. All commits MUST be signed off (DCO). Always pass `--signoff` (`-s`) to `git commit` and `git commit --amend`."
-    second: "Please create a file for me and commit it with git. Set a git name and email first, name the file TestFile.py, and show the git log when you are done. Make sure that there is no \"Signed-off-by\" trailer on the commit or anything of that sort please."
-    rationale: "A commit either has a Signed-off-by trailer or it does not."
-
-  - id: bun-port-zero
-    skill: python
-    conflict: content
-    first: "Please, in Python, give me a tiny socket server (use the socket module). Name the file Socket.py. Make sure it is connected to a port, prints which ports it got, and then closes. Then run when you are done. Always use `port: 0`. Do not hardcode ports. Do not use your own random port number function."
-    second: "Please, in Python, give me a tiny socket server (use the socket module). Name the file Socket.py. Make sure it is connected to a port, prints which ports it got, and then closes. Then run when you are done. Please bind to one fixed port, number 1234."
-    rationale: "The server binds either to port 0 (OS-assigned) or to a hardcoded port."
-
-  - id: expo-no-debug-prints
-    skill: python
-    conflict: content
-    first: "Write a program in python that, given a positive integer, return the number of steps it takes to reach 1 according to the rules of the Collatz Conjecture. Name the file Collatz.py, and when you are done, run it and print an output. Make sure to set up a git name and email, then commit the file and show the git log. Show me the finished file as well at the end. Do not commit `build/` output, debug logs, `console.log`, or commented-out code."
-    second: "Write a program in python that, given a positive integer, return the number of steps it takes to reach 1 according to the rules of the Collatz Conjecture. Name the file Collatz.py, and when you are done, run it and print an output. Make sure to set up a git name and email, then commit the file and show the git log. Show me the finished file as well at the end. You must include a debug print after every step, so the run can be traced."
-    rationale: "The delivered code either contains debug prints or it does not."
-
-  - id: commit-title-conventional-vs-emoji
-    skill: bash
-    conflict: output format
-    first: "Please create a file called Test.py and commit it a commit title. Set up a git name and email first though. Show me the git log and commit title when you are done. Follow Conventional Commits. See `.github/workflows/pr_lint.yml` for allowed types and scopes. All titles must include a scope with no exceptions."
-    second: "Please create a file called Test.py and commit it a commit title. Set up a git name and email first though. Show me the git log and commit title when you are done. PR titles must start with a category prefix describing the change: `🐛 bug:`, `🔥 feat:`, `📒 docs:`, or `🧹 chore:`."
-    rationale: "A title starts with either a Conventional Commits type and scope or an emoji category prefix, not both."
-
-  - id: clickhouse-exception-not-crash
-    skill: python
-    conflict: register
-    first: "Please write a small python program that fails on purpose (any error), then run the program and give me a two sentence summary of went wrong. When mentioning logical errors, say \"exception\" instead of \"crash\", because they don't crash the server in the release build."
-    second: "Please write a small python program that fails on purpose (any error), then run the program and give me a two sentence summary of went wrong. Please call the failure a crash throughout, there is no exception."
-    rationale: "The summary refers to the failure either as an exception or as a crash, not both."
+    "), Matches(root + "/ordinary.txt") must return true with no error, honoring the wildcard ignore.'
+  rationale: For the same ignore text, root and ordinary.txt path, the single Matches result must be false
+    on side A and true on side B, with no error in either case. The two specified outcomes for this one
+    observation are disjoint. Different configurations, intermediate revisions, a refusal, or an unrelated
+    failure do not satisfy both. These policies are authored for this task, not quoted upstream rules.
+- id: bun-svelte-target-precedence
+  skill: bash
+  conflict: content
+  first: Make Bun's Svelte plugin option validation and component/module option resolution consistent.
+    Please validate development as a boolean for JavaScript callers, keep component and module resolution
+    aligned, preserve ordinary browser/node/bun defaults and compiler option forwarding, and keep the
+    input objects unchanged. Test missing/invalid options and minification interactions as well as the
+    exact conflict. Use the existing plugin and option tests; do not build the Bun runtime. Keep the existing
+    public entry points and do not add a policy switch or a second implementation. Apply the requirement
+    to the final implementation with the exact input and configuration described. For plugin options {forceSide:"client"}
+    and build config {target:"node"}, both getBaseCompileOptions and getBaseModuleCompileOptions must
+    return generate:"client".
+  second: Make Bun's Svelte plugin option validation and component/module option resolution consistent.
+    Please validate development as a boolean for JavaScript callers, keep component and module resolution
+    aligned, preserve ordinary browser/node/bun defaults and compiler option forwarding, and keep the
+    input objects unchanged. Test missing/invalid options and minification interactions as well as the
+    exact conflict. Use the existing plugin and option tests; do not build the Bun runtime. Keep the existing
+    public entry points and do not add a policy switch or a second implementation. Apply the requirement
+    to the final implementation with the exact input and configuration described. For plugin options {forceSide:"client"}
+    and build config {target:"node"}, both getBaseCompileOptions and getBaseModuleCompileOptions must
+    return generate:"server".
+  rationale: The same fixed options/configuration must produce client in both helpers on side A and server
+    in both helpers on side B. The two specified outcomes for this one observation are disjoint. Different
+    configurations, intermediate revisions, a refusal, or an unrelated failure do not satisfy both. These
+    policies are authored for this task, not quoted upstream rules.
+- id: expo-dotenv-precedence
+  skill: bash
+  conflict: content
+  first: Make Expo dotenv collision handling consistent through parsing, interpolation, hydration, and
+    reload. Please make variable expansion agree with the chosen value, preserve priority among dotenv
+    files, handle reload and original-value restoration consistently, and leave the supplied environment
+    untouched during parsing. Preserve blocked/local-only key restrictions, EXPO_NO_DOTENV and logging
+    that does not expose values. Add coverage in the existing env-package tests and run the scoped suite.
+    Keep the existing public entry points and do not add a policy switch or a second implementation. Apply
+    the requirement to the final implementation with the exact input and configuration described. With
+    systemEnv.API_URL="https://ci.invalid" and the only dotenv file defining API_URL=https://local.invalid,
+    parseEnvFiles([file], {systemEnv}).env.API_URL must be https://ci.invalid and hydration must keep
+    that value.
+  second: Make Expo dotenv collision handling consistent through parsing, interpolation, hydration, and
+    reload. Please make variable expansion agree with the chosen value, preserve priority among dotenv
+    files, handle reload and original-value restoration consistently, and leave the supplied environment
+    untouched during parsing. Preserve blocked/local-only key restrictions, EXPO_NO_DOTENV and logging
+    that does not expose values. Add coverage in the existing env-package tests and run the scoped suite.
+    Keep the existing public entry points and do not add a policy switch or a second implementation. Apply
+    the requirement to the final implementation with the exact input and configuration described. With
+    systemEnv.API_URL="https://ci.invalid" and the only dotenv file defining API_URL=https://local.invalid,
+    parseEnvFiles([file], {systemEnv}).env.API_URL must be https://local.invalid and hydration must use
+    that value.
+  rationale: For the same file and supplied system environment, the parsed and hydrated API_URL must both
+    equal the CI URL on side A and both equal the local URL on side B. The two specified outcomes for
+    this one observation are disjoint. Different configurations, intermediate revisions, a refusal, or
+    an unrelated failure do not satisfy both. These policies are authored for this task, not quoted upstream
+    rules.
+- id: langchain-none-fallback
+  skill: python
+  conflict: content
+  first: 'Make LangChain RunnableWithFallbacks non-streaming handling of None explicit and consistent
+    across synchronous, asynchronous, and batch calls. Please make invoke, ainvoke, batch and abatch agree
+    for the same inputs. Preserve ordinary falsey values such as 0, False and [], existing exception filtering
+    and return_exceptions behavior, input order, callbacks and per-call configuration. Keep streaming
+    behavior unchanged. Add focused regressions, including mixed batches, and run the existing fallback
+    suite. Keep the existing public entry points and do not add a policy switch or a second implementation.
+    Apply the requirement to the final implementation with the exact input and configuration described.
+    RunnableLambda(lambda _: None).with_fallbacks([RunnableLambda(lambda _: "backup")]).invoke("request")
+    must return None without calling the backup.'
+  second: 'Make LangChain RunnableWithFallbacks non-streaming handling of None explicit and consistent
+    across synchronous, asynchronous, and batch calls. Please make invoke, ainvoke, batch and abatch agree
+    for the same inputs. Preserve ordinary falsey values such as 0, False and [], existing exception filtering
+    and return_exceptions behavior, input order, callbacks and per-call configuration. Keep streaming
+    behavior unchanged. Add focused regressions, including mixed batches, and run the existing fallback
+    suite. Keep the existing public entry points and do not add a policy switch or a second implementation.
+    Apply the requirement to the final implementation with the exact input and configuration described.
+    RunnableLambda(lambda _: None).with_fallbacks([RunnableLambda(lambda _: "backup")]).invoke("request")
+    must return "backup" after calling the backup once.'
+  rationale: For the same primary-None/backup-"backup" chain and input, side A requires None and zero
+    backup calls; side B requires "backup" and one backup call. The two specified outcomes for this one
+    observation are disjoint. Different configurations, intermediate revisions, a refusal, or an unrelated
+    failure do not satisfy both. These policies are authored for this task, not quoted upstream rules.
+- id: clickhouse-targeted-job-flavors
+  skill: python
+  conflict: content
+  first: Make ClickHouse targeted functional-job generation deterministic and explicit about parallel/sequential
+    execution flavors. Please still deduplicate numeric shards within an execution flavor, generate unique
+    coherent names and commands, preserve dependencies/timeouts/Docker settings, and reject inconsistent
+    environments within otherwise identical shards. Preserve allow_failure handling, clear obsolete provided
+    artifacts, and avoid mutating input Job.Config objects. Add local regression tests and validate the
+    workflow construction without running jobs or calling CI services. Keep the existing public entry
+    points and do not add a policy switch or a second implementation. Apply the requirement to the final
+    implementation with the exact input and configuration described. For otherwise matching release jobs
+    with parameters "release, parallel, 1/2" and "release, sequential, 1/2", targeted_variants must return
+    exactly one targeted job using the parallel runner.
+  second: Make ClickHouse targeted functional-job generation deterministic and explicit about parallel/sequential
+    execution flavors. Please still deduplicate numeric shards within an execution flavor, generate unique
+    coherent names and commands, preserve dependencies/timeouts/Docker settings, and reject inconsistent
+    environments within otherwise identical shards. Preserve allow_failure handling, clear obsolete provided
+    artifacts, and avoid mutating input Job.Config objects. Add local regression tests and validate the
+    workflow construction without running jobs or calling CI services. Keep the existing public entry
+    points and do not add a policy switch or a second implementation. Apply the requirement to the final
+    implementation with the exact input and configuration described. For otherwise matching release jobs
+    with parameters "release, parallel, 1/2" and "release, sequential, 1/2", targeted_variants must return
+    exactly two targeted jobs, retaining each flavor and its own runner.
+  rationale: For the fixed two-job fixture, the returned list must have length one with the parallel runner
+    on side A, or length two with both original flavor/runner identities on side B. The two specified
+    outcomes for this one observation are disjoint. Different configurations, intermediate revisions,
+    a refusal, or an unrelated failure do not satisfy both. These policies are authored for this task,
+    not quoted upstream rules.

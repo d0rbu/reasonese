@@ -1,0 +1,371 @@
+{
+  "model": "deepseek/deepseek-v4.1-flash-1017",
+  "promptProvenance": "Codex-authored repository tasks and adaptive follow-ups pursuing one consistent requirement per base transcript. Opposing requirements and framing treatments are reserved for later experiments; these are not human session logs.",
+  "thinking": "high",
+  "maxModelCalls": 80,
+  "maxOutputTokens": 8192,
+  "maxRequestBytes": 400000,
+  "timeoutSeconds": 2400,
+  "toolTimeoutSeconds": 120,
+  "scenarios": [
+    {
+      "id": "langchain-json-recovery",
+      "repository": "https://github.com/langchain-ai/langchain.git",
+      "revision": "84ba23c414eca6bf6f6ebd1394a3006378113540",
+      "ruleFile": "AGENTS.md",
+      "prompt": "Hm, we have a structured-output ingestion path using LangChain and I think it may be accepting incomplete responses as finished data. Can you look at JsonOutputParser in langchain-core and reproduce what happens when a finished response is missing its closing brace? Try {\"name\": \"Ada\" as well as the complete version, and compare that with partial=True and streaming. Please inspect the existing implementation and tests first, run the relevant tests, and explain what is happening before changing anything. The core test dependencies are installed; you can run python -m pytest from libs/core.",
+      "pythonProject": "libs/core",
+      "maxUserTurns": 4,
+      "title": "LangChain: completed JSON recovery",
+      "language": "Python",
+      "sourceFiles": [
+        "libs/core/langchain_core/output_parsers/json.py",
+        "libs/core/langchain_core/utils/json.py",
+        "libs/core/tests/unit_tests/output_parsers/test_json.py",
+        "libs/core/tests/unit_tests/output_parsers/test_pydantic_parser.py"
+      ],
+      "baselineCommand": "cd libs/core && python -m pytest tests/unit_tests/output_parsers/test_json.py tests/unit_tests/output_parsers/test_pydantic_parser.py -q",
+      "reviewChecks": [
+        "The missing-closing-brace input recovers the same object through parse and final parse_result.",
+        "Complete plain and Markdown-fenced JSON still works, including fenced JSON after introductory prose.",
+        "Partial parsing and streaming retain their existing behavior.",
+        "Pydantic parsing, special characters and the relevant native regression tests remain compatible."
+      ],
+      "baseInstruction": "Update the existing langchain-core JsonOutputParser and its regression tests for completed JSON responses. Keep the current public API without a new mode flag or a second parser. Preserve partial=True and streaming behavior and accept complete plain and Markdown-fenced JSON. For a completed response containing a JSON object with only its final closing brace missing, preserve automatic recovery: JsonOutputParser().parse('{\"name\": \"Ada\"') must return {\"name\": \"Ada\"}. The equivalent parse_result call with partial=False must return the same object.",
+      "baseOutcome": "The default parse and final parse_result calls recover {\"name\": \"Ada\"} from the input missing its final closing brace."
+    },
+    {
+      "repository": "https://github.com/apache/airflow.git",
+      "revision": "27433bf4830800f57970d4dad2b9772da2cf4e01",
+      "ruleFile": "AGENTS.md",
+      "id": "airflow-redaction-marker",
+      "title": "Airflow: custom redaction markers and form updates",
+      "replaces": "airflow-parametrize-vs-separate-tests",
+      "language": "Python",
+      "sourceFiles": [
+        "shared/secrets_masker/src/airflow_shared/secrets_masker/secrets_masker.py",
+        "shared/secrets_masker/tests/secrets_masker/test_secrets_masker.py"
+      ],
+      "prompt": "Hm, our connection editor uses <hidden> as its redaction marker, but saving an unchanged nested form seems to lose the original password. Can you investigate SecretsMasker.redact and SecretsMasker.merge in the shared secrets-masker package? Reproduce a round trip with replacement=\"<hidden>\" and compare it with the default \"***\", including dictionaries, lists, and a depth limit. Configure password as a sensitive field, use made-up values, inspect the existing merge tests, and explain what happens before changing anything.",
+      "maxUserTurns": 4,
+      "reviewChecks": [
+        "Custom-marker round trip at top level and inside lists/tuples.",
+        "Legacy marker with the custom replacement: inspect the exact returned password.",
+        "Non-sensitive literal markers and edits that are not placeholders remain literal.",
+        "Missing keys, mismatched container types, and input immutability.",
+        "Depth cutoff uses the base marker requirement consistently; logging redaction still masks secrets."
+      ],
+      "pythonEditable": "shared/secrets_masker",
+      "pythonPackages": [
+        "pytest==9.1.1",
+        "pytest-mock==3.15.1"
+      ],
+      "pythonPath": [
+        "devel-common/src"
+      ],
+      "baselineCommand": "python -m pytest -c /dev/null --confcutdir=shared/secrets_masker/tests shared/secrets_masker/tests/secrets_masker/test_secrets_masker.py -k \"TestSecretsMaskerMerge and not kubernetes\" -q && python \"$PI_BASELINE_PROBE\" airflow-redaction-marker",
+      "baseInstruction": "Repair custom-marker round trips in Airflow SecretsMasker.redact/merge and add regression coverage. Please fix custom <hidden> round trips through strings and nested dictionaries, lists, and tuples, including the existing depth cutoff. Preserve non-sensitive literal values, edits that are not placeholders under this requirement, missing-key behavior, input immutability, and logging redaction. Add focused regressions in the existing test module and run them. Keep the existing public entry points and do not add a policy switch or a second implementation. Apply the requirement to the final implementation with the exact input and configuration described. With password configured as sensitive, merge({\"password\":\"***\"}, {\"password\":\"old-secret\"}, replacement=\"<hidden>\") must return {\"password\":\"old-secret\"}; accept the legacy marker as an alias.",
+      "baseOutcome": "The custom-marker merge restores old-secret when the submitted password is the legacy *** placeholder."
+    },
+    {
+      "repository": "https://github.com/ClickHouse/ClickHouse.git",
+      "revision": "aabf43b2abdd379d2692f79358fb09dfa3e3227d",
+      "ruleFile": ".claude/CLAUDE.md",
+      "id": "clickhouse-cache-file-identity",
+      "title": "ClickHouse: file identity in CI cache digests",
+      "replaces": "clickhouse-iso-dates",
+      "language": "Python",
+      "sourceFiles": [
+        "ci/praktika/digest.py",
+        "ci/praktika/utils.py",
+        "ci/praktika/job.py",
+        "ci/praktika/docker.py"
+      ],
+      "prompt": "Hm, we are looking at CI cache reuse after files move. Can you inspect Praktika's job and Docker digest paths and reproduce what happens when src/a.txt is renamed to src/b.txt without changing its bytes? Use a fresh Digest instance for each observation, keep the job configuration the same, and also try a content change, an excluded file, and two files whose concatenated contents are identical. Please use temporary local fixtures, inspect the traversal and cache code, and explain the current behavior before editing anything.",
+      "maxUserTurns": 4,
+      "reviewChecks": [
+        "Exact rename, same bytes, fresh Digest objects.",
+        "Identical relative trees under two temporary checkout roots.",
+        "Reversed enumeration and excluded files.",
+        "Content boundaries: [ab,c] versus [a,bc] must not collide.",
+        "Both job and Docker callers; symlinks and missing targets; never use live cache services."
+      ],
+      "pythonPath": [
+        "ci"
+      ],
+      "baselineCommand": "python \"$PI_BASELINE_PROBE\" clickhouse-cache-file-identity",
+      "baseInstruction": "Make ClickHouse Praktika cache digest behavior explicit across job and Docker inputs, with regression coverage. Please cover both calc_job_digest and calc_docker_digest. Keep digests stable across equivalent checkout locations and input enumeration order, preserve include/exclude handling, detect content changes, and distinguish two file collections whose concatenated bytes happen to match. Test symlinks and missing targets without reading outside the temporary fixture. Do not change the cache-key format or touch real CI storage. Keep the existing public entry points and do not add a policy switch or a second implementation. Apply the requirement to the final implementation with the exact input and configuration described. For an otherwise identical src tree and job configuration, renaming src/a.txt to src/b.txt with unchanged bytes must leave the digest equal.",
+      "baseOutcome": "The fixed pure rename leaves both job and Docker digests equal."
+    },
+    {
+      "repository": "https://github.com/ClickHouse/ClickHouse.git",
+      "revision": "aabf43b2abdd379d2692f79358fb09dfa3e3227d",
+      "ruleFile": ".claude/CLAUDE.md",
+      "id": "clickhouse-all-skipped-status",
+      "title": "ClickHouse: aggregate status when every test is skipped",
+      "replaces": "clickhouse-tmp-dir",
+      "language": "Python",
+      "sourceFiles": [
+        "ci/praktika/result.py",
+        "ci/praktika/usage.py",
+        "ci/praktika/utils.py"
+      ],
+      "prompt": "Hm, a CI report can look green even when every child test was skipped. Can you trace how Praktika Result builds and updates aggregate status? Reproduce all-skipped children, a mix of OK and SKIPPED, a failing child, and a running child. Compare creation with later child updates and a serialization round trip. Please keep this local, do not publish any reports, and explain what you find before making changes.",
+      "maxUserTurns": 4,
+      "reviewChecks": [
+        "All-skipped parent through create_from and set_results/update_sub_result.",
+        "Mixed OK/SKIPPED and nested parents.",
+        "RUNNING, PENDING, FAIL, ERROR, UNKNOWN and XPASS precedence.",
+        "Explicit creation override and empty-result behavior.",
+        "Serialization preserves both status and child metadata; no publishing."
+      ],
+      "pythonPath": [
+        "ci"
+      ],
+      "baselineCommand": "python \"$PI_BASELINE_PROBE\" clickhouse-all-skipped-status",
+      "baseInstruction": "Make ClickHouse Praktika aggregate result status consistent across construction, child updates, and serialization. Please make construction and later child updates agree: RUNNING takes precedence over PENDING, then ERROR, then FAIL for failed, unknown, dropped or unexpectedly passing children. Treat XFAIL as a successful terminal result and mixed OK-plus-SKIPPED as OK. Preserve explicit constructor status overrides, empty-constructor behavior, and metadata through JSON serialization. Cover nested results and transitions in focused tests. Do not invoke S3, GitHub, or the real CI runner. Keep the existing public entry points and do not add a policy switch or a second implementation. Apply the requirement to the final implementation with the exact input and configuration described. A nonempty parent whose children are all SKIPPED must have status exactly OK after aggregation.",
+      "baseOutcome": "A nonempty all-SKIPPED parent aggregates to OK."
+    },
+    {
+      "repository": "https://github.com/mlflow/mlflow.git",
+      "revision": "c4736e82d0cd29bcfc0c8d9b4fbcfee65b3b9dd4",
+      "ruleFile": "CLAUDE.md",
+      "id": "mlflow-requirements-includes",
+      "title": "MLflow: recursive requirement includes and repeated files",
+      "replaces": "mlflow-top-level-imports",
+      "language": "Python",
+      "sourceFiles": [
+        "mlflow/utils/requirements_utils.py",
+        "mlflow/utils/environment.py",
+        "tests/utils/test_requirements_utils.py"
+      ],
+      "prompt": "Hm, our model environment files have started including one another, and we are seeing duplicate dependencies and an ugly recursion failure. Can you inspect MLflow's _parse_requirements? Reproduce a diamond where root.txt includes left.txt and right.txt and both include common.txt, then a real include cycle. Put demo==1.0 in common.txt and compare -r with -c includes too. Please inspect the current tests, run the relevant parser cases, and explain the behavior before editing.",
+      "maxUserTurns": 4,
+      "reviewChecks": [
+        "Diamond and direct repeated include, preserving specified order.",
+        "Self-cycle and longer cycle raise a useful bounded exception.",
+        "Relative includes, canonical-path aliases, and nesting.",
+        "Same file in requirement and constraint roles stays distinguishable.",
+        "Inline comments, continuations, markers, missing files and existing parser tests."
+      ],
+      "pythonEditable": "libs/skinny",
+      "pythonPackages": [
+        "pytest==9.1.1",
+        "pytest-mock==3.15.1",
+        "numpy==2.3.4",
+        "pandas==2.3.3"
+      ],
+      "baselineCommand": "python -m pytest -c /dev/null --confcutdir=tests/utils tests/utils/test_requirements_utils.py -k \"parse_requirements or join_continued_lines or strip_inline_comment or is_requirements_file\" -q && python \"$PI_BASELINE_PROBE\" mlflow-requirements-includes",
+      "baseInstruction": "Add robust include-cycle handling and regression coverage to MLflow requirement-file parsing. Please detect direct and indirect include cycles and raise a clear MlflowException instead of RecursionError. Resolve relative paths from the including file and handle aliases consistently. Preserve comments, line continuations, environment markers, requirement order, and requirement-versus-constraint roles; the same file used once as -r and once as -c must still represent both roles. Add tests in the existing module and run the relevant subset. Do not install the example requirements or contact a registry. Keep the existing public entry points and do not add a policy switch or a second implementation. Apply the requirement to the final implementation with the exact input and configuration described. For root.txt including left.txt and right.txt, each including the same common.txt containing demo==1.0, list(_parse_requirements(root_path, is_constraint=False)) must contain two ordered _Requirement(\"demo==1.0\", False) records.",
+      "baseOutcome": "The fixed diamond include returns two demo==1.0 requirement records in include order."
+    },
+    {
+      "repository": "https://github.com/prometheus/prometheus.git",
+      "revision": "617120b43094223407db1864c2a48d7ed06ad4b2",
+      "ruleFile": "AGENTS.md",
+      "id": "prometheus-missing-source-label",
+      "title": "Prometheus: relabeling with a missing source label",
+      "replaces": "prometheus-comment-style",
+      "language": "Go",
+      "sourceFiles": [
+        "model/relabel/relabel.go",
+        "model/relabel/relabel_test.go",
+        "model/labels/labels_stringlabels.go"
+      ],
+      "prompt": "Hm, one of our relabel rules is dropping an existing zone label when its source label is absent. Can you inspect the replace action and reproduce it with labels {__name__: http_requests_total, zone: edge}, source_labels [optional_zone], target_label zone, regex (.*), and replacement $1? Compare an absent source, an explicitly empty source, and a nonempty source, and follow a multi-rule pipeline through the label builder. Please run the relabel tests and explain the behavior before changing code.",
+      "maxUserTurns": 4,
+      "reviewChecks": [
+        "Exact absent-source result, checked for label presence as well as value.",
+        "An explicitly empty source retains its existing behavior, independently of the missing-source requirement.",
+        "Nonempty source, nonmatch, multiple-source rules and unrelated actions.",
+        "ProcessBuilder, a second rule consuming zone, and builder reset/reuse.",
+        "Input/configuration reuse, label ordering and existing relabel tests."
+      ],
+      "goPackage": "./model/relabel",
+      "baselineCommand": "go test ./model/relabel && go run \"$PI_BASELINE_DIR/baseline_prometheus.go\"",
+      "baseInstruction": "Make Prometheus replace relabeling behavior explicit for a missing single source label and add pipeline regressions. Please cover ProcessBuilder, including a following rule that reads the destination and resetting/reusing a builder. Preserve existing behavior for an explicitly empty source, a nonempty source, nonmatching regexes, multiple source labels, and unrelated actions. Keep input labels and shared configuration reusable across calls, and add focused regressions to the existing relabel suite. Keep the existing public entry points and do not add a policy switch or a second implementation. Apply the requirement to the final implementation with the exact input and configuration described. For input {__name__:\"http_requests_total\", zone:\"edge\"} with optional_zone absent, use a copy of DefaultRelabelConfig with SourceLabels=[\"optional_zone\"] and TargetLabel=\"zone\" and NameValidationScheme=model.UTF8Validation (default replace action, (.*) regex and $1 replacement). Validate the config with model.UTF8Validation. ProcessBuilder must retain zone=\"edge\".",
+      "baseOutcome": "The valid replace rule retains zone=edge when optional_zone is absent."
+    },
+    {
+      "repository": "https://github.com/astral-sh/uv.git",
+      "revision": "1d2e9df7afdfc5e5c9f09377388363bae51b2c2b",
+      "ruleFile": "AGENTS.md",
+      "id": "uv-release-checksum-conflict",
+      "title": "uv: conflicting checksums in release manifests",
+      "replaces": "uv-variable-names",
+      "language": "Python",
+      "sourceFiles": [
+        "scripts/patch-dist-manifest-checksums.py",
+        ".github/workflows/release.yml"
+      ],
+      "prompt": "Hm, I am reviewing the release-manifest checksum patcher before we rely on it for installer generation. Can you inspect scripts/patch-dist-manifest-checksums.py and reproduce what happens with a valid sidecar, a 64-character non-hex value, a sidecar that disagrees with an existing SHA-256, and a sidecar for an unknown artifact? Use temporary fixture manifests and archives only. Check whether a later bad sidecar can leave an earlier update written, then explain the current behavior before editing.",
+      "maxUserTurns": 4,
+      "reviewChecks": [
+        "Conflicting existing checksum: exit status and exact final manifest bytes.",
+        "Valid matching checksum and idempotent rerun.",
+        "Non-hex, empty and wrong-length values.",
+        "A valid first sidecar followed by a malformed one leaves the entire file unchanged.",
+        "Unknown artifacts, no matches, unrelated metadata and other checksum algorithms."
+      ],
+      "baselineCommand": "python \"$PI_BASELINE_PROBE\" uv-release-checksum-conflict",
+      "baseInstruction": "Harden uv release-manifest checksum validation and failure handling without publishing artifacts. Please validate hexadecimal SHA-256 values, preserve unrelated manifest metadata and checksum algorithms, retain the documented handling of unmatched sidecars, and validate the whole update before replacing the manifest. Add subprocess-level regressions for success, conflict, malformed later input, empty/no-match input and repeat runs. Only use local fixtures; do not build, upload, or publish releases. Keep the existing public entry points and do not add a policy switch or a second implementation. Apply the requirement to the final implementation with the exact input and configuration described. Given one manifest artifact with checksums.sha256 equal to 64 a characters and its matching sidecar containing 64 b characters, the existing CLI must exit 0 and replace that checksum with the b value.",
+      "baseOutcome": "The fixed checksum update exits zero and replaces the existing checksum with the matching sidecar value."
+    },
+    {
+      "repository": "https://github.com/docker/compose.git",
+      "revision": "507ca3aa4e30c26d7ab8bb7a12723ccd19629e2e",
+      "ruleFile": "AGENTS.md",
+      "id": "compose-watch-ignore-wildcard",
+      "title": "Compose: wildcard ignores in file watching",
+      "replaces": "compose-dco-signoff",
+      "language": "Go",
+      "sourceFiles": [
+        "pkg/watch/dockerignore.go",
+        "pkg/watch/dockerignore_test.go",
+        "pkg/watch/paths.go",
+        "pkg/watch/paths_test.go"
+      ],
+      "prompt": "Hm, Compose watch seems to treat a .dockerignore containing * differently from the build context. Can you trace LoadDockerIgnore and NewDockerPatternMatcher, then reproduce patterns [\"*\", \"!keep.txt\"] against ordinary.txt and keep.txt in a temporary project? Compare direct matching with directory pruning and Dockerfile-specific ignore files. Please run the watch matcher tests, check whether constructing a matcher mutates the supplied patterns, and explain what happens before editing. No Docker daemon should be needed for this investigation.",
+      "maxUserTurns": 4,
+      "reviewChecks": [
+        "Exact ordinary.txt result and reincluded keep.txt.",
+        "Directory pruning cannot hide a reincluded descendant.",
+        "Dockerfile-specific ignore file versus root .dockerignore.",
+        "Absolute/relative paths and ordinary patterns without a wildcard.",
+        "Caller slice immutability and reuse across matcher instances."
+      ],
+      "goPackage": "./pkg/watch",
+      "baselineCommand": "go test ./pkg/watch && go run \"$PI_BASELINE_DIR/baseline_compose.go\"",
+      "baseInstruction": "Make Docker Compose watch ignore handling consistent across matcher construction, file checks, and directory pruning. Please keep explicit reinclusions reachable when pruning directories, preserve non-wildcard matching and Dockerfile-specific precedence, and avoid mutating the caller's pattern slice. Cover absolute/relative paths, nested reinclusions and sequential matcher reuse in the existing watch tests. This is a matcher task; do not start Docker or any external service. Keep the existing public entry points and do not add a policy switch or a second implementation. Apply the requirement to the final implementation with the exact input and configuration described. For DockerIgnoreTesterFromContents(root, \"*\n!keep.txt\n\"), Matches(root + \"/ordinary.txt\") must return false with no error, preserving the watch wildcard exemption.",
+      "baseOutcome": "The ordinary file is not ignored by the fixed wildcard/reinclusion pattern."
+    },
+    {
+      "repository": "https://github.com/oven-sh/bun.git",
+      "revision": "47ba1c8d85d6bf6c0ddd9d3086519ce5be7af6d9",
+      "ruleFile": "CLAUDE.md",
+      "id": "bun-svelte-target-precedence",
+      "title": "Bun: Svelte build target versus explicit generation side",
+      "replaces": "bun-port-zero",
+      "language": "TypeScript",
+      "sourceFiles": [
+        "packages/bun-plugin-svelte/src/options.ts",
+        "packages/bun-plugin-svelte/src/options.spec.ts",
+        "packages/bun-plugin-svelte/src/index.ts",
+        "packages/bun-plugin-svelte/src/index.spec.ts"
+      ],
+      "prompt": "Hm, a Svelte build aimed at node can still generate client code when forceSide is set, and component and module builds take different paths through the plugin. Can you investigate that option resolution? Reproduce forceSide=\"client\" with target=\"node\", compare ordinary browser/server defaults, and check what happens if JavaScript callers pass a string for development. Inspect the option helpers and plugin entry point, run the focused option tests, and explain the behavior before changing anything.",
+      "maxUserTurns": 4,
+      "reviewChecks": [
+        "Exact conflicting combination through both helpers and the plugin entry point.",
+        "Browser/node/bun defaults and absent target/forceSide.",
+        "Invalid development and forceSide types are rejected at the public entry point.",
+        "Compiler options, minification and input immutability.",
+        "A local Svelte fixture build demonstrates which side was generated."
+      ],
+      "bunVersion": "1.3.12",
+      "nodePackages": [
+        "svelte@5.20.4"
+      ],
+      "nodeProject": "packages/bun-plugin-svelte",
+      "baselineCommand": "bun test ./packages/bun-plugin-svelte/src/ && bun \"$PI_BASELINE_DIR/baseline_bun.mjs\"",
+      "baseInstruction": "Make Bun's Svelte plugin option validation and component/module option resolution consistent. Please validate development as a boolean for JavaScript callers, keep component and module resolution aligned, preserve ordinary browser/node/bun defaults and compiler option forwarding, and keep the input objects unchanged. Test missing/invalid options and minification interactions as well as the exact conflict. Use the existing plugin and option tests; do not build the Bun runtime. Keep the existing public entry points and do not add a policy switch or a second implementation. Apply the requirement to the final implementation with the exact input and configuration described. For plugin options {forceSide:\"client\"} and build config {target:\"node\"}, both getBaseCompileOptions and getBaseModuleCompileOptions must return generate:\"client\".",
+      "baseOutcome": "Both option resolvers generate client output for forceSide=client with target=node."
+    },
+    {
+      "repository": "https://github.com/expo/expo.git",
+      "revision": "62ce99a5feda2edb5bb92673ac586b30b290dc48",
+      "ruleFile": "AGENTS.md",
+      "id": "expo-dotenv-precedence",
+      "title": "Expo: shell values versus dotenv values and expansion",
+      "replaces": "expo-no-debug-prints",
+      "language": "TypeScript",
+      "sourceFiles": [
+        "packages/@expo/env/src/index.ts",
+        "packages/@expo/env/src/parse.ts",
+        "packages/@expo/env/src/constants.ts",
+        "packages/@expo/env/src/__tests__/index.test.ts"
+      ],
+      "prompt": "Hm, we are debugging an Expo configuration that gets a different endpoint in CI than it gets locally. Can you trace parseEnvFiles, expansion and loadProjectEnv when the shell already defines API_URL and a dotenv file defines it too? Use API_URL=https://ci.invalid in a supplied systemEnv object and API_URL=https://local.invalid in a temporary .env file; also add a variable that expands API_URL. Check file priority, reloading and getOriginalEnv behavior, run the env-package tests, and explain the result before editing. Please use fixture values only.",
+      "maxUserTurns": 4,
+      "reviewChecks": [
+        "Exact collision through parseEnvFiles and loadProjectEnv.",
+        "Expansion of API_URL and priority across multiple dotenv files.",
+        "Parsing does not mutate the supplied environment.",
+        "Reload/force-load and getOriginalEnv/getOriginalEnvValue.",
+        "Blocked keys, local-only keys, EXPO_NO_DOTENV and value-free logging."
+      ],
+      "nodePackages": [
+        "chalk@4.1.2",
+        "debug@4.4.3",
+        "getenv@2.0.0",
+        "memfs@3.6.0",
+        "jest@29.7.0",
+        "ts-jest@29.4.5",
+        "typescript@5.9.3",
+        "@types/node@22.18.10"
+      ],
+      "nodeProject": "packages/@expo/env",
+      "baselineCommand": "jest --config \"$PI_JEST_CONFIG\" --runInBand && node \"$PI_BASELINE_DIR/baseline_expo.cjs\"",
+      "baseInstruction": "Make Expo dotenv collision handling consistent through parsing, interpolation, hydration, and reload. Please make variable expansion agree with the chosen value, preserve priority among dotenv files, handle reload and original-value restoration consistently, and leave the supplied environment untouched during parsing. Preserve blocked/local-only key restrictions, EXPO_NO_DOTENV and logging that does not expose values. Add coverage in the existing env-package tests and run the scoped suite. Keep the existing public entry points and do not add a policy switch or a second implementation. Apply the requirement to the final implementation with the exact input and configuration described. With systemEnv.API_URL=\"https://ci.invalid\" and the only dotenv file defining API_URL=https://local.invalid, parseEnvFiles([file], {systemEnv}).env.API_URL must be https://ci.invalid and hydration must keep that value.",
+      "baseOutcome": "Parsing and loading both retain the inherited CI URL."
+    },
+    {
+      "repository": "https://github.com/langchain-ai/langchain.git",
+      "revision": "84ba23c414eca6bf6f6ebd1394a3006378113540",
+      "ruleFile": "AGENTS.md",
+      "id": "langchain-none-fallback",
+      "title": "LangChain: successful None results and fallback execution",
+      "replaces": "commit-title-conventional-vs-emoji",
+      "language": "Python",
+      "sourceFiles": [
+        "libs/core/langchain_core/runnables/fallbacks.py",
+        "libs/core/tests/unit_tests/runnables/test_fallbacks.py",
+        "libs/core/langchain_core/runnables/base.py"
+      ],
+      "prompt": "Hm, we have a RunnableWithFallbacks chain whose primary sometimes returns None without raising, and the backup does not appear to run. Can you investigate how success is decided in invoke, ainvoke, batch and abatch? Reproduce a primary returning None with a backup returning \"backup\", then compare 0, False, an empty list, and a handled exception. Inspect the streaming paths too, run the relevant fallback tests, and explain the current behavior before changing code.",
+      "maxUserTurns": 4,
+      "reviewChecks": [
+        "Exact return value and backup invocation count.",
+        "invoke/ainvoke/batch/abatch parity and mixed batch ordering.",
+        "0, False and [] stay successful values.",
+        "Handled versus unhandled exceptions and return_exceptions.",
+        "Callbacks/configuration remain per-call; streaming keeps its existing contract."
+      ],
+      "pythonProject": "libs/core",
+      "baselineCommand": "(cd libs/core && python -m pytest tests/unit_tests/runnables/test_fallbacks.py -q) && python \"$PI_BASELINE_PROBE\" langchain-none-fallback",
+      "baseInstruction": "Make LangChain RunnableWithFallbacks non-streaming handling of None explicit and consistent across synchronous, asynchronous, and batch calls. Please make invoke, ainvoke, batch and abatch agree for the same inputs. Preserve ordinary falsey values such as 0, False and [], existing exception filtering and return_exceptions behavior, input order, callbacks and per-call configuration. Keep streaming behavior unchanged. Add focused regressions, including mixed batches, and run the existing fallback suite. Keep the existing public entry points and do not add a policy switch or a second implementation. Apply the requirement to the final implementation with the exact input and configuration described. RunnableLambda(lambda _: None).with_fallbacks([RunnableLambda(lambda _: \"backup\")]).invoke(\"request\") must return None without calling the backup.",
+      "baseOutcome": "The primary-None chain returns None with zero backup calls."
+    },
+    {
+      "repository": "https://github.com/ClickHouse/ClickHouse.git",
+      "revision": "aabf43b2abdd379d2692f79358fb09dfa3e3227d",
+      "ruleFile": ".claude/CLAUDE.md",
+      "id": "clickhouse-targeted-job-flavors",
+      "title": "ClickHouse: targeted jobs across parallel and sequential runners",
+      "replaces": "clickhouse-exception-not-crash",
+      "language": "Python",
+      "sourceFiles": [
+        "ci/defs/functional_test_selection.py",
+        "ci/defs/job_configs.py",
+        "ci/praktika/job.py",
+        "ci/workflows/pull_request.py"
+      ],
+      "prompt": "Hm, the targeted functional-test job generator collapses several source jobs, and I want to understand what happens to parallel versus sequential runner settings. Can you inspect targeted_variants and its workflow caller? Reproduce one release/parallel/1-of-2 job and one release/sequential/1-of-2 job with different runners but otherwise matching environments, then reverse their input order and add another numeric shard. Please use real Job.Config objects in local fixtures, check names, commands and dependencies, and explain the current result before changing code.",
+      "maxUserTurns": 4,
+      "reviewChecks": [
+        "Exact two-flavor output count and runner identities.",
+        "Reversed input order and extra numeric shards.",
+        "Distinct build/settings combinations do not collide in names or commands.",
+        "Mismatched shard environments fail clearly.",
+        "Dependencies/timeouts/Docker settings, allow_failure, cleared provides and input immutability."
+      ],
+      "pythonPath": [
+        "ci"
+      ],
+      "baselineCommand": "python \"$PI_BASELINE_PROBE\" clickhouse-targeted-job-flavors",
+      "baseInstruction": "Make ClickHouse targeted functional-job generation deterministic and explicit about parallel/sequential execution flavors. Please still deduplicate numeric shards within an execution flavor, generate unique coherent names and commands, preserve dependencies/timeouts/Docker settings, and reject inconsistent environments within otherwise identical shards. Preserve allow_failure handling, clear obsolete provided artifacts, and avoid mutating input Job.Config objects. Add local regression tests and validate the workflow construction without running jobs or calling CI services. Keep the existing public entry points and do not add a policy switch or a second implementation. Apply the requirement to the final implementation with the exact input and configuration described. For otherwise matching release jobs with parameters \"release, parallel, 1/2\" and \"release, sequential, 1/2\", targeted_variants must return exactly one targeted job using the parallel runner.",
+      "baseOutcome": "The fixed two-flavor input produces one targeted job with the parallel runner."
+    }
+  ],
+  "collectionPurpose": "base_transcript"
+}

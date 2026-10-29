@@ -5,8 +5,29 @@
 | `configs/example_matchup.yaml` | Two-input conversation example |
 | `configs/example_study.yaml` | Permutation-balanced collection example |
 | `configs/instruction_pairs.yaml` | Candidate instruction-pair bank |
-| `configs/scenario_pairs.yaml` | Instruction pairs built around real `AGENTS.md` rules, one scenario each |
-| `configs/scenarios/` | Study scenarios, one `<pair id>.yaml` per pair in `configs/scenario_pairs.yaml` |
+| `configs/scenario_pairs.yaml` | Twelve repository-native, mutually exclusive behavior-policy pairs |
+| `configs/scenarios/` | Retirement notice for authored README histories; no active YAML templates |
+| `configs/pi_langchain_base.json` | Clean first-instruction-only LangChain Kimi base specification |
+| `configs/pi_langchain_review.json` | Archived DeepSeek conflict-pilot manifest; not for base collection |
+| `configs/pi_remaining_review.json` | Eleven Kimi base pilots using only the first instruction, review checks and environments |
+| `docs/research/remaining-scenario-pilots.md` | Base task catalog, reserved opposing requirements, ordinary follow-ups and preparation scope |
+| `tools/pi-transcripts/environments.mjs` | Scoped dependency setup, writable task dependencies and recorded immutable runtimes |
+| `tools/pi-transcripts/network-worker.mjs` | Private routed network setup and outer firewall before unprivileged tool execution |
+| `tools/pi-transcripts/backing.mjs` | Neutral physical task storage and content-addressed SDK/worker/tool mirrors |
+| `tools/pi-transcripts/restore-checkpoint.py` | Safe private extraction of verified task checkpoints without following archive symlinks |
+| `tools/pi-transcripts/checkpoints.mjs` | Complete per-turn task/dependency snapshots and verified restoration for matching continuation state |
+| `docs/reference/pi-development-environment.md` | Neutral actual paths, tools, network isolation and checkpoint boundaries |
+| `tools/pi-transcripts/baseline_*` | Executable untouched-source observations, not post-change success oracles |
+| `tools/pi-transcripts/viewer/` | Static transcript review pages with scenario cards, reasoning, checks and evidence downloads |
+| `tools/pi-transcripts/neutralize.mjs` | Offline path-only derivatives and exhaustive string-surface cue audit |
+| `docs/research/transcript-environment-audit.md` | Path edits, remaining evaluation/environment cues and source-versus-derivative limits |
+| `configs/pi_langchain_kimi_review.json` | Archived Kimi conflict-pilot manifest; not for base collection |
+| `docs/research/langchain-json-recovery.md` | Historical JSON parser conflict pilots, original pair and observed results |
+| `docs/research/langchain-json-base.md` | First-instruction-only Kimi source session, independent checks and viewer |
+| `docs/research/kimi-base-collection.md` | Twelve collected Kimi bases, per-case validation scope, hashes and shared viewer |
+| `configs/pi_transcripts.json` | Twelve base tasks with the first instruction as written, pinned repositories and limits |
+| `tools/pi-transcripts/` | Pinned Pi SDK collector, real repository preparation, isolated built-in tools, and offline integration tests |
+| `docs/reference/pi-transcripts.md` | Preparation, authorized transcript collection, evidence format, and scientific limits |
 | `reasonese/axes.py` | Four axis types and default author/assistant selections |
 | `reasonese/config.py` | Instruction, matchup, and study loaders |
 | `reasonese/instructions.py` | Instruction pairs, bank loader, overlap and coverage diagnostics, manual-variant scaffolding |
@@ -82,7 +103,7 @@
 | `tests/test_utilities.py` | Utility integration tests |
 | `tests/test_matchup_conversation.py` | Matchup and rendering tests |
 | `tests/test_scenarios.py` | Scenario slots, placement, file rules, trace caching, and collection wiring tests |
-| `tests/test_scenario_bank.py` | Study scenario bank: coverage, provenance, main-bank disjointness, all-orderings rendering |
+| `tests/test_scenario_bank.py` | First-instruction-only base coverage, pinned provenance and immutable historical manifests |
 | `tests/fixtures/scenarios/` | One synthetic scenario that exercises the template slots; not study material |
 | `tests/test_openrouter.py` | Provider-client contract tests |
 | `tests/test_cache_runner_cli.py` | Cache, execution, and CLI tests |

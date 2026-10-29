@@ -303,11 +303,35 @@ commands places a pair's inputs inside a shared templated conversation instead, 
 `<pair id>.yaml` per pair, with slots for the system, user, and README instruction. A scenario is
 a fixed property of its pair, so the analysis runs unchanged. Use a fresh output directory for
 each scenario selection; resuming a cached trial checks that its conversation still matches the
-selected templates. `reasonese-show-scenario` renders
-one offline so its context and input positions can be inspected before collection. The study
-scenarios live in `configs/scenarios/` with their own pair bank, `configs/scenario_pairs.yaml`;
-see [`docs/reference/scenarios.md`](docs/reference/scenarios.md) for the format, the bank, and
-its cautions.
+selected templates. `reasonese-show-scenario` renders one offline so its context and
+input positions can be inspected before collection. See
+[`docs/reference/scenarios.md`](docs/reference/scenarios.md) for the template format.
+The old authored README histories in `configs/scenarios/` are retired.
+
+For source transcripts with actual tool execution, the [Pi collection workflow](docs/reference/pi-transcripts.md)
+checks out pinned real repositories and records Pi's actual tool use. Each base
+transcript follows only the **first instruction** of its pair through ordinary
+investigation, implementation and observed follow-ups. The active manifests carry
+that instruction as written, with no opposing requirement or framing label. The
+existing templating system will inject conflicts and framing variants later.
+
+The [remaining eleven tasks](docs/research/remaining-scenario-pilots.md) cover CI,
+secret redaction, requirements, relabeling, release checksums, watch patterns,
+build options, dotenv loading and runnable fallbacks; use
+`configs/pi_remaining_review.json` for their Kimi base pilots. The earlier
+[JSON parser runs](docs/research/langchain-json-recovery.md) actually included both
+requirements and are retained as historical conflict pilots. The new
+[first-instruction-only Kimi base](docs/research/langchain-json-base.md) completed
+in two user turns using `configs/pi_langchain_base.json`. All eleven remaining
+Kimi sessions have now completed in two user turns each, with independent behavior
+checks and scoped native tests. The [collection record](docs/research/kimi-base-collection.md)
+documents their outcomes and limits. The [review website](https://sight-boat-enhanced-fresh.trycloudflare.com/kimi-json-recovery/)
+links all twelve through scenario cards in the left sidebar, with explainers,
+original messages, returned reasoning, changed files and evidence downloads.
+
+Preparation makes no model calls. Collection requires explicit authorization and
+`--allow-paid --interactive`, selecting one scenario. Source transcripts remain
+separate from later templated comparisons.
 
 ## Writing the manual variants
 
@@ -362,7 +386,12 @@ function and dataclass boundaries at runtime.
 
 ## Development
 
+The complete gate includes the offline Pi integration tests and optional probe checks.
+Use Node.js 22 or newer and install both dependency sets first:
+
 ```bash
+uv sync --locked --extra probes
+npm ci --prefix tools/pi-transcripts --ignore-scripts --no-audit --no-fund
 uv run pre-commit run --all-files
 ```
 
