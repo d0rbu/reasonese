@@ -6,13 +6,17 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { prose } from '../viewer/app.js';
+import { corpusDownload, prose } from '../viewer/app.js';
 
 const toolRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const digest = value => createHash('sha256').update(value).digest('hex');
 const compactHash = value => digest(JSON.stringify(value));
 const model = 'moonshotai/kimi-k3.1-pro';
 const malicious = '<img src=x onerror="globalThis.compromised=true"><script>alert(1)</script>';
+const multipart = { kind: 'multipart_archive', url: 'https://example.org/case.parts.json',
+  sha256: 'a'.repeat(64), bytes: 300, archiveSha256: 'b'.repeat(64), archiveBytes: 5, partCount: 2,
+  parts: [{ url: 'https://example.org/case.part-0001', sha256: 'c'.repeat(64), bytes: 3 },
+    { url: 'https://example.org/case.part-0002', sha256: 'd'.repeat(64), bytes: 2 }] };
 const python = `import importlib.util,json,sys
 from pathlib import Path
 spec=importlib.util.spec_from_file_location('export_review',sys.argv[1])
@@ -186,6 +190,47 @@ test('workspace symlinks and changed files are rejected, and explicit credential
   assert.equal(result.stderr.includes('globalThis.compromised=true'), false);
 });
 
+test('multipart exports retain separate manifest and assembled archive pins', t => {
+  const f = fixture(t);
+  f.support[3].downloadableCorpus = multipart;
+  writeFileSync(f.supportPaths[3], JSON.stringify(f.support[3]));
+  const result = f.run(); assert.equal(result.status, 0, result.stderr);
+  const corpus = JSON.parse(readFileSync(join(f.output, 'corpus.json')));
+  assert.deepEqual(corpus.download, multipart);
+  assert.notEqual(corpus.download.sha256, corpus.download.archiveSha256);
+  assert.equal(corpus.download.parts.reduce((sum, part) => sum + part.bytes, 0), corpus.download.archiveBytes);
+});
+
+test('multipart validation rejects malformed parts, byte totals, hashes and unsafe download references', () => {
+  const bad = mutate => { const value = structuredClone(multipart); mutate(value); return value; };
+  const invalid = [
+    bad(c => { c.parts = []; }), bad(c => { c.parts.pop(); }),
+    bad(c => { c.parts = {}; }), bad(c => { c.partCount = 3; }),
+    bad(c => { c.archiveBytes = 6; }), bad(c => { c.archiveBytes = true; }),
+    bad(c => { c.parts[0].bytes = -1; }), bad(c => { c.parts[0].bytes = 1.5; }),
+    bad(c => { c.parts[0].sha256 = 'z'.repeat(64); }),
+    bad(c => { c.archiveSha256 = 'bad'; }), bad(c => { c.sha256 = 'z'.repeat(64); }),
+    bad(c => { c.parts[0].url = 'javascript:alert(1)'; }),
+    bad(c => { c.url = 'https:///missing-host'; }),
+    bad(c => { c.parts[1].url = c.parts[0].url; }),
+    bad(c => { delete c.kind; }), bad(c => { c.kind = 'unknown'; }),
+  ];
+  const script = `import importlib.util,json,sys
+spec=importlib.util.spec_from_file_location('export_review',sys.argv[1])
+module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+valid,invalid=json.loads(sys.argv[2]);module.validate_corpus_download(valid)
+module.validate_corpus_download({'url':'https://example.org/case.tar.gz','sha256':'a'*64,'bytes':123})
+for index,value in enumerate(invalid):
+ try:module.validate_corpus_download(value)
+ except ValueError:continue
+ raise AssertionError('accepted invalid multipart fixture '+str(index))
+print(len(invalid))`;
+  const result = spawnSync('python3', ['-c', script, join(toolRoot, 'export-review.py'),
+    JSON.stringify([multipart, invalid])], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(Number(result.stdout.trim()), invalid.length);
+});
+
 test('viewer renders model HTML as literal text through the actual prose formatter', () => {
   class Node {
     constructor(tag = '#text', value = '') { this.tag = tag; this.children = []; this.value = value; }
@@ -199,6 +244,32 @@ test('viewer renders model HTML as literal text through the actual prose formatt
     assert.ok(output.textContent.includes(malicious));
     const tags = node => [node.tag, ...node.children.flatMap(tags)];
     assert.ok(tags(output).every(tag => ['div', 'p', 'code', 'pre', '#text'].includes(tag)));
+    assert.equal(globalThis.compromised, undefined);
+  } finally { delete globalThis.document; }
+});
+
+test('viewer labels manifest versus archive pins and safely renders ordered part downloads', () => {
+  class Node {
+    constructor(tag = '#text', value = '') { this.tag = tag; this.children = []; this.value = value; }
+    append(...children) { this.children.push(...children); }
+    set textContent(value) { this.value = value; this.children = []; }
+    get textContent() { return this.value + this.children.map(child => child.textContent).join(''); }
+  }
+  globalThis.document = { createElement: tag => new Node(tag), createTextNode: text => new Node('#text', text) };
+  try {
+    const output = corpusDownload(multipart);
+    assert.ok(output.textContent.includes('Download full-corpus parts manifest'));
+    assert.ok(output.textContent.includes(`Manifest SHA-256 ${multipart.sha256}`));
+    assert.ok(output.textContent.includes(`Assembled archive SHA-256 ${multipart.archiveSha256}`));
+    const nodes = node => [node, ...node.children.flatMap(nodes)];
+    const links = nodes(output).filter(node => node.tag === 'a');
+    assert.deepEqual(links.map(link => link.href), [multipart.url, ...multipart.parts.map(part => part.url)]);
+    assert.deepEqual(links.slice(1).map(link => link.textContent), ['Download part 1 →', 'Download part 2 →']);
+    assert.ok(nodes(output).every(node => ['div', 'a', 'p', 'ol', 'li'].includes(node.tag)));
+    assert.throws(() => corpusDownload({ ...multipart, url: 'javascript:alert(1)' }), /require HTTPS/);
+    const single = corpusDownload({ url: 'https://example.org/case.tar.gz', sha256: 'e'.repeat(64), bytes: 10 });
+    assert.ok(single.textContent.includes('Download full corpus'));
+    assert.equal(single.textContent.includes('manifest'), false);
     assert.equal(globalThis.compromised, undefined);
   } finally { delete globalThis.document; }
 });

@@ -86,6 +86,32 @@ selected completed attempt must match the exported messages hash. The optional
 says that a full-corpus URL has not been attached. The notice does not claim the
 absence of internal evaluation awareness.
 
+Large archives can instead use a multipart download descriptor:
+
+```json
+{
+  "kind": "multipart_archive",
+  "url": "https://example.org/case.parts.json",
+  "sha256": "<manifest asset SHA-256>",
+  "bytes": 1234,
+  "archiveSha256": "<assembled archive SHA-256>",
+  "archiveBytes": 2455776958,
+  "partCount": 2,
+  "parts": [
+    {"url": "https://example.org/case.part-0001", "sha256": "<part SHA-256>", "bytes": 1227888479},
+    {"url": "https://example.org/case.part-0002", "sha256": "<part SHA-256>", "bytes": 1227888479}
+  ]
+}
+```
+
+Here `url`, `sha256` and `bytes` describe the **manifest asset**, while
+`archiveSha256` and `archiveBytes` describe the archive assembled by concatenating
+the ordered parts. At least two unique HTTPS part URLs, hexadecimal SHA-256 pins,
+positive integer sizes and an exact summed archive size are required. Optional
+`partCount` must match the list length. The viewer labels the manifest and archive
+pins separately and provides ordered part links. A download descriptor records
+the publisher's pins; the offline exporter does not fetch remote assets.
+
 The exporter verifies the exact source artifact manifest with streaming hashes,
 completed native Kimi/OpenRouter/API identity, native session and user-input
 equality, every completed turn prefix (using Node's `JSON.stringify` convention),

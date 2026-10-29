@@ -36,6 +36,30 @@ export function prose(text) {
   });
   return node;
 }
+export function corpusDownload(corpus) {
+  const node = el('div');
+  const download = (label, url) => {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:') throw new Error('Corpus downloads require HTTPS');
+    const link = el('a', '', label); link.href = parsed.href; return link;
+  };
+  if (corpus.kind === 'multipart_archive') {
+    node.append(download('Download full-corpus parts manifest →', corpus.url),
+      el('p', '', `Manifest SHA-256 ${corpus.sha256} · ${number(corpus.bytes)} B`),
+      el('p', '', `Assembled archive SHA-256 ${corpus.archiveSha256} · ${number(corpus.archiveBytes)} B`),
+      el('p', '', `Download all ${corpus.parts.length} parts in the listed order, concatenate their bytes, then verify the assembled archive hash before extraction.`));
+    const parts = el('ol');
+    corpus.parts.forEach((part, index) => {
+      const item = el('li');
+      item.append(download(`Download part ${index + 1} →`, part.url),
+        el('p', 'file-footer', `SHA-256 ${part.sha256} · ${number(part.bytes)} B`));
+      parts.append(item);
+    });
+    node.append(parts);
+  } else node.append(download('Download full corpus →', corpus.url),
+    el('p', '', `SHA-256 ${corpus.sha256} · ${number(corpus.bytes)} B`));
+  return node;
+}
 function details(label, text, className) {
   const node = el('details', className); node.dataset.expand = 'true'; node.open = expanded;
   node.append(el('summary', '', label), el('pre', '', text));
@@ -129,8 +153,7 @@ async function init() {
     const note = $('#corpus-note'); note.hidden = false;
     note.append(el('strong', '', 'Full workspace corpus'), el('p', '', data.corpus.notice));
     if (data.corpus.download) {
-      const corpus = data.corpus.download, link = el('a', '', 'Download full corpus →');
-      link.href = corpus.url; note.append(link, el('p', '', `SHA-256 ${corpus.sha256} · ${number(corpus.bytes)} B`));
+      note.append(corpusDownload(data.corpus.download));
     } else note.append(el('p', '', 'A full-corpus download URL has not been attached to this page.'));
     for (const snapshot of data.corpus.snapshots) note.append(el('p', 'file-footer',
       `${snapshot.name} · ${number(snapshot.bytes)} B · SHA-256 ${snapshot.sha256}`));

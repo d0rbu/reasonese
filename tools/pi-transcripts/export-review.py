@@ -99,6 +99,43 @@ def thinking(message):
                    if block.get("type") == "thinking")
 
 
+def valid_digest(value):
+    return isinstance(value, str) and len(value) == 64 and all(
+        character in "0123456789abcdef" for character in value.lower())
+
+
+def valid_bytes(value):
+    return type(value) is int and 0 < value <= 2 ** 53 - 1
+
+
+def validate_download_reference(reference):
+    require(isinstance(reference, dict) and isinstance(reference.get("url"), str),
+            "Invalid corpus download reference")
+    parsed = urlparse(reference["url"])
+    require(parsed.scheme == "https" and parsed.hostname and valid_digest(reference.get("sha256"))
+            and valid_bytes(reference.get("bytes")), "Invalid corpus download pin")
+
+
+def validate_corpus_download(corpus):
+    validate_download_reference(corpus)
+    require(corpus.get("kind") in {None, "single_archive", "multipart_archive"}, "Unknown corpus download kind")
+    if corpus.get("kind") != "multipart_archive":
+        require(not {"parts", "archiveSha256", "archiveBytes", "partCount"}.intersection(corpus),
+                "Multipart corpus fields require multipart_archive kind")
+        return
+    require(valid_digest(corpus.get("archiveSha256")) and valid_bytes(corpus.get("archiveBytes")),
+            "Invalid assembled archive pin")
+    parts = corpus.get("parts")
+    require(isinstance(parts, list) and len(parts) >= 2, "Multipart corpus requires at least two ordered parts")
+    for part in parts:
+        validate_download_reference(part)
+    require(len({part["url"] for part in parts}) == len(parts), "Duplicate multipart download URL")
+    require(sum(part["bytes"] for part in parts) == corpus["archiveBytes"], "Multipart archive byte total differs")
+    if "partCount" in corpus:
+        require(type(corpus["partCount"]) is int and corpus["partCount"] == len(parts),
+                "Multipart archive part count differs")
+
+
 def compact_hashes(paths):
     # The collector hashes JSON.stringify, whose floats differ from Python JSON.
     script = """import{readFileSync}from'node:fs';import{createHash}from'node:crypto';
@@ -324,8 +361,7 @@ def validate_support(inputs, source):
         require(selection["attemptCount"] == len(attempts), "Selection attempt count differs")
     corpus = selection.get("downloadableCorpus")
     if corpus:
-        require(urlparse(corpus["url"]).scheme == "https" and len(corpus["sha256"]) == 64
-                and isinstance(corpus["bytes"], int) and corpus["bytes"] > 0, "Invalid full-corpus download pin")
+        validate_corpus_download(corpus)
     require(isinstance(files["files"], list), "Expected a file-list receipt")
     names = []
     for item in files["files"]:
