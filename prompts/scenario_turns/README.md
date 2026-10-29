@@ -9,6 +9,11 @@ bound to the plan. Replace its entire `TODO:` text. There are 108 human slots:
 The primary editing task is the 72 implementation messages. The 36 investigation
 messages are optional when keeping the source investigation history fixed.
 
+The [message workshop](../../tools/pi-authoring/README.md) offers the same editing
+task beside the real transcript, with bespoke checklists and GPT 6.1 Sol high
+submission feedback. It saves accepted entries into a separate bank and exports
+a patch for these human files; it does not rewrite messages or start experiments.
+
 For every slot:
 
 - `source.txt` preserves the original operator-authored user message.

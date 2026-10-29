@@ -35,6 +35,17 @@ also match the complete archive hash before extraction. Failed downloads and
 partial files are retained. A full checkpoint still needs its recorded immutable
 runtimes installed on the execution host.
 
+## Message workshop
+
+The [workshop](../../tools/pi-authoring/README.md) provides a simple transcript
+viewer and human editor, a writing guide, bespoke task checklists and independent
+normal/casual/persuasive style briefs. An explicitly enabled submission asks
+GPT 6.1 Sol at high effort to check the exact text. Passing entries enter an
+ignored, planner-compatible bank and can be downloaded as repository patches.
+This submission QA does not start experiments or replace the native runner's
+existing independent Luna exact-text QA. The model judge gives feedback and
+never rewrites a human submission.
+
 ## Max's editing workflow
 
 The [prompt bank](../../prompts/scenario_turns/README.md) has 108 human TODOs and 108

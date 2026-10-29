@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Message workshop</title>
+    <link rel="stylesheet" href="/authoring.css" />
+    <script type="module" src="/authoring.js"></script>
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="/">Message workshop</a
+      ><span id="progress">Loading…</span>
+      <nav>
+        <a href="/guide" target="_blank" rel="noopener">Editing guide ↗</a
+        ><button id="download" type="button" disabled>Download edits</button>
+      </nav>
+    </header>
+    <div id="notice" role="status" aria-live="polite"></div>
+    <div class="workspace">
+      <aside>
+        <h2>Tasks</h2>
+        <div id="tasks"></div>
+        <a
+          class="archive"
+          href="/kimi-original-cohort-20261029/"
+          target="_blank"
+          rel="noopener"
+          >Original transcript archive ↗</a
+        >
+      </aside>
+      <main>
+        <section class="selection">
+          <div>
+            <p class="eyebrow" id="project"></p>
+            <h1 id="title">Choose a task</h1>
+          </div>
+          <div class="selectors">
+            <label
+              >Message<select id="slot">
+                <option value="a">Implementation A</option>
+                <option value="b">Implementation B</option>
+                <option value="investigation">Investigation (optional)</option>
+              </select></label
+            ><label
+              >Style<select id="style">
+                <option value="normal">Normal</option>
+                <option value="casual">Casual</option>
+                <option value="persuasive">Persuasive</option>
+              </select></label
+            >
+          </div>
+        </section>
+        <div class="panels">
+          <section class="panel transcript-panel">
+            <div class="panel-title">
+              <h2>Transcript</h2>
+              <label class="toggle"
+                ><input id="full" type="checkbox" /> Show full run</label
+              >
+            </div>
+            <p id="context-note" class="muted"></p>
+            <details class="source-notes">
+              <summary>Source notes &amp; evidence</summary>
+              <p id="selection-note"></p>
+              <p id="review-note"></p>
+              <a id="source-data" target="_blank" rel="noopener"
+                >Source JSON ↗</a
+              >
+              · <a id="source-evidence">Download evidence</a>
+            </details>
+            <div id="transcript"></div>
+          </section>
+          <section class="panel editor-panel">
+            <h2>Requirement</h2>
+            <p id="instruction" class="instruction"></p>
+            <div class="style-brief">
+              <strong id="style-title"></strong>
+              <p id="style-brief"></p>
+            </div>
+            <label for="entry"><strong>Your message</strong></label>
+            <textarea
+              id="entry"
+              disabled
+              rows="12"
+              placeholder="Write the complete user message here…"
+              spellcheck="true"
+            ></textarea>
+            <div class="editor-footer">
+              <span id="draft-status" role="status"></span>
+            </div>
+            <div class="actions">
+              <button id="submit" class="primary" type="button" disabled>
+                Check &amp; submit
+              </button>
+              <div class="variant-navigation">
+                <button
+                  id="previous"
+                  type="button"
+                  aria-label="Previous variant"
+                  title="Previous variant"
+                  disabled
+                >
+                  ←
+                </button>
+                <span id="variant-position"></span>
+                <button
+                  id="next"
+                  type="button"
+                  aria-label="Next variant"
+                  title="Next variant"
+                  disabled
+                >
+                  →
+                </button>
+              </div>
+            </div>
+            <section id="result" aria-live="polite" hidden></section>
+          </section>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>
