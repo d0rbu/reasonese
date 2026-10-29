@@ -13,7 +13,7 @@
       ><span id="progress">Loading…</span>
       <nav>
         <a href="/guide" target="_blank" rel="noopener">Editing guide ↗</a
-        ><button id="download" type="button">Download edits</button>
+        ><button id="download" type="button" disabled>Download edits</button>
       </nav>
     </header>
     <div id="notice" role="status" aria-live="polite"></div>
@@ -72,38 +72,16 @@
             <div id="transcript"></div>
           </section>
           <section class="panel editor-panel">
-            <h2>What to communicate</h2>
-            <p class="hint">
-              Use your own words. Preserve the behavior and details below; you
-              do not need to copy the reference.
-            </p>
-            <ul id="requirements"></ul>
+            <h2>Requirement</h2>
+            <p id="instruction" class="instruction"></p>
             <div class="style-brief">
               <strong id="style-title"></strong>
               <p id="style-brief"></p>
-              <p class="hint">
-                Keep the assignment consistent. Do not add mandatory work, claim
-                unfinished work is done, or mention evaluation/style labels in
-                your message.
-              </p>
             </div>
-            <details class="reference">
-              <summary>Reference assignment</summary>
-              <pre id="reference"></pre>
-            </details>
-            <div class="writing-header">
-              <label for="entry"><strong>Your message</strong></label
-              ><label class="name"
-                >Written by
-                <input
-                  id="author"
-                  placeholder="Your name"
-                  maxlength="100"
-                  autocomplete="name"
-              /></label>
-            </div>
+            <label for="entry"><strong>Your message</strong></label>
             <textarea
               id="entry"
+              disabled
               rows="12"
               placeholder="Write the complete user message here…"
               spellcheck="true"
@@ -113,15 +91,31 @@
               ><span id="words"></span>
             </div>
             <div class="actions">
-              <button id="save" type="button">Save draft</button
-              ><button id="submit" class="primary" type="button">
-                Check &amp; submit</button
-              ><button id="next" type="button" hidden>Next message →</button>
+              <button id="submit" class="primary" type="button" disabled>
+                Check &amp; submit
+              </button>
+              <div class="variant-navigation">
+                <button
+                  id="previous"
+                  type="button"
+                  aria-label="Previous variant"
+                  title="Previous variant"
+                  disabled
+                >
+                  ←
+                </button>
+                <span id="variant-position"></span>
+                <button
+                  id="next"
+                  type="button"
+                  aria-label="Next variant"
+                  title="Next variant"
+                  disabled
+                >
+                  →
+                </button>
+              </div>
             </div>
-            <p class="judge-note">
-              Checked by GPT 6.1 Sol · high reasoning. Accepted text is saved
-              exactly as written.
-            </p>
             <section id="result" aria-live="polite" hidden></section>
           </section>
         </div>

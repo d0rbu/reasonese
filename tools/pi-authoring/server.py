@@ -328,12 +328,13 @@ class App:
         result = dict(self.messages[key])
         result.pop("path")
         result["draft"], result["author"], result["acceptedText"] = "", "", None
+        result["hasDraft"] = False
         if private:
             with self.db() as conn:
                 draft = conn.execute("SELECT * FROM drafts WHERE key=?", (key,)).fetchone()
                 accepted = conn.execute("SELECT * FROM accepted WHERE key=?", (key,)).fetchone()
                 if draft:
-                    result.update(draft=draft["text"], author=draft["author"])
+                    result.update(draft=draft["text"], author=draft["author"], hasDraft=True)
                 if accepted:
                     result["acceptedText"] = accepted["text"]
         return result
@@ -352,7 +353,7 @@ class App:
         }
 
     def save_draft(self, key: str, text: str, author: str) -> None:
-        if key not in self.messages or not isinstance(text, str) or not text.strip():
+        if key not in self.messages or not isinstance(text, str):
             raise ValueError("Choose a message and write a draft first")
         if len(text.encode()) > 24_000 or not isinstance(author, str) or len(author) > 100:
             raise ValueError("Entry is too long")
@@ -361,6 +362,8 @@ class App:
 
     def submit(self, key: str, text: str, author: str) -> str:
         with self.lock:
+            if not isinstance(text, str) or not text.strip():
+                raise ValueError("Write a complete message before submitting")
             self.save_draft(key, text, author)
             if self.judge is None:
                 raise ValueError("Live checks are not enabled")

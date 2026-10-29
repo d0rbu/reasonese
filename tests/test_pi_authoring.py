@@ -348,3 +348,30 @@ def test_private_state_cannot_be_served_from_public_site(factory):
             app.source_bank, app.state.parent / "rubrics.json", app.site, app.site / "private-state"
         )
     assert not (app.site / "private-state").exists()
+
+
+def test_empty_autosave_preserves_clear_and_does_not_submit(factory):
+    app = factory()
+    with http(app) as (url, auth):
+        body = {"key": KEY, "text": "first draft", "author": "Existing writer"}
+        assert requests.post(url + "/api/draft", json=body, headers=auth).status_code == 200
+        body["text"] = ""
+        assert requests.post(url + "/api/draft", json=body, headers=auth).status_code == 200
+        loaded = requests.get(url + "/api/message/" + KEY, headers=auth).json()
+        assert loaded["hasDraft"] is True and loaded["draft"] == ""
+        assert loaded["author"] == "Existing writer"
+        assert requests.get(url + "/api/message/" + KEY).json()["hasDraft"] is False
+        assert requests.post(url + "/api/submit", json=body, headers=auth).status_code == 400
+    with app.db() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == 0
+    assert app.catalog()["accepted"] == []
+
+
+def test_cleared_accepted_draft_stays_empty_on_reload(factory):
+    app = factory()
+    assert wait(app, app.submit(KEY, "accepted version", "Original writer"))["status"] == "passed"
+    app.save_draft(KEY, "", "Original writer")
+    loaded = app.message(KEY, True)
+    assert loaded["hasDraft"] is True and loaded["draft"] == ""
+    assert loaded["acceptedText"] == "accepted version"
+    assert (app.bank / app.messages[KEY]["path"]).read_text() == "accepted version"

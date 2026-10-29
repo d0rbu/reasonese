@@ -10,10 +10,17 @@ const state = {
   case: null,
   key: null,
   message: null,
+  author: "",
   transcripts: new Map(),
   results: new Map(),
   checking: new Set(),
   generation: 0,
+  pendingSaves: new Map(),
+  saveErrors: new Set(),
+  saving: null,
+  savingKey: null,
+  saveTimer: null,
+  submitting: 0,
 };
 const styles = { normal: "Normal", casual: "Casual", persuasive: "Persuasive" };
 function element(tag, text, cls) {
@@ -29,6 +36,7 @@ async function api(path, body) {
       ...(body ? { "Content-Type": "application/json" } : {}),
     },
     ...(body ? { method: "POST", body: JSON.stringify(body) } : {}),
+    ...(path === "/api/draft" ? { keepalive: true } : {}),
   });
   const result = await response.json();
   if (!response.ok)
@@ -47,30 +55,101 @@ function localDraft() {
     return null;
   }
 }
-function updateDraft() {
+function variants() {
+  const choices = [],
+    slots =
+      $("slot").value === "investigation" ? ["investigation"] : ["a", "b"];
+  for (const task of state.catalog.cases)
+    for (const slot of slots)
+      for (const style of Object.keys(styles)) {
+        choices.push({
+          task: task.id,
+          slot,
+          style,
+          key: keyFor(task.id, slot, style),
+        });
+      }
+  return choices;
+}
+function updateNavigation() {
+  if (!state.catalog) return;
+  const choices = variants(),
+    current = choices.findIndex((c) => c.key === state.key);
+  $("previous").disabled = !state.message || current <= 0;
+  $("next").disabled = !state.message || current >= choices.length - 1;
+  const perTask = $("slot").value === "investigation" ? 3 : 6;
+  $("variant-position").textContent = `${(current % perTask) + 1} / ${perTask}`;
+}
+function renderDraft() {
   if (!state.key || !state.message) return;
-  localStorage.setItem(
-    `draft:${state.key}`,
-    JSON.stringify({ text: $("entry").value, author: $("author").value }),
-  );
+  const text = $("entry").value,
+    accepted =
+      state.message.acceptedText === text &&
+      state.message.acceptedText !== null;
   $("words").textContent =
-    `${$("entry").value.trim().split(/\s+/).filter(Boolean).length} words`;
-  const accepted =
-    state.message.acceptedText === $("entry").value &&
-    state.message.acceptedText !== null;
-  $("draft-status").textContent = accepted
-    ? "Accepted version"
-    : "Draft kept in this browser";
+    `${text.trim().split(/\s+/).filter(Boolean).length} words`;
+  $("draft-status").textContent = state.saveErrors.has(state.key)
+    ? "Saved in this browser · could not sync to the site"
+    : state.pendingSaves.has(state.key) || state.savingKey === state.key
+      ? "Saving…"
+      : accepted
+        ? "Accepted · saved"
+        : text || state.message.hasDraft
+          ? "Draft saved"
+          : "Autosaves as you type";
   const busy = state.checking.has(state.key),
     writable = state.catalog.canWrite && state.catalog.writable;
-  $("save").disabled = !writable || !$("entry").value.trim();
-  $("submit").disabled = !writable || busy || !$("entry").value.trim();
+  $("submit").disabled = !writable || busy || !text.trim();
   $("submit").textContent = busy ? "Checking…" : "Check & submit";
-  $("next").hidden = !accepted;
+  updateNavigation();
   if (state.results.has(state.key)) {
     const job = state.results.get(state.key);
-    if (accepted && job.text !== $("entry").value) $("result").hidden = true;
+    if (accepted && job.text !== text) $("result").hidden = true;
     else showResult(job);
+  }
+}
+function queueDraft() {
+  if (!state.message || !state.catalog.canWrite) return;
+  const draft = {
+    key: state.key,
+    text: $("entry").value,
+    author: state.author,
+  };
+  localStorage.setItem(`draft:${draft.key}`, JSON.stringify(draft));
+  state.pendingSaves.set(draft.key, draft);
+  state.saveErrors.delete(draft.key);
+  clearTimeout(state.saveTimer);
+  state.saveTimer = setTimeout(() => void flushDrafts(), 500);
+  renderDraft();
+}
+async function flushDrafts() {
+  clearTimeout(state.saveTimer);
+  if (state.submitting) return;
+  if (state.saving) return state.saving;
+  state.saving = (async () => {
+    while (state.pendingSaves.size && !state.submitting) {
+      const [key, draft] = state.pendingSaves.entries().next().value;
+      state.pendingSaves.delete(key);
+      state.savingKey = key;
+      try {
+        await api("/api/draft", draft);
+        state.saveErrors.delete(key);
+        if (key === state.key && state.message) state.message.hasDraft = true;
+      } catch {
+        if (!state.pendingSaves.has(key)) state.pendingSaves.set(key, draft);
+        state.saveErrors.add(key);
+        break;
+      } finally {
+        state.savingKey = null;
+        renderDraft();
+      }
+    }
+  })();
+  try {
+    await state.saving;
+  } finally {
+    state.saving = null;
+    renderDraft();
   }
 }
 function drawTasks() {
@@ -102,25 +181,46 @@ function block(summary, text) {
 }
 function drawTranscript() {
   const transcript = state.transcripts.get(state.case);
-  if (!transcript) return;
-  const messages = transcript.messages;
-  const second = messages.findIndex((m, i) => m.role === "user" && i > 0);
-  const full = $("full").checked;
-  const shown = full || second < 0 ? messages : messages.slice(0, second);
-  $("context-note").textContent = full
-    ? "Complete recorded source · requirement A"
-    : $("slot").value === "investigation"
-      ? "Recorded investigation · your message replaces its opening request"
-      : "Investigation context before the implementation assignment";
+  if (!transcript || !state.message) return;
+  const messages = transcript.messages,
+    userIndices = messages.flatMap((m, i) => (m.role === "user" ? [i] : []));
+  const targetIndex =
+    userIndices[state.message.slot === "investigation" ? 0 : 1];
+  const shown = $("full").checked
+    ? messages
+    : messages.slice(0, targetIndex + 1);
+  $("context-note").textContent =
+    state.message.slot === "investigation"
+      ? "The highlighted request is the message you’re rewriting."
+      : `The highlighted request is the original A assignment. Write requirement ${state.message.side.toUpperCase()} in the selected style.`;
   $("selection-note").textContent = transcript.selectionNote;
   $("review-note").textContent = transcript.reviewNote;
   $("source-data").href = transcript.dataUrl;
   $("source-evidence").href = transcript.evidenceUrl;
   $("transcript").replaceChildren();
-  for (const m of shown) {
-    const article = element("article", undefined, `event ${m.role}`);
-    const role = m.role === "toolResult" ? "Tool result" : m.role;
-    article.append(element("div", role, "role"));
+  for (const [index, m] of shown.entries()) {
+    const active = index === targetIndex;
+    const article = element(
+      "article",
+      undefined,
+      `event ${m.role}${active ? " rewrite-target" : ""}`,
+    );
+    article.dataset.messageIndex = index;
+    if (active) {
+      article.id = "rewrite-target";
+      article.setAttribute("aria-current", "true");
+    }
+    article.append(
+      element(
+        "div",
+        active
+          ? "User · rewriting this message"
+          : m.role === "toolResult"
+            ? "Tool result"
+            : m.role,
+        "role",
+      ),
+    );
     const content =
       typeof m.content === "string"
         ? [{ type: "text", text: m.content }]
@@ -144,22 +244,36 @@ function drawTranscript() {
       }
     $("transcript").append(article);
   }
+  scrollToRewrite();
+}
+function scrollToRewrite() {
+  requestAnimationFrame(() => {
+    const target = $("rewrite-target");
+    if (!target) return;
+    const panel = target.closest(".transcript-panel"),
+      heading = panel.querySelector(".panel-title");
+    panel.scrollTop +=
+      target.getBoundingClientRect().top -
+      panel.getBoundingClientRect().top -
+      heading.offsetHeight -
+      16;
+  });
 }
 async function select(task = state.case) {
+  void flushDrafts();
   const generation = ++state.generation;
   state.message = null;
   state.case = task;
   state.key = keyFor(task);
-  const key = state.key;
-  const selected = state.catalog.cases.find((c) => c.id === task);
+  const key = state.key,
+    selected = state.catalog.cases.find((c) => c.id === task);
   $("title").textContent = selected.title;
   $("project").textContent = selected.project;
   drawTasks();
   $("entry").disabled = true;
-  $("save").disabled = true;
   $("submit").disabled = true;
   $("result").hidden = true;
-  $("next").hidden = true;
+  updateNavigation();
   const params = new URLSearchParams({
     task,
     message: $("slot").value,
@@ -176,28 +290,24 @@ async function select(task = state.case) {
     if (generation !== state.generation) return;
     state.transcripts.set(task, transcript);
     state.message = message;
-    $("requirements").replaceChildren(
-      ...message.checks
-        .filter((c) => c.id.startsWith("task-"))
-        .map((c) => element("li", c.requirement)),
-    );
+    $("instruction").textContent =
+      message.canonical.trim() ||
+      "Investigate and explain before making implementation changes.";
     $("style-title").textContent = styles[message.framing] + " style";
     $("style-brief").textContent = message.checks.find(
       (c) => c.id === "style",
     ).requirement;
-    $("reference").textContent = message.reference;
-    const local = localDraft();
-    $("entry").value = local
-      ? local.text
-      : message.draft || message.acceptedText || "";
-    $("author").value =
-      local?.author ||
-      message.author ||
-      localStorage.getItem("authoring-name") ||
-      "";
-    $("entry").disabled = !(state.catalog.canWrite && state.catalog.writable);
+    const local = state.catalog.canWrite ? localDraft() : null;
+    const serverText = message.hasDraft
+      ? message.draft
+      : message.acceptedText || "";
+    $("entry").value = local ? local.text : serverText;
+    state.author = local?.author ?? message.author ?? "";
+    $("entry").disabled = !state.catalog.canWrite;
     drawTranscript();
-    updateDraft();
+    if (local && (local.text !== serverText || state.author !== message.author))
+      queueDraft();
+    renderDraft();
   } catch (error) {
     $("notice").textContent = error.message;
   }
@@ -234,45 +344,50 @@ function showResult(job) {
   const failures = job.result.checks.filter((c) => !c.satisfied);
   if (failures.length) {
     const ul = element("ul");
-    for (const c of failures) {
-      const li = element("li");
-      const requirement =
-        state.message.checks.find((r) => r.id === c.id)?.requirement || c.id;
-      li.append(element("strong", requirement), element("p", c.feedback));
-      ul.append(li);
-    }
+    for (const c of failures) ul.append(element("li", c.feedback));
     target.append(ul);
   }
+}
+async function moveVariant(direction) {
+  if (!state.message) return false;
+  const choices = variants(),
+    current = choices.findIndex((c) => c.key === state.key),
+    next = choices[current + direction];
+  if (!next) return false;
+  $("slot").value = next.slot;
+  $("style").value = next.style;
+  await select(next.task);
+  return true;
 }
 $("slot").onchange = () => select();
 $("style").onchange = () => select();
 $("full").onchange = drawTranscript;
-$("entry").oninput = updateDraft;
-$("author").oninput = () => {
-  localStorage.setItem("authoring-name", $("author").value);
-  updateDraft();
-};
-$("save").onclick = async () => {
-  const key = state.key,
-    text = $("entry").value;
-  try {
-    await api("/api/draft", { key, text, author: $("author").value });
-    if (key === state.key && text === $("entry").value)
-      $("draft-status").textContent = "Draft saved to the site";
-  } catch (error) {
-    $("notice").textContent = error.message;
-  }
-};
+window.addEventListener("resize", scrollToRewrite);
+$("entry").oninput = queueDraft;
+$("previous").onclick = () => moveVariant(-1);
+$("next").onclick = () => moveVariant(1);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") void flushDrafts();
+});
+window.addEventListener("pagehide", () => void flushDrafts());
 $("submit").onclick = async () => {
   const key = state.key,
     text = $("entry").value,
-    author = $("author").value;
+    author = state.author,
+    generation = state.generation;
   state.checking.add(key);
-  updateDraft();
   state.results.set(key, { key, text, status: "queued", result: null });
-  if (key === state.key) showResult(state.results.get(key));
+  renderDraft();
   try {
-    const { id } = await api("/api/submit", { key, text, author });
+    await flushDrafts();
+    state.submitting++;
+    let id;
+    try {
+      ({ id } = await api("/api/submit", { key, text, author }));
+    } finally {
+      state.submitting--;
+      void flushDrafts();
+    }
     let job;
     do {
       await new Promise((resolve) => setTimeout(resolve, 1200));
@@ -281,9 +396,18 @@ $("submit").onclick = async () => {
     state.results.set(key, job);
     state.catalog = await api("/api/catalog");
     drawTasks();
-    if (key === state.key) {
+    if (key === state.key && state.message) {
       if (job.status === "passed") state.message.acceptedText = job.text;
       showResult(job);
+      if (
+        job.status === "passed" &&
+        generation === state.generation &&
+        text === $("entry").value
+      ) {
+        if (!(await moveVariant(1)))
+          $("notice").textContent =
+            "Accepted. You’ve reached the last variant.";
+      }
     }
   } catch (error) {
     state.results.set(key, {
@@ -294,31 +418,8 @@ $("submit").onclick = async () => {
     });
   } finally {
     state.checking.delete(key);
-    if (key === state.key) updateDraft();
+    renderDraft();
   }
-};
-$("next").onclick = () => {
-  const currentOptional = $("slot").value === "investigation",
-    choices = [];
-  for (const task of state.catalog.cases)
-    for (const slot of currentOptional ? ["investigation"] : ["a", "b"])
-      for (const style of Object.keys(styles))
-        choices.push({
-          task: task.id,
-          slot,
-          style,
-          key: keyFor(task.id, slot, style),
-        });
-  const current = choices.findIndex((c) => c.key === state.key);
-  const next = [
-    ...choices.slice(current + 1),
-    ...choices.slice(0, current + 1),
-  ].find((c) => !state.catalog.accepted.includes(c.key));
-  if (next) {
-    $("slot").value = next.slot;
-    $("style").value = next.style;
-    select(next.task);
-  } else $("notice").textContent = "All messages in this group are accepted.";
 };
 $("download").onclick = async () => {
   try {
@@ -343,10 +444,10 @@ try {
   state.catalog = await api("/api/catalog");
   if (!state.catalog.canWrite)
     $("notice").textContent =
-      "Read-only view. Open your authoring link to save drafts and submit messages.";
+      "Read-only view. Open your authoring link to edit and submit messages.";
   else if (!state.catalog.writable)
     $("notice").textContent =
-      "Draft review is available; live judging is currently disabled.";
+      "Drafts autosave; live judging is currently disabled.";
   const params = new URLSearchParams(location.search),
     task =
       state.catalog.cases.find((c) => c.id === params.get("task"))?.id ||

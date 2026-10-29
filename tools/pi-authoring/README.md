@@ -1,7 +1,7 @@
 # Message workshop
 
 A small, server-backed editor for the twelve native Pi tasks. It shows the genuine
-transcript, a writing guide, the selected A/B assignment's bespoke checklist, and
+transcript, a writing guide, the selected A/B requirement, and
 normal/casual/persuasive style guidance. Human writers start with an empty editor;
 Kimi examples are not offered as draft text. Investigation variants are optional.
 There are 72 primary implementation entries and 36 optional investigation entries.
@@ -51,7 +51,9 @@ release.
 rubrics: investigation and implementation A/B for each task. Each is bound to the
 neutral authoring source, canonical policy and selected source binding. The server
 composes each with the selected style and assignment-integrity checks, yielding
-108 message rubrics. The exact checklist and style brief are shown before writing.
+108 message rubrics. The rubric stays behind the scenes. The selected requirement and style brief
+are shown beside the editor; the original user turn is highlighted and scrolled
+into view in the unchanged transcript.
 Changing a bound source requires explicitly reviewing/updating its rubric.
 
 The judge gets the candidate as quoted data, the full reference assignment, its
@@ -120,3 +122,19 @@ selection notes and the original archive remain inspectable in the viewer.
 
 Run offline checks with `uv run pytest tests/test_pi_authoring.py --no-cov` and
 `node --check tools/pi-authoring/app.js`, plus the required repository gate.
+
+## Drafts and navigation
+
+Typing saves locally immediately and syncs to the server after a short pause.
+Switching variants flushes queued saves; writes are serialized so a slower older
+save cannot overwrite a newer draft. Empty drafts are saved too, without changing
+the last accepted text. A failed sync leaves the local draft available and shows
+its status. Reloading restores and resyncs that draft. Author names from existing
+drafts remain in metadata; the editor has no writer-name field.
+
+The arrows visit every variant in order: A normal/casual/persuasive, then B
+normal/casual/persuasive, then the next task. The previous arrow reverses that
+order. Optional investigations use their own three-style sequence. The global
+sequence ends disable the corresponding arrow. A successful check advances once
+if the writer is still viewing that unchanged draft; a failed/rejected check or
+an edit/navigation during the check does not move them.
