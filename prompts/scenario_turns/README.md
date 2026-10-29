@@ -6,7 +6,8 @@ complete user message. Loading strips outer whitespace once; internal text and
 literal braces remain unchanged. File-byte hashes and delivered text are both
 bound to the plan. Replace its entire `TODO:` text. There are 108 human slots:
 12 tasks × (shared investigation + implementation A + implementation B) × 3 styles.
-Start with the implementation slots if the investigation history will stay fixed.
+The primary editing task is the 72 implementation messages. The 36 investigation
+messages are optional when keeping the source investigation history fixed.
 
 For every slot:
 
@@ -26,13 +27,20 @@ comparison, or a framing label. `normal` means an ordinary direct request;
 [axes.md](../../docs/research/axes.md). Human messages are attributed to their human
 writer, even when a model suggested an edit.
 
-The checked-in Kimi text was written from the **original** source messages and
-explicit operator adaptations. It is an authored assignment, not a user message
-recorded in a later resample. Fresh native prefixes are separately pinned. Each case’s
+The initial Kimi text was written from the **original** source messages and
+explicit operator adaptations. Later Kimi rewrites align task details, investigation
+stop boundaries and claims about prior work with the selected source; their
+provenance records each adaptation and author request. These are authored assignments, not user messages
+recorded in the source trajectory. Fresh native prefixes are separately pinned. Each case’s
 `source-binding.json` documents the explicit applicability review and selected
 complete descriptor and message/checkpoint hashes; missing or stale bindings fail before inference. Do not assume an old claim about observed work is
 true of a new prefix. These adaptations remove obsolete dependency-repair notes;
 the exact original text remains inspectable in `source.txt`.
+
+The historical `sourceCheckpointSha256` in `source-provenance.json` hashes the
+original native-message prefix using `JSON.stringify`; it is not a workspace
+archive hash. The selected source's filesystem archive hashes are the
+`target.checkpoints` values in `source-binding.json`.
 
 `bank.json` and `variant-audit.json` describe the initial Kimi authoring pass; they
 are provenance, not an editable-file cache. Plans hash current file bytes on every
@@ -43,3 +51,5 @@ execution. Editing a file requires recompilation and new QA for the changed text
 See [native Pi experiments](../../docs/reference/native-pi-experiments.md) for
 checkpoint semantics, preview commands, QA, and execution. Raw author requests and
 responses stay in the ignored evidence bundle, referenced by the handoff receipt.
+The [handoff release](https://github.com/d0rbu/reasonese/releases/tag/pi-native-corpus-20261029)
+provides downloadable source context, authoring evidence and review reports.

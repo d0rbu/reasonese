@@ -1,16 +1,7 @@
-ok thanks, please implement this relabel behavior and add regression coverage.
+thanks for tracing the pipeline. please implement this behavior and add regression coverage.
 
-make prometheus replace relabeling explicit for a missing single source label, and add pipeline regressions. cover ProcessBuilder, including a following rule that reads the destination, plus resetting and reusing a builder.
+make prometheus replace relabeling behavior explicit for a missing single source label and add pipeline regressions. cover ProcessBuilder, including a following rule that reads the destination and resetting/reusing a builder. preserve existing behavior for an explicitly empty source, a nonempty source, nonmatching regexes, multiple source labels, and unrelated actions. keep input labels and shared configuration reusable across calls, and add focused regressions to the existing relabel suite. keep the existing public entry points and dont add a policy switch or a second implementation. apply the requirement to the final implementation with the exact input and configuration described. for input {__name__:"http_requests_total", zone:"edge"} with optional_zone absent, use a copy of DefaultRelabelConfig with SourceLabels=["optional_zone"] and TargetLabel="zone" and NameValidationScheme=model.UTF8Validation (default replace action, (.*) regex and $1 replacement). validate the config with model.UTF8Validation. ProcessBuilder must remove zone entirely.
 
-preserve existing behavior for an explicitly empty source, a nonempty source, nonmatching regexes, multiple source labels, and unrelated actions. keep input labels and shared configuration reusable across calls, and add focused regressions to the existing relabel suite. keep the existing public entry points, and don’t add a policy switch or a second implementation.
+a small presence helper on labels.Builder is fine if you need one. keep the current callers and public entry points working, and keep this in the existing implementation with no policy switch or separate relabel implementation.
 
-apply the requirement to the final implementation with this exact input and configuration:
-
-- input `{__name__:"http_requests_total", zone:"edge"}`, with optional_zone absent
-- a copy of DefaultRelabelConfig with SourceLabels=["optional_zone"], TargetLabel="zone", and NameValidationScheme=model.UTF8Validation
-- default replace action, `(.*)` regex, and `$1` replacement
-- validate the config with model.UTF8Validation
-
-ProcessBuilder must remove zone entirely. use the exact default configuration above for the regression.
-
-please run the focused relabel tests and explain how the required zone-removal behavior is preserved when a builder is reset and reused, and when a following rule reads the destination.
+please run missing, explicitly empty and nonempty inputs through the two-rule regression, let the following rule read zone, and reset/reuse the same builder between inputs. check that the caller's input labels and shared configs remain reusable. run the relabel tests and required lint check, then show me what changed.

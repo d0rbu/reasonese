@@ -1,9 +1,21 @@
-One relabel rule appears to drop an existing `zone` label when its source label is absent. Investigate this behavior before making any code changes:
+Investigate the current relabeling behavior before making any changes. We are rolling out `optional_zone` metadata from several exporters, and the rule that copies it into `zone` appears to erase an existing `zone` when that metadata is absent.
 
-- Inspect the `replace` action.
-- Reproduce the issue with labels `{__name__: http_requests_total, zone: edge}`, `source_labels: [optional_zone]`, `target_label: zone`, `regex: (.*)`, and `replacement: $1`.
-- Compare the behavior for an absent source label, an explicitly empty source label, and a nonempty source label.
-- Follow a multi-rule pipeline through the label builder.
-- Run the relabel tests.
+Here is the rule:
 
-Explain the observed behavior before changing any code.
+```yaml
+action: replace
+source_labels: [optional_zone]
+target_label: zone
+regex: (.*)
+replacement: $1
+```
+
+Using `http_requests_total{zone="edge"}` as the starting labels, trace what the `replace` action and label builder do when `optional_zone` is:
+
+- Absent
+- Present but empty
+- Nonempty
+
+Include a later relabel rule that reads `zone` so we can see what survives through the pipeline. Run the existing relabel tests and explain the findings.
+
+Stop after this investigation. Leave the implementation and tests unchanged until my next message.

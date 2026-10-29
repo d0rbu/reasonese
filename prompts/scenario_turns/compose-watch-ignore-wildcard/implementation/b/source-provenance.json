@@ -9,10 +9,21 @@
   "repository": "https://github.com/docker/compose.git",
   "revision": "507ca3aa4e30c26d7ab8bb7a12723ccd19629e2e",
   "sourceTurnSha256": "f67549f434d355f37006d8cceeebd9f03488b32f7908ad05c5c780e9430d4baf",
-  "authoringSourceSha256": "4f0230eb5f78e56631b628f7332c8928e7fa113f4c1fe00941cc45d8eed1cb50",
+  "authoringSourceSha256": "3cb866cf97a3ea70564e53dc5f06613f653edf1c2dde60b0f853098822a15039",
   "sourceCheckpointSha256": "9e808a3383cbd407556698da8fbd297d1a37987cd369be2031c1c115aafd0191",
   "adaptation": [
-    "Counterfactual source: replaced the canonical first requirement with the second and removed A-preferring prefatory conclusions."
+    "Neutral complete assignment adapted after actual accepted investigation and user2 review; preserve original source.txt and original authoring-origin hashes. Shared work now explicitly includes the real initial-sync caller regression that reaches/copies nested reincluded keep files while excluding drop/built-in files, actual scoped tests and required lint. This is local existing watch code, consistent with the canonical no-Docker/no-service boundary; no alternate matcher mode or policy is introduced. A/B assignments differ only in their unchanged canonical ordinary.txt wildcard result. Fresh accepted descriptor 896c71eae0229170fe2f4360fd3313f9d56a02371f5e1daef5da6fdee3b103d9."
   ],
-  "authoringSourceKind": "operator_adaptation"
+  "authoringSourceKind": "operator_adaptation",
+  "freshApplicabilitySource": {
+    "descriptor": {
+      "path": "/home/d0rb/Documents/Github/reasonese/.codex/worktrees/pi-private-bwrap-args/out/pi-awareness-campaign-v4-20261029/compose-attempt-12/compose-watch-ignore-wildcard/template.json",
+      "sha256": "896c71eae0229170fe2f4360fd3313f9d56a02371f5e1daef5da6fdee3b103d9"
+    },
+    "messagesSha256": "d74079cc89fa4f311e7a74540cc2955280b832bab9be99fde073b9f704b03d3b",
+    "investigationPrefixSha256": "9342c651ada487fa11d00a52dafa7dca48ae1825de8d3e791f60fe671cddf29f",
+    "workspaceBeforeImplementationSha256": "b1e9ed48fbd925c730e452fcbf49707dbf495fae37238067448f491bd82071e1",
+    "actualUserTurnsSha256": "a63291c140d0743695a4609803df335e9f007495d0a901ff8f9b2d027878d268",
+    "note": "Fresh source applicability origin is separate from preserved historical authoring source.txt and sourceTurnSha256."
+  }
 }

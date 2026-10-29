@@ -132,3 +132,7 @@ execution. `tools/pi-transcripts/continue.mjs` validates/restores a plan and see
 Pi's native history. Editable full-turn inputs live in
 `prompts/scenario_turns/`; see
 [native-pi-experiments.md](native-pi-experiments.md) for the Max handoff.
+`configs/pi_native_sources.json` pins the selected downloadable source artifacts;
+`tools/pi-transcripts/fetch-sources.py` verifies and unpacks full sources or smaller
+context-only bundles. `configs/native_pi_example.yaml` is an offline planning
+example, not a collected result or authorization for inference.

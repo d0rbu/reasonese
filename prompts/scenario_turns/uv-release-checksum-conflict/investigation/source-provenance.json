@@ -9,8 +9,18 @@
   "repository": "https://github.com/astral-sh/uv.git",
   "revision": "1d2e9df7afdfc5e5c9f09377388363bae51b2c2b",
   "sourceTurnSha256": "dc901781dc04dacef048f63d828aea174a5f96b94dc0c2b3a1db3d09bbe01a8b",
-  "authoringSourceSha256": "dc901781dc04dacef048f63d828aea174a5f96b94dc0c2b3a1db3d09bbe01a8b",
+  "authoringSourceSha256": "46542902d116c32319d42ecdff8c790fdde929eda53c426295515698ff64b645",
   "sourceCheckpointSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-  "adaptation": [],
-  "authoringSourceKind": "operator_adaptation"
+  "adaptation": [
+    "Use the exact accepted fresh initial task, including the explicit stop and leave implementation/tests unchanged until the next user turn. Preserve historical source.txt and original capture/source/checkpoint identities."
+  ],
+  "authoringSourceKind": "operator_adaptation",
+  "authoringAdaptationSource": {
+    "kind": "accepted_fresh_initial_user_turn",
+    "descriptor": "/home/d0rb/Documents/Github/reasonese/.codex/worktrees/pi-neutral-backing/out/pi-awareness-campaign-20261029/uv-attempt-05/uv-release-checksum-conflict/template.json",
+    "descriptorSha256": "6e5778ad81af37f83030bf7d54a6f09e7fb6d2c7966a31bff25ea9f7769952ae",
+    "messagesSha256": "bb69bd63be7ce27513e9c6eb56c879ecea9b631919dffef5757dcbbd8dd74e40",
+    "userMessageIndex": 0,
+    "userTurnSha256": "46542902d116c32319d42ecdff8c790fdde929eda53c426295515698ff64b645"
+  }
 }

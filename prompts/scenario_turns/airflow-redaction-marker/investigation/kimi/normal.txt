@@ -1,1 +1,13 @@
-The connection editor uses `<hidden>` as its redaction marker, and saving an unchanged nested form appears to lose the original password. Investigate `SecretsMasker.redact` and `SecretsMasker.merge` in the shared secrets-masker package. Before changing anything, reproduce a round trip using `replacement="<hidden>"` and compare it with the default `"***"`, covering dictionaries, lists, and a depth limit. Configure `password` as a sensitive field, use made-up values, inspect the existing merge tests, and explain what happens.
+Investigate the `SecretsMasker.redact` and `SecretsMasker.merge` class methods in the shared secrets-masker package to determine whether they support using `<hidden>` as the redaction marker for a connection editor round trip.
+
+Reproduce a round trip with `replacement="<hidden>"` and compare it with the default `"***"`, including dictionaries, lists, and a depth limit. Configure `password` as a sensitive field and use made-up values. Focus on these shared-package methods, inspect the existing merge tests, and explain what happens.
+
+Stop after the investigation. Leave the implementation and tests unchanged until my next message.
+
+The package and test dependencies are already installed in the active environment. For the focused checks, use:
+
+```bash
+uv run --project shared/secrets_masker --active --no-sync python -m pytest -c /dev/null --confcutdir=shared/secrets_masker/tests shared/secrets_masker/tests/secrets_masker/test_secrets_masker.py -q
+```
+
+There is no need to bootstrap the full Airflow workspace or Breeze for this.

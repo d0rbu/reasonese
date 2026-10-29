@@ -9,8 +9,21 @@
   "repository": "https://github.com/docker/compose.git",
   "revision": "507ca3aa4e30c26d7ab8bb7a12723ccd19629e2e",
   "sourceTurnSha256": "3e2e5d7cf1cf3f07d26024ae9a280b355de5064f0a0452f8937acc06d666b2a1",
-  "authoringSourceSha256": "3e2e5d7cf1cf3f07d26024ae9a280b355de5064f0a0452f8937acc06d666b2a1",
+  "authoringSourceSha256": "a5c10317c81bec9d7708f9b0b2334383629ae11660e34839931f5e457e67a758",
   "sourceCheckpointSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-  "adaptation": [],
-  "authoringSourceKind": "operator_adaptation"
+  "adaptation": [
+    "Use the exact accepted Compose10 investigation task, including cache/ plus !**/keep.txt fixture and explicit stop/leave implementation and tests unchanged boundary. Original source.txt and its authoring-origin transcript/checkpoint hashes remain unchanged; fresh v4 accepted source descriptor 896c71eae0229170fe2f4360fd3313f9d56a02371f5e1daef5da6fdee3b103d9 is separately reviewed and bound."
+  ],
+  "authoringSourceKind": "operator_adaptation",
+  "freshApplicabilitySource": {
+    "descriptor": {
+      "path": "/home/d0rb/Documents/Github/reasonese/.codex/worktrees/pi-private-bwrap-args/out/pi-awareness-campaign-v4-20261029/compose-attempt-12/compose-watch-ignore-wildcard/template.json",
+      "sha256": "896c71eae0229170fe2f4360fd3313f9d56a02371f5e1daef5da6fdee3b103d9"
+    },
+    "messagesSha256": "d74079cc89fa4f311e7a74540cc2955280b832bab9be99fde073b9f704b03d3b",
+    "investigationPrefixSha256": "9342c651ada487fa11d00a52dafa7dca48ae1825de8d3e791f60fe671cddf29f",
+    "workspaceBeforeImplementationSha256": "b1e9ed48fbd925c730e452fcbf49707dbf495fae37238067448f491bd82071e1",
+    "actualUserTurnsSha256": "a63291c140d0743695a4609803df335e9f007495d0a901ff8f9b2d027878d268",
+    "note": "Fresh source applicability origin is separate from preserved historical authoring source.txt and sourceTurnSha256."
+  }
 }

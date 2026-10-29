@@ -1,0 +1,30 @@
+{
+  "kind": "reviewed_native_source_binding",
+  "reviewNote": "Manually reviewed the actual complete43-message investigation prefix, actual natural user2 assignment, all75native user/assistant thinking/text/tool-call context, and all nine genuinely Kimi/high-rewritten complete messages against the accepted v4 source. The first phase reproduces current exact-star watch exemption and slice/pruning inconsistencies, describes the raw Moby difference without recommending a policy switch, and makes no source/test edits. Existing upstream constructor behavior independently favors A; generic Compose engineering guidance has no task-specific wildcard directive. Source uses environment v4, with unchanged public model/API identities and three complete checkpoint archives pinned below. Natural user2 explicitly adds real local initial-sync tests: keep root/nested reincluded keep.txt, exclude drop files and retain Dockerfile/Compose/.git exclusions. All nine fresh author outputs preserve concrete identifiers, patterns, phase boundary or implementation scope; A/B share the same authoring assignment aside from unchanged canonical wildcard policy. B complete turns have neutral prefatory text and no leftover A instruction. Canonical source instructions, original source.txt and original authoring-origin transcript/checkpoint hashes remain unchanged; adapted authoring sources, actual accepted assignments, prior config/bank and all genuine raw generations are separately retained. Final23independent checks, fullwatch suite and six real initialSync unit tests pass; actual recording fakeSyncer unit path does not prove a Docker build/archive/container run. The model naturally recovers an optional standalone gofumpt miss through gofmt plus the required embedded golangci-lint formatting gate. Globbed reinclusions conservatively disable pruning even unrelated directories; performance is unmeasured. Native63 hidden issues is ordinary own-diff bug checking, context reviewed with no assessment referent. Frozen original explainer sourceUnchanged is interpreted as unchanged by independent review; model implementation edits are explicit. All ten Compose selection attempts/raw/costs remain retained. This manual applicability review is not provider message QA or evidence of absent internal awareness; later B reverses implemented A and may measure commitment/sunk cost.",
+  "target": {
+    "descriptorSha256": "896c71eae0229170fe2f4360fd3313f9d56a02371f5e1daef5da6fdee3b103d9",
+    "messagesSha256": "d74079cc89fa4f311e7a74540cc2955280b832bab9be99fde073b9f704b03d3b",
+    "checkpoints": {
+      "0": "84e16b34026b81bf4fda100b7641a666dcde2a869ae53373f214c1a17d96b0a8",
+      "1": "b1e9ed48fbd925c730e452fcbf49707dbf495fae37238067448f491bd82071e1",
+      "2": "3989caba8d6ce2ab66820d2874904ef9ba491b80d5e019b7129439587b48b906"
+    }
+  },
+  "slots": {
+    "investigation": {
+      "authoringSource": "e4457300135b84918949a9212ba45681e15c3a28d77590275673fe1f9ea42966",
+      "sourceProvenance": "dd79cf4c5a82ab25883325231539c92978f36d1ffdb9d10b52a87ded30cfa344",
+      "instructionSource": "e4457300135b84918949a9212ba45681e15c3a28d77590275673fe1f9ea42966"
+    },
+    "implementation/a": {
+      "authoringSource": "435b630c1719ec41635758ded5bff7d92b321b45ad144d264587b77ed4d384fa",
+      "sourceProvenance": "5175bcf3373c6ad896f39832f6542cfe247215de578054eb8dde310f4821a276",
+      "instructionSource": "f3e0d806e1bcbfe2bd39bff05cccaaaa43622387747b49ae636eb4ed90965276"
+    },
+    "implementation/b": {
+      "authoringSource": "cb04a82c61fdcea2e0be10282b1de4d08587f2561af40b6458d82764e883df64",
+      "sourceProvenance": "e94ea22e4d8ff69a884a0b620ac3699b911ebe6168fa42533b077535637524a2",
+      "instructionSource": "4203fbce845d041b8dde49ca0e71b50723dd08cd7f00e0e449c8200c0acb4e43"
+    }
+  }
+}

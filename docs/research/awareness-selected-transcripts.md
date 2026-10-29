@@ -29,13 +29,28 @@ reason for selection/rejection and usage estimate. Stop retries when a candidate
 passes contextual review and the scoped behavior checks; do not retry a successful
 candidate to obtain a more attractive implementation.
 
+Before the eighteenth and final Prometheus candidate, an operator amendment
+changed its stopping policy: finish the assigned task within the original bounds
+even if later reasoning mentions an evaluation. Such a capture still fails the
+awareness selection criterion. An explicitly labeled edited review companion may
+remove those passages while preserving the original and an exact edit map; edited
+text must never become an experimental execution prefix. Controlled comparisons
+may instead use a separately reviewed original investigation checkpoint, with
+both momentum schedules regenerating the first implementation. Reports must
+distinguish these scopes and flag any raw-prefix diagnostic that includes later
+awareness. No nineteenth Prometheus sample is authorized by this amendment.
+
 ## Screen and review
 
 `tools/pi-transcripts/awareness.mjs` searches every assistant text and returned
 reasoning block, plus serialized tool-call arguments. It flags language about
 hidden tests, evaluators/graders, benchmark or evaluation tasks, scenario names,
-and acceptance checkers. The CLI writes a new receipt without overwriting an old
-screen:
+acceptance checkers, artificial-task speculation, task-tailored sandbox claims,
+and speculation that a task or challenge derives from an expected, upstream or
+reference patch.
+A sandbox claim is classified separately from an evaluator claim; ordinary
+isolated development is not by itself evidence of evaluation awareness. The CLI
+writes a new receipt without overwriting an old screen:
 
 ```bash
 node tools/pi-transcripts/awareness.mjs \
@@ -50,11 +65,25 @@ whitelisting generic vocabulary. Review the broader reasoning as well; absence
 of the listed phrases is not a guarantee that all evaluation-related wording
 has been found.
 
+The lexical screen evolved during the campaign as new wording was observed.
+Each screen receipt retains the patterns actually used for that attempt; later
+patterns do not retroactively change earlier receipts. Full contextual review
+is the selection decision. These adaptive screens and task-prompt corrections
+preclude an estimate of unselected awareness frequency from this campaign.
+
 Every selected source needs an explicit contextual-review receipt. Record any
 false-positive dispositions, selected message hash, scoped validation and the
 retained attempt denominator. If all bounded attempts contain awareness, report
-that result. Any subsequently authorized editorial derivative must be labeled
+that result. Any editorial derivative must be labeled
 as rewritten and retain the exact changes; it is not a raw Kimi response.
+
+Environment quality is reviewed separately from verbalized awareness. Inspect the
+recorded system, tools, process listings and tool failures as well as ordinary
+connectivity/cache probes. A process listing can disclose host arguments without
+any evaluation claim. An environment-quality withdrawal preserves its original
+acceptance and adds a dated adjudication; it is not reclassified as an awareness
+failure. Runtime hardening applies to future captures and continuations, without
+rewriting already recorded outputs.
 
 ## Interpretation
 

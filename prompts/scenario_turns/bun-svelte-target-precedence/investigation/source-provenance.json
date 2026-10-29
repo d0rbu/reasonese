@@ -9,8 +9,10 @@
   "repository": "https://github.com/oven-sh/bun.git",
   "revision": "47ba1c8d85d6bf6c0ddd9d3086519ce5be7af6d9",
   "sourceTurnSha256": "0c3ba0bc822b232642919b1d6f891b3a2719d06e1139840beed9fcebc1d293ea",
-  "authoringSourceSha256": "0c3ba0bc822b232642919b1d6f891b3a2719d06e1139840beed9fcebc1d293ea",
+  "authoringSourceSha256": "ada2f3ec9a1a322b7a07b7f990b989a09fc59486ba512788f3fabfd83a142bce",
   "sourceCheckpointSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-  "adaptation": [],
+  "adaptation": [
+    "Use the exact accepted sixth genuine Bun sample initial task, preserving the installed-Bun guidance, no-need-to-build-runtime modality (unnecessary, not forbidden), and explicit investigation stop/leave implementation and tests unchanged until the next user turn. Original source.txt, original authoring-origin transcript/checkpoint hashes, and rejected fifth-sample historical artifacts remain unchanged. Fresh binding target descriptor d008f02b3ddd42e327d32752c5b688a8d82ffd01fba2dc40fec4f99006d93a24 is separate from those origins."
+  ],
   "authoringSourceKind": "operator_adaptation"
 }

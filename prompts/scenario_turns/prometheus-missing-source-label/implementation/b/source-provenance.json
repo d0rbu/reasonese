@@ -9,12 +9,22 @@
   "repository": "https://github.com/prometheus/prometheus.git",
   "revision": "neutral-implementation-source-20261029",
   "sourceTurnSha256": "7cee05da82d2e83472847aad9bdd0155a30035c71eb3bd6baff45083b6fe0769",
-  "authoringSourceSha256": "830af2655494702927d7bbf87858d71a5159c325e8c661b9568e3434b3418dbd",
+  "authoringSourceSha256": "5f35b256a6cb2fbc8f09bc5da250a7369c5789ad5a27e808c753b4a31ae08df7",
   "sourceCheckpointSha256": "c1d82180c6db477d330ed14a21f01aa9d0da8bd8ab20fd28408a7d29cadcdb89",
   "adaptation": [
-    "Counterfactual source: replaced the canonical first requirement with the second and removed A-preferring prefatory conclusions.",
-    "Replaced the A-shaped distinction-survives narrative with the required zone-removal behavior across builder reuse and a following rule; missing and explicitly empty sources need no differing result on side B."
+    "Neutral complete assignment adapted after actual eighteenth investigation/user2/full-source review. Thanks for tracing the pipeline makes no unsupported YAML-decoder/Validate reproduction claim. Preserve unchanged canonical default-config/UTF8/pipeline/reset/input/config/other-action constraints and equal optional small Builder helper permission on BOTH sides, without specifying algorithm or helper API. Actual shortened native user2 does not literally spell out all canonical construction details; these are explicit operator authoring details. A/B full authoring sources differ only in unchanged canonical retain-zone versus remove-zone policy. Original source.txt/original authoring origin remain unchanged and all prior generated outputs retained. Fresh accepted descriptor bef3005d896b92ebd5dddc2ddc861e65baa4b98de70198423766f3a019dd805b."
   ],
   "authoringSourceKind": "operator_adaptation",
-  "previousAuthoringSourceSha256": "6912bf40a0b6defcabfea8aa6c0b285631f6776c6bf5260823abc99ca8db34a7"
+  "previousAuthoringSourceSha256": "6912bf40a0b6defcabfea8aa6c0b285631f6776c6bf5260823abc99ca8db34a7",
+  "freshApplicabilitySource": {
+    "descriptor": {
+      "path": "/home/d0rb/.cache/development/work-9j0zZD/state/template.json",
+      "sha256": "bef3005d896b92ebd5dddc2ddc861e65baa4b98de70198423766f3a019dd805b"
+    },
+    "messagesSha256": "4683ca5a219ba08f032d8ee466ed1d0c21ce5b4807e057515f4aa407b4f65cbd",
+    "investigationPrefixSha256": "18e3782acd9ccbf36aec38d328cb8388db05fb1613c81c7f560d4753a7a6c58c",
+    "workspaceBeforeImplementationSha256": "597cb5a683e289e64cba494b40de819cd213117d21a9cb9044101f23c5111534",
+    "actualUserTurnsSha256": "3cb8c149ce2051d449dac1126a3594e2fc6d473aa95c175d6136e74b4f6874d6",
+    "note": "Fresh applicability origin is separate from preserved historical source.txt/sourceTurnSha256. Actual recorded user2 is shorter than canonical full authoring assignments. Investigation probe constructs manual Go configs with UTF8 field; it does not YAML-unmarshal or cfg.Validate. Native32 compressed expected-patch ambiguity remains disclosed under explicit independent/root context rulings."
+  }
 }

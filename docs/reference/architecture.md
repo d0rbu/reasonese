@@ -54,6 +54,13 @@ matchup -> authored messages -> independent message QA -> conversation -> assist
   baselines; interactive collection selects one prepared case with `--scenario`. These
   unjudged source transcripts are not silently converted into scenario templates, trial caches, or
   observations. See [`pi-transcripts.md`](pi-transcripts.md).
+- `reasonese.native_templates` explicitly binds reviewed source trajectories to
+  complete user-turn variants. It shares the existing instruction, author, framing,
+  channel, study and trial values, while retaining Pi's native system, tool and
+  reasoning history. Replacement restores the preceding filesystem checkpoint
+  and discards downstream history. The native runner applies exact-text message QA
+  before continuing with Pi; these captures require separate outcome checks before
+  analysis. See [`native-pi-experiments.md`](native-pi-experiments.md).
 - `tools/pi-transcripts/viewer/` contains static review assets. Each exported page reads its
   unchanged source messages and separate explainer/check receipts from `data.json`; a shared
   catalog supplies the left sidebar's scenario cards. Generated exports and publication receipts

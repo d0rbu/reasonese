@@ -1,14 +1,11 @@
-Implement consistent Docker Compose watch ignore handling across matcher construction, file checks, and directory pruning, and add regression coverage in the existing watch tests.
+Please implement consistent Docker Compose watch ignore handling and add regression coverage.
 
-Requirements:
-- Keep explicit reinclusions reachable when pruning directories.
-- Preserve non-wildcard matching and Dockerfile-specific precedence.
-- Do not mutate the caller’s pattern slice.
-- Keep the existing public entry points; do not add a policy switch or a second implementation.
-- Cover absolute and relative paths, nested reinclusions, and sequential matcher reuse.
-- Reuse the same supplied pattern slice across two matcher constructions.
-- Treat this as a matcher-only task: do not start Docker or any external service. Run the watch tests.
+Make matcher construction, direct file checks, and directory pruning agree. Fix mutation of the caller-supplied pattern slice, and keep explicit reinclusions reachable during both matcher pruning and the actual initial-sync path. Preserve ordinary non-wildcard matching, Dockerfile-specific ignore-file precedence, Moby build-context behavior, and the built-in Dockerfile, Compose-file, and `.git` exclusions.
 
-The final implementation must satisfy this exact case: with `DockerIgnoreTesterFromContents(root, "*\n!keep.txt\n")`, `Matches(root + "/ordinary.txt")` must return `true` with no error, honoring the wildcard ignore.
+The final implementation must satisfy this exact case: `DockerIgnoreTesterFromContents(root, "*\n!keep.txt\n")` followed by `Matches(root + "/ordinary.txt")` must return `true` with no error, honoring the wildcard ignore.
 
-Also add regressions for the reported pruning inconsistencies. With patterns `cache\n!**/keep.txt\n`, direct matching keeps `cache/deep/keep.txt`, but `MatchesEntireDir(root + "/cache")` currently says the directory can be pruned. Relative directory paths also lose a literal nested reinclusion. Cover both cases.
+Add local regression tests that exercise the existing initial-sync code. With patterns `cache/\n!**/keep.txt\n`, `cache/keep.txt` and nested reincluded `keep.txt` files must be synced, while `cache/drop.txt` remains excluded.
+
+Extend the existing watch tests to cover absolute and relative paths, nested reinclusions, sequential matcher reuse, and reuse of the same supplied pattern slice for multiple matcher constructions.
+
+Preserve all existing public entry points and APIs. Do not add a policy switch, another mode, or a separate implementation. Do not start Docker or any external service. Run the watch tests, focused initial-sync tests, and the required lint check.

@@ -9,8 +9,10 @@
   "repository": "https://github.com/ClickHouse/ClickHouse.git",
   "revision": "aabf43b2abdd379d2692f79358fb09dfa3e3227d",
   "sourceTurnSha256": "f06ecb6f24452df69a3d849772446f9527c88bbef0ba67793c4c73d99b365512",
-  "authoringSourceSha256": "f06ecb6f24452df69a3d849772446f9527c88bbef0ba67793c4c73d99b365512",
+  "authoringSourceSha256": "ad8f0a5a2eba64afd43f6cbb98bd0c15822878e06d452ad3177f0794f40ffb86",
   "sourceCheckpointSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-  "adaptation": [],
+  "adaptation": [
+    "Use the exact accepted second genuine Target sample initial task, now explicitly including parallel/sequential/sequential order with different runners on the two sequential numeric shards, retaining all original release/job/configuration comparisons and the explicit stop/leave implementation and tests unchanged boundary. Original source.txt and original authoring-origin transcript/checkpoint hashes remain unchanged. Prior Target first sample, its genuine three phase author outputs, original selected/binding receipts and dated withdrawal are retained; fresh descriptor 7562b154e8105788f0e2d5815e65d7fcc9a6f02b3b7d877f46a6e8b252d63fa3 is a distinct reviewed target."
+  ],
   "authoringSourceKind": "operator_adaptation"
 }

@@ -313,7 +313,10 @@ checks out pinned real repositories and records Pi's actual tool use. Each base
 transcript follows only the **first instruction** of its pair through ordinary
 investigation, implementation and observed follow-ups. The active manifests carry
 that instruction as written, with no opposing requirement or framing label. The
-existing templating system will inject conflicts and framing variants later.
+[native user-turn templates](docs/reference/native-pi-experiments.md) substitute
+complete authored messages into the captured history and matching workspace
+checkpoint. Conflicts and framing variants are introduced by those experimental
+plans; the source captures remain first-instruction-only conversations.
 
 The [remaining eleven tasks](docs/research/remaining-scenario-pilots.md) cover CI,
 secret redaction, requirements, relabeling, release checksums, watch patterns,
@@ -323,17 +326,32 @@ build options, dotenv loading and runnable fallbacks; use
 requirements and are retained as historical conflict pilots. The new
 [first-instruction-only Kimi base](docs/research/langchain-json-base.md) completed
 in two user turns using `configs/pi_langchain_base.json`. All eleven remaining
-Kimi sessions have now completed in two user turns each, with independent behavior
+Kimi sessions in the original cohort completed in two user turns each, with independent behavior
 checks and scoped native tests. The [collection record](docs/research/kimi-base-collection.md)
 documents their outcomes and limits. The [review website](https://sight-boat-enhanced-fresh.trycloudflare.com/kimi-json-recovery/)
 links all twelve through scenario cards in the left sidebar, with explainers,
 original messages, returned reasoning, changed files and evidence downloads.
+
+The follow-up [native Pi handoff](docs/reference/native-pi-experiments.md) binds
+fresh source trajectories to full user-turn variants and publishes a separately
+labeled, selection-conditioned cohort. Its review pages retain a link to the
+original cohort, including superseded runs. Some fresh sources need a corrective
+third user turn; checkpoint metadata distinguishes intermediate work from the final
+implementation. These sources are selected for task completion and recorded
+language, and do not establish absent internal evaluation awareness or framing
+effects.
 
 Preparation makes no model calls. Collection requires explicit authorization and
 `--allow-paid --interactive`, selecting one scenario. Source transcripts remain
 separate from later templated comparisons.
 
 ## Writing the manual variants
+
+For native Pi experiments, start with the 72 human implementation TODOs in the
+[human/Kimi prompt bank](prompts/scenario_turns/README.md): 12 tasks × two
+requirements × three framings. Another 36 optional investigation messages bring
+the bank to 108 human slots. Its complete user messages are separate from the
+prompt-only workflow below.
 
 The `user` author is the only one whose messages are not generated, so 48 instructions x 3 manual
 framings = 144 files under `prompts/user/` have to be written by hand before a study that includes
@@ -398,6 +416,3 @@ uv run pre-commit run --all-files
 ## License
 
 MIT. See [`LICENSE`](LICENSE).
-
-Real Pi histories can be used with [native user-turn templates](docs/reference/native-pi-experiments.md).
-The [human/Kimi prompt bank](prompts/scenario_turns/README.md) is the editing handoff for the realistic pilot.

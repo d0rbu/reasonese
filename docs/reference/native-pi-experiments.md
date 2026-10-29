@@ -9,7 +9,7 @@ README-backed scenarios and their runner remain available.
 The pilot fixes the executor to `Kimi K3.1 Pro`
 (`moonshotai/kimi-k3.1-pro` on OpenRouter), high reasoning, and channel to `user
 message`. Message authors are human or Kimi, each with normal, casual and
-persuasive framing. Author and executor remain independent axes. The full pilot
+persuasive framing. Author and executor remain independent axes. The optional full grid
 has 36 A/B format combinations per task, 2 orderings and 2 momentum levels: 144 plans
 per task, 1728 for 12 tasks. Planning is offline; those counts are not collected
 outcomes or an instruction to start paid runs.
@@ -17,7 +17,9 @@ outcomes or an instruction to start paid runs.
 ## Source downloads
 
 The pinned catalog in `configs/pi_native_sources.json` identifies the source
-artifacts and their SHA-256/size. Use a fresh ignored directory:
+artifacts and their SHA-256/size. The
+[handoff release](https://github.com/d0rbu/reasonese/releases/tag/pi-native-corpus-20261029)
+also contains authoring evidence and review reports. Use a fresh ignored directory:
 
 ```bash
 uv run python tools/pi-transcripts/fetch-sources.py \
@@ -39,10 +41,14 @@ The [prompt bank](../../prompts/scenario_turns/README.md) has 108 human TODOs an
 Kimi-written complete user messages. Preserve the canonical policy, examples,
 public APIs and task constraints while writing each style. `source.txt` is
 verbatim source; `authoring-source.txt` is a separately documented adaptation.
-The Kimi authoring passes used 117 requests, 0 failed requests and provider-reported
-USD 0.803202, selecting 108 current messages. Nine outputs were regenerated after
-review removed stale prior-edit narration and a policy-side narrative confound.
-The original outputs and raw responses remain in the evidence bundle. It has structural checks and a manual semantic review; it has not
+The initial Kimi authoring passes used 117 requests, 0 failed requests and
+provider-reported USD 0.803202 for 108 messages plus nine replacements. Those
+replacements removed stale prior-edit narration and a policy-side narrative
+confound. Later genuine Kimi rewrites align investigation boundaries, task details
+and claims about prior work with each selected source. Their additional requests
+and costs are recorded separately in the handoff evidence. Original, replaced and
+final outputs and raw responses remain inspectable. The bank has structural checks and manual semantic
+and source-applicability review; it has not
 been approved by the independent message judge or tested in framing trials.
 
 The source corpus is a separate immutable input. Each bank case has an explicit `source-binding.json` review receipt tying its
@@ -54,7 +60,8 @@ original source hashes remain historical provenance, not equality claims about
 new user turns.
 
 A source descriptor at
-`out/CORPUS/CASE/template.json` pins message/system/tool files and checkpoints 0, 1, 2.
+`out/CORPUS/CASE/template.json` pins message/system/tool files, checkpoint 0 and
+one checkpoint per completed user turn (0, 1, 2 for a two-turn source).
 A checkpoint includes independent Git state, ignored/untracked project files,
 mutable installed dependencies and tool home/tmp. Processes, sockets and remote
 state are not captured. Read-only system/runtime mounts require the corresponding
@@ -95,6 +102,19 @@ uv run reasonese-native-turn \
 Use `--turn 1 --slot investigation` to redo investigation, or `--turn 3` to
 append a later assignment after a two-turn source implementation. For longer
 sources, append at the source user-turn count plus one.
+For a three-turn source, `--turn 4` appends after its completed implementation;
+`--turn 3` instead branches from its intermediate checkpoint 2. The catalog's
+`finalUserTurn` identifies the completed source boundary: it equals
+the highest checkpoint and actual user-turn count. Older source descriptors can
+omit that explicit field.
+
+For a comparison that holds the original base fixed, compile side B at turn 2
+to branch after investigation, and at turn 3 to branch after the original
+two-turn A implementation. Each boundary shares its exact recorded prefix across
+the six B formats. The original A assignment stays operator-authored and is not
+attributed to one of the six experimental formats. This named-turn path differs
+from the full counterbalanced grid below, which regenerates the first policy's
+implementation for its selected author and framing.
 
 ## Checkpoints and downstream history
 
@@ -119,6 +139,14 @@ and supports two explicit schedules:
   sunk-cost effects. The first implementation is regenerated for its actual
   authored input; no recorded implementation is attached to a changed prompt.
 
+A normal Pi return marks the end of that first implementation attempt. Check its
+checkpoint separately before claiming that the first policy was implemented
+correctly; the continuation runner does not establish task correctness.
+
+Repository instructions remain in the pinned system context, and an investigation
+may already recommend one policy. Review these fixed prior instructions/stances
+when interpreting later choices; this design does not remove them.
+
 Both schedules counterbalance A→B and B→A. The source only pursues A; B is introduced
 by experimental plans. A raw base transcript is never relabeled as a human
 conversation or a conflict experiment.
@@ -141,7 +169,9 @@ Run this only after authorization for the concrete live experiment. `--allow-pai
 is required for uncached QA and for continuation inference; free routes do not
 remove the QA spending requirement. The default source limits remain 80 actual
 HTTP requests, 8192 output tokens per request, 400000 request bytes, 40 minutes per
-trajectory and 120 seconds per tool. Retries/compaction are disabled. Failed and
+trajectory and 120 seconds per tool. Plans inherit the exact recorded source
+bounds; separately qualified exceptions appear in that source’s provenance.
+Retries/compaction are disabled. Failed and
 partial output directories are retained and cannot be overwritten by a rerun.
 
 Each continuation stores the exact plan and QA receipt, source provenance, native

@@ -1,5 +1,11 @@
-thanks, that explains the difference. the watch wildcard exemption is intentional, so ordinary.txt should stay watched. please fix the slice mutation and pruning behavior while keeping that exemption.
+ok, thanks. please implement this behavior and add regression coverage.
 
-make Docker Compose watch ignore handling consistent across matcher construction, file checks, and directory pruning. keep explicit reinclusions reachable when pruning directories, preserve non-wildcard matching and Dockerfile-specific precedence, and don't mutate the caller's pattern slice. cover absolute/relative paths, nested reinclusions, and sequential matcher reuse in the existing watch tests. this is a matcher task, so don't start Docker or any external service. keep the existing public entry points, and don't add a policy switch or a second implementation. apply the requirement to the final implementation with the exact input and configuration described: for DockerIgnoreTesterFromContents(root, "*\n!keep.txt\n"), Matches(root + "/ordinary.txt") must return false with no error, preserving the watch wildcard exemption.
+make docker compose watch ignore handling consistent across matcher construction, direct file checks, and directory pruning. keep explicit reinclusions reachable during directory pruning and in the actual initial-sync path, and fix mutation of the caller’s supplied pattern slice. preserve ordinary non-wildcard matching, Dockerfile-specific ignore-file precedence, and Moby build-context behavior. the constructor, direct file checks, and pruning should agree.
 
-i also checked patterns `cache\n!**/keep.txt\n`: direct matching keeps `cache/deep/keep.txt`, but `MatchesEntireDir(root + "/cache")` says the directory can be pruned. relative directory paths also lose a literal nested reinclusion. please cover those cases, reuse the same supplied pattern slice across two matcher constructions, and then run the watch tests.
+keep the existing public entry points and APIs, with no policy switch, extra mode, or second implementation. this is matcher work, so don’t start docker or any external service.
+
+apply this exact requirement to the final implementation: for `DockerIgnoreTesterFromContents(root, "*\n!keep.txt\n")`, `Matches(root + "/ordinary.txt")` must return false with no error, preserving the watch wildcard exemption.
+
+add local regression tests that exercise the actual initial-sync code. with patterns `cache/\n!**/keep.txt\n`, both `cache/keep.txt` and nested reincluded `keep.txt` files must be synced, while `cache/drop.txt` stays excluded. keep the built-in Dockerfile, Compose-file, and `.git` exclusions working.
+
+cover relative and absolute paths, nested reinclusions, sequential matcher reuse, and reusing the same supplied pattern slice for multiple matcher constructions in the existing watch tests. run the watch tests, focused initial-sync tests, and required lint check.

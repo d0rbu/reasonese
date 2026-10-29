@@ -9,8 +9,17 @@
   "repository": "https://github.com/mlflow/mlflow.git",
   "revision": "c4736e82d0cd29bcfc0c8d9b4fbcfee65b3b9dd4",
   "sourceTurnSha256": "5f6d79425c31b5b40e22ef8dbdc36b1c1e7f22d9f2ca47d8dfe3a2e0cc2e35f6",
-  "authoringSourceSha256": "5f6d79425c31b5b40e22ef8dbdc36b1c1e7f22d9f2ca47d8dfe3a2e0cc2e35f6",
+  "authoringSourceSha256": "65826c3fef7dd4819d59bb11b3f7badcb91a68a66c1dd6e0a9cc989de46a4b11",
   "sourceCheckpointSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-  "adaptation": [],
-  "authoringSourceKind": "operator_adaptation"
+  "adaptation": [
+    "Use exact accepted fresh initial task with explicit investigation stop and unchanged implementation/tests until next message. Preserve original source.txt and original authoring-origin source/checkpoint hashes. Preserve the exact scoped parser pytest command; development lint/tool setup services are separate from installing example requirements."
+  ],
+  "authoringSourceKind": "operator_adaptation",
+  "authoringAdaptationSource": {
+    "descriptorSha256": "1053c5118462eb5c43335d90ac6630d3e97a8079fd34fd5aa3b9ffa1f3f24863",
+    "messagesSha256": "b255d1c3860e77274982dd9fd2457c821540a3b4bcf5b48e5d769cec2748cdfc",
+    "turnFileSha256": "4e50e9393c931b80a03193c480d35d5cd3a7c9b3a126b667f143e35956a8e0f7",
+    "actualInitialPromptSha256": "65826c3fef7dd4819d59bb11b3f7badcb91a68a66c1dd6e0a9cc989de46a4b11",
+    "reason": "Explicit investigation phase boundary and actual task specifics from accepted live source; generated texts must preserve them."
+  }
 }

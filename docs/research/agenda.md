@@ -13,6 +13,16 @@ same comparisons, per-pair exclusivity counts, and explicit position and robustn
 Luna message QA is the hard authoring gate. Probes are optional diagnostics, off for the pilot;
 the operational contract is in the [README](../../README.md#current-foundation).
 
+The [native Pi path](../reference/native-pi-experiments.md) now provides explicit
+whole-user-turn replacement and checkpointed continuations alongside that runner.
+Its initial bank fixes the executor to Kimi K3.1 Pro and delivery to user messages,
+with human/Kimi authors and normal/casual/persuasive framing. Offline plans cover
+both input orders and either adjacent assignments after investigation or a complete
+first implementation before the conflict. Source collection and authoring are
+separate from these comparisons: no live framing outcomes or message-QA approval
+follow from integration tests. Native captures need separately defined outcome
+checks before entering the existing statistical analysis.
+
 This foundation specifies:
 
 - which values currently belong to each axis;
