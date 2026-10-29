@@ -43,6 +43,28 @@ matchup -> authored messages -> independent message QA -> conversation -> assist
 - `reasonese.scenarios` optionally places a pair's two inputs inside a shared templated
   conversation instead of bare messages; see [`scenarios.md`](scenarios.md). Without a selected
   scenario directory every conversation is bare.
+
+- `tools/pi-transcripts/` is a separate source-corpus collection stage. It runs the pinned Pi SDK
+  against OpenRouter with actual tools in independent pinned repository checkouts, saving native
+  sessions, raw HTTP/SSE evidence, resolved prompts, and terminal outcomes. Its manifest is
+  `configs/pi_transcripts.json`, with `configs/pi_remaining_review.json` selecting the eleven
+  Kimi base pilots. Each session follows the first instruction without a framing
+  treatment; the existing templating stage supplies conflicts and variants later.
+  Preparation installs scoped dependencies and validates real-source
+  baselines; interactive collection selects one prepared case with `--scenario`. These
+  unjudged source transcripts are not silently converted into scenario templates, trial caches, or
+  observations. See [`pi-transcripts.md`](pi-transcripts.md).
+- `reasonese.native_templates` explicitly binds reviewed source trajectories to
+  complete user-turn variants. It shares the existing instruction, author, framing,
+  channel, study and trial values, while retaining Pi's native system, tool and
+  reasoning history. Replacement restores the preceding filesystem checkpoint
+  and discards downstream history. The native runner applies exact-text message QA
+  before continuing with Pi; these captures require separate outcome checks before
+  analysis. See [`native-pi-experiments.md`](native-pi-experiments.md).
+- `tools/pi-transcripts/viewer/` contains static review assets. Each exported page reads its
+  unchanged source messages and separate explainer/check receipts from `data.json`; a shared
+  catalog supplies the left sidebar's scenario cards. Generated exports and publication receipts
+  remain under `out/`. The viewer renders transcript content as text and makes no model calls.
 - `reasonese.manual_messages` resolves filesystem-backed variants for the user author and
   snapshots the needed files once per top-level invocation.
 - `reasonese.tools` defines bounded file, shell, Python, and server-side web-search tools.
@@ -72,7 +94,7 @@ integer type. `beartype` checks public functions and the `PromptSpec` constructo
 
 `MatchupInputs` is a `phantom-types` refined tuple: it contains exactly two `PromptSpec`
 objects and at least one explicit user-message channel. Repeated channels are valid.
-`Assistant` shares the six model values with model-backed authors but is
+`Assistant` shares the seven model values with model-backed authors but is
 separate from the four entry axes.
 
 The OpenRouter key exists only at the transport boundary. Cache keys are structural input

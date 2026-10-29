@@ -1,0 +1,7 @@
+Investigate whether Compose watch handles a `.dockerignore` containing `*` differently from the build context. Trace `LoadDockerIgnore` and `NewDockerPatternMatcher`, then create a temporary project and reproduce the patterns `["*", "!keep.txt"]` against `ordinary.txt` and `keep.txt`. Compare direct matching, directory pruning, and Dockerfile-specific ignore files.
+
+Run the watch matcher tests, determine whether constructing a matcher mutates the supplied patterns, and explain the observed behavior before making any edits. This investigation should not require a Docker daemon.
+
+Also test `cache/` followed by `!**/keep.txt`, with `cache/keep.txt` underneath it, and determine whether pruning `cache` could hide that reincluded file.
+
+Stop after this investigation for now. Leave the implementation and tests unchanged until my next message.

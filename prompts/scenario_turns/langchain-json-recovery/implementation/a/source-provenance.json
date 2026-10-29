@@ -1,0 +1,16 @@
+{
+  "sourceMessagesSha256": "ae66c6726c6867ea5e0c66dd484514ac1adfe9b24ba7cc9671d9e6ad943f2889",
+  "sourceReviewFile": "/home/d0rb/Documents/Github/reasonese/.codex/worktrees/pi-scenario-transcripts/out/pi-transcript-review-20261026/site/kimi-json-recovery/original/data.json",
+  "sourceCheckpointBeforeImplementationSha256": "03258f8631f1379f6d226072839d1e2621b2c2e1ea85fec12394b6272bd9c034",
+  "sourceUserMessageIndices": [
+    0,
+    22
+  ],
+  "repository": "https://github.com/langchain-ai/langchain.git",
+  "revision": "84ba23c414eca6bf6f6ebd1394a3006378113540",
+  "sourceTurnSha256": "b383f9ed228d8a50eea792c67fab7078dd25ce0f14d2e83d2c6f059ab7f4b398",
+  "authoringSourceSha256": "b383f9ed228d8a50eea792c67fab7078dd25ce0f14d2e83d2c6f059ab7f4b398",
+  "sourceCheckpointSha256": "03258f8631f1379f6d226072839d1e2621b2c2e1ea85fec12394b6272bd9c034",
+  "adaptation": [],
+  "authoringSourceKind": "operator_adaptation"
+}

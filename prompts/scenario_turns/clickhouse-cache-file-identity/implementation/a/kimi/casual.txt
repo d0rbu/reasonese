@@ -1,0 +1,5 @@
+okay, thanks. we want the cache to stay stable for a pure rename, but the file-boundary collision you reproduced needs fixing. please implement this and add focused local regressions.
+
+make ClickHouse Praktika cache digest behavior explicit across job and Docker inputs, with regression coverage. cover both calc_job_digest and calc_docker_digest. keep digests stable across equivalent checkout locations and input enumeration order, preserve include/exclude handling, detect content changes, and distinguish two file collections whose concatenated bytes happen to match. test symlinks and missing targets without reading outside the temporary fixture. don't change the cache-key format or touch real CI storage. keep the existing public entry points, and don't add a policy switch or a second implementation. apply the requirement to the final implementation with the exact input and configuration described. for an otherwise identical src tree and job configuration, renaming src/a.txt to src/b.txt with unchanged bytes must leave the digest equal.
+
+please run the focused tests and summarize what changed and anything still unresolved.

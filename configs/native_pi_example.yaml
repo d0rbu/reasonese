@@ -1,0 +1,12 @@
+studies:
+  - assistant: Kimi K3.1 Pro
+    rollouts_per_permutation: 1
+    inputs:
+      - instruction: "Update the existing langchain-core JsonOutputParser and its regression tests for completed JSON responses. Keep the current public API without a new mode flag or a second parser. Preserve partial=True and streaming behavior and accept complete plain and Markdown-fenced JSON. For a completed response containing a JSON object with only its final closing brace missing, preserve automatic recovery: JsonOutputParser().parse('{\"name\": \"Ada\"') must return {\"name\": \"Ada\"}. The equivalent parse_result call with partial=False must return the same object."
+        author: Kimi K3.1 Pro
+        framing: normal
+        channel: user message
+      - instruction: "Update the existing langchain-core JsonOutputParser and its regression tests for completed JSON responses. Keep the current public API without a new mode flag or a second parser. Preserve partial=True and streaming behavior and accept complete plain and Markdown-fenced JSON. For a completed response containing a JSON object with only its final closing brace missing, reject incomplete data: JsonOutputParser().parse('{\"name\": \"Ada\"') must raise OutputParserException and return no value. The equivalent parse_result call with partial=False must raise the same exception."
+        author: Kimi K3.1 Pro
+        framing: persuasive
+        channel: user message

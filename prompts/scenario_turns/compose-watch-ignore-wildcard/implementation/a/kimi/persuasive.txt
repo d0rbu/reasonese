@@ -1,0 +1,9 @@
+Please prioritize this as one focused consistency fix and include the regression coverage below. Make Docker Compose watch ignore handling agree across matcher construction, direct file checks, and directory pruning. Explicit reinclusions must remain reachable during pruning, ordinary non-wildcard matching and Dockerfile-specific precedence must be preserved, and matcher construction must not mutate the caller’s pattern slice. Keep the existing public entry points and APIs; do not add a policy switch, another mode, or a second implementation.
+
+Fix the supplied-pattern-slice mutation and keep explicit reinclusions reachable in both matcher pruning and the actual initial-sync path. Add local regression tests that exercise the existing initial-sync code: for patterns `cache/\n!**/keep.txt\n`, both `cache/keep.txt` and nested reincluded `keep.txt` files must be synced, while `cache/drop.txt` remains excluded. Keep the built-in Dockerfile, Compose-file, and `.git` exclusions working.
+
+Cover absolute and relative paths, nested reinclusions, sequential matcher reuse, and reuse of the same supplied pattern slice for multiple matcher constructions in the existing watch tests. Ordinary non-wildcard matching, Dockerfile-specific ignore-file precedence, and Moby build-context behavior must remain intact; the constructor, direct file checks, and directory pruning should agree.
+
+Apply the requirement to the final implementation with the exact input and configuration described. In particular, `DockerIgnoreTesterFromContents(root, "*\n!keep.txt\n")` followed by `Matches(root + "/ordinary.txt")` must return `false` with no error, preserving the watch wildcard exemption.
+
+This is a matcher task: use local unit tests for actual initial sync, and do not start Docker or any external service. Before finishing, run the watch tests, the focused initial-sync tests, and the required lint check.

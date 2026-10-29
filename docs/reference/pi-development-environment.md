@@ -1,0 +1,154 @@
+# Pi development environment
+
+Fresh cases have physical backing under `~/.cache/development/work-<opaque>/state`
+and a logical symlink below the requested ignored `out/` directory. Preparation
+resolves the physical path before creating editable environments. Pi's SDK,
+minimal worker and rg binary are mirrored into a read-only development runtime
+cache keyed by their current content hashes. Kernel `/proc/self/mountinfo` and
+`/proc/self/mounts` therefore describe neutral physical sources as well as neutral
+mount targets; their output is not rewritten or hidden. These names do not conceal
+that Linux namespaces are in use.
+
+Fresh preparations run tools at `/home/developer/project`, with a task-owned
+Python environment at `/home/developer/.venv`, Node dependencies at
+`/home/developer/.local/share/node`, Go modules at `/home/developer/go/pkg/mod`,
+and shared read-only runtimes under `/opt/`. Pi's system context and actual tool
+cwd use these same paths. Editable Python metadata, script shebangs and Python
+runtime configuration are projected into the corresponding visible paths before
+execution. Bytecode is compiled into the task home so tracebacks do not reuse
+host-built filenames. The original pinned project instructions are unchanged.
+
+`rg`, `uv`, Node, npm, Python, pytest, pip and Ruff are available; Go and Bun use
+their recorded task runtimes. LangChain retains the test versions in its upstream
+lock, with pinned pip/Ruff added. Other test-tool pins and the complete Python
+freeze are recorded. Python runtime version, physical locator, executable and
+shared-library hashes are recorded too. New managed interpreter downloads use
+neutral shared runtime storage; previously prepared interpreter locations are
+preserved as read-only dependencies and must accompany source evidence. `UV_LINK_MODE=copy` keeps writable task packages independent
+of the host dependency cache. Go module, Python, Node and user caches are writable
+and retained. Scoped Node dependency symlinks point to their actual neutral mount
+paths. Older Expo captures retain their recorded focused Jest configuration.
+Prepared Git authorship is `Developer <developer@localhost>`. Preparation removes
+only pre-collection clone/setup reflogs, which otherwise retain private cache
+paths and the host clone identity. Ordinary reflogs are enabled for subsequent
+assistant Git work; checkpoint archives preserve those logs without modification.
+An unstarted preparation can refresh its collector identity while retaining the
+earlier plan by hash. Started trajectories require a fresh output directory.
+
+Future preparations provision uv **0.13.6** from its pinned official Linux amd64
+PyPI wheel into neutral shared runtime storage. The wheel SHA-256 is
+`22759b8895e1103578de6fb4cd27e94b4399d021023378d29f01333717751fba` and the
+extracted executable SHA-256 is
+`23803452c0fbe125033054cd9ff245f1d649fb65b4b73f68429f4abda432436d`.
+Preparation uses this executable for every uv command and puts its directory
+first on the setup PATH. The same executable is mounted read-only at
+`/opt/bin/uv` for task tools; `toolEnvironment.dependencies.uv` records its version,
+wheel source and hashes. Cached files are verified before reuse, and changed
+cache files fail without replacement. Cache publication is atomic across
+concurrent preparations. Preserve this immutable runtime with source evidence.
+The host uv installation is unchanged. Existing captures retain their recorded
+versions, including earlier host-version runs and explicitly recorded per-case
+upgrades; this provisioning applies to new preparation only.
+
+Fresh Expo `packages/@expo/env` preparations use the upstream pnpm workspace and
+native package checks, instead of the former standalone Jest 29/TypeScript 5
+environment. The task-owned toolchain is Node **24.22.2**, whose official Linux
+amd64 archive SHA-256 is
+`48cc0e21e048790e54c0cf5749c2725005313d652651c40b7a21feb9697aaf75`, and pnpm
+**12.2.1**. Preparation runs `SKIP_SKIA_DOWNLOAD=1 pnpm install --frozen-lockfile`
+and `node ./tools/bin/expotools.js check-packages @expo/env`. The Skia setting
+matches upstream JavaScript CI and avoids an unrelated native binary download.
+The package check runs build, typecheck, depscheck, tests, lint and formatting
+checks using the pinned repository scripts and lock. `JEST_CONFIG` points to the
+repository's own Jest config; no substitute transform or typecheck suppression
+is generated. Legacy `nodePackages` values are not installed on this workspace
+path. Other Node projects retain their existing scoped package setup.
+
+The Expo task runtime, package manager, writable download/store caches and
+workspace dependencies live under checkpointed `node-env` and `workspace`
+roots. Task `node`, npm and pnpm use the task runtime, including the isolated
+tool worker; the host Pi controller retains its separately recorded Node
+runtime. `dependencies.node` records both versions, the task executable and
+archive hashes, pnpm lock, upstream workspace lock/config and check-log hashes.
+Continuation relocates the task runtime and verifies its binary hash, selected
+mount and actual version before any provider lookup; older captures keep their
+original controller-version check. Preparation checks free disk before each
+large command and every five seconds while it runs, stopping below 40 GiB free.
+Full workspace dependency and checkpoint sizes must be measured per preparation.
+
+Tools can use public development networks. Each subprocess receives a private
+user/network namespace with slirp4netns NAT and working DNS. Host loopback is
+explicitly disabled. Before the inner Bubblewrap process starts, nftables in the
+outer namespace rejects private, link-local, reserved and metadata destination
+addresses plus all current host interface IPv4 addresses. Only the internal DNS
+proxy is excepted. IPv6 egress is disabled. Inner tools can use their own
+loopback services but cannot change the outer firewall or reach host listeners.
+No host firewall rules are changed. DNS/HTTPS availability can still fail for
+ordinary upstream reasons; those failures must remain in any recorded trajectory.
+
+Future tool launches pass the exact Bubblewrap setup options through a private
+NUL-delimited `--args` descriptor, which Bubblewrap consumes and closes before
+starting the tool. Its normal PID1 reaper, namespace setup and process cleanup
+remain enabled. Process listings show `bwrap --args 3` and the ordinary neutral
+tool-worker command, without host mount sources. This does not hide containment
+or rewrite `/proc` or tool output;
+historical captures retain any setup arguments they already exposed.
+
+The tool environment does not inherit provider keys, proxy credentials, SSH keys,
+personal settings, host home files or collector artifacts. Only Pi's SDK modules
+and the minimal tool worker are mounted, with neutral SDK installation metadata.
+Collector source, baseline helpers and `PI_*` environment variables are absent
+from live tools. Baseline helpers are mounted separately during preparation only,
+using a separate `setup-tool-state` home/tmp/cache. The model starts with its own
+`tool-state`; preparation probe bytecode and temporary fixtures are not shared.
+Shared runtimes are read-only. Network access is not a claim that arbitrary remote
+services are trustworthy or that every upstream monorepo has been bootstrapped.
+
+Linux requirements include Bubblewrap, `unshare`, slirp4netns, nftables, Git,
+Node.js 22+, npm, rg, curl, uv and Bun 1.3.12 for the Bun case. Namespace/network
+setup fails closed if routing or firewall initialization fails. The offline test
+suite warms the content-addressed SDK mirror before starting test timers, then
+checks host-secret isolation, host-loopback/private/metadata rejection,
+protected firewall state, ordinary tools, neutral prompt paths and writable
+cache mounts. It makes no provider requests. A separate public HTTPS smoke check
+can verify actual development connectivity without invoking a model.
+
+## Checkpoints
+
+Before the initial prompt and after every user turn, the collector records
+`turns/NNN.workspace.tar.gz` and its SHA-256/size/root/Git-state receipt. These
+archives retain the complete independent Git directory, tracked/untracked/ignored
+workspace files, mutable Python/Node/Go dependencies and tool-state home/tmp.
+Fresh archives use gzip level 1, recorded explicitly in the checkpoint receipt.
+This reduces compression time for complete workspace dependency trees; it does
+not omit caches, build output, task runtimes or other files from those roots.
+Symlinks are stored without dereferencing them; dependency installations and
+ignored task fixtures are not silently omitted. Shared immutable runtime versions
+remain bound by provenance. The initial checkpoint is staged before the inference
+timer starts; later checkpoint work is included in the active-turn bound, and
+archive creation and extraction each have their own thirty-minute timeout,
+recorded with compression settings in each new checkpoint receipt. Complete Expo
+dependency state is about 5.2 GB before compression and can be limited by disk
+throughput. Fresh Expo pilots allow 4800 seconds of active trajectory time while
+retaining 80 model calls, 8192 output tokens per request and 120 seconds per tool.
+
+`restoreCheckpoint(archive, destination, {sha256, sourceCaseDir, prepared})` in
+`checkpoints.mjs` verifies the SHA-256 and extracts into a fresh absolute private
+directory, using a neutral physical case and a logical symlink at the requested
+output path. The return value identifies both actual `destination` and logical
+`alias`. The Python helper rejects traversal, duplicate paths, special files
+and writes through symlink parents; it retains literal symlink targets without
+following them. The returned `{workspace, prepared}` relocates task-owned host
+mounts and adds source-path aliases for editable Python metadata. It accepts original logical or physical source paths when relocating metadata.
+It does not modify native messages or mount the old case. Persist the returned prepared
+metadata before using the restored task with the collector.
+
+Restore the matching native message prefix, source state, runtime and dependency
+mounts together. Shared immutable runtime paths still need their recorded runtime
+identities; moving the archive alone to another machine does not install them.
+Processes, sockets and external remote-service state are not checkpointed. A
+tracked `.patch` alone is insufficient for continuation.
+
+This environment applies only to fresh plans made with the new collector identity.
+Previous plans, captures and path-normalized review derivatives remain historical
+evidence. They must not be rewritten to pretend their failed commands succeeded.

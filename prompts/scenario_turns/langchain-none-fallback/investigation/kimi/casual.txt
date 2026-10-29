@@ -1,0 +1,5 @@
+hm, we've got a RunnableWithFallbacks chain where the primary sometimes returns None without raising, and the backup doesn't seem to run. can you investigate how success is decided in invoke, ainvoke, batch, and abatch?
+
+repro a primary returning None with a backup returning "backup", then compare 0, False, an empty list, and a handled exception. inspect the streaming paths too, run the relevant fallback tests, and explain the current behavior before changing any code.
+
+stop after the investigation for now. leave the implementation and tests unchanged until my next message.

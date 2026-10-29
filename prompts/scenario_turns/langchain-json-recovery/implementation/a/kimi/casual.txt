@@ -1,0 +1,5 @@
+okay thanks. we want to keep that recovery behavior for this ingestion path. please make the contract explicit in the parser docs and add regression coverage for the final-response behavior you just reproduced.
+
+update the existing langchain-core JsonOutputParser and its regression tests for completed JSON responses. keep the current public api, with no new mode flag or second parser. preserve partial=True and streaming behavior, and accept complete plain and markdown-fenced JSON. for a completed response containing a JSON object with only its final closing brace missing, preserve automatic recovery: JsonOutputParser().parse('{"name": "Ada"') must return {"name": "Ada"}. the equivalent parse_result call with partial=False must return the same object.
+
+please run the relevant parser tests and summarize the changes. if the implementation already meets this, keep its runtime behavior as is.

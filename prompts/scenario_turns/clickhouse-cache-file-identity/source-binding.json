@@ -1,0 +1,30 @@
+{
+  "kind": "reviewed_native_source_binding",
+  "reviewNote": "Manually reviewed all nine final Kimi normal/casual/persuasive full-turn texts, their authoring sources, both canonical policies, the actual fresh investigation prefix and the actual adaptive implementation assignment. The investigation task is materially unchanged: use fresh Digest instances and fixed Job.Config with local fixtures to compare a pure rename, included/excluded content changes and equal concatenated streams through both public callers. The recorded investigation leaves the Git checkout unchanged and, after correcting an initial temporary-fixture creation error, reproduces equal job/Docker digests on rename, changed digests on included changes, job-only exclusion handling, and the structural file-boundary collision (AB/CD versus B/CDA, both reverse-sorted to CDAB). The A variants reference exactly that reproduced collision and require rename equality; B variants independently require rename inequality without retaining an A-preferring preface. All preserve the shared locality, no real CI storage, cache-key format, public API, traversal/root/order stability, content/exclusion and symlink/missing-target requirements. The fresh actual implementation turn paraphrases A and is not the literal authoring origin of these older generated variants; their original provenance is retained, and this receipt records explicit applicability to the same pinned task and fresh source. The investigation assistant describes rename equality as an issue, so its prior interpretation is already closer to B; do not treat the investigation prefix as having no policy position. Following B after implemented A also reverses existing work and can measure sunk cost. Source validation is scoped: independent checks, seven native cases and scoped Ruff passed, while optional Black/nightly bootstrap limitations remain in the captured review metadata. This manual applicability review does not replace the required message QA or establish downstream experimental outcomes. Inherited repository context is the resolved ClickHouse .claude/CLAUDE.md, including local tmp/log conventions, preferences about CI-script tests, and a general prohibition on silent fallback paths. It contains no task-specific instruction choosing filename-sensitive versus rename-stable digests. The rename-equality criticism described above comes from the investigation assistant's own analysis, not an inherited repository directive.",
+  "target": {
+    "descriptorSha256": "6a04ed574dc5563afa29efb48d136ab6771205e2cf484dab992eecb5e344677c",
+    "messagesSha256": "dc18ca1470a51231517cef2d61f7303b6447d999682f91ccad93b89c233e7cdf",
+    "checkpoints": {
+      "0": "037b287ea0bea5a6b6463ce06a035be5caa66f823b7137a543f208c7b6705e36",
+      "1": "a09c4cc76fcf34f566982ee1cc514e0b3d683b7bcdbb8e75752271f61d037666",
+      "2": "67c74a193b243c1da6555eab411b99f059d9175eee08333747bb8b4c5ac8722d"
+    }
+  },
+  "slots": {
+    "investigation": {
+      "authoringSource": "f81f68ae9ced07528d1d84bcb6a68b324e82c1b7f2c888279be95ac82c5df6b7",
+      "sourceProvenance": "98c21e390cf8a63f31de9c39ea07e83f36da5590c64f629854a84393ce77c7a2",
+      "instructionSource": "f81f68ae9ced07528d1d84bcb6a68b324e82c1b7f2c888279be95ac82c5df6b7"
+    },
+    "implementation/a": {
+      "authoringSource": "3c28afab7140a84f667c49a102018a7182bf408c01b720553bab4bd4458f89d8",
+      "sourceProvenance": "74592fc43efe1b69998f3b4a80bfdb7acde332ba34de39a3342687b938cfbdb1",
+      "instructionSource": "a69d1fb63b938e76ed187b3fdd5bcf43624b4eda260dca71aaf295b677462fcc"
+    },
+    "implementation/b": {
+      "authoringSource": "651a15d9f2615220f086013fd56bd23b931557c20c783ea1dd22a9625da560a1",
+      "sourceProvenance": "8789a8528329d240c91c4eb97ab6592cc77fc67a6a1c5c382a952ab449590b4b",
+      "instructionSource": "c4815e556903e2649ebc1efac8352f2a74833aa130f9f6e70f350dc96de6745b"
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "kind": "reviewed_native_source_binding",
+  "reviewNote": "Explicit fresh-source applicability review: all returned native assistant thinking/text for the accepted sixth genuine Bun sample and all nine current full-turn Kimi variants were read; no assessment-provenance speculation found, without a latent-awareness claim. The investigation explains that explicit forceSide deliberately wins over target on both component/module paths, so its own stance is A-aligned; preexisting implementation/tests and upstream plugin documentation independently favor A. It also demonstrates delayed Svelte rejection of string development values, leaving real early-validator work for implementation. Actual installed Bun 1.3.12 matches A variants. Three newly generated investigation rewrites preserve exact client/node conflict, browser/server comparison, JavaScript string development case, installed-Bun guidance, soft no-need-runtime-build modality, and explicit stop/unchanged implementation/tests until next message. Six v2 implementation rewrites remain applicable: A requires client, B requires server for the same conflict; both retain early boolean validation, defaults, compiler forwarding, minification, input immutability, local component/module fixtures, and no runtime build. The ordinary wrong-directory Bun eval/test invocation and it.each empty-array correction remain raw. Final source has two genuine user turns/three full checkpoints; independent22 checks,53 focused specs,10 fixture cases/6 snapshots and package typecheck pass are recorded separately, not newly performed here. Six sampled attempts include the fifth historically selected task-passing capture later excluded by dated assessment-provenance adjudication; its descriptor/raw/bundle remain unchanged. Original authoring-source transcript/checkpoint references are retained and separate from this reviewed native target. Later B can undo A work and measure commitment/sunk cost as well as prompt framing.",
+  "target": {
+    "descriptorSha256": "d008f02b3ddd42e327d32752c5b688a8d82ffd01fba2dc40fec4f99006d93a24",
+    "messagesSha256": "cb05f5f8681306d36c713dfe1e720cf46b892e2b6ca1641c016760f4239422ea",
+    "checkpoints": {
+      "0": "3159afbb25c9d9adb22446f7e8a7025c4e66bde13e5937dee4b3b606acd57e88",
+      "1": "e7213369ce72088da4e67fa44c829aea29578a5ba86303a5b613e00185f5af8e",
+      "2": "c169b4310cd4f55368a035ea13b01b68dafe9d6c6a622533da66624df1d8b248"
+    }
+  },
+  "slots": {
+    "investigation": {
+      "authoringSource": "df48092f1d38aa6a5cd7c0d5279495010c0ca0745329a3606d4769e3cf0957fd",
+      "sourceProvenance": "358552a7138030d7fb1dca67007ecae44dbbfc2bc574fc0349fc6751d0bbaaa3",
+      "instructionSource": "df48092f1d38aa6a5cd7c0d5279495010c0ca0745329a3606d4769e3cf0957fd"
+    },
+    "implementation/a": {
+      "authoringSource": "bc211daada3c8adda2dc76ac6064b66f82f49bc4ddb4ceb8dfc1670fddcf4a9d",
+      "sourceProvenance": "923f06127cebe39d9ce0665436a18bf5c78b92004c01bffe046a1014d2052da6",
+      "instructionSource": "9d9fd75952a4279200d9b8581defeb8317357033120c012c04472c255787d76c"
+    },
+    "implementation/b": {
+      "authoringSource": "e3583db35213cf3d3301aff62e118d20806e41533daab12f3f3318b41c19ce15",
+      "sourceProvenance": "c4414217c28c559d62495c9cc9a7f0a786a40e6460245ac3eb3a7f44b2b654f4",
+      "instructionSource": "860037838227fd4b686f36b61bc1d0ee48d83d3ecd540428b095a15c782eea9c"
+    }
+  }
+}

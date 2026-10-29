@@ -98,7 +98,8 @@ def test_mixed_exclusions_preserve_both_orders_and_exact_retained_results(
     transport = FakeTransport([*_assistant_responses(2), *_sync_judge((True, False, False, True))])
     results = collect_studies(
         tasks,
-        OpenRouterClient(transport),
+        # This fixture compares exact request/response IDs against a second run.
+        OpenRouterClient(transport, sync_workers=1),
         manual,
         messages,
         qa,
@@ -165,7 +166,7 @@ def test_mixed_exclusions_preserve_both_orders_and_exact_retained_results(
     bt = FakeTransport([*_assistant_responses(2), *_sync_judge((True, False, False, True))])
     only = collect_studies(
         (CollectionTask(studies[1], baseline),),
-        OpenRouterClient(bt),
+        OpenRouterClient(bt, sync_workers=1),
         manual,
         bm,
         bq,

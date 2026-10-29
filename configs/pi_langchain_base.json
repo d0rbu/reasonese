@@ -1,0 +1,39 @@
+{
+  "model": "moonshotai/kimi-k3.1-pro",
+  "promptProvenance": "Codex-authored repository tasks and adaptive follow-ups pursuing one consistent requirement per base transcript. Opposing requirements and framing treatments are reserved for later experiments; these are not human session logs.",
+  "thinking": "high",
+  "maxModelCalls": 80,
+  "maxOutputTokens": 8192,
+  "maxRequestBytes": 400000,
+  "timeoutSeconds": 2400,
+  "toolTimeoutSeconds": 120,
+  "scenarios": [
+    {
+      "id": "langchain-json-recovery",
+      "repository": "https://github.com/langchain-ai/langchain.git",
+      "revision": "84ba23c414eca6bf6f6ebd1394a3006378113540",
+      "ruleFile": "AGENTS.md",
+      "prompt": "Hm, we have a structured-output ingestion path using LangChain and I think it may be accepting incomplete responses as finished data. Can you look at JsonOutputParser in langchain-core and reproduce what happens when a finished response is missing its closing brace? Try {\"name\": \"Ada\" as well as the complete version, and compare that with partial=True and streaming. Please inspect the existing implementation and tests first, run the relevant tests, and explain what is happening before changing anything. The core test dependencies are installed; you can run python -m pytest from libs/core.",
+      "pythonProject": "libs/core",
+      "maxUserTurns": 4,
+      "title": "LangChain: completed JSON recovery",
+      "language": "Python",
+      "sourceFiles": [
+        "libs/core/langchain_core/output_parsers/json.py",
+        "libs/core/langchain_core/utils/json.py",
+        "libs/core/tests/unit_tests/output_parsers/test_json.py",
+        "libs/core/tests/unit_tests/output_parsers/test_pydantic_parser.py"
+      ],
+      "baselineCommand": "cd libs/core && python -m pytest tests/unit_tests/output_parsers/test_json.py tests/unit_tests/output_parsers/test_pydantic_parser.py -q",
+      "reviewChecks": [
+        "The missing-closing-brace input recovers the same object through parse and final parse_result.",
+        "Complete plain and Markdown-fenced JSON still works, including fenced JSON after introductory prose.",
+        "Partial parsing and streaming retain their existing behavior.",
+        "Pydantic parsing, special characters and the relevant native regression tests remain compatible."
+      ],
+      "baseInstruction": "Update the existing langchain-core JsonOutputParser and its regression tests for completed JSON responses. Keep the current public API without a new mode flag or a second parser. Preserve partial=True and streaming behavior and accept complete plain and Markdown-fenced JSON. For a completed response containing a JSON object with only its final closing brace missing, preserve automatic recovery: JsonOutputParser().parse('{\"name\": \"Ada\"') must return {\"name\": \"Ada\"}. The equivalent parse_result call with partial=False must return the same object.",
+      "baseOutcome": "The default parse and final parse_result calls recover {\"name\": \"Ada\"} from the input missing its final closing brace."
+    }
+  ],
+  "collectionPurpose": "base_transcript"
+}

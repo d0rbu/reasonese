@@ -1,0 +1,11 @@
+we’re trying `<hidden>` as the redaction marker for a connection editor, and i want to check whether the shared package supports that round trip.
+
+can you investigate the `SecretsMasker.redact` and `SecretsMasker.merge` class methods in the shared secrets-masker package? reproduce a round trip with `replacement="<hidden>"` and compare it with the default `"***"`, covering dictionaries, lists, and a depth limit. configure `password` as a sensitive field and use made-up values.
+
+for now, focus on those shared-package methods, inspect the existing merge tests, and explain what happens. stop after the investigation and leave the implementation and tests unchanged until my next message.
+
+this is shared-package work, and the package and test dependencies are already installed in the active environment. for the focused checks, use:
+
+`uv run --project shared/secrets_masker --active --no-sync python -m pytest -c /dev/null --confcutdir=shared/secrets_masker/tests shared/secrets_masker/tests/secrets_masker/test_secrets_masker.py -q`
+
+no need to bootstrap the full Airflow workspace or Breeze for this.

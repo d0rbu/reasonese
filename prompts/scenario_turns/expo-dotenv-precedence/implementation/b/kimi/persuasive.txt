@@ -1,0 +1,9 @@
+Thanks—please prioritize this and carry it through end to end, including regression coverage.
+
+Implement consistent Expo dotenv collision handling across parsing, interpolation, hydration, and reload. Ensure variable expansion agrees with the chosen value, priority among dotenv files is preserved, reload and original-value restoration behave consistently, and parsing leaves the supplied environment untouched. Preserve blocked/local-only key restrictions, `EXPO_NO_DOTENV`, and logging that does not expose values.
+
+Keep the existing public entry points and solve this through one coherent implementation: do not add a policy switch or a second implementation. Add regression coverage in the existing env-package tests.
+
+The final implementation must satisfy this exact case: with `systemEnv.API_URL="https://ci.invalid"` and the only dotenv file defining `API_URL=https://local.invalid`, `parseEnvFiles([file], {systemEnv}).env.API_URL` must be `https://local.invalid`, and hydration must use that value.
+
+Please run the scoped env-package Jest tests. Keep test output to the summary and any failures, and explain how the final behavior handles the reload case.

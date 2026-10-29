@@ -1,0 +1,13 @@
+Implement hardening of uv release-manifest checksum validation and failure handling, and add regression coverage without publishing artifacts.
+
+Requirements:
+- Validate hexadecimal SHA-256 values.
+- Preserve unrelated manifest metadata and checksum algorithms.
+- Retain the documented handling of unmatched sidecars.
+- Validate the whole update before replacing the manifest.
+- Keep the existing public entry points. Do not add a policy switch or a second implementation.
+- Add subprocess-level regressions covering success, conflict, malformed later input, empty/no-match input, and repeat runs.
+- Use only local fixtures. Do not build, upload, or publish releases.
+- Apply the requirement to the final implementation with the exact input and configuration described: given one manifest artifact with `checksums.sha256` equal to 64 `a` characters and its matching sidecar containing 64 `b` characters, the existing CLI must exit nonzero and leave the manifest byte-for-byte unchanged.
+
+Run the subprocess regressions and summarize what succeeds, what fails, and when the manifest file can change.

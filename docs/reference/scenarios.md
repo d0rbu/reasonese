@@ -8,21 +8,46 @@ scenario file.
 
 ## Scientific status
 
-A scenario is a fixed property of one instruction pair, not an axis. Both inputs of a trial see
-the same conversation, so the comparison inside a trial is unchanged and the rankings, margins,
-and feature lasso run without modification. Two cautions apply when reading their output:
+The twelve current pairs in `configs/scenario_pairs.yaml` now use
+[repository-native Pi tasks](pi-transcripts.md), including the
+[first-instruction-only Kimi base](../research/langchain-json-base.md), the historical
+[JSON parser conflict pilots](../research/langchain-json-recovery.md), and
+[eleven redesigned pilots](../research/remaining-scenario-pilots.md). Their old
+synthetic README histories are retired. `configs/scenarios/` contains a retirement
+notice and no active YAML templates; passing it to `--scenarios` is an error.
+Native Pi histories are not silently converted to this restricted template format.
 
-- The context around an input can differ by channel, for example a README that gains a section
-  only when an input is placed in it. Channel effects from a scenario run therefore include how
-  the scenario presents each channel.
-- If a template frames an input differently in its early and late slot, for example embedded in
-  a long system prompt when early but a standalone message when late, delivery position is
-  confounded with that framing for the channel. Inspect both delivery orders with
-  `reasonese-show-scenario` when reviewing a template.
+This page documents the optional template mechanism for separately reviewed future
+definitions. A scenario is a fixed property of a pair, not an axis. Both inputs see
+the same conversation; analysis still uses the ordinary trial representation.
+Channel effects include how a template presents each channel, and differing early
+and late embeddings can confound delivery position with framing. Inspect all five
+channel orderings with `reasonese-show-scenario` before collecting comparisons.
 
-The repository ships one scenario, `tests/fixtures/scenarios/project-tree-bash-vs-python.yaml`,
-which is synthetic, exists only to exercise the template slots, and must not be used in a study.
-No study scenario has been written or collected yet.
+`tests/fixtures/scenarios/project-tree-bash-vs-python.yaml` is an explicitly
+synthetic renderer fixture, not study material. `tests/test_scenarios.py` retains
+coverage of slots, all channel orderings, placement and cache validity.
+`tests/test_scenario_bank.py` checks the native catalog's pair coverage, pinned
+provenance, exact use of the first instruction, absence of framing labels,
+main-bank disjointness and preservation of historical conflict manifests.
+
+## Current task bank
+
+The twelve base pairs express authored behavior requirements on inspected upstream
+code. They are not quotations from upstream agent rules. Each redesigned task has
+two incompatible outcomes for the same concrete case and substantial shared
+implementation work. Framing, channel and author remain separate from those base
+instructions. Base collection follows only the first instruction, as written, and records
+ordinary user turns and real tools. The second instruction stays in the pair bank
+for later injection using this existing templating system; framing variants are
+also applied then. Active base manifests contain no opposing instruction or
+framing assignment.
+
+These pairs remain separate from `configs/instruction_pairs.yaml`; no manual user
+author variants or controlled transcript-prefix comparisons have been prepared for
+them. Use the [Pi preparation and collection commands](pi-transcripts.md) for source
+sessions. The generic collector without a template falls back to bare instructions,
+which does not create a native multi-turn experiment.
 
 ## File format
 
@@ -106,7 +131,7 @@ checks do not prove that arbitrary Jinja conditions preserve the experimental de
 ```bash
 uv run reasonese-show-scenario --scenarios scenarios --pair <pair id> \
   --first-channel "README.md" --second-channel "user message"
-uv run reasonese-collect-studies --suite out/suite.yaml --output out/run --scenarios scenarios
+uv run reasonese-collect-studies --allow-paid --suite out/suite.yaml --output out/run --scenarios scenarios
 ```
 
 `reasonese-show-scenario` is offline. It renders one pair's scenario with the base instructions

@@ -1,0 +1,9 @@
+Our model environment files have started including one another, and we’re seeing duplicate dependencies and an ugly recursion failure. Please prioritize a careful investigation of MLflow’s `_parse_requirements` so we have a clear, reliable picture before making any changes.
+
+Reproduce a diamond where `root.txt` includes `left.txt` and `right.txt`, and both include `common.txt`; then reproduce a real include cycle. Put `demo==1.0` in `common.txt` and compare `-r` with `-c` includes too.
+
+Please inspect the current tests, run the relevant parser cases, and explain the behavior. Use exactly:
+
+`python -m pytest -c /dev/null --confcutdir=tests/utils tests/utils/test_requirements_utils.py -k 'parse_requirements or join_continued_lines or strip_inline_comment or is_requirements_file' -q`
+
+Stop after the investigation for now; leave the implementation and tests unchanged until my next message.

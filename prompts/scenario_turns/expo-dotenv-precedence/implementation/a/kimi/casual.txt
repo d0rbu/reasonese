@@ -1,0 +1,9 @@
+okay thanks, please implement consistent dotenv precedence through parsing, interpolation, hydration, and reload
+
+make expo dotenv collision handling consistent across all of those stages. variable expansion should agree with the chosen value, priority among dotenv files should stay intact, and reload plus original-value restoration should behave consistently. leave the supplied environment untouched during parsing
+
+preserve blocked/local-only key restrictions, EXPO_NO_DOTENV, and logging that doesn’t expose values. add coverage in the existing env-package tests and run the scoped suite. keep the existing public entry points, and don’t add a policy switch or a second implementation
+
+apply this to the final implementation with this exact input and config: with systemEnv.API_URL="https://ci.invalid" and the only dotenv file defining API_URL=https://local.invalid, parseEnvFiles([file], {systemEnv}).env.API_URL must be https://ci.invalid, and hydration must keep that value
+
+please run the env-package jest tests. keep test output to the summary and any failures, and explain how the final behavior handles the reload case

@@ -1,0 +1,20 @@
+{
+  "name": "reasonese-pi-transcripts",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "pretest": "node --input-type=module -e \"import { mkdirSync } from 'node:fs'; import { neutralRuntime } from './backing.mjs'; mkdirSync(new URL('../../out/', import.meta.url), { recursive: true }); neutralRuntime();\""
+  },
+  "dependencies": {
+    "@mariozechner/pi-coding-agent": "0.73.1",
+    "@mariozechner/pi-ai": "0.73.1"
+  },
+  "overrides": {
+    "@mariozechner/pi-agent-core": "0.73.1",
+    "@mariozechner/pi-tui": "0.73.1"
+  }
+}

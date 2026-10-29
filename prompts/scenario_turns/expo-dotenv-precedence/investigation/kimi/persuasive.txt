@@ -1,0 +1,5 @@
+Please prioritize this investigation so we can confidently pin down why the Expo configuration resolves a different endpoint in CI than locally. Trace `parseEnvFiles`, expansion, and `loadProjectEnv` when the shell already defines `API_URL` and a dotenv file defines it too. Use `API_URL=https://ci.invalid` in a supplied `systemEnv` object and `API_URL=https://local.invalid` in a temporary `.env` file; also add a variable that expands `API_URL`.
+
+Check file priority, reloading, and `getOriginalEnv` behavior. Run the env-package tests with `jest --config "$JEST_CONFIG" --runInBand`, use fixture values only, and explain the result before editing.
+
+Stop after this investigation for now; leave implementation and tests unchanged until my next message. This focused trace is the essential next step before making any changes.

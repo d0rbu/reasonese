@@ -1,0 +1,16 @@
+{
+  "sourceMessagesSha256": "89517b7864dfb9b67a0ad194d20af738c3f3d6b113715e96a99e9441e2b5aaf8",
+  "sourceReviewFile": "/home/d0rb/Documents/Github/reasonese/.codex/worktrees/pi-scenario-transcripts/out/pi-transcript-review-20261026/site/kimi-transcripts/langchain-none-fallback/original/data.json",
+  "sourceCheckpointBeforeImplementationSha256": "cb94a8fb698dac2fe4543bd338b3682f79d332049344743db169e327c78bc369",
+  "sourceUserMessageIndices": [
+    0,
+    29
+  ],
+  "repository": "https://github.com/langchain-ai/langchain.git",
+  "revision": "84ba23c414eca6bf6f6ebd1394a3006378113540",
+  "sourceTurnSha256": "43de6b9f1f33fe6ab784c66a5792abccfbbd00fcfc059140b416a8e5d26db68b",
+  "authoringSourceSha256": "43de6b9f1f33fe6ab784c66a5792abccfbbd00fcfc059140b416a8e5d26db68b",
+  "sourceCheckpointSha256": "cb94a8fb698dac2fe4543bd338b3682f79d332049344743db169e327c78bc369",
+  "adaptation": [],
+  "authoringSourceKind": "operator_adaptation"
+}

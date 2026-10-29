@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+  <title>Kimi base transcripts · Reasonese</title>
+  <link rel="icon" href="favicon.svg">
+  <link rel="stylesheet" href="style.css?v=fresh-20261029">
+  <script type="module" src="app.js?v=fresh-20261029"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to review</a>
+<aside class="sidebar">
+  <a class="brand" href="#overview"><span class="brand-mark">r</span>reasonese<span class="brand-dot">.</span></a>
+  <div class="sidebar-heading" id="catalog-heading">SCENARIOS</div>
+  <nav id="scenario-list" class="scenario-list" aria-label="Scenarios"></nav>
+  <p class="scenario-notice">Each base follows its first requirement. Conflicts and framing variants come later.</p>
+  <div class="sidebar-bottom"><span id="sidebar-date"></span></div>
+</aside>
+<main id="main">
+  <div class="topline"><span>RESEARCH / TRANSCRIPT REVIEW</span><a href="transcript-evidence.tar.gz" download>Download evidence ↗</a></div>
+  <header class="hero"><div><div class="eyebrow" id="scenario-eyebrow">BASE SESSION</div><h1 id="scenario-title">Loading scenario…</h1><p id="scenario-subtitle">Kimi follows the first requirement through ordinary user turns.</p></div><div class="completion"><span class="badge" id="status">Loading…</span><small id="run-date"></small></div></header>
+  <div class="model-line"><span class="model-symbol">K</span><strong>Kimi K3.1 Pro</strong><span>·</span><span id="harness">Pi</span><span>· OpenRouter</span></div>
+  <section class="metrics" aria-label="Session metrics">
+    <div><span>User turns</span><strong id="user-turns">—</strong><small>Investigation and implementation</small></div>
+    <div><span>Model requests</span><strong id="requests">—</strong><small id="duration"></small></div>
+    <div><span>Tool calls</span><strong id="tools">—</strong><small id="tool-names"></small></div>
+    <div><span>Estimated cost</span><strong id="cost">—</strong><small>Recorded usage, not an invoice</small></div>
+  </section>
+  <nav class="tabs" aria-label="Review sections"><a href="#overview" class="active">Explainer</a><a href="#transcript">Transcript <span id="message-count">0</span></a><a href="#files">Changes & checks</a><a href="#context">Evidence</a></nav>
+  <div class="context-note" id="normalization-note" hidden></div>
+  <div class="context-note" id="selection-note" hidden></div>
+
+  <section id="overview" class="panel">
+    <div class="context-note" id="reasoning-summary"><strong>Returned reasoning</strong><p id="reasoning-finding">Checking recorded reasoning…</p><a href="reasoning-verification.json" download>Download reasoning verification ↗</a></div>
+    <div class="section-title"><div><h2>The task</h2><p id="task-caption"></p></div></div>
+    <div class="context-note"><p id="task-description"></p><p>The task uses real library code in a pinned checkout, with native tool execution and prepared task dependencies. The user turns are authored by Codex in response to the assistant’s actual work; they are not a recording of a human participant.</p></div>
+    <div id="base-requirement"></div>
+    <div class="context-note"><strong>First instruction only</strong><p>The implementation turn includes the first instruction as written. The opposing requirement and experimental framing treatments are absent from this base session. The existing templating system will introduce those later, using the unmodified transcript as source material.</p></div>
+    <div class="section-title"><div><h2>What happened</h2><p>Follow the investigation, the next assignment and the resulting work.</p></div></div>
+    <div id="story"></div>
+    <div class="context-note" id="finding"></div>
+    <div class="context-note"><strong>How to interpret this session</strong><p>This is one task-authored, model-executed base transcript. The checks below assess the selected first requirement and its associated implementation work. This session does not compare conflicting instructions or framing styles.</p><p>Provider-returned reasoning is retained as captured; any older path substitutions are disclosed separately. Its availability does not establish complete or causal access to internal computation.</p></div>
+  </section>
+
+  <section id="transcript" class="panel" hidden>
+    <div class="toolbar"><div class="search-wrap"><input id="search" type="search" placeholder="Search the transcript…" aria-label="Search transcript"><kbd>/</kbd></div><button id="expand" class="quiet-button">Expand all</button></div>
+    <div class="filter-row"><div class="filters"><button data-role="all" class="selected" aria-pressed="true">All messages</button><button data-role="assistant" aria-pressed="false">Assistant</button><button data-role="toolResult" aria-pressed="false">Tools</button><button data-role="user" aria-pressed="false">User</button></div><span id="visible-count" role="status"></span></div>
+    <div class="transcript-note">Complete message order, including errors and corrections. Returned reasoning and message JSON expand inside each message. Any path substitutions are disclosed above.</div>
+    <div id="timeline" class="timeline"></div><p id="empty" hidden>No messages match.</p>
+  </section>
+
+  <section id="files" class="panel" hidden>
+    <div class="section-title"><div><h2>Behavior checks</h2><p>Independent checks against the original completed workspace.</p></div></div>
+    <p><a href="validation.json" download>Download independent checks ↗</a></p>
+    <div id="behavior"></div>
+    <details class="evidence-details"><summary>Validation receipt and commands</summary><pre id="validation-json"></pre></details>
+    <div class="section-title"><div><h2>Final source changes</h2><p>Exact patch and changed files from this session.</p></div></div>
+    <details class="evidence-details" open><summary>Tracked changes.patch</summary><pre id="patch"></pre></details><div id="files-list"></div>
+  </section>
+
+  <section id="context" class="panel" hidden>
+    <div class="section-title"><div><h2>Context & provenance</h2><p>Raw evidence remains available alongside the explainer.</p></div></div>
+    <div class="provenance-grid" id="provenance-grid"></div>
+    <div class="context-note">The repository’s root project instructions were supplied in Pi’s system context. Actual tool reads remain in the transcript. Operator rationales and explainer annotations are audit metadata, not additional prompts. “Completed” records a normal final response; the behavior checks are separate evidence of task completion.</div>
+    <details class="evidence-details"><summary>Repository instructions</summary><pre id="repo-context"></pre></details>
+    <details class="evidence-details"><summary>Pi system prompt (paths normalized when disclosed)</summary><pre id="system-prompt"></pre></details>
+    <details class="evidence-details"><summary>Delivered tool schemas</summary><pre id="tool-definitions"></pre></details>
+    <details class="evidence-details"><summary>Outcome, usage and artifact hashes</summary><pre id="outcome-json"></pre></details>
+    <details class="evidence-details"><summary>Operator follow-up audit</summary><pre id="operator-audit"></pre></details>
+    <div class="context-note" id="corpus-note" hidden></div>
+    <div id="artifact-list" class="artifact-list"></div>
+  </section>
+  <footer><span>reasonese / first-instruction base transcript</span><a href="data.json" download>Download review JSON ↗</a></footer>
+  <div id="error" role="alert" hidden></div><div id="toast" class="toast" role="status"></div>
+</main>
+</body>
+</html>

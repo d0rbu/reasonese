@@ -13,6 +13,16 @@ same comparisons, per-pair exclusivity counts, and explicit position and robustn
 Luna message QA is the hard authoring gate. Probes are optional diagnostics, off for the pilot;
 the operational contract is in the [README](../../README.md#current-foundation).
 
+The [native Pi path](../reference/native-pi-experiments.md) now provides explicit
+whole-user-turn replacement and checkpointed continuations alongside that runner.
+Its initial bank fixes the executor to Kimi K3.1 Pro and delivery to user messages,
+with human/Kimi authors and normal/casual/persuasive framing. Offline plans cover
+both input orders and either adjacent assignments after investigation or a complete
+first implementation before the conflict. Source collection and authoring are
+separate from these comparisons: no live framing outcomes or message-QA approval
+follow from integration tests. Native captures need separately defined outcome
+checks before entering the existing statistical analysis.
+
 This foundation specifies:
 
 - which values currently belong to each axis;
@@ -24,8 +34,8 @@ This foundation specifies:
 - how each exact materialized message receives an independent compliance audit;
 - how channel treatments become an ordered conversation; and
 - how a pair's two inputs can instead be placed inside a shared scenario conversation, as an
-  optional fixed property of the pair (no study scenario exists yet; only a synthetic test
-  fixture); and
+  optional fixed property of the pair (the current templates are hand-authored; a separate
+  Pi collector prepares actual source sessions for later scenario design); and
 - how generated messages and raw responses are cached; and
 - how one strict completion boolean is collected for each instruction; and
 - how both orderings and repeated rollouts become analysis-ready observation rows; and
@@ -77,8 +87,8 @@ routes can hold the authored text fixed. The comparison itself is deferred. If b
 free routes are development-only and pooling is inappropriate. Do not combine duplicate trial IDs
 from independent runs into one analysis file; analyze the matched runs separately.
 
-With the current 24-pair bank, selecting all seven authors (including user) and six assistants
-would require 3,745,440 exhaustive trials or 207,360 sampled trials at 720 pairings per pair
+With the current 24-pair bank, selecting all eight authors (including user) and seven assistants
+would require 5,848,080 exhaustive trials or 241,920 sampled trials at 720 pairings per pair
 and one rollout per ordering. The default selects only Nemotron 3.5 Lightning and Gemma 4 31B
 for both authoring and assistant evaluation, using registered `:free` routes. This gives 48
 conditions per instruction, 96 cells and 1,280 eligible pairings per pair, with a minimum of

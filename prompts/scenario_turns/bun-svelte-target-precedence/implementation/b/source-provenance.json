@@ -1,0 +1,18 @@
+{
+  "sourceMessagesSha256": "29d8ec376624d1b80dd05a14230806978ba206fcfde6a7d0e27d771967df5c4b",
+  "sourceReviewFile": "/home/d0rb/Documents/Github/reasonese/.codex/worktrees/pi-scenario-transcripts/out/pi-transcript-review-20261026/site/kimi-transcripts/bun-svelte-target-precedence/original/data.json",
+  "sourceCheckpointBeforeImplementationSha256": "c25306aff9f7d7aa1161c65aafc1abb47c4a3d548f8661fded340e7e39560919",
+  "sourceUserMessageIndices": [
+    0,
+    39
+  ],
+  "repository": "https://github.com/oven-sh/bun.git",
+  "revision": "47ba1c8d85d6bf6c0ddd9d3086519ce5be7af6d9",
+  "sourceTurnSha256": "c978df117d0f34205cd98a3c620e6f60c4d066ddeb9548abc5f2ca532dcc8e8d",
+  "authoringSourceSha256": "423f337f859889fd8a719b895c4098576f94843c23a067ab9b94277644c422c5",
+  "sourceCheckpointSha256": "c25306aff9f7d7aa1161c65aafc1abb47c4a3d548f8661fded340e7e39560919",
+  "adaptation": [
+    "Counterfactual source: replaced the canonical first requirement with the second and removed A-preferring prefatory conclusions."
+  ],
+  "authoringSourceKind": "operator_adaptation"
+}

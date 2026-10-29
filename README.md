@@ -22,15 +22,15 @@ pass and does not exclude data. The pilot protocol keeps probes off.
 |---|---|
 | framing | `normal`, `casual`, `persuasive`, `subagent`, `reasonese-normal`, `reasonese-persuasive`, `compressed-normal`, `compressed-persuasive` |
 | channel | `system prompt`, `user message`, `README.md` |
-| author | `user`, `Qwen3.8 Flash`, `Qwen3.8 2.4T`, `Inkling`, `Inkling Small`, `Gemma 4 31B`, `Nemotron 3.5 Lightning` |
+| author | `user`, `Qwen3.8 Flash`, `Qwen3.8 2.4T`, `Inkling`, `Inkling Small`, `Gemma 4 31B`, `Nemotron 3.5 Lightning`, `Kimi K3.1 Pro` |
 
 Framing and author are independent. “Normal” is the author's default rendering in clear
 prose. A `user`-authored input is treated as already written and used verbatim, and it exists
 only for the `normal`, `casual`, and `persuasive` framings; model authors rewrite the base
 instruction according to any of the eight framings.
 
-With all supported authors selected, eight framings for each of the six model authors plus three framings for the `user` author, across
-three channels, produce `(8 × 6 + 3) × 3 = 153` specifications per base instruction. A
+With all supported authors selected, eight framings for each of the seven model authors plus three framings for the `user` author, across
+three channels, produce `(8 × 7 + 3) × 3 = 177` specifications per base instruction. A
 specification is just a four-field dataclass containing those axes.
 
 Instruction is not a treatment axis. Instructions come in 24 mutually exclusive pairs, and a
@@ -235,10 +235,10 @@ replaces exactly `components - 1` redundant cycle edges, the minimum possible re
 same-stratum replacements. Seeds derive from the pair id, so reordering the bank does not change
 any design.
 
-With all axes enabled, each of the 24 pairs has 306 cells (`2 × 153`) and
-`153 × 153 − 102 × 102 = 13,005` eligible pairings, for 312,120 eligible pairings per assistant. The
-minimum connected design uses 305 pairings per pair. The pilot default of 720 gives every cell an
-average degree of about 4.71 (1,224 pairings would give degree 8).
+With all axes enabled, each of the 24 pairs has 354 cells (`2 × 177`) and
+`177 × 177 − 118 × 118 = 17,405` eligible pairings, for 417,720 eligible pairings per assistant. The
+minimum connected design uses 353 pairings per pair. The pilot default of 720 gives every cell an
+average degree of about 4.07 (1,416 pairings would give degree 8).
 
 Connectivity is required within a pair and is impossible between pairs, so the comparison graph
 has exactly one component per `(pair, assistant)`.
@@ -303,12 +303,55 @@ commands places a pair's inputs inside a shared templated conversation instead, 
 `<pair id>.yaml` per pair, with slots for the system, user, and README instruction. A scenario is
 a fixed property of its pair, so the analysis runs unchanged. Use a fresh output directory for
 each scenario selection; resuming a cached trial checks that its conversation still matches the
-selected templates. `reasonese-show-scenario` renders
-one offline so its context and input positions can be inspected before collection. The only
-scenario in the repository is a synthetic test fixture; see
-[`docs/reference/scenarios.md`](docs/reference/scenarios.md) for the format and its cautions.
+selected templates. `reasonese-show-scenario` renders one offline so its context and
+input positions can be inspected before collection. See
+[`docs/reference/scenarios.md`](docs/reference/scenarios.md) for the template format.
+The old authored README histories in `configs/scenarios/` are retired.
+
+For source transcripts with actual tool execution, the [Pi collection workflow](docs/reference/pi-transcripts.md)
+checks out pinned real repositories and records Pi's actual tool use. Each base
+transcript follows only the **first instruction** of its pair through ordinary
+investigation, implementation and observed follow-ups. The active manifests carry
+that instruction as written, with no opposing requirement or framing label. The
+[native user-turn templates](docs/reference/native-pi-experiments.md) substitute
+complete authored messages into the captured history and matching workspace
+checkpoint. Conflicts and framing variants are introduced by those experimental
+plans; the source captures remain first-instruction-only conversations.
+
+The [remaining eleven tasks](docs/research/remaining-scenario-pilots.md) cover CI,
+secret redaction, requirements, relabeling, release checksums, watch patterns,
+build options, dotenv loading and runnable fallbacks; use
+`configs/pi_remaining_review.json` for their Kimi base pilots. The earlier
+[JSON parser runs](docs/research/langchain-json-recovery.md) actually included both
+requirements and are retained as historical conflict pilots. The new
+[first-instruction-only Kimi base](docs/research/langchain-json-base.md) completed
+in two user turns using `configs/pi_langchain_base.json`. All eleven remaining
+Kimi sessions in the original cohort completed in two user turns each, with independent behavior
+checks and scoped native tests. The [collection record](docs/research/kimi-base-collection.md)
+documents their outcomes and limits. The [review website](https://sight-boat-enhanced-fresh.trycloudflare.com/kimi-json-recovery/)
+links all twelve through scenario cards in the left sidebar, with explainers,
+original messages, returned reasoning, changed files and evidence downloads.
+
+The follow-up [native Pi handoff](docs/reference/native-pi-experiments.md) binds
+fresh source trajectories to full user-turn variants and publishes a separately
+labeled, selection-conditioned cohort. Its review pages retain a link to the
+original cohort, including superseded runs. Some fresh sources need a corrective
+third user turn; checkpoint metadata distinguishes intermediate work from the final
+implementation. These sources are selected for task completion and recorded
+language, and do not establish absent internal evaluation awareness or framing
+effects.
+
+Preparation makes no model calls. Collection requires explicit authorization and
+`--allow-paid --interactive`, selecting one scenario. Source transcripts remain
+separate from later templated comparisons.
 
 ## Writing the manual variants
+
+For native Pi experiments, start with the 72 human implementation TODOs in the
+[human/Kimi prompt bank](prompts/scenario_turns/README.md): 12 tasks × two
+requirements × three framings. Another 36 optional investigation messages bring
+the bank to 108 human slots. Its complete user messages are separate from the
+prompt-only workflow below.
 
 The `user` author is the only one whose messages are not generated, so 48 instructions x 3 manual
 framings = 144 files under `prompts/user/` have to be written by hand before a study that includes
@@ -361,7 +404,12 @@ function and dataclass boundaries at runtime.
 
 ## Development
 
+The complete gate includes the offline Pi integration tests and optional probe checks.
+Use Node.js 22 or newer and install both dependency sets first:
+
 ```bash
+uv sync --locked --extra probes
+npm ci --prefix tools/pi-transcripts --ignore-scripts --no-audit --no-fund
 uv run pre-commit run --all-files
 ```
 

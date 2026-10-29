@@ -13,7 +13,7 @@ jobs:
       - name: Install sandbox tools
         run: |
           sudo apt-get update
-          sudo apt-get install --yes bubblewrap mawk
+          sudo apt-get install --yes bubblewrap mawk slirp4netns nftables ripgrep
           # Allow Bubblewrap's namespaces on this disposable Ubuntu test runner.
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - uses: astral-sh/setup-uv@v5
@@ -23,6 +23,15 @@ jobs:
         run: uv python install 3.13
       - name: Install dependencies
         run: uv sync --locked --extra probes
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: tools/pi-transcripts/package-lock.json
+      - name: Install pinned Pi harness
+        run: npm ci --prefix tools/pi-transcripts --ignore-scripts --no-audit --no-fund
+      - name: Pi transcript offline integration
+        run: npm --prefix tools/pi-transcripts test
       - name: Ruff
         run: uv run ruff check .
       - name: Ty

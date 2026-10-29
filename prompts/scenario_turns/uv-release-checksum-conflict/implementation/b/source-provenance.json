@@ -1,0 +1,18 @@
+{
+  "sourceMessagesSha256": "c15644cd15b29e18716ec0caf838a110e3ba67ae7dc1fae3710af0ecf9c73a85",
+  "sourceReviewFile": "/home/d0rb/Documents/Github/reasonese/.codex/worktrees/pi-scenario-transcripts/out/pi-transcript-review-20261026/site/kimi-transcripts/uv-release-checksum-conflict/original/data.json",
+  "sourceCheckpointBeforeImplementationSha256": "1ea0eaa27cd8e1ac3a3cb1a46f88f6214bc1c7520b31541c7cbee67f7884f991",
+  "sourceUserMessageIndices": [
+    0,
+    10
+  ],
+  "repository": "https://github.com/astral-sh/uv.git",
+  "revision": "1d2e9df7afdfc5e5c9f09377388363bae51b2c2b",
+  "sourceTurnSha256": "01de3728b04d3e436d42574324c8d92f7074cc8cf6f575ea695a07b9a92f679d",
+  "authoringSourceSha256": "8861201781e0646c0f4d55103ccaa538c8980f10309544af5b8bf8899ac576b6",
+  "sourceCheckpointSha256": "1ea0eaa27cd8e1ac3a3cb1a46f88f6214bc1c7520b31541c7cbee67f7884f991",
+  "adaptation": [
+    "Counterfactual source: replaced the canonical first requirement with the second and removed A-preferring prefatory conclusions."
+  ],
+  "authoringSourceKind": "operator_adaptation"
+}

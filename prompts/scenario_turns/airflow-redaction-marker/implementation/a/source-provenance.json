@@ -1,0 +1,18 @@
+{
+  "sourceMessagesSha256": "7143c0eb5f61e324ce5cf9a26d6da70ce62c0e8ae7cf4aef5ca35f73ba4f5994",
+  "sourceReviewFile": "/home/d0rb/Documents/Github/reasonese/.codex/worktrees/pi-scenario-transcripts/out/pi-transcript-review-20261026/site/kimi-transcripts/airflow-redaction-marker/original/data.json",
+  "sourceCheckpointBeforeImplementationSha256": "a279f36f506e24bff6102af3eef2ac5fd45f406b84f1e9c75243a9e11ab67716",
+  "sourceUserMessageIndices": [
+    0,
+    35
+  ],
+  "repository": "https://github.com/apache/airflow.git",
+  "revision": "27433bf4830800f57970d4dad2b9772da2cf4e01",
+  "sourceTurnSha256": "b7ff1e9714e8d3a44876f3c270ad105888c642cbe489d360b03192b5c69c9bdb",
+  "authoringSourceSha256": "bbccde19df388becc1cf31b8458172ea3b4a3f0d2050f132e28019c7109b50e3",
+  "sourceCheckpointSha256": "a279f36f506e24bff6102af3eef2ac5fd45f406b84f1e9c75243a9e11ab67716",
+  "adaptation": [
+    "Removed isolated-venv and dependency-intervention narration; retained reproduction and test scope."
+  ],
+  "authoringSourceKind": "operator_adaptation"
+}
