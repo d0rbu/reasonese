@@ -10,7 +10,9 @@ The user authorized this single collection and replacement of the existing viewe
 contents. The earlier Kimi run, which sent both requirements, is preserved as a
 [historical conflict pilot](langchain-json-recovery.md) and at the
 [archived viewer path](https://sight-boat-enhanced-fresh.trycloudflare.com/kimi-json-recovery-conflict-20261028/).
-The remaining eleven base scenarios have not been collected.
+The remaining eleven base scenarios were subsequently collected under the user's
+batch authorization. The [complete collection](kimi-base-collection.md) shares
+this viewer's sidebar; this first transcript and its evidence bundle are unchanged.
 
 ## Recorded session
 

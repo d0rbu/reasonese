@@ -16,8 +16,9 @@ model, authoring model or judge in this collection stage.
 `configs/pi_remaining_review.json` selects the remaining eleven with Kimi K3.1 Pro;
 `configs/pi_langchain_base.json` selects the first-scenario Kimi run. Its
 [clean base transcript](../research/langchain-json-base.md) completed in two user
-turns; the other eleven bases remain uncollected. No second instruction or framing
-assignment appears in an active collection manifest.
+turns. The [complete twelve-session collection](../research/kimi-base-collection.md)
+now includes all eleven remaining cases, also with two user turns each. No second
+instruction or framing assignment appears in an active collection manifest.
 
 The existing templating system will introduce conflicting instructions and style
 variants later, using the recorded base context. The pair bank retains both sides
@@ -162,6 +163,22 @@ ignored outputs, local commits, and temporary files. `completed` means Pi reache
 final assistant message; it does not certify task success or instruction adherence. Raw
 responses retain the provider's reported model and metadata separately from the requested slug.
 Treat all output as research data; generated artifacts belong below ignored `out/`.
+
+## Review website
+
+[`tools/pi-transcripts/viewer/`](../../tools/pi-transcripts/viewer/README.md) provides
+static pages with a shared scenario catalog and clickable cards in the left sidebar.
+Each page includes the operator's explainer, all original messages, expandable
+provider-returned reasoning, changed files, independent checks and raw evidence.
+Search and role filters change only the display. Annotations and validation
+receipts remain separate from the recorded user and assistant messages.
+
+Copy the viewer assets beside each exported `data.json`, retain evidence downloads,
+and write `/kimi-transcripts/catalog.json` as described in the viewer README. The
+approved first transcript keeps `/kimi-json-recovery/`; the remaining cases use
+`/kimi-transcripts/<scenario-id>/`. Historical conflict-pilot exports stay at their
+archive paths. Export only reviewed public artifacts, check source hashes and
+credentials, and verify navigation plus served bytes through the public tunnel.
 
 ## Use as the basis for realistic scenarios
 

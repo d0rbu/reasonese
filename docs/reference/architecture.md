@@ -54,6 +54,10 @@ matchup -> authored messages -> independent message QA -> conversation -> assist
   baselines; interactive collection selects one prepared case with `--scenario`. These
   unjudged source transcripts are not silently converted into scenario templates, trial caches, or
   observations. See [`pi-transcripts.md`](pi-transcripts.md).
+- `tools/pi-transcripts/viewer/` contains static review assets. Each exported page reads its
+  unchanged source messages and separate explainer/check receipts from `data.json`; a shared
+  catalog supplies the left sidebar's scenario cards. Generated exports and publication receipts
+  remain under `out/`. The viewer renders transcript content as text and makes no model calls.
 - `reasonese.manual_messages` resolves filesystem-backed variants for the user author and
   snapshots the needed files once per top-level invocation.
 - `reasonese.tools` defines bounded file, shell, Python, and server-side web-search tools.

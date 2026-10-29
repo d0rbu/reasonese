@@ -322,11 +322,16 @@ build options, dotenv loading and runnable fallbacks; use
 [JSON parser runs](docs/research/langchain-json-recovery.md) actually included both
 requirements and are retained as historical conflict pilots. The new
 [first-instruction-only Kimi base](docs/research/langchain-json-base.md) completed
-in two user turns using `configs/pi_langchain_base.json`.
+in two user turns using `configs/pi_langchain_base.json`. All eleven remaining
+Kimi sessions have now completed in two user turns each, with independent behavior
+checks and scoped native tests. The [collection record](docs/research/kimi-base-collection.md)
+documents their outcomes and limits. The [review website](https://sight-boat-enhanced-fresh.trycloudflare.com/kimi-json-recovery/)
+links all twelve through scenario cards in the left sidebar, with explainers,
+original messages, returned reasoning, changed files and evidence downloads.
 
 Preparation makes no model calls. Collection requires explicit authorization and
-`--allow-paid --interactive`, selecting one scenario. The other eleven bases remain
-uncollected. Source transcripts remain separate from later templated comparisons.
+`--allow-paid --interactive`, selecting one scenario. Source transcripts remain
+separate from later templated comparisons.
 
 ## Writing the manual variants
 

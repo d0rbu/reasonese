@@ -16,6 +16,9 @@ Pro. Each `baseInstruction` is an exact copy of the pair's first instruction. Th
 full active catalog is `configs/pi_transcripts.json`, and
 `configs/pi_langchain_base.json` specifies the separately collected
 [first-scenario Kimi base](langchain-json-base.md).
+All eleven sessions have now completed in two user turns each; see the
+[collection record and viewer](kimi-base-collection.md) for the actual transcripts,
+independent checks and observed limitations.
 The tasks use maintained source code at pinned commits and remain authored
 scenarios, not claims about reported customer incidents or human session logs.
 
@@ -291,10 +294,10 @@ in base plans before preparation or inference.
 The corrected remaining cases are prepared in `out/pi-base-remaining-20261028`;
 the first case uses `out/pi-base-langchain-ready-20261028`. Readiness receipts record
 the current manifest and collector hashes, pristine source revisions, resolved
-instruction bytes and baseline outputs. The eleven remaining cases are still
-preparations only. The first workspace subsequently produced the
-[two-turn Kimi base](langchain-json-base.md); its earlier preparation receipt and
-new transcript are both retained.
+instruction bytes and baseline outputs. The first workspace subsequently produced
+the [two-turn Kimi base](langchain-json-base.md), and the user's later batch
+authorization produced the [other eleven base sessions](kimi-base-collection.md).
+The original preparation receipts and all source transcripts are retained.
 
 | Case | Native preparation scope |
 |---|---|
