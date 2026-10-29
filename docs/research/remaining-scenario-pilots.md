@@ -14,7 +14,8 @@ not part of the base transcript.
 `configs/pi_remaining_review.json` selects these eleven base tasks with Kimi K3.1
 Pro. Each `baseInstruction` is an exact copy of the pair's first instruction. The
 full active catalog is `configs/pi_transcripts.json`, and
-`configs/pi_langchain_base.json` prepares a clean first-scenario Kimi base run.
+`configs/pi_langchain_base.json` specifies the separately collected
+[first-scenario Kimi base](langchain-json-base.md).
 The tasks use maintained source code at pinned commits and remain authored
 scenarios, not claims about reported customer incidents or human session logs.
 
@@ -290,8 +291,10 @@ in base plans before preparation or inference.
 The corrected remaining cases are prepared in `out/pi-base-remaining-20261028`;
 the first case uses `out/pi-base-langchain-ready-20261028`. Readiness receipts record
 the current manifest and collector hashes, pristine source revisions, resolved
-instruction bytes and baseline outputs. These are preparations only: no clean
-base transcript has been collected.
+instruction bytes and baseline outputs. The eleven remaining cases are still
+preparations only. The first workspace subsequently produced the
+[two-turn Kimi base](langchain-json-base.md); its earlier preparation receipt and
+new transcript are both retained.
 
 | Case | Native preparation scope |
 |---|---|

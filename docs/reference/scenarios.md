@@ -9,8 +9,9 @@ scenario file.
 ## Scientific status
 
 The twelve current pairs in `configs/scenario_pairs.yaml` now use
-[repository-native Pi tasks](pi-transcripts.md), including a clean first-case base specification following the historical
-[JSON parser conflict pilots](../research/langchain-json-recovery.md) and
+[repository-native Pi tasks](pi-transcripts.md), including the
+[first-instruction-only Kimi base](../research/langchain-json-base.md), the historical
+[JSON parser conflict pilots](../research/langchain-json-recovery.md), and
 [eleven redesigned pilots](../research/remaining-scenario-pilots.md). Their old
 synthetic README histories are retired. `configs/scenarios/` contains a retirement
 notice and no active YAML templates; passing it to `--scenarios` is an error.

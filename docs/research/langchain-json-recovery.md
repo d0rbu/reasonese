@@ -6,7 +6,9 @@ design error for base collection. Their recorded messages and original manifests
 remain unchanged as evidence. New base collection uses only the first instruction
 (JSON recovery), without a framing treatment, via
 `configs/pi_langchain_base.json`. The opposing instruction will be injected later
-through the existing templating system. No clean replacement has been collected.
+through the existing templating system. A fresh
+[first-instruction-only Kimi base](langchain-json-base.md) has now been collected
+separately in two user turns.
 
 The protocol and results below describe the earlier conflict runs; they are not
 instructions for new base collection. See the

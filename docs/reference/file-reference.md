@@ -15,6 +15,7 @@
 | `tools/pi-transcripts/baseline_*` | Executable untouched-source observations, not post-change success oracles |
 | `configs/pi_langchain_kimi_review.json` | Archived Kimi conflict-pilot manifest; not for base collection |
 | `docs/research/langchain-json-recovery.md` | Historical JSON parser conflict pilots, original pair and observed results |
+| `docs/research/langchain-json-base.md` | First-instruction-only Kimi source session, independent checks and viewer |
 | `configs/pi_transcripts.json` | Twelve base tasks with the first instruction as written, pinned repositories and limits |
 | `tools/pi-transcripts/` | Pinned Pi SDK collector, real repository preparation, isolated built-in tools, and offline integration tests |
 | `docs/reference/pi-transcripts.md` | Preparation, authorized transcript collection, evidence format, and scientific limits |

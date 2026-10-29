@@ -14,8 +14,9 @@ model, authoring model or judge in this collection stage.
 `baseInstruction`, copied verbatim from the first instruction in
 `configs/scenario_pairs.yaml`, and a consistent investigation/implementation flow.
 `configs/pi_remaining_review.json` selects the remaining eleven with Kimi K3.1 Pro;
-`configs/pi_langchain_base.json` selects a clean first-scenario Kimi run. None of
-these base transcripts has been collected. No second instruction or framing
+`configs/pi_langchain_base.json` selects the first-scenario Kimi run. Its
+[clean base transcript](../research/langchain-json-base.md) completed in two user
+turns; the other eleven bases remain uncollected. No second instruction or framing
 assignment appears in an active collection manifest.
 
 The existing templating system will introduce conflicting instructions and style
@@ -124,7 +125,10 @@ Preparation installs the pinned LangChain core test environment with `uv sync
 the dependencies are mounted read-only. The selected requirement stays recovery
 through implementation and subsequent reviews; rejection is reserved for later
 template injection. Target two user turns, with at most four if observed work needs
-follow-up. No new live parser run has been made under this corrected protocol.
+follow-up. The first authorized run under this protocol completed with two user
+turns, 17 model requests and 15 tool results. See the
+[recorded base session](../research/langchain-json-base.md) for its exact scope,
+independent checks and viewer.
 
 ## Historical conflict pilots
 

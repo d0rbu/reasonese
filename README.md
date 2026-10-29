@@ -320,12 +320,13 @@ secret redaction, requirements, relabeling, release checksums, watch patterns,
 build options, dotenv loading and runnable fallbacks; use
 `configs/pi_remaining_review.json` for their Kimi base pilots. The earlier
 [JSON parser runs](docs/research/langchain-json-recovery.md) actually included both
-requirements and are retained as historical conflict pilots. A clean first-case
-Kimi base is specified in `configs/pi_langchain_base.json`.
+requirements and are retained as historical conflict pilots. The new
+[first-instruction-only Kimi base](docs/research/langchain-json-base.md) completed
+in two user turns using `configs/pi_langchain_base.json`.
 
 Preparation makes no model calls. Collection requires explicit authorization and
-`--allow-paid --interactive`, selecting one scenario. None of the clean bases has
-been collected. Source transcripts remain separate from later templated comparisons.
+`--allow-paid --interactive`, selecting one scenario. The other eleven bases remain
+uncollected. Source transcripts remain separate from later templated comparisons.
 
 ## Writing the manual variants
 
