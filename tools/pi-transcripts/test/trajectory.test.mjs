@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createServer } from "node:http";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import test from "node:test";
 import { main, selectScenarios } from "../collect.mjs";
@@ -234,10 +234,22 @@ test("preparation checks out exact commits from cached refs with independent Git
   assert.equal((await git(firstCwd, "rev-parse", "HEAD")).trim(), scenario.revision);
   assert.equal((await git(secondCwd, "rev-parse", "HEAD")).trim(), scenario.revision);
   assert.equal(readFileSync(join(firstCwd, "README.md"), "utf8"), readFileSync(join(setup.cwd, "README.md"), "utf8"));
-  const packs = ".git/objects/pack";
-  const pack = readdirSync(join(firstCwd, packs)).find((name) => name.endsWith(".pack"));
-  assert.ok(pack);
-  assert.notEqual(statSync(join(firstCwd, packs, pack)).ino, statSync(join(secondCwd, packs, pack)).ino);
+  const objects = ".git/objects";
+  const storage = cwd => readdirSync(join(cwd, objects), { recursive: true })
+    .filter(name => /^[a-f0-9]{2}\/[a-f0-9]{38}$/.test(name) || /^pack\/[^/]+$/.test(name)).sort();
+  const files = storage(firstCwd);
+  assert.ok(files.length);
+  assert.deepEqual(storage(secondCwd), files);
+  for (const cwd of [firstCwd, secondCwd]) assert.equal(existsSync(join(cwd, objects, "info/alternates")), false);
+  for (const file of files) {
+    const firstPath = join(firstCwd, objects, file), secondPath = join(secondCwd, objects, file);
+    const firstStat = lstatSync(firstPath), secondStat = lstatSync(secondPath);
+    assert.ok(firstStat.isFile() && secondStat.isFile());
+    assert.equal(firstStat.nlink, 1);
+    assert.equal(secondStat.nlink, 1);
+    assert.notDeepEqual([firstStat.dev, firstStat.ino], [secondStat.dev, secondStat.ino]);
+    assert.deepEqual(readFileSync(firstPath), readFileSync(secondPath));
+  }
   assert.equal(readJson(join(output, scenario.id, "prepared.json")).context.resolvedPath, "CLAUDE.md");
   assert.equal(existsSync(join(firstCwd, ".git/logs")), false);
   assert.equal(existsSync(join(secondCwd, ".git/logs")), false);

@@ -44,8 +44,10 @@ node tools/pi-transcripts/collect.mjs prepare \
   --manifest configs/pi_remaining_review.json --output out/pi-base-remaining-review
 ```
 
-Preparation downloads complete shallow checkouts at the pinned commits and gives
-every scenario independent Git storage. A neighboring `out/pi-transcript-sources/`
+Preparation downloads complete checkouts with the pinned commits' full ancestor
+history and gives every scenario independent Git storage. It fetches the exact
+pinned revision without following newer branches or tags, and upgrades existing
+unstarted shallow caches/checkouts before collection. A neighboring `out/pi-transcript-sources/`
 cache shares downloads without exposing them to model tools. Preparation checks
 pristine source, cited files and resolved instruction targets, installs scoped
 dependencies, runs each manifest's native baseline and real-source probes in the
