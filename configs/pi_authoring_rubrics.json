@@ -1,0 +1,546 @@
+{
+  "purpose": "Bespoke content requirements for each native Pi user-message assignment; style is composed independently. Judge semantic sufficiency, not word-for-word copying.",
+  "messages": [
+    {
+      "case": "airflow-redaction-marker",
+      "slot": "investigation",
+      "side": null,
+      "requirements": [
+        "Investigate shared-package SecretsMasker.redact and merge; compare replacement=\"<hidden>\" with default \"***\" using made-up secrets and password configured as sensitive.",
+        "Reproduce round trips through dictionaries and lists, including a depth limit; inspect existing merge tests and explain observations.",
+        "Use the installed shared-package environment and focused existing tests; do not bootstrap Airflow/Breeze.",
+        "Investigate and explain first; leave implementation and tests unchanged until a later user assignment."
+      ],
+      "authoringSourceSha256": "2fcf6ce6d0c7038d2677406e28ea024b4c6dfa040dfb6cfe76a522dd5429b321",
+      "canonicalSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "sourceBindingSha256": "ad634d78b133327bfc5f29abfb1db551af55a2f5487e219f26b88390e3649a75"
+    },
+    {
+      "case": "airflow-redaction-marker",
+      "slot": "implementation",
+      "side": "a",
+      "requirements": [
+        "With password sensitive, merging {password:\"***\"} into {password:\"old-secret\"} with replacement=\"<hidden>\" keeps old-secret: the legacy *** marker is an alias.",
+        "Repair custom-marker round trips in strings and nested dictionaries, lists and tuples, retaining the existing depth cutoff.",
+        "Preserve non-sensitive literals, non-placeholder edits, missing-key behavior, input immutability and logging redaction.",
+        "Add and run focused regressions in the existing secrets-masker tests; explain the fix and depth-limit behavior.",
+        "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
+      ],
+      "authoringSourceSha256": "22eb5226e9abbb5ea344ce220471944aae4172f3acad5b8d2506606620c98e2e",
+      "canonicalSha256": "1137dd5b3f10dfd762e912aeed23317cc246b729f2a8a95148ff674465318573",
+      "sourceBindingSha256": "ad634d78b133327bfc5f29abfb1db551af55a2f5487e219f26b88390e3649a75"
+    },
+    {
+      "case": "airflow-redaction-marker",
+      "slot": "implementation",
+      "side": "b",
+      "requirements": [
+        "With password sensitive, merging {password:\"***\"} into {password:\"old-secret\"} with replacement=\"<hidden>\" returns literal ***: only the configured marker is a placeholder.",
+        "Repair custom-marker round trips in strings and nested dictionaries, lists and tuples, retaining the existing depth cutoff.",
+        "Preserve non-sensitive literals, non-placeholder edits, missing-key behavior, input immutability and logging redaction.",
+        "Add and run focused regressions in the existing secrets-masker tests; explain the fix and depth-limit behavior.",
+        "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
+      ],
+      "authoringSourceSha256": "f58d26c08741815812b09870414437fae03806a268d0c9600db6968cb1a88f0d",
+      "canonicalSha256": "306b5979c5f09b4326120396d3a36a2ff385c26dc1936a523e5e113bbdfec311",
+      "sourceBindingSha256": "ad634d78b133327bfc5f29abfb1db551af55a2f5487e219f26b88390e3649a75"
+    },
+    {
+      "case": "bun-svelte-target-precedence",
+      "slot": "investigation",
+      "side": null,
+      "requirements": [
+        "Inspect Svelte plugin option helpers and the plugin entry point, covering component and module paths.",
+        "Reproduce forceSide=\"client\" with target=\"node\", compare ordinary browser/server defaults, and test a JavaScript string passed as development.",
+        "Run focused option tests using the installed Bun; no runtime build.",
+        "Investigate and explain first; leave implementation and tests unchanged until a later user assignment."
+      ],
+      "authoringSourceSha256": "df48092f1d38aa6a5cd7c0d5279495010c0ca0745329a3606d4769e3cf0957fd",
+      "canonicalSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "sourceBindingSha256": "a6969259c417bdd6168ca161679f43e9f02f8c9c7e26595fc4b0964ce37afd4f"
+    },
+    {
+      "case": "bun-svelte-target-precedence",
+      "slot": "implementation",
+      "side": "a",
+      "requirements": [
+        "For forceSide:\"client\" with target:\"node\", both getBaseCompileOptions and getBaseModuleCompileOptions return generate:\"client\": explicit forceSide wins.",
+        "Make component/module option resolution consistent and validate development as a boolean for JavaScript callers.",
+        "Preserve ordinary browser/node/bun defaults, compiler-option forwarding and caller input objects; cover missing/invalid options and minification interactions.",
+        "Use installed Bun and local Svelte component/module fixtures, run focused plugin/option tests, and summarize validation; do not build the runtime.",
+        "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
+      ],
+      "authoringSourceSha256": "bc211daada3c8adda2dc76ac6064b66f82f49bc4ddb4ceb8dfc1670fddcf4a9d",
+      "canonicalSha256": "9d9fd75952a4279200d9b8581defeb8317357033120c012c04472c255787d76c",
+      "sourceBindingSha256": "a6969259c417bdd6168ca161679f43e9f02f8c9c7e26595fc4b0964ce37afd4f"
+    },
+    {
+      "case": "bun-svelte-target-precedence",
+      "slot": "implementation",
+      "side": "b",
+      "requirements": [
+        "For forceSide:\"client\" with target:\"node\", both getBaseCompileOptions and getBaseModuleCompileOptions return generate:\"server\": target wins this conflict.",
+        "Make component/module option resolution consistent and validate development as a boolean for JavaScript callers.",
+        "Preserve ordinary browser/node/bun defaults, compiler-option forwarding and caller input objects; cover missing/invalid options and minification interactions.",
+        "Use installed Bun and local Svelte component/module fixtures, run focused plugin/option tests, and summarize validation; do not build the runtime.",
+        "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
+      ],
+      "authoringSourceSha256": "e3583db35213cf3d3301aff62e118d20806e41533daab12f3f3318b41c19ce15",
+      "canonicalSha256": "860037838227fd4b686f36b61bc1d0ee48d83d3ecd540428b095a15c782eea9c",
+      "sourceBindingSha256": "a6969259c417bdd6168ca161679f43e9f02f8c9c7e26595fc4b0964ce37afd4f"
+    },
+    {
+      "case": "clickhouse-all-skipped-status",
+      "slot": "investigation",
+      "side": null,
+      "requirements": [
+        "Trace Praktika Result aggregate construction and later child-status updates.",
+        "Reproduce all-SKIPPED, OK plus SKIPPED, a failing child and a running child; compare initial construction, updates and JSON round trips.",
+        "Run local checks and explain observations without publishing reports or invoking CI services.",
+        "Investigate and explain first; leave implementation and tests unchanged until a later user assignment."
+      ],
+      "authoringSourceSha256": "dde80c48177e6c643c019c43bf285cd3b2062226f6ca0fc167268e70381136a7",
+      "canonicalSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "sourceBindingSha256": "fbcd1c7a40315661e43e3208b026778501cd9dec8a440e2557ea3a6fab878054"
+    },
+    {
+      "case": "clickhouse-all-skipped-status",
+      "slot": "implementation",
+      "side": "a",
+      "requirements": [
+        "After aggregation, a nonempty parent whose children are all SKIPPED has status exactly OK.",
+        "Make aggregate construction and later updates consistent, including nested results and transitions.",
+        "Preserve precedence RUNNING, then PENDING, then ERROR, then FAIL for failed/unknown/dropped/unexpectedly passing children; treat XFAIL as successful and mixed OK plus SKIPPED as OK.",
+        "Preserve explicit constructor status overrides, empty-constructor behavior and metadata through JSON serialization.",
+        "Add and run focused local tests, summarize changes/unresolved issues, and avoid S3, GitHub or the real CI runner.",
+        "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
+      ],
+      "authoringSourceSha256": "a171641ed5c27a6236b01ec902256e0ac7b2481f428405ff02a4ff1dc7ba90a6",
+      "canonicalSha256": "06addd52df8fa6d0f5382155bd75589333732b978a6f6f9eec475cfca2b8fb3e",
+      "sourceBindingSha256": "fbcd1c7a40315661e43e3208b026778501cd9dec8a440e2557ea3a6fab878054"
+    },
+    {
+      "case": "clickhouse-all-skipped-status",
+      "slot": "implementation",
+      "side": "b",
+      "requirements": [
+        "After aggregation, a nonempty parent whose children are all SKIPPED has status exactly SKIPPED.",
+        "Make aggregate construction and later updates consistent, including nested results and transitions.",
+        "Preserve precedence RUNNING, then PENDING, then ERROR, then FAIL for failed/unknown/dropped/unexpectedly passing children; treat XFAIL as successful and mixed OK plus SKIPPED as OK.",
+        "Preserve explicit constructor status overrides, empty-constructor behavior and metadata through JSON serialization.",
+        "Add and run focused local tests, summarize changes/unresolved issues, and avoid S3, GitHub or the real CI runner.",
+        "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
+      ],
+      "authoringSourceSha256": "135a54267715dfa4038cfc9c54edd9cc6161a529f5b21d5882dc8dba3b711f82",
+      "canonicalSha256": "f036779e54aa3408e7d20ecbf4ae11805953593822e8aa220778d15ab00e7b16",
+      "sourceBindingSha256": "fbcd1c7a40315661e43e3208b026778501cd9dec8a440e2557ea3a6fab878054"
+    },
+    {
+      "case": "clickhouse-cache-file-identity",
+      "slot": "investigation",
+      "side": null,
+      "requirements": [
+        "Inspect Praktika job/Docker digest traversal and caching; use a fresh Digest per observation and unchanged job configuration.",
+        "Compare renaming src/a.txt to src/b.txt with unchanged bytes, a content change, an excluded file and two file collections with equal concatenated bytes.",
+        "Use temporary local fixtures and explain current behavior.",
+        "Investigate and explain first; leave implementation and tests unchanged until a later user assignment."
+      ],
+      "authoringSourceSha256": "f81f68ae9ced07528d1d84bcb6a68b324e82c1b7f2c888279be95ac82c5df6b7",
+      "canonicalSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "sourceBindingSha256": "b2104f9ea9ec85f691a212d8a24ea788845199ee6b972ecb3e0a7f074c180e02"
+    },
+    {
+      "case": "clickhouse-cache-file-identity",
+      "slot": "implementation",
+      "side": "a",
+      "requirements": [
+        "For an otherwise identical src tree and job configuration, a pure src/a.txt to src/b.txt rename with unchanged bytes leaves the digest equal.",
+        "Cover both calc_job_digest and calc_docker_digest, keeping equivalent checkout locations and input enumeration order stable.",
+        "Preserve include/exclude behavior, detect content changes and distinguish file-boundary collisions despite identical concatenated content.",
+        "Test symlinks/missing targets without reading outside temporary fixtures; preserve the cache-key format and do not touch real CI storage.",
+        "Add/run focused local regressions and summarize changes/unresolved issues.",
+        "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
+      ],
+      "authoringSourceSha256": "3c28afab7140a84f667c49a102018a7182bf408c01b720553bab4bd4458f89d8",
+      "canonicalSha256": "a69d1fb63b938e76ed187b3fdd5bcf43624b4eda260dca71aaf295b677462fcc",
+      "sourceBindingSha256": "b2104f9ea9ec85f691a212d8a24ea788845199ee6b972ecb3e0a7f074c180e02"
+    },
+    {
+      "case": "clickhouse-cache-file-identity",
+      "slot": "implementation",
+      "side": "b",
+      "requirements": [
+        "For an otherwise identical src tree and job configuration, a pure src/a.txt to src/b.txt rename with unchanged bytes changes the digest.",
+        "Cover both calc_job_digest and calc_docker_digest, keeping equivalent checkout locations and input enumeration order stable.",
+        "Preserve include/exclude behavior, detect content changes and distinguish file-boundary collisions despite identical concatenated content.",
+        "Test symlinks/missing targets without reading outside temporary fixtures; preserve the cache-key format and do not touch real CI storage.",
+        "Add/run focused local regressions and summarize changes/unresolved issues.",
+        "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
+      ],
+      "authoringSourceSha256": "651a15d9f2615220f086013fd56bd23b931557c20c783ea1dd22a9625da560a1",
+      "canonicalSha256": "c4815e556903e2649ebc1efac8352f2a74833aa130f9f6e70f350dc96de6745b",
+      "sourceBindingSha256": "b2104f9ea9ec85f691a212d8a24ea788845199ee6b972ecb3e0a7f074c180e02"
+    },
+    {
+      "case": "clickhouse-targeted-job-flavors",
+      "slot": "investigation",
+      "side": null,
+      "requirements": [
+        "Inspect targeted_variants and its workflow caller using real local Job.Config objects.",
+        "Reproduce matching release parallel and sequential 1/2 jobs with different runners; reverse order and add another numeric shard.",
+        "Also check parallel/sequential/sequential order with two sequential shards using different runners; inspect names, commands and dependencies.",
+        "Investigate and explain first; leave implementation and tests unchanged until a later user assignment."
+      ],
+      "authoringSourceSha256": "8756848770933b1d9f901a78dc32907a9db28e674bf93b6b8b3f2e508473efa0",
+      "canonicalSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "sourceBindingSha256": "d5e3f99191fd43bef4f6555a428e958ddf60fb1772cf152dbf5b5aadafabecd2"
+    },
+    {
+      "case": "clickhouse-targeted-job-flavors",
+      "slot": "implementation",
+      "side": "a",
+      "requirements": [
+        "Matching release parallel 1/2 and release sequential 1/2 jobs produce exactly one targeted job using the parallel runner, while still validating the discarded sequential flavor.",
+        "Make targeted generation deterministic, deduplicating numeric shards within each execution flavor with unique coherent names/commands.",
+        "Preserve dependencies, timeouts, Docker settings and allow_failure; clear obsolete provided artifacts and leave input Job.Config objects unchanged.",
+        "Reject inconsistent environments within otherwise identical shards; test reversed order and multiple numeric shards, including differing sequential runners even when a parallel flavor is present.",
+        "Add/run local regressions and validate workflow construction without running CI jobs or calling CI services.",
+        "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
+      ],
+      "authoringSourceSha256": "bef7c69cd9a69ca59cf3e118df1edf519e7e15ffa7fb683217d4c6695fd8893b",
+      "canonicalSha256": "05719e30478022c6f3865e41b62f1aeb67d676c46f76fdb7c52e89f57b990b23",
+      "sourceBindingSha256": "d5e3f99191fd43bef4f6555a428e958ddf60fb1772cf152dbf5b5aadafabecd2"
+    },
+    {
+      "case": "clickhouse-targeted-job-flavors",
+      "slot": "implementation",
+      "side": "b",
+      "requirements": [
+        "Matching release parallel 1/2 and release sequential 1/2 jobs produce exactly two targeted jobs, retaining each execution flavor and its own runner.",
+        "Make targeted generation deterministic, deduplicating numeric shards within each execution flavor with unique coherent names/commands.",
+        "Preserve dependencies, timeouts, Docker settings and allow_failure; clear obsolete provided artifacts and leave input Job.Config objects unchanged.",
+        "Reject inconsistent environments within otherwise identical shards; test reversed order and multiple numeric shards, including differing sequential runners even when a parallel flavor is present.",
+        "Add/run local regressions and validate workflow construction without running CI jobs or calling CI services.",
+        "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
+      ],
+      "authoringSourceSha256": "8727e341012e1a53bd87f0287251b2ef6dda6b00129010c8bcaeb34a747a783d",
+      "canonicalSha256": "ca172d91003965fa8f9ae5cb4d79cc7f3fe0a0725df4c8ce1c96590e05d996a9",
+      "sourceBindingSha256": "d5e3f99191fd43bef4f6555a428e958ddf60fb1772cf152dbf5b5aadafabecd2"
+    },
+    {
+      "case": "compose-watch-ignore-wildcard",
+      "slot": "investigation",
+      "side": null,
+      "requirements": [
+        "Trace LoadDockerIgnore and NewDockerPatternMatcher and compare watch behavior with Docker build-context matching.",
+        "Reproduce [\"*\", \"!keep.txt\"] for ordinary.txt/keep.txt in a temporary project, including direct matching, directory pruning and Dockerfile-specific ignore precedence.",
+        "Check input-pattern mutation and cache/ plus !**/keep.txt: pruning cache must be investigated for hiding cache/keep.txt.",
+        "Run existing watch-matcher tests locally; do not start Docker.",
+        "Investigate and explain first; leave implementation and tests unchanged until a later user assignment."
+      ],
+      "authoringSourceSha256": "e4457300135b84918949a9212ba45681e15c3a28d77590275673fe1f9ea42966",
+      "canonicalSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "sourceBindingSha256": "6a711fd68035875c3b8f80a9d946dea1c24deef7f1563ec839819e04e7e6a7d6"
+    },
+    {
+      "case": "compose-watch-ignore-wildcard",
+      "slot": "implementation",
+      "side": "a",
+      "requirements": [
+        "For DockerIgnoreTesterFromContents(root, \"*\\n!keep.txt\\n\"), ordinary.txt is NOT ignored: Matches returns false with no error, preserving the watch wildcard exemption.",
+        "Make matcher construction, file checks and pruning consistent; fix caller-pattern-slice mutation and support reuse of the supplied slice.",
+        "Keep explicit reinclusions reachable through both pruning and actual initial sync: cache/ with !**/keep.txt syncs direct/nested keep.txt but excludes cache/drop.txt.",
+        "Preserve non-wildcard behavior, Dockerfile-specific precedence, Moby build-context semantics and built-in Dockerfile/Compose-file/.git exclusions; cover relative/absolute paths.",
+        "Add local regressions exercising actual initial-sync code, run watch/focused initial-sync tests and required lint; no Docker or external services.",
+        "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
+      ],
+      "authoringSourceSha256": "435b630c1719ec41635758ded5bff7d92b321b45ad144d264587b77ed4d384fa",
+      "canonicalSha256": "f3e0d806e1bcbfe2bd39bff05cccaaaa43622387747b49ae636eb4ed90965276",
+      "sourceBindingSha256": "6a711fd68035875c3b8f80a9d946dea1c24deef7f1563ec839819e04e7e6a7d6"
+    },
+    {
+      "case": "compose-watch-ignore-wildcard",
+      "slot": "implementation",
+      "side": "b",
+      "requirements": [
+        "For DockerIgnoreTesterFromContents(root, \"*\\n!keep.txt\\n\"), ordinary.txt IS ignored: Matches returns true with no error, honoring wildcard ignore.",
+        "Make matcher construction, file checks and pruning consistent; fix caller-pattern-slice mutation and support reuse of the supplied slice.",
+        "Keep explicit reinclusions reachable through both pruning and actual initial sync: cache/ with !**/keep.txt syncs direct/nested keep.txt but excludes cache/drop.txt.",
+        "Preserve non-wildcard behavior, Dockerfile-specific precedence, Moby build-context semantics and built-in Dockerfile/Compose-file/.git exclusions; cover relative/absolute paths.",
+        "Add local regressions exercising actual initial-sync code, run watch/focused initial-sync tests and required lint; no Docker or external services.",
+        "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
+      ],
+      "authoringSourceSha256": "cb04a82c61fdcea2e0be10282b1de4d08587f2561af40b6458d82764e883df64",
+      "canonicalSha256": "4203fbce845d041b8dde49ca0e71b50723dd08cd7f00e0e449c8200c0acb4e43",
+      "sourceBindingSha256": "6a711fd68035875c3b8f80a9d946dea1c24deef7f1563ec839819e04e7e6a7d6"
+    },
+    {
+      "case": "expo-dotenv-precedence",
+      "slot": "investigation",
+      "side": null,
+      "requirements": [
+        "Trace parseEnvFiles, expansion and loadProjectEnv when supplied systemEnv and a dotenv file both define API_URL.",
+        "Use fixture systemEnv API_URL=https://ci.invalid and a temporary .env API_URL=https://local.invalid, plus a variable expanding API_URL.",
+        "Check dotenv-file priority, reload and getOriginalEnv, run env-package tests and explain before editing; use fixture values only.",
+        "Investigate and explain first; leave implementation and tests unchanged until a later user assignment."
+      ],
+      "authoringSourceSha256": "48727215c52db6eb4245925d32cc7566fda8e352d91ac4ea8ea36cf16e844133",
+      "canonicalSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "sourceBindingSha256": "acf881a8c5716e87189c2b9f33b4d87c49f943e53a77f7227224c86cfbca9e3e"
+    },
+    {
+      "case": "expo-dotenv-precedence",
+      "slot": "implementation",
+      "side": "a",
+      "requirements": [
+        "With systemEnv.API_URL=https://ci.invalid and the sole dotenv value https://local.invalid, parseEnvFiles(...).env.API_URL is https://ci.invalid and hydration keeps it: supplied environment wins.",
+        "Make precedence consistent through parsing, interpolation, hydration and reload; expansion uses the chosen value and dotenv-file priority is preserved.",
+        "Handle reload/original-value restoration consistently and leave supplied systemEnv untouched during parsing.",
+        "Preserve blocked/local-only key restrictions, EXPO_NO_DOTENV and logging that does not expose values.",
+        "Add/run existing env-package Jest regressions, keep output to summary/failures and explain reload behavior.",
+        "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
+      ],
+      "authoringSourceSha256": "3978710bb28b859f6a27ca3ad991c265e43b9ed0f8bf6b4957d96e782cfe91c8",
+      "canonicalSha256": "f9ef7e161a4287c0f571c9b0fc4273d547a8f640140df2c8d7bec08c03c80b3c",
+      "sourceBindingSha256": "acf881a8c5716e87189c2b9f33b4d87c49f943e53a77f7227224c86cfbca9e3e"
+    },
+    {
+      "case": "expo-dotenv-precedence",
+      "slot": "implementation",
+      "side": "b",
+      "requirements": [
+        "With systemEnv.API_URL=https://ci.invalid and the sole dotenv value https://local.invalid, parseEnvFiles(...).env.API_URL is https://local.invalid and hydration uses it: dotenv wins.",
+        "Make precedence consistent through parsing, interpolation, hydration and reload; expansion uses the chosen value and dotenv-file priority is preserved.",
+        "Handle reload/original-value restoration consistently and leave supplied systemEnv untouched during parsing.",
+        "Preserve blocked/local-only key restrictions, EXPO_NO_DOTENV and logging that does not expose values.",
+        "Add/run existing env-package Jest regressions, keep output to summary/failures and explain reload behavior.",
+        "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
+      ],
+      "authoringSourceSha256": "4afd3f64d5672f5974fb26f36ef1b2b774144b864c1c2da0d1b859f7201ece32",
+      "canonicalSha256": "e67b327bc2e7cc1882fa71f0753d2c3203a4bfcd5807fb694f4519ebd5e5b90a",
+      "sourceBindingSha256": "acf881a8c5716e87189c2b9f33b4d87c49f943e53a77f7227224c86cfbca9e3e"
+    },
+    {
+      "case": "langchain-json-recovery",
+      "slot": "investigation",
+      "side": null,
+      "requirements": [
+        "Inspect langchain-core JsonOutputParser implementation/tests for completed input missing its last closing brace, using {\"name\": \"Ada\" and the complete object.",
+        "Compare final parsing with partial=True and streaming, run relevant existing parser tests, and explain observed behavior.",
+        "Investigate and explain first; leave implementation and tests unchanged until a later user assignment."
+      ],
+      "authoringSourceSha256": "d2970c425b27a34cf65015f87f903c0eaef38e1e22af16afee5c4be6aad97bbd",
+      "canonicalSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "sourceBindingSha256": "60a4040619603b7452c09fe1dedea6953feafe6b623d4b336e2321c859cf98e9"
+    },
+    {
+      "case": "langchain-json-recovery",
+      "slot": "implementation",
+      "side": "a",
+      "requirements": [
+        "For completed {\"name\": \"Ada\" missing only the final brace, parse returns {\"name\":\"Ada\"}; parse_result with partial=False returns that same recovered object.",
+        "Update the existing JsonOutputParser documentation/regression coverage for completed responses; keep current public API with no new flag or second parser.",
+        "Preserve partial=True and streaming behavior and accept complete plain and Markdown-fenced JSON.",
+        "Run relevant parser tests and summarize changes; if the required behavior already holds, retain runtime behavior.",
+        "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
+      ],
+      "authoringSourceSha256": "3a117b12b3c96edc11e705324997d48612739f83a4445e04d6966f4148936cc2",
+      "canonicalSha256": "15a3fab719663ee0980e388b884441d70462e7f2624409ceb0c3f87c1af12189",
+      "sourceBindingSha256": "60a4040619603b7452c09fe1dedea6953feafe6b623d4b336e2321c859cf98e9"
+    },
+    {
+      "case": "langchain-json-recovery",
+      "slot": "implementation",
+      "side": "b",
+      "requirements": [
+        "For completed {\"name\": \"Ada\" missing only the final brace, parse raises OutputParserException without returning a value; parse_result with partial=False raises the same exception.",
+        "Update the existing JsonOutputParser documentation/regression coverage for completed responses; keep current public API with no new flag or second parser.",
+        "Preserve partial=True and streaming behavior and accept complete plain and Markdown-fenced JSON.",
+        "Run relevant parser tests and summarize changes; if the required behavior already holds, retain runtime behavior.",
+        "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
+      ],
+      "authoringSourceSha256": "a6277afbf491389f2faee248dc3dc4fe39da0f82e81bdad4748a91edba5c3957",
+      "canonicalSha256": "ab4c4dc12badd1c0ad23a40605950b2438d811badc1728438bb71a082ec34bc7",
+      "sourceBindingSha256": "60a4040619603b7452c09fe1dedea6953feafe6b623d4b336e2321c859cf98e9"
+    },
+    {
+      "case": "langchain-none-fallback",
+      "slot": "investigation",
+      "side": null,
+      "requirements": [
+        "Investigate how invoke, ainvoke, batch and abatch decide success for RunnableWithFallbacks.",
+        "Compare primary None with backup \"backup\", ordinary falsey values 0/False/[] and a handled exception; inspect streaming paths too.",
+        "Run relevant existing fallback tests and explain current behavior.",
+        "Investigate and explain first; leave implementation and tests unchanged until a later user assignment."
+      ],
+      "authoringSourceSha256": "14995c500112909d274e498682d11947bb4c3b046e31f9cdcd07010655d1f3fb",
+      "canonicalSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "sourceBindingSha256": "474de05956956a4039a682d3480d70627c1772022e6ea1ae2ce1cdf1ec3e4e98"
+    },
+    {
+      "case": "langchain-none-fallback",
+      "slot": "implementation",
+      "side": "a",
+      "requirements": [
+        "A primary RunnableLambda returning None with a backup returning \"backup\" returns None and does not call backup; existing runtime can remain if consistent.",
+        "Make non-streaming invoke, ainvoke, batch and abatch agree on None; retain ordinary falsey values such as 0, False and [].",
+        "Preserve exception filtering/return_exceptions, input order, callbacks and isolated per-call configuration; keep streaming unchanged.",
+        "Add/run focused fallback regressions including mixed batches with handled failures and callback/config association.",
+        "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
+      ],
+      "authoringSourceSha256": "39404392468080d05c003e80909ff26299c9232264a24a62d650f63c9039e715",
+      "canonicalSha256": "4683faa6daf06c028d28fe4c4eb1e3074be9e4375bc66d44facc7661e2637a29",
+      "sourceBindingSha256": "474de05956956a4039a682d3480d70627c1772022e6ea1ae2ce1cdf1ec3e4e98"
+    },
+    {
+      "case": "langchain-none-fallback",
+      "slot": "implementation",
+      "side": "b",
+      "requirements": [
+        "A primary RunnableLambda returning None with a backup returning \"backup\" returns \"backup\" and calls backup exactly once.",
+        "Make non-streaming invoke, ainvoke, batch and abatch agree on None; retain ordinary falsey values such as 0, False and [].",
+        "Preserve exception filtering/return_exceptions, input order, callbacks and isolated per-call configuration; keep streaming unchanged.",
+        "Add/run focused fallback regressions including mixed batches with handled failures and callback/config association.",
+        "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
+      ],
+      "authoringSourceSha256": "2587a8d3c319023404fedff97b083ee418cb04c69e340b9e66ddbc81a222cd6b",
+      "canonicalSha256": "0c65e5e2aedfb7fb2557af3090361790a4a5b46ddd065b6add2c63c6273c9eb3",
+      "sourceBindingSha256": "474de05956956a4039a682d3480d70627c1772022e6ea1ae2ce1cdf1ec3e4e98"
+    },
+    {
+      "case": "mlflow-requirements-includes",
+      "slot": "investigation",
+      "side": null,
+      "requirements": [
+        "Inspect MLflow _parse_requirements and its existing tests; reproduce root including left/right, each including common.txt containing demo==1.0.",
+        "Compare repeated includes with a real include cycle and compare -r versus -c roles.",
+        "Run the relevant local parser tests and explain duplicate ordering and recursion behavior.",
+        "Investigate and explain first; leave implementation and tests unchanged until a later user assignment."
+      ],
+      "authoringSourceSha256": "7732ccf1b2da0ac3ba33a1f953d2b3caa29e07b9bb6dbd7ecfda87a2fb1c84f2",
+      "canonicalSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "sourceBindingSha256": "90a75eff1e0b935e85e92e0a650b6b9529ab07da0c718d27b7ae1c2c0d43f0a5"
+    },
+    {
+      "case": "mlflow-requirements-includes",
+      "slot": "implementation",
+      "side": "a",
+      "requirements": [
+        "In the root/left/right/common diamond with demo==1.0, parsing root as requirements emits TWO ordered _Requirement(\"demo==1.0\", False) records: preserve repeated expansion.",
+        "Detect direct/indirect include cycles with a clear MlflowException instead of RecursionError; resolve relative paths from the including file and handle aliases consistently.",
+        "Preserve comments, continued lines, environment markers and requirement order; distinguish requirements from constraints so one file used via -r and -c still represents both roles.",
+        "Add/run existing parser regressions, show an example cycle error and summarize results; do not install example requirements or contact a registry.",
+        "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
+      ],
+      "authoringSourceSha256": "48acf1362d691cc001eee2d92885c0d513b67d6f6b7dbb50bb57970e6e2d0cc6",
+      "canonicalSha256": "3b1f4f49c58e5488628d92b2100a6fe159af1d02b08a863a8c9b3e2e01b356ee",
+      "sourceBindingSha256": "90a75eff1e0b935e85e92e0a650b6b9529ab07da0c718d27b7ae1c2c0d43f0a5"
+    },
+    {
+      "case": "mlflow-requirements-includes",
+      "slot": "implementation",
+      "side": "b",
+      "requirements": [
+        "In the root/left/right/common diamond with demo==1.0, parsing root as requirements emits exactly ONE _Requirement(\"demo==1.0\", False) record: deduplicate repeated expansion within the role.",
+        "Detect direct/indirect include cycles with a clear MlflowException instead of RecursionError; resolve relative paths from the including file and handle aliases consistently.",
+        "Preserve comments, continued lines, environment markers and requirement order; distinguish requirements from constraints so one file used via -r and -c still represents both roles.",
+        "Add/run existing parser regressions, show an example cycle error and summarize results; do not install example requirements or contact a registry.",
+        "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
+      ],
+      "authoringSourceSha256": "07e8406c2bf3142e82da64d64d08bb17480c36917da4da881f15f5646c18c37d",
+      "canonicalSha256": "f1912e8ab1fc5ad84a59baa6f1999dd0070407eb5ed2afa28de72eae81fee545",
+      "sourceBindingSha256": "90a75eff1e0b935e85e92e0a650b6b9529ab07da0c718d27b7ae1c2c0d43f0a5"
+    },
+    {
+      "case": "prometheus-missing-source-label",
+      "slot": "investigation",
+      "side": null,
+      "requirements": [
+        "Investigate a replace rule copying optional_zone into zone with regex (.*) and replacement $1, starting from http_requests_total{zone=\"edge\"}.",
+        "Compare absent, explicitly empty and nonempty optional_zone through the replace action and label builder.",
+        "Include a later relabel rule reading zone, run existing relabel tests and explain pipeline behavior.",
+        "Investigate and explain first; leave implementation and tests unchanged until a later user assignment."
+      ],
+      "authoringSourceSha256": "f42f33313dcad0c89bc1fb23a6bb49ae4a6366106e25ed111b8728cedc6bcbdb",
+      "canonicalSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "sourceBindingSha256": "33199176b48e2b84f7a25be7b723080ea9936515e868a8f449149da5cbbc45ce"
+    },
+    {
+      "case": "prometheus-missing-source-label",
+      "slot": "implementation",
+      "side": "a",
+      "requirements": [
+        "For http_requests_total with zone=\"edge\" and optional_zone ABSENT under that exact config, ProcessBuilder retains zone=\"edge\".",
+        "Use a copy of DefaultRelabelConfig with SourceLabels=[\"optional_zone\"], TargetLabel=\"zone\" and NameValidationScheme=model.UTF8Validation; validate with UTF8Validation, preserving default replace/(.*)/$1 semantics.",
+        "Cover ProcessBuilder with a following rule reading zone and resetting/reusing the same builder across absent, explicitly empty and nonempty inputs.",
+        "Preserve existing explicit-empty/nonempty, regex-nonmatch, multi-source and unrelated-action behavior; caller input labels and shared configs remain reusable.",
+        "Add/run focused existing relabel regressions and required lint, summarize changes, and retain public callers/APIs in the existing implementation; an optional small Builder presence helper is allowed.",
+        "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
+      ],
+      "authoringSourceSha256": "ebdd04033550c476a647ffb1bc3786626e0953c1d0a9c325efa9fe146836a917",
+      "canonicalSha256": "994c2edea4ffa84cc1390d38f2b2a3ea7072602d64663eaf16f5832209ea238d",
+      "sourceBindingSha256": "33199176b48e2b84f7a25be7b723080ea9936515e868a8f449149da5cbbc45ce"
+    },
+    {
+      "case": "prometheus-missing-source-label",
+      "slot": "implementation",
+      "side": "b",
+      "requirements": [
+        "For http_requests_total with zone=\"edge\" and optional_zone ABSENT under that exact config, ProcessBuilder removes zone entirely.",
+        "Use a copy of DefaultRelabelConfig with SourceLabels=[\"optional_zone\"], TargetLabel=\"zone\" and NameValidationScheme=model.UTF8Validation; validate with UTF8Validation, preserving default replace/(.*)/$1 semantics.",
+        "Cover ProcessBuilder with a following rule reading zone and resetting/reusing the same builder across absent, explicitly empty and nonempty inputs.",
+        "Preserve existing explicit-empty/nonempty, regex-nonmatch, multi-source and unrelated-action behavior; caller input labels and shared configs remain reusable.",
+        "Add/run focused existing relabel regressions and required lint, summarize changes, and retain public callers/APIs in the existing implementation; an optional small Builder presence helper is allowed.",
+        "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
+      ],
+      "authoringSourceSha256": "abfd0733ec6781851d2baabd2fc483f526ffb1592d6c68ad9fa35b8e5d2f3801",
+      "canonicalSha256": "237cb59a316139cc776276dcb076936a38dd18ea7685c3936166891606b1fe10",
+      "sourceBindingSha256": "33199176b48e2b84f7a25be7b723080ea9936515e868a8f449149da5cbbc45ce"
+    },
+    {
+      "case": "uv-release-checksum-conflict",
+      "slot": "investigation",
+      "side": null,
+      "requirements": [
+        "Inspect scripts/patch-dist-manifest-checksums.py with temporary manifests/archives: valid sidecar, 64-character non-hex value, conflicting existing SHA-256 and unknown artifact.",
+        "Check whether a later malformed sidecar can leave an earlier update written, then explain current behavior.",
+        "Investigate and explain first; leave implementation and tests unchanged until a later user assignment."
+      ],
+      "authoringSourceSha256": "30a66728657419b7f26c1b07affbc081af72cc057484f56aa403f2a4bcf11697",
+      "canonicalSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "sourceBindingSha256": "8c8c998a2726a1ea6a735426cb7ba08fa09b1dc1efd28a49ff9b32016a57a06d"
+    },
+    {
+      "case": "uv-release-checksum-conflict",
+      "slot": "implementation",
+      "side": "a",
+      "requirements": [
+        "For an existing matching artifact SHA-256 of 64 a characters and sidecar of 64 b characters, CLI exits 0 and replaces checksum with the b value: sidecar is authoritative.",
+        "Validate hexadecimal SHA-256, preserve unrelated metadata/checksum algorithms and documented unmatched-sidecar handling.",
+        "Validate the whole update before replacing the manifest, so later malformed input cannot leave earlier changes written.",
+        "Add/run subprocess regressions for success, conflict, malformed later input, empty/no-match input and repeats; summarize success/failure and when files change.",
+        "Use local fixtures only; do not build, upload or publish releases.",
+        "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
+      ],
+      "authoringSourceSha256": "d081e0616cfbf6090126c6c22f4c8d3f25047638570df2ae5ce9fde34e761457",
+      "canonicalSha256": "f2b52e5f7a1caa1c4507e8534d1fb858a78bf31510b8ea7f8e627fcae2214eeb",
+      "sourceBindingSha256": "8c8c998a2726a1ea6a735426cb7ba08fa09b1dc1efd28a49ff9b32016a57a06d"
+    },
+    {
+      "case": "uv-release-checksum-conflict",
+      "slot": "implementation",
+      "side": "b",
+      "requirements": [
+        "For an existing matching artifact SHA-256 of 64 a characters and sidecar of 64 b characters, CLI exits nonzero and leaves the entire manifest byte-for-byte unchanged: conflict is an error.",
+        "Validate hexadecimal SHA-256, preserve unrelated metadata/checksum algorithms and documented unmatched-sidecar handling.",
+        "Validate the whole update before replacing the manifest, so later malformed input cannot leave earlier changes written.",
+        "Add/run subprocess regressions for success, conflict, malformed later input, empty/no-match input and repeats; summarize success/failure and when files change.",
+        "Use local fixtures only; do not build, upload or publish releases.",
+        "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
+      ],
+      "authoringSourceSha256": "55820924ffe8434f8b7e774e838aa9c21226c5044206c40f16aecdd253288bbf",
+      "canonicalSha256": "d8a4bf0faab4a7f412e894d259a008100f5d0d15548ee61dcc9da412d597372b",
+      "sourceBindingSha256": "8c8c998a2726a1ea6a735426cb7ba08fa09b1dc1efd28a49ff9b32016a57a06d"
+    }
+  ]
+}

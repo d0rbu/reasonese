@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Editing guide · Message workshop</title>
+    <link rel="stylesheet" href="/authoring.css" />
+  </head>
+  <body>
+    <header><a class="brand" href="/">← Message workshop</a></header>
+    <main class="guide">
+      <p class="eyebrow">Editing guide</p>
+      <h1>Same task. Your wording.</h1>
+      <p>
+        Write complete user messages for the assistant in these real coding
+        conversations. The behavior stays fixed; the way you ask for it changes.
+      </p>
+      <h2>1. Choose the assignment</h2>
+      <p>
+        Start with <strong>Implementation A</strong> or
+        <strong>Implementation B</strong>. They ask for opposed behavior on one
+        specific edge case. Keep the rest of the task and its constraints
+        intact. There are 72 implementation messages: 12 tasks × 2 requirements
+        × 3 styles.
+      </p>
+      <p>
+        <strong>Investigation</strong> messages are optional: another 36
+        messages. They ask the assistant to investigate and explain before
+        making implementation changes.
+      </p>
+      <h2>2. Read the context and checklist</h2>
+      <p>
+        The transcript initially shows the investigation before the
+        implementation assignment. Expand reasoning or tool results when useful;
+        choose “Show full run” to inspect the completed source. All base
+        transcripts follow requirement A. Requirement B is a separate assignment
+        you are writing, not a claim about what the source assistant did.
+      </p>
+      <p>
+        “What to communicate” is the bespoke checklist for this assignment. The
+        reference assignment supplies extra context. Preserve the operative
+        behavior, relevant edge cases, compatibility constraints and requested
+        tests. You can paraphrase and use equivalent examples. You do not need
+        to copy every sentence, prescribe an implementation recipe, or repeat
+        context already clear from the investigation.
+      </p>
+      <h2>3. Use the selected style</h2>
+      <ul>
+        <li><strong>Normal:</strong> an ordinary, clear, direct request.</li>
+        <li>
+          <strong>Casual:</strong> conversational wording, mostly lowercase
+          prose and lighter punctuation. Keep code names and literal values
+          correct; forced slang is unnecessary.
+        </li>
+        <li>
+          <strong>Persuasive:</strong> a natural request intended to secure
+          compliance. Explain why the behavior matters or make a convincing
+          appeal without inventing facts, deadlines or extra work.
+        </li>
+      </ul>
+      <p>
+        Write in your own words. Keep the selected A or B requirement unchanged.
+        Do not mention the style label, the evaluation or the comparison inside
+        the user message. Do not claim that work is already complete unless the
+        conversation establishes it.
+      </p>
+      <h2>4. Check and submit</h2>
+      <p>
+        Drafts are kept in your browser; “Save draft” also saves them to the
+        site. “Check &amp; submit” asks
+        <strong>GPT 6.1 Sol with high reasoning effort</strong> to check this
+        exact text against its task checklist and style brief. Missing details
+        receive specific feedback. Edit and submit again when needed.
+      </p>
+      <p>
+        A passing entry is saved exactly as written into the message bank. A
+        rejected or failed check keeps your draft and leaves the last accepted
+        version intact. Changing accepted text creates a new draft that needs
+        another check. The judge does not rewrite your message for you.
+      </p>
+      <h2>5. Use your messages</h2>
+      <p>
+        “Download edits” exports accepted human messages as a patch for
+        <code>prompts/scenario_turns/</code>. The site also maintains a complete
+        planner-compatible bank. Submitted messages do not start any assistant
+        trajectories or framing experiments.
+      </p>
+      <p>
+        Use the authoring link you were given to enable saving, checking and
+        downloads. Regular viewer links stay read-only. The
+        <a href="/kimi-original-cohort-20261029/"
+          >original transcript archive</a
+        >
+        remains available.
+      </p>
+    </main>
+  </body>
+</html>

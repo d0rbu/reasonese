@@ -136,3 +136,9 @@ Pi's native history. Editable full-turn inputs live in
 `tools/pi-transcripts/fetch-sources.py` verifies and unpacks full sources or smaller
 context-only bundles. `configs/native_pi_example.yaml` is an offline planning
 example, not a collected result or authorization for inference.
+
+`tools/pi-authoring/` serves the native transcript workshop, human draft/editor and
+GPT 6.1 Sol high submission checks. `configs/pi_authoring_rubrics.json` binds the
+36 bespoke assignment checklists to their exact sources; `tests/test_pi_authoring.py`
+checks HTTP access, fail-closed paid checks and exact-text persistence. See the
+[workshop guide](../../tools/pi-authoring/README.md) for deployment and exports.
