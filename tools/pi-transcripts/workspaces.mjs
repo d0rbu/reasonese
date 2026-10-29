@@ -1,9 +1,10 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, sep } from "node:path";
 import { promisify } from "node:util";
 import { projectDir, sandboxGit, sandboxTools, toolDir } from "./sandbox.mjs";
+import { neutralRuntime, preparedCase } from "./backing.mjs";
 import { prepareEnvironment, validateEnvironment } from "./environments.mjs";
 
 const exec = promisify(execFile);
@@ -11,11 +12,17 @@ export const MODEL = "deepseek/deepseek-v4.1-flash-1017";
 export const KIMI_MODEL = "moonshotai/kimi-k3.1-pro";
 export const PI_VERSION = "0.73.1";
 export const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+export function sha256File(filename) {
+  const hash = createHash("sha256"), buffer = Buffer.alloc(1024 * 1024), fd = openSync(filename, "r");
+  try { let size; while ((size = readSync(fd, buffer, 0, buffer.length, null))) hash.update(buffer.subarray(0, size)); }
+  finally { closeSync(fd); }
+  return hash.digest("hex");
+}
 export const readJson = (filename) => JSON.parse(readFileSync(filename, "utf8"));
 export const writeJson = (filename, value) => writeFileSync(filename, JSON.stringify(value, null, 2) + "\n");
 
 export async function git(cwd, ...args) {
-  const result = await exec("git", ["-c", "core.hooksPath=/dev/null", "-c", "core.autocrlf=false", ...args], {
+  const result = await exec("git", ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "core.autocrlf=false", ...args], {
     cwd, maxBuffer: 32 * 1024 * 1024, timeout: 1_800_000,
     env: { PATH: "/usr/bin:/bin", LANG: "C.UTF-8", GIT_TERMINAL_PROMPT: "0",
       GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null" },
@@ -66,8 +73,8 @@ export function collectorIdentity() {
     if (installed.version !== PI_VERSION) throw new Error(`Unexpected installed ${name}; run npm ci`);
   }
   return {
-    pi: PI_VERSION, node: process.version,
-    files: Object.fromEntries(["package-lock.json", "collect.mjs", "workspaces.mjs", "environments.mjs", "trajectory.mjs", "sandbox.mjs", "tool-worker.mjs", ...readdirSync(toolDir).filter(n => n.startsWith("baseline_")).sort()].map((name) =>
+    pi: PI_VERSION, node: process.version, runtime: neutralRuntime(),
+    files: Object.fromEntries(["package.json", "package-lock.json", "collect.mjs", "workspaces.mjs", "environments.mjs", "trajectory.mjs", "sandbox.mjs", "tool-worker.mjs", "network-worker.mjs", "backing.mjs", "checkpoints.mjs", "restore-checkpoint.py", ...readdirSync(toolDir).filter(n => n.startsWith("baseline_")).sort()].map((name) =>
       [name, sha256(readFileSync(join(toolDir, name)))])),
     pythonLock: sha256(readFileSync(join(projectDir, "uv.lock"))),
   };
@@ -142,7 +149,7 @@ export async function prepare(manifest, output, sourceDirectory = join(dirname(o
   const failure = fetched.find((result) => result.status === "rejected");
   if (failure) throw failure.reason;
   for (const scenario of manifest.scenarios) {
-    const caseDir = join(output, scenario.id);
+    const caseDir = preparedCase(join(output, scenario.id));
     const cwd = join(caseDir, "workspace");
     const cache = caches.get(scenario.repository + scenario.revision);
     mkdirSync(caseDir, { recursive: true });
@@ -152,11 +159,16 @@ export async function prepare(manifest, output, sourceDirectory = join(dirname(o
       await git(caseDir, "clone", "--no-hardlinks", "--no-checkout", cache, cwd);
       await git(cwd, "checkout", "--detach", scenario.revision);
       await git(cwd, "remote", "set-url", "origin", scenario.repository);
-      await git(cwd, "config", "user.name", "Transcript Collector");
-      await git(cwd, "config", "user.email", "collector@example.invalid");
       await git(cwd, "config", "commit.gpgSign", "false");
       await git(cwd, "config", "core.hooksPath", "/dev/null");
     }
+    await git(cwd, "config", "user.name", "Developer");
+    await git(cwd, "config", "user.email", "developer@localhost");
+    // Local-cache cloning records private host paths/identity in setup reflogs.
+    // No trajectory has started here; subsequent assistant Git work gets normal
+    // reflogs with the developer identity and neutral tool-visible paths.
+    rmSync(join(cwd, ".git/logs"), { recursive: true, force: true });
+    await git(cwd, "config", "core.logAllRefUpdates", "true");
     const context = await verifyWorkspace(cwd, scenario);
     for (const source of scenario.sourceFiles ?? []) {
       const path = realpathSync(join(cwd, source));
@@ -172,7 +184,7 @@ export async function prepare(manifest, output, sourceDirectory = join(dirname(o
       writeFileSync(join(caseDir, `baseline-failed-${sha256(failed)}.json`), failed);
     }
     try {
-      check = await sandboxTools(cwd, join(caseDir, "tool-state"), Math.max(600, manifest.toolTimeoutSeconds), pythonEnvironment?.path, toolEnvironment)
+      check = await sandboxTools(cwd, join(caseDir, "setup-tool-state"), Math.max(600, manifest.toolTimeoutSeconds), pythonEnvironment?.path, { ...toolEnvironment, preparation: true })
         .find((tool) => tool.name === "bash").execute("preflight", { command });
       writeJson(join(caseDir, "baseline.json"), { command, result: check });
     } catch (error) {

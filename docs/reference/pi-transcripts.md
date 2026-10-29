@@ -33,7 +33,8 @@ rejected by the current base-collection command.
 
 ## Prepare without model calls
 
-Use Linux amd64 with Bubblewrap, Git, Node.js 22 or newer, uv, and Bun 1.3.12
+Use Linux amd64 with Bubblewrap, unshare, slirp4netns, nftables, Git, rg,
+Node.js 22 or newer, npm, uv, and Bun 1.3.12
 (default `~/.bun/bin/bun`, or set `PI_BUN_PATH`):
 
 ```bash
@@ -59,11 +60,14 @@ See [validation scope](../research/remaining-scenario-pilots.md#preparation-and-
 for the exact boundaries. No full monorepo build, submodules, Docker daemon, cloud
 CI execution or release publication is required.
 
-Each tool subprocess has its own network namespace, writable checkout and private
-temporary/home directories, read-only runtime/dependency mounts, and no host API
-credentials. Pi extensions, skills, ancestor instructions and personal settings are
-excluded. Git remotes are never pushed. Go's module network access is also disabled
-inside tools; dependencies are resolved before collection.
+Each tool subprocess has its own routed network namespace, neutral checkout/cwd,
+private temporary/home directories, writable task-owned dependency caches and
+read-only shared runtimes, with no host API credentials. Public development
+network access is allowed while host loopback, private networks and metadata
+addresses are blocked by an outer-namespace firewall. Pi extensions, skills, ancestor instructions and personal settings are
+excluded. Git remotes are never pushed. Dependencies are resolved before collection and tools can download additional
+public dependencies. See the [development environment](pi-development-environment.md)
+for exact mounts, network boundaries, tools and complete per-turn checkpoints.
 
 Preparation may refresh collector hashes before any session has started; previous
 plans are retained. A changed manifest or any existing trajectory requires a fresh
@@ -156,6 +160,7 @@ Each `<scenario>/trajectory/` contains:
 | `sessions/*.jsonl` | Pi's native session format, including tool calls, results, model messages, usage, and stop reasons |
 | `events.jsonl`, `messages.json` | Full Pi event stream and final ordered message list, including partial/error messages |
 | `http/*.request.json`, `http/*.response.*` | Actual request payloads, HTTP status, and raw response/SSE bytes; authorization headers are excluded |
+| `turns/NNN.workspace.tar.gz`, `turns/NNN.workspace.json` | Complete task state before collection and after each user turn, including Git, ignored/untracked files, mutable dependencies and home/tmp; hash and Git-state receipt |
 | `changes.patch`, `outcome.json` | Tracked changes including local commits, terminal status, Git status/log, request/tool counts, usage, and hashes of every retained transcript artifact |
 
 The adjacent `workspace/` and `tool-state/` remain available, including untracked files,

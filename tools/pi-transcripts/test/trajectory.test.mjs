@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createServer } from "node:http";
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import test from "node:test";
 import { main, selectScenarios } from "../collect.mjs";
-import { projectDir, sandboxArgs, sandboxTools } from "../sandbox.mjs";
+import { neutralCwd, projectDir, sandboxArgs, sandboxTools } from "../sandbox.mjs";
 import { captureTransport, modelMetadata, runTrajectory, verifyCompleted } from "../trajectory.mjs";
 import { collectorIdentity, contextFile, git, KIMI_MODEL, loadManifest, MODEL, prepare, readJson, writeJson } from "../workspaces.mjs";
 
@@ -67,7 +67,7 @@ function completion(res, index, call = null, finish = "stop", { model = MODEL, r
   res.end("data: [DONE]\n\n");
 }
 
-test("real Pi agent loop runs all four real tools and persists the complete trajectory", { timeout: 60_000 }, async (t) => {
+test("real Pi agent loop runs all four real tools and persists the complete trajectory", { timeout: 180_000 }, async (t) => {
   const setup = await fixture(t);
   const calls = [
     ["read", { path: "README.md" }],
@@ -90,7 +90,11 @@ test("real Pi agent loop runs all four real tools and persists the complete traj
   assert.equal(readJson(join(evidence, "provenance.json")).kind, "offline_test_fixture");
   const system = readFileSync(join(evidence, "system.txt"), "utf8");
   assert.match(system, /Offline fixture: include the observed/);
-  assert.doesNotMatch(system, /Shared GPU spending policy|AGENTS.md - reasonese/);
+  assert.doesNotMatch(system, /Shared GPU spending policy|AGENTS.md - reasonese|\/reasonese\/|\.codex\/|pi-fixture-/);
+  assert.match(system, /Current working directory: \/home\/developer\/project/);
+  assert.equal(system.match(/Current date:/g).length, 1);
+  assert.ok(result.artifactHashes["turns/000.workspace.tar.gz"]);
+  assert.ok(result.artifactHashes["turns/001.workspace.tar.gz"]);
   const messages = readJson(join(evidence, "messages.json"));
   assert.equal(messages[0].role, "user");
   assert.equal(messages[0].content[0].text, setup.scenario.prompt);
@@ -205,17 +209,17 @@ test("Python launcher aliases preserve the project interpreter inside the sandbo
   symlinkSync(launcher, join(environment, "bin/python"));
   writeFileSync(join(environment, "pyvenv.cfg"), readFileSync(join(projectDir, ".venv/pyvenv.cfg")));
   const result = spawnSync("bwrap", sandboxArgs(cwd, join(caseDir, "tool-state"), environment), {
-    input: JSON.stringify({ cwd, name: "bash", id: "python-alias", parameters: {
+    input: JSON.stringify({ cwd: neutralCwd(), name: "bash", id: "python-alias", parameters: {
       command: "python -c 'import sys; print(sys.prefix); print(sys.version_info[:2])'",
     } }), encoding: "utf8", env: { PATH: "/usr/bin:/bin" }, timeout: 10_000,
   });
   assert.equal(result.status, 0, result.stderr);
   const output = JSON.parse(result.stdout);
   assert.equal(output.error, undefined, output.error);
-  assert.equal(output.result.content[0].text, `${environment}\n(3, 13)\n`);
+  assert.equal(output.result.content[0].text, `${"/home/developer/.venv"}\n(3, 13)\n`);
 });
 
-test("preparation checks out exact commits from cached refs with independent Git objects", { timeout: 60_000 }, async (t) => {
+test("preparation checks out exact commits from cached refs with independent Git objects", { timeout: 180_000 }, async (t) => {
   const setup = await fixture(t);
   const scenario = { ...setup.scenario, repository: `file://${setup.cwd}` };
   const second = { ...scenario, id: "second-fixture" };
@@ -224,6 +228,9 @@ test("preparation checks out exact commits from cached refs with independent Git
   await prepare(plan, output, join(setup.caseDir, "sources"));
   const firstCwd = join(output, scenario.id, "workspace");
   const secondCwd = join(output, second.id, "workspace");
+  const physicalCases = [firstCwd, secondCwd].map(path => dirname(realpathSync(path)));
+  t.after(() => physicalCases.forEach(path => rmSync(dirname(path), { recursive: true, force: true })));
+  physicalCases.forEach(path => assert.doesNotMatch(path, /reasonese|\.codex/));
   assert.equal((await git(firstCwd, "rev-parse", "HEAD")).trim(), scenario.revision);
   assert.equal((await git(secondCwd, "rev-parse", "HEAD")).trim(), scenario.revision);
   assert.equal(readFileSync(join(firstCwd, "README.md"), "utf8"), readFileSync(join(setup.cwd, "README.md"), "utf8"));
@@ -232,9 +239,14 @@ test("preparation checks out exact commits from cached refs with independent Git
   assert.ok(pack);
   assert.notEqual(statSync(join(firstCwd, packs, pack)).ino, statSync(join(secondCwd, packs, pack)).ino);
   assert.equal(readJson(join(output, scenario.id, "prepared.json")).context.resolvedPath, "CLAUDE.md");
+  assert.equal(existsSync(join(firstCwd, ".git/logs")), false);
+  assert.equal(existsSync(join(secondCwd, ".git/logs")), false);
   writeFileSync(join(firstCwd, "new.txt"), "first workspace only");
   await git(firstCwd, "add", "new.txt");
   await git(firstCwd, "commit", "-m", "test: independent commit");
+  const reflog = readFileSync(join(firstCwd, ".git/logs/HEAD"), "utf8");
+  assert.match(reflog, /Developer <developer@localhost>/);
+  assert.doesNotMatch(reflog, /reasonese|\.codex|clone: from/);
   assert.equal((await git(secondCwd, "status", "--porcelain")).trim(), "");
   assert.equal((await git(secondCwd, "rev-parse", "HEAD")).trim(), scenario.revision);
   mkdirSync(join(output, scenario.id, "trajectory"));
@@ -263,9 +275,9 @@ test("prepared tool dependencies are readable, immutable, and do not expose sibl
   mkdirSync(dependency);
   writeFileSync(join(dependency, "value"), "dependency fixture\n");
   writeFileSync(join(caseDir, "private.txt"), "not exposed");
-  const environment = { readOnlyPaths: [dependency], path: [], env: { PI_DEPENDENCY: dependency } };
+  const environment = { mounts: [{ source: dependency, target: "/opt/dependency" }], path: [], env: { DEPENDENCY: dependency } };
   const bash = sandboxTools(cwd, join(caseDir, "tool-state"), 10, undefined, environment).find(t => t.name === "bash");
-  const result = await bash.execute("check-dependency", { command: `python - <<'PY'\nimport os\nfrom pathlib import Path\np = Path(os.environ['PI_DEPENDENCY']) / 'value'\nassert p.read_text() == 'dependency fixture\\n'\nassert not (p.parent.parent / 'private.txt').exists()\ntry:\n p.write_text('changed')\nexcept OSError:\n print('read-only dependency')\nelse:\n raise AssertionError('writable dependency')\nPY` });
+  const result = await bash.execute("check-dependency", { command: `python - <<'PY'\nimport os\nfrom pathlib import Path\np = Path(os.environ['DEPENDENCY']) / 'value'\nassert p.read_text() == 'dependency fixture\\n'\nassert not (p.parent.parent / 'private.txt').exists()\ntry:\n p.write_text('changed')\nexcept OSError:\n print('read-only dependency')\nelse:\n raise AssertionError('writable dependency')\nPY` });
   assert.match(result.content[0].text, /read-only dependency/);
   assert.equal(readFileSync(join(dependency, "value"), "utf8"), "dependency fixture\n");
 });

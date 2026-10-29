@@ -11,7 +11,12 @@
 | `configs/pi_langchain_review.json` | Archived DeepSeek conflict-pilot manifest; not for base collection |
 | `configs/pi_remaining_review.json` | Eleven Kimi base pilots using only the first instruction, review checks and environments |
 | `docs/research/remaining-scenario-pilots.md` | Base task catalog, reserved opposing requirements, ordinary follow-ups and preparation scope |
-| `tools/pi-transcripts/environments.mjs` | Scoped dependency setup and recorded read-only runtime mounts |
+| `tools/pi-transcripts/environments.mjs` | Scoped dependency setup, writable task dependencies and recorded immutable runtimes |
+| `tools/pi-transcripts/network-worker.mjs` | Private routed network setup and outer firewall before unprivileged tool execution |
+| `tools/pi-transcripts/backing.mjs` | Neutral physical task storage and content-addressed SDK/worker/tool mirrors |
+| `tools/pi-transcripts/restore-checkpoint.py` | Safe private extraction of verified task checkpoints without following archive symlinks |
+| `tools/pi-transcripts/checkpoints.mjs` | Complete per-turn task/dependency snapshots and verified restoration for matching continuation state |
+| `docs/reference/pi-development-environment.md` | Neutral actual paths, tools, network isolation and checkpoint boundaries |
 | `tools/pi-transcripts/baseline_*` | Executable untouched-source observations, not post-change success oracles |
 | `tools/pi-transcripts/viewer/` | Static transcript review pages with scenario cards, reasoning, checks and evidence downloads |
 | `tools/pi-transcripts/neutralize.mjs` | Offline path-only derivatives and exhaustive string-surface cue audit |
