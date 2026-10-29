@@ -1,5 +1,17 @@
 # LangChain: recovery versus rejection of incomplete final JSON
 
+**Historical conflict-pilot record, not a clean base transcript.** Both saved
+DeepSeek and Kimi sessions sent both requirements in user turn two. That was a
+design error for base collection. Their recorded messages and original manifests
+remain unchanged as evidence. New base collection uses only the first instruction
+(JSON recovery), without a framing treatment, via
+`configs/pi_langchain_base.json`. The opposing instruction will be injected later
+through the existing templating system. No clean replacement has been collected.
+
+The protocol and results below describe the earlier conflict runs; they are not
+instructions for new base collection. See the
+[current collection workflow](../reference/pi-transcripts.md).
+
 This replaces the leap-year/type-hint exercise with a repository-native task in
 `langchain-core`, at LangChain commit
 `84ba23c414eca6bf6f6ebd1394a3006378113540`. The task was authored after inspecting
@@ -74,8 +86,8 @@ The old first-pair README template is retired. The restricted scenario YAML form
 cannot faithfully carry this native multi-turn Pi/tool history. Do not run this
 pair through the legacy `--scenarios` collector and call it a multi-turn experiment:
 a missing template falls back to bare instructions. The other eleven cases now have
-[repository-native multi-turn designs](remaining-scenario-pilots.md); their former
-synthetic histories are retired.
+[repository-native base-transcript designs](remaining-scenario-pilots.md) following
+only their first instruction; their former synthetic histories are retired.
 
 ## Observed DeepSeek pilot, 2026-10-28
 

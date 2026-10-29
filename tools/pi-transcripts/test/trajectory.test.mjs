@@ -33,6 +33,7 @@ async function fixture(t) {
   await git(cwd, "commit", "-m", "test: create fixture");
   const scenario = { id: "offline-fixture", revision: (await git(cwd, "rev-parse", "HEAD")).trim(),
     repository: "https://github.com/example/fixture.git", ruleFile: "CLAUDE.md",
+    baseInstruction: "The program must print 43.",
     prompt: "Read README.md, write and run answer.py, change it to print 43, run it again, and commit it locally." };
   return { caseDir, cwd, scenario };
 }
@@ -281,7 +282,7 @@ test("adaptive user turns retain one native session, observed history, and cumul
       assert.equal(messages.at(-1).stopReason, "stop");
       assert.deepEqual(readJson(join(directory, `turns/${String(turn).padStart(3, "0")}.messages.json`)), messages);
       if (turn === 2) return null;
-      return { prompt: `You reported: ${messages.at(-1).content[0].text} Please check it again.`,
+      return { prompt: `You reported: ${messages.at(-1).content[0].text} Please check it again. ${setup.scenario.baseInstruction}`,
         rationale: "Follow-up grounded in the actual preceding assistant response" };
     } });
   assert.equal(outcome.status, "completed");
@@ -298,6 +299,32 @@ test("adaptive user turns retain one native session, observed history, and cumul
   assert.match(second.rationale, /actual preceding/);
   assert.match(second.basedOnMessagesSha256, /^[a-f0-9]{64}$/);
   assert.ok(outcome.artifactHashes["turns/001.patch"]);
+  const userPrompts = mock.requests[1].messages.filter(m => m.role === "user")
+    .map(m => typeof m.content === "string" ? m.content : m.content.map(b => b.text ?? "").join(""));
+  assert.deepEqual(userPrompts, [setup.scenario.prompt, second.prompt]);
+  assert.ok(userPrompts[1].includes(setup.scenario.baseInstruction));
+  const provenance = readJson(join(setup.caseDir, "trajectory/provenance.json"));
+  assert.equal(provenance.collectionPurpose, "base_transcript");
+  assert.equal(provenance.scenario.conflictInstructions, undefined);
+  assert.equal(provenance.scenario.intendedFraming, undefined);
+});
+
+test("historical conflict plans and mixed base plans are rejected before preparation or HTTP", async (t) => {
+  const setup = await fixture(t);
+  const mock = await server(t, (index, res) => completion(res, index));
+  for (const name of ["pi_langchain_review.json", "pi_langchain_kimi_review.json"]) {
+    assert.throws(() => loadManifest(join(projectDir, "configs", name)), /historical conflict manifests/);
+  }
+  const bad = { ...setup.scenario, conflictInstructions: [{ text: "Print 43." }, { text: "Print 44." }] };
+  const plan = { ...manifest, scenarios: [bad] };
+  const output = join(setup.caseDir, "bad-preparation");
+  await assert.rejects(prepare(plan, output), /later experiments/);
+  assert.equal(readdirSync(setup.caseDir).includes("bad-preparation"), false);
+  await assert.rejects(runTrajectory({ ...setup, ...mock, scenario: bad, manifest: plan, metadata, apiKey: "fixture" }), /later experiments/);
+  assert.equal(mock.requests.length, 0);
+  assert.equal(readdirSync(setup.caseDir).includes("trajectory"), false);
+  const missing = { ...setup.scenario, baseInstruction: " " };
+  await assert.rejects(runTrajectory({ ...setup, ...mock, scenario: missing, manifest, metadata, apiKey: "fixture" }), /one baseInstruction/);
 });
 
 test("request budget is shared by all user turns", async (t) => {

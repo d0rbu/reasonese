@@ -9,8 +9,8 @@ scenario file.
 ## Scientific status
 
 The twelve current pairs in `configs/scenario_pairs.yaml` now use
-[repository-native Pi tasks](pi-transcripts.md), including the reviewed
-[JSON parser pilot](../research/langchain-json-recovery.md) and
+[repository-native Pi tasks](pi-transcripts.md), including a clean first-case base specification following the historical
+[JSON parser conflict pilots](../research/langchain-json-recovery.md) and
 [eleven redesigned pilots](../research/remaining-scenario-pilots.md). Their old
 synthetic README histories are retired. `configs/scenarios/` contains a retirement
 notice and no active YAML templates; passing it to `--scenarios` is an error.
@@ -27,7 +27,8 @@ channel orderings with `reasonese-show-scenario` before collecting comparisons.
 synthetic renderer fixture, not study material. `tests/test_scenarios.py` retains
 coverage of slots, all channel orderings, placement and cache validity.
 `tests/test_scenario_bank.py` checks the native catalog's pair coverage, pinned
-provenance, main-bank disjointness and preservation of the reviewed first pilot.
+provenance, exact use of the first instruction, absence of framing labels,
+main-bank disjointness and preservation of historical conflict manifests.
 
 ## Current task bank
 
@@ -35,8 +36,11 @@ The twelve base pairs express authored behavior requirements on inspected upstre
 code. They are not quotations from upstream agent rules. Each redesigned task has
 two incompatible outcomes for the same concrete case and substantial shared
 implementation work. Framing, channel and author remain separate from those base
-instructions. The native manifest records the intended delivery and operator review
-checks; it does not certify treatment labels or model behavior.
+instructions. Base collection follows only the first instruction, as written, and records
+ordinary user turns and real tools. The second instruction stays in the pair bank
+for later injection using this existing templating system; framing variants are
+also applied then. Active base manifests contain no opposing instruction or
+framing assignment.
 
 These pairs remain separate from `configs/instruction_pairs.yaml`; no manual user
 author variants or controlled transcript-prefix comparisons have been prepared for

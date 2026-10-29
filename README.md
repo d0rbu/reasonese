@@ -309,17 +309,23 @@ input positions can be inspected before collection. See
 The old authored README histories in `configs/scenarios/` are retired.
 
 For source transcripts with actual tool execution, the [Pi collection workflow](docs/reference/pi-transcripts.md)
-checks out pinned real repositories and records Pi's actual tool use. All twelve
-cases now have repository-native behavior conflicts and adaptive user follow-ups.
-The reviewed [JSON parser pilot](docs/research/langchain-json-recovery.md) is unchanged;
-the [other eleven designs](docs/research/remaining-scenario-pilots.md) cover CI, secret
-redaction, requirement parsing, relabeling, release checksums, watch patterns,
-build options, dotenv loading and runnable fallbacks. `configs/pi_remaining_review.json`
-selects Kimi K3.1 Pro for those eleven pilots. Preparation makes no model calls;
-collection requires explicit authorization and a separate `--allow-paid --interactive`
-invocation selecting one scenario. Complete sessions are retained for later scenario
-construction, with no fabricated README reads. Source sessions remain separate
-from controlled study observations.
+checks out pinned real repositories and records Pi's actual tool use. Each base
+transcript follows only the **first instruction** of its pair through ordinary
+investigation, implementation and observed follow-ups. The active manifests carry
+that instruction as written, with no opposing requirement or framing label. The
+existing templating system will inject conflicts and framing variants later.
+
+The [remaining eleven tasks](docs/research/remaining-scenario-pilots.md) cover CI,
+secret redaction, requirements, relabeling, release checksums, watch patterns,
+build options, dotenv loading and runnable fallbacks; use
+`configs/pi_remaining_review.json` for their Kimi base pilots. The earlier
+[JSON parser runs](docs/research/langchain-json-recovery.md) actually included both
+requirements and are retained as historical conflict pilots. A clean first-case
+Kimi base is specified in `configs/pi_langchain_base.json`.
+
+Preparation makes no model calls. Collection requires explicit authorization and
+`--allow-paid --interactive`, selecting one scenario. None of the clean bases has
+been collected. Source transcripts remain separate from later templated comparisons.
 
 ## Writing the manual variants
 

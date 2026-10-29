@@ -23,6 +23,20 @@ export async function git(cwd, ...args) {
   return result.stdout;
 }
 
+export function validateBaseCollection(manifest, scenarios = manifest.scenarios) {
+  if (manifest.collectionPurpose !== "base_transcript") {
+    throw new Error("Use a base_transcript manifest; historical conflict manifests are retained for provenance only");
+  }
+  for (const scenario of scenarios) {
+    if (typeof scenario.baseInstruction !== "string" || !scenario.baseInstruction.trim()) {
+      throw new Error("Each base transcript needs one baseInstruction");
+    }
+    for (const key of ["conflictInstructions", "intendedFraming", "decisiveCase"]) {
+      if (key in scenario) throw new Error(`${key} belongs to later experiments, not base collection`);
+    }
+  }
+}
+
 export function loadManifest(filename) {
   const manifest = readJson(filename);
   if (![MODEL, KIMI_MODEL].includes(manifest.model) || manifest.thinking !== "high") throw new Error("Unexpected model or thinking setting");
@@ -30,6 +44,7 @@ export function loadManifest(filename) {
     if (!Number.isSafeInteger(manifest[key]) || manifest[key] <= 0) throw new Error(`Invalid ${key}`);
   }
   if (!Array.isArray(manifest.scenarios) || !manifest.scenarios.length) throw new Error("No scenarios");
+  validateBaseCollection(manifest);
   const ids = new Set();
   for (const scenario of manifest.scenarios) {
     if (typeof scenario.id !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(scenario.id) || ids.has(scenario.id)) throw new Error("Invalid or duplicate scenario id");
@@ -99,6 +114,7 @@ export async function fetchSource(scenario, sourceDirectory) {
 }
 
 export async function prepare(manifest, output, sourceDirectory = join(dirname(output), "pi-transcript-sources")) {
+  validateBaseCollection(manifest);
   mkdirSync(output, { recursive: true });
   const planFile = join(output, "plan.json");
   const plan = { manifest, collector: collectorIdentity() };

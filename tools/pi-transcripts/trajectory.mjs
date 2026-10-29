@@ -5,7 +5,7 @@ import {
   SessionManager, SettingsManager,
 } from "@mariozechner/pi-coding-agent";
 import { sandboxGit, sandboxTools } from "./sandbox.mjs";
-import { collectorIdentity, MODEL, readJson, sha256, verifyWorkspace, writeJson } from "./workspaces.mjs";
+import { collectorIdentity, MODEL, readJson, sha256, validateBaseCollection, verifyWorkspace, writeJson } from "./workspaces.mjs";
 
 function hasFinalAnswer(messages) {
   const last = messages.at(-1);
@@ -111,6 +111,7 @@ export function captureTransport(directory, manifest, baseUrl) {
 
 export async function runTrajectory({ manifest, scenario, caseDir, metadata, apiKey,
   fixtureEndpoint = null, nextTurn = null }) {
+  validateBaseCollection(manifest, [scenario]);
   if ((scenario.maxUserTurns ?? 1) > 1 && !nextTurn) throw new Error("Multi-turn scenarios require an interactive operator");
   const baseUrl = fixtureEndpoint ?? "https://openrouter.ai/api/v1";
   if (fixtureEndpoint && !/^http:\/\/127\.0\.0\.1:\d+\/v1$/.test(fixtureEndpoint)) throw new Error("Fixtures must use localhost");
@@ -122,6 +123,7 @@ export async function runTrajectory({ manifest, scenario, caseDir, metadata, api
   mkdirSync(directory);
   const provenance = {
     kind: fixtureEndpoint ? "offline_test_fixture" : "live_pi_session", scenario,
+    collectionPurpose: manifest.collectionPurpose,
     manifest, collector: collectorIdentity(), modelMetadata: metadata,
     context, startedAt: new Date().toISOString(), taskSuccess: "unjudged",
     pythonEnvironment: existsSync(join(caseDir, "prepared.json")) ? readJson(join(caseDir, "prepared.json")).pythonEnvironment : undefined,

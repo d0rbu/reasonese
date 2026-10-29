@@ -10,20 +10,24 @@ The manifest selects exactly `deepseek/deepseek-v4.1-flash-1017` or
 actual HTTP request are checked for that model; there is no substitution, fallback
 model, authoring model or judge in this collection stage.
 
-`configs/pi_transcripts.json` holds twelve repository-native tasks with pinned
-commits and conflicting behavior requirements. The reviewed
-[LangChain JSON parser task](../research/langchain-json-recovery.md) replaces the
-original leap-year exercise. The [other eleven tasks](../research/remaining-scenario-pilots.md)
-now have comparable investigation/implementation protocols, source references,
-exclusive cases, shared requirements and review checks. Their dedicated manifest,
-`configs/pi_remaining_review.json`, selects Kimi K3.1 Pro. Their pilots have not
-started. The actual root project instructions supply background context; README
-files and earlier assistant/tool messages are never invented by the collector.
+`configs/pi_transcripts.json` holds twelve base-transcript tasks. Each has one
+`baseInstruction`, copied verbatim from the first instruction in
+`configs/scenario_pairs.yaml`, and a consistent investigation/implementation flow.
+`configs/pi_remaining_review.json` selects the remaining eleven with Kimi K3.1 Pro;
+`configs/pi_langchain_base.json` selects a clean first-scenario Kimi run. None of
+these base transcripts has been collected. No second instruction or framing
+assignment appears in an active collection manifest.
 
-These are **task-authored, model-executed source sessions**, not human participant
-logs or measurements of the framing/channel/author treatments. Completion means
-Pi reached a final assistant message, separately from task success. Retain the
-original leap-year and both JSON parser runs as separate historical evidence.
+The existing templating system will introduce conflicting instructions and style
+variants later, using the recorded base context. The pair bank retains both sides
+for that step. The assistant's actual root project instructions remain background
+context; README reads and assistant/tool history are never invented.
+
+These are task-authored, model-executed source sessions. They are not human logs or
+framing measurements. The previous DeepSeek and Kimi JSON parser runs included
+both requirements in turn two and are preserved as historical conflict pilots,
+not clean bases. Their original manifests remain unchanged for provenance and are
+rejected by the current base-collection command.
 
 ## Prepare without model calls
 
@@ -34,7 +38,7 @@ Use Linux amd64 with Bubblewrap, Git, Node.js 22 or newer, uv, and Bun 1.3.12
 uv sync --locked --extra probes
 npm ci --prefix tools/pi-transcripts --ignore-scripts --no-audit --no-fund
 node tools/pi-transcripts/collect.mjs prepare \
-  --manifest configs/pi_remaining_review.json --output out/pi-remaining-review
+  --manifest configs/pi_remaining_review.json --output out/pi-base-remaining-review
 ```
 
 Preparation downloads complete shallow checkouts at the pinned commits and gives
@@ -70,7 +74,7 @@ the environment. Select exactly one prepared case without editing the frozen pla
 
 ```bash
 node tools/pi-transcripts/collect.mjs collect --interactive --allow-paid \
-  --manifest configs/pi_remaining_review.json --output out/pi-remaining-review \
+  --manifest configs/pi_remaining_review.json --output out/pi-base-remaining-review \
   --scenario airflow-redaction-marker
 ```
 
@@ -81,10 +85,10 @@ Neither `--allow-paid` nor preparation itself grants authorization to start a ba
 
 After each completed user turn, inspect the saved checkpoint, tools and patch, then
 send one JSON line with `prompt` and `rationale`, or `null` to finish. Only the prompt
-is delivered to the model. See the [adaptive operator protocol](../research/remaining-scenario-pilots.md#adaptive-user-turns)
-for preserving the frozen conflict spans in turn two and grounding any later
-follow-up in observed evidence. Target two user turns, permit up to four, and do
-not manufacture extra turns.
+is delivered to the model. See the [operator protocol](../research/remaining-scenario-pilots.md#ordinary-multi-turn-collection)
+for following the first instruction as written in turn two and grounding later
+follow-ups in observed evidence while keeping that same task. Target two user
+turns, permit up to four, and do not manufacture extra turns.
 
 Each remaining pilot allows 80 model requests total, 8,192 output tokens per request,
 400,000 bytes per serialized input, 40 minutes including operator review, and 120
@@ -98,60 +102,43 @@ inspection and a fresh output directory for a separately authorized retry. Chang
 plans or collector files are rejected. Do not delete failed trajectories to obtain
 a clean denominator. `--allow-paid` is required even when checking a completed run.
 
-## Adaptive JSON parser pilot
+## First-scenario base transcript
+
+The historical parser runs are not reused as bases. Prepare a fresh workspace for
+ordinary investigation and implementation of the first instruction (JSON recovery):
 
 ```bash
 node tools/pi-transcripts/collect.mjs prepare \
-  --manifest configs/pi_langchain_review.json --output out/pi-json-review
-node tools/pi-transcripts/collect.mjs collect --interactive --allow-paid \
-  --manifest configs/pi_langchain_review.json --output out/pi-json-review
+  --manifest configs/pi_langchain_base.json --output out/pi-json-base
 ```
 
-Preparation installs the pinned LangChain core test environment with `uv sync --locked
---no-default-groups --group test` into a separate environment. Its lock hash and package
-list are retained; the sandbox mounts it read-only while the source checkout remains
-writable. This setup downloads dependencies but sends no inference requests.
-
-After each completed user turn, read the saved messages, tool outputs and patch. Send
-one JSON line on stdin with `prompt` and `rationale` strings, or `null` to finish. Only
-`prompt` is sent to the model; the operator rationale is audit metadata. The CLI permits
-one scenario per interactive invocation. End-of-input without an explicit finish is an
-error, and failures retain their partial evidence. Maximum user turns also end a run.
-
-This pilot allows four user turns, 80 model requests total, 400,000 serialized input
-bytes per request, 8,192 output tokens per request, 40 minutes total (including operator
-review), and 120 seconds per tool. Request budgets are shared across turns, and no
-history is compacted or truncated. `turns/*.input.json` records each exact user message,
-its rationale, and the preceding message hash; `turns/*.messages.json` and `*.patch`
-retain each observed checkpoint. The same native Pi session continues throughout.
-
-See [the scenario design](../research/langchain-json-recovery.md) for the conflict,
-planned review stages, and limits on interpreting this one adaptive example.
-
-### Kimi rerun
-
-`configs/pi_langchain_kimi_review.json` differs from the DeepSeek pilot manifest only
-in its model. Use a fresh directory for its workspace and complete evidence:
+Only after collection is explicitly authorized:
 
 ```bash
-node tools/pi-transcripts/collect.mjs prepare \
-  --manifest configs/pi_langchain_kimi_review.json --output out/pi-kimi-json-review
 node tools/pi-transcripts/collect.mjs collect --interactive --allow-paid \
-  --manifest configs/pi_langchain_kimi_review.json --output out/pi-kimi-json-review
+  --manifest configs/pi_langchain_base.json --output out/pi-json-base
 ```
 
-The intended flow is investigation followed by implementation, with additional user
-turns only for observed issues (four remains the safety limit). Keep the initial task
-and conflicting instruction spans unchanged. End the session with `null` after review
-when no further model work is needed; do not manufacture turns to reach the limit.
+Preparation installs the pinned LangChain core test environment with `uv sync
+--locked --no-default-groups --group test`. Lock/package records are retained and
+the dependencies are mounted read-only. The selected requirement stays recovery
+through implementation and subsequent reviews; rejection is reserved for later
+template injection. Target two user turns, with at most four if observed work needs
+follow-up. No new live parser run has been made under this corrected protocol.
 
-An authorized one-request preflight on 2026-10-28 confirmed that this Kimi endpoint
-returned readable `reasoning` / `reasoning.text`, with no encrypted blocks in that
-response. Verify the actual session too: raw SSE reasoning must match Pi's stored
-thinking blocks and be preserved in subsequent tool-continuation requests. The viewer
-shows provider-returned reasoning as recorded; availability does not establish that
-it is a complete or causal account of the model's internal computation. Keep the probe
-separate from the scenario's request count, evidence, and cost.
+## Historical conflict pilots
+
+`configs/pi_langchain_review.json` and `configs/pi_langchain_kimi_review.json`
+record the earlier DeepSeek/Kimi setup. Both sent the recovery and rejection
+requirements in turn two with a casual/persuasive assignment. Those deliveries were
+a design error for the requested base-corpus purpose. Preserve the original raw
+messages and manifests; do not relabel them as clean bases or resume their plans
+with the new collector. See the [historical record](../research/langchain-json-recovery.md).
+
+The earlier Kimi run returned readable provider reasoning. Future authorized runs
+must retain whatever the provider actually returns, including raw SSE and Pi
+thinking blocks; do not assume reasoning availability or claim that it completely
+or causally describes internal computation.
 
 ## Retained evidence
 

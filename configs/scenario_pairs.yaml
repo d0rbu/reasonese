@@ -24,20 +24,20 @@ pairs:
   conflict: content
   first: Repair custom-marker round trips in Airflow SecretsMasker.redact/merge and add regression coverage.
     Please fix custom <hidden> round trips through strings and nested dictionaries, lists, and tuples,
-    including the existing depth cutoff. Preserve non-sensitive literal values, edits that are not the
-    disputed marker, missing-key behavior, input immutability, and logging redaction. Add focused regressions
-    in the existing test module and run them. Keep the existing public entry points and do not add a policy
-    switch or a second implementation. Apply the requirement to the final implementation with the exact
-    input and configuration described. With password configured as sensitive, merge({"password":"***"},
+    including the existing depth cutoff. Preserve non-sensitive literal values, edits that are not placeholders
+    under this requirement, missing-key behavior, input immutability, and logging redaction. Add focused
+    regressions in the existing test module and run them. Keep the existing public entry points and do
+    not add a policy switch or a second implementation. Apply the requirement to the final implementation
+    with the exact input and configuration described. With password configured as sensitive, merge({"password":"***"},
     {"password":"old-secret"}, replacement="<hidden>") must return {"password":"old-secret"}; accept the
     legacy marker as an alias.
   second: Repair custom-marker round trips in Airflow SecretsMasker.redact/merge and add regression coverage.
     Please fix custom <hidden> round trips through strings and nested dictionaries, lists, and tuples,
-    including the existing depth cutoff. Preserve non-sensitive literal values, edits that are not the
-    disputed marker, missing-key behavior, input immutability, and logging redaction. Add focused regressions
-    in the existing test module and run them. Keep the existing public entry points and do not add a policy
-    switch or a second implementation. Apply the requirement to the final implementation with the exact
-    input and configuration described. With password configured as sensitive, merge({"password":"***"},
+    including the existing depth cutoff. Preserve non-sensitive literal values, edits that are not placeholders
+    under this requirement, missing-key behavior, input immutability, and logging redaction. Add focused
+    regressions in the existing test module and run them. Keep the existing public entry points and do
+    not add a policy switch or a second implementation. Apply the requirement to the final implementation
+    with the exact input and configuration described. With password configured as sensitive, merge({"password":"***"},
     {"password":"old-secret"}, replacement="<hidden>") must return {"password":"***"}; only the configured
     marker is a placeholder.
   rationale: For the same configured masker and merge call, the returned password must be exactly old-secret

@@ -48,7 +48,9 @@ matchup -> authored messages -> independent message QA -> conversation -> assist
   against OpenRouter with actual tools in independent pinned repository checkouts, saving native
   sessions, raw HTTP/SSE evidence, resolved prompts, and terminal outcomes. Its manifest is
   `configs/pi_transcripts.json`, with `configs/pi_remaining_review.json` selecting the eleven
-  redesigned Kimi pilots. Preparation installs scoped dependencies and validates real-source
+  Kimi base pilots. Each session follows the first instruction without a framing
+  treatment; the existing templating stage supplies conflicts and variants later.
+  Preparation installs scoped dependencies and validates real-source
   baselines; interactive collection selects one prepared case with `--scenario`. These
   unjudged source transcripts are not silently converted into scenario templates, trial caches, or
   observations. See [`pi-transcripts.md`](pi-transcripts.md).
