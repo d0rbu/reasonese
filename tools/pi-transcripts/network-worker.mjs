@@ -1,0 +1,28 @@
+// Controlled namespace setup runs before the inner, unprivileged tool process.
+import { execFileSync, spawn } from "node:child_process";
+import { writeSync } from "node:fs";
+
+writeSync(3, "ready\n");
+let input = "";
+for await (const chunk of process.stdin) input += chunk;
+const { args, request, blockedAddresses } = JSON.parse(input);
+const privateRanges = ["0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "169.254.0.0/16",
+  "172.16.0.0/12", "192.0.0.0/24", "192.0.2.0/24", "192.168.0.0/16", "198.18.0.0/15",
+  "168.63.129.16/32", "198.51.100.0/24", "203.0.113.0/24", "224.0.0.0/4", "240.0.0.0/4", ...blockedAddresses];
+execFileSync("/usr/sbin/nft", ["-f", "-"], { input: `table inet development {
+ chain output { type filter hook output priority 0; policy accept;
+  oifname "lo" accept
+  ip daddr 10.0.2.3 udp dport 53 accept
+  ip daddr 10.0.2.3 tcp dport 53 accept
+  ip daddr { ${privateRanges.join(", ")} } reject
+  meta nfproto ipv6 reject
+ }
+}\n` });
+// The network namespace belongs to the outer user namespace. The inner user
+// namespace cannot remove these rules or enter the host network namespace.
+const child = spawn("bwrap", [...args.slice(0, 1), "--share-net", ...args.slice(1)], {
+  stdio: ["pipe", "inherit", "inherit"], env: { PATH: "/usr/bin:/bin" },
+});
+child.stdin.end(JSON.stringify(request));
+child.on("exit", code => process.exit(code ?? 1));
+child.on("error", error => { process.stderr.write(error.message); process.exit(1); });

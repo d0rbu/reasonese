@@ -1,11 +1,14 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
+import { join, relative } from "node:path";
 import {
   AuthStorage, createAgentSession, DefaultResourceLoader, ModelRegistry,
   SessionManager, SettingsManager,
 } from "@mariozechner/pi-coding-agent";
-import { sandboxGit, sandboxTools } from "./sandbox.mjs";
-import { collectorIdentity, MODEL, readJson, sha256, validateBaseCollection, verifyWorkspace, writeJson } from "./workspaces.mjs";
+import { neutralCwd, sandboxGit, sandboxTools, toolDir } from "./sandbox.mjs";
+import { buildSystemPrompt } from "./node_modules/@mariozechner/pi-coding-agent/dist/core/system-prompt.js";
+import { isNeutralCase } from "./backing.mjs";
+import { snapshotWorkspace } from "./checkpoints.mjs";
+import { collectorIdentity, MODEL, readJson, sha256, sha256File, validateBaseCollection, verifyWorkspace, writeJson } from "./workspaces.mjs";
 
 function hasFinalAnswer(messages) {
   const last = messages.at(-1);
@@ -19,7 +22,7 @@ function artifactHashes(directory, prefix = "") {
     const name = join(prefix, entry.name);
     if (name === "outcome.json") continue;
     if (entry.isDirectory()) Object.assign(hashes, artifactHashes(directory, name));
-    else if (entry.isFile()) hashes[name] = sha256(readFileSync(join(directory, name)));
+    else if (entry.isFile()) hashes[name] = sha256File(join(directory, name));
     else throw new Error(`Unexpected evidence entry: ${name}`);
   }
   return hashes;
@@ -116,6 +119,8 @@ export async function runTrajectory({ manifest, scenario, caseDir, metadata, api
   const baseUrl = fixtureEndpoint ?? "https://openrouter.ai/api/v1";
   if (fixtureEndpoint && !/^http:\/\/127\.0\.0\.1:\d+\/v1$/.test(fixtureEndpoint)) throw new Error("Fixtures must use localhost");
   if (metadata.id !== manifest.model) throw new Error("Wrong model metadata");
+  caseDir = realpathSync(caseDir);
+  if (!fixtureEndpoint && !isNeutralCase(caseDir)) throw new Error("Live collection requires neutral physical backing");
   const cwd = join(caseDir, "workspace");
   const context = await verifyWorkspace(cwd, scenario);
   const directory = join(caseDir, "trajectory");
@@ -152,20 +157,27 @@ export async function runTrajectory({ manifest, scenario, caseDir, metadata, api
       compaction: { enabled: false }, retry: { enabled: false },
     });
     const agentDir = join(directory, "agent");
+    const tools = sandboxTools(cwd, join(caseDir, "tool-state"), manifest.toolTimeoutSeconds, provenance.pythonEnvironment?.path, provenance.toolEnvironment);
+    const baseSystem = buildSystemPrompt({ cwd: neutralCwd(), selectedTools: tools.map(t => t.name),
+      toolSnippets: Object.fromEntries(tools.map(t => [t.name, t.promptSnippet])),
+      promptGuidelines: tools.flatMap(t => t.promptGuidelines ?? []), contextFiles: [], skills: [] })
+      .replace(/\nCurrent date: [^\n]+\nCurrent working directory: [^\n]+$/, "")
+      .replaceAll(realpathSync(join(toolDir, "node_modules")), "/opt/pi/node_modules")
+      .replaceAll(join(toolDir, "node_modules"), "/opt/pi/node_modules");
     const resourceLoader = new DefaultResourceLoader({
-      cwd, agentDir, settingsManager,
+      cwd: neutralCwd(), agentDir, settingsManager,
       noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,
       // Pi's ordinary system prompt + the real project's root context, without host ancestors.
-      agentsFilesOverride: () => ({ agentsFiles: [{ path: context.path, content: context.content }] }),
-      systemPromptOverride: () => undefined, appendSystemPromptOverride: () => [],
+      agentsFilesOverride: () => ({ agentsFiles: [{ path: join(neutralCwd(), relative(cwd, context.path)), content: context.content }] }),
+      systemPromptOverride: () => baseSystem, appendSystemPromptOverride: () => [],
     });
     await resourceLoader.reload();
     ({ session } = await createAgentSession({
-      cwd, agentDir, resourceLoader, authStorage, modelRegistry, model,
+      cwd: neutralCwd(), agentDir, resourceLoader, authStorage, modelRegistry, model,
       thinkingLevel: manifest.thinking, settingsManager,
       tools: ["read", "bash", "edit", "write"],
-      customTools: sandboxTools(cwd, join(caseDir, "tool-state"), manifest.toolTimeoutSeconds, provenance.pythonEnvironment?.path, provenance.toolEnvironment),
-      sessionManager: SessionManager.create(cwd, join(directory, "sessions")),
+      customTools: tools,
+      sessionManager: SessionManager.create(neutralCwd(), join(directory, "sessions")),
     }));
     writeFileSync(join(directory, "system.txt"), session.systemPrompt);
     writeJson(join(directory, "tools.json"), session.agent.state.tools.map(({ name, description, parameters }) =>
@@ -177,8 +189,12 @@ export async function runTrajectory({ manifest, scenario, caseDir, metadata, api
       timeoutMs: manifest.timeoutSeconds * 1000,
     });
     transport = captureTransport(join(directory, "http"), manifest, baseUrl);
-    timer = setTimeout(() => interrupt("time_limit"), manifest.timeoutSeconds * 1000);
     mkdirSync(join(directory, "turns"));
+    writeJson(join(directory, "turns/000.workspace.json"), await snapshotWorkspace(caseDir, join(directory, "turns/000"), {
+      head: (await sandboxGit(cwd, join(caseDir, "tool-state"), "rev-parse", "HEAD")).trim(),
+      status: await sandboxGit(cwd, join(caseDir, "tool-state"), "status", "--porcelain=v1", "--untracked-files=all"),
+    }));
+    timer = setTimeout(() => interrupt("time_limit"), manifest.timeoutSeconds * 1000);
     let turn = { prompt: scenario.prompt, rationale: "Initial task from the prepared manifest" };
     while (turn && !interruption) {
       if (typeof turn.prompt !== "string" || !turn.prompt.trim() || typeof turn.rationale !== "string" || !turn.rationale.trim()) {
@@ -193,6 +209,10 @@ export async function runTrajectory({ manifest, scenario, caseDir, metadata, api
       writeJson(`${prefix}.messages.json`, session.messages);
       const diff = await sandboxGit(cwd, join(caseDir, "tool-state"), "diff", "--binary", "--no-ext-diff", "--no-textconv", scenario.revision);
       writeFileSync(`${prefix}.patch`, diff);
+      writeJson(`${prefix}.workspace.json`, await snapshotWorkspace(caseDir, prefix, {
+        head: (await sandboxGit(cwd, join(caseDir, "tool-state"), "rev-parse", "HEAD")).trim(),
+        status: await sandboxGit(cwd, join(caseDir, "tool-state"), "status", "--porcelain=v1", "--untracked-files=all"),
+      }));
       if (interruption || !hasFinalAnswer(session.messages) || userTurns >= (scenario.maxUserTurns ?? 1)) break;
       // The same Pi session and workspace survive the operator's review. No synthetic
       // assistant history, hidden steering, or replacement tool results are inserted.

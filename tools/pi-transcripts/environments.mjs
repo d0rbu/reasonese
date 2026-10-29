@@ -1,11 +1,13 @@
-// Dependency setup is explicit and runs before collection. Model tools remain offline.
+// Dependency setup is explicit and runs before collection; tools retain public network access.
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readlinkSync, readdirSync, realpathSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
+import { backingRoot } from "./backing.mjs";
+import { neutralCwd } from "./sandbox.mjs";
 
 const exec = promisify(execFile);
 const hash = (value) => createHash("sha256").update(value).digest("hex");
@@ -34,15 +36,16 @@ export function validateEnvironment(scenario) {
 }
 
 export async function prepareEnvironment(scenario, caseDir, cwd) {
-  const environment = { readOnlyPaths: [], path: [], env: {}, dependencies: {} };
-  environment.env.PI_BASELINE_PROBE = fileURLToPath(new URL("baseline_probe.py", import.meta.url));
-  environment.env.PI_BASELINE_DIR = dirname(environment.env.PI_BASELINE_PROBE);
+  const environment = { mounts: [], path: [], env: {}, baselineEnv: {}, dependencies: {} };
+  environment.baselineEnv.PI_BASELINE_PROBE = fileURLToPath(new URL("baseline_probe.py", import.meta.url));
+  environment.baselineEnv.PI_BASELINE_DIR = dirname(environment.baselineEnv.PI_BASELINE_PROBE);
   const setupHome = join(caseDir, "setup-home");
   mkdirSync(setupHome, { recursive: true });
   // Public dependency installation does not inherit provider credentials or user config.
   const setupEnv = { PATH: process.env.PATH, HOME: setupHome, LANG: "C.UTF-8",
-    UV_CACHE_DIR: join(dirname(caseDir), "dependency-cache/uv"),
-    npm_config_cache: join(dirname(caseDir), "dependency-cache/npm") };
+    UV_CACHE_DIR: join(backingRoot, "downloads/uv"), UV_LINK_MODE: "copy",
+    UV_PYTHON_INSTALL_DIR: join(backingRoot, "runtimes/python"),
+    npm_config_cache: join(backingRoot, "downloads/npm") };
   const run = async (label, command, args, options = {}) => {
     try {
       const result = await exec(command, args, { cwd, env: setupEnv, timeout: 1_800_000,
@@ -57,27 +60,35 @@ export async function prepareEnvironment(scenario, caseDir, cwd) {
     }
   };
   let pythonEnvironment;
-  if (scenario.pythonProject || scenario.pythonEditable) {
+  {
     const path = join(caseDir, "python-env");
-    const project = join(cwd, scenario.pythonProject ?? scenario.pythonEditable);
+    const project = join(cwd, scenario.pythonProject ?? scenario.pythonEditable ?? ".");
     if (scenario.pythonProject) {
       await run("python-setup", "uv", ["sync", "--locked", "--no-default-groups", "--group", "test", "--project", project],
         { env: { ...setupEnv, UV_PROJECT_ENVIRONMENT: path } });
     } else {
       if (!existsSync(join(path, "bin/python"))) await run("python-venv", "uv", ["venv", "--python", "3.13", path]);
-      await run("python-setup", "uv", ["pip", "install", "--python", join(path, "bin/python"), "-e", project, ...(scenario.pythonPackages ?? [])]);
+      if (scenario.pythonEditable) await run("python-setup", "uv", ["pip", "install", "--python", join(path, "bin/python"), "-e", project, ...(scenario.pythonPackages ?? [])]);
     }
+    await run("python-development-tools", "uv", ["pip", "install", "--python", join(path, "bin/python"), "pip==25.3", "ruff==0.15.2", ...(!scenario.pythonProject && !scenario.pythonEditable ? ["pytest==9.1.1"] : [])]);
     const packages = await run("python-freeze", "uv", ["pip", "freeze", "--python", join(path, "bin/python")]);
-    pythonEnvironment = { path, project: scenario.pythonProject ?? scenario.pythonEditable,
+    const executable = realpathSync(join(path, "bin/python"));
+    const runtime = dirname(dirname(executable));
+    const version = readFileSync(join(path, "pyvenv.cfg"), "utf8").match(/^version = (.+)$/m)?.[1];
+    pythonEnvironment = { path, runtime: { path: runtime, version,
+      executableSha256: hash(readFileSync(executable)),
+      sharedLibraries: readdirSync(join(runtime, "lib")).filter(name => /^libpython.*\.so(?:\..*)?$/.test(name))
+        .map(name => ({ file: name, sha256: hash(readFileSync(join(runtime, "lib", name))) })),
+      modelAccess: "read-only runtime mount; preserve this immutable runtime with source evidence" }, project: scenario.pythonProject ?? scenario.pythonEditable,
       lockSha256: scenario.pythonProject ? hash(readFileSync(join(project, "uv.lock"))) : undefined,
       packages, packagesSha256: hash(packages),
-      resolution: scenario.pythonProject ? "upstream uv.lock" : "editable upstream package and exact test package pins; transitive versions recorded in freeze" };
+      resolution: scenario.pythonProject ? "upstream uv.lock plus pinned pip/ruff development tools" : scenario.pythonEditable ? "editable upstream package and exact test/tool package pins; transitive versions recorded in freeze" : "pinned development tools; transitive versions recorded in freeze" };
   }
   if (scenario.pythonPath) environment.env.PYTHONPATH = scenario.pythonPath.map(p => join(cwd, p)).join(":");
 
   if (scenario.goPackage) {
     if (process.platform !== "linux" || process.arch !== "x64") throw new Error("Prepared Go runtime requires Linux amd64");
-    const runtime = join(dirname(caseDir), "runtimes", `go-${GO_VERSION}`);
+    const runtime = join(backingRoot, "runtimes", `go-${GO_VERSION}`);
     const archive = runtime + ".tar.gz";
     mkdirSync(dirname(runtime), { recursive: true });
     if (!existsSync(archive)) {
@@ -98,8 +109,9 @@ export async function prepareEnvironment(scenario, caseDir, cwd) {
     // Resolve only this package's test dependency graph; do not run upstream tests on the host.
     await run("go-dependencies", join(root, "bin/go"), ["list", "-deps", "-test", scenario.goPackage],
       { env: { ...setupEnv, ...goEnv, GOCACHE: join(caseDir, "setup-go-cache"), GOPATH: join(caseDir, "setup-go-path") } });
-    Object.assign(environment.env, goEnv, { GOPROXY: "off", GOSUMDB: "off" });
-    environment.readOnlyPaths.push(root, moduleCache);
+    await run("go-cache-permissions", "chmod", ["-R", "u+w", moduleCache]);
+    Object.assign(environment.env, goEnv, { GOPROXY: "https://proxy.golang.org,direct", GOSUMDB: "sum.golang.org", GOFLAGS: "-mod=readonly -modcacherw -p=2" });
+    environment.mounts.push({ source: root, target: "/opt/go" }, { source: moduleCache, target: "/home/developer/go/pkg/mod", writable: true });
     environment.path.push(join(root, "bin"));
     environment.dependencies.go = { version: GO_VERSION, archiveSha256: GO_SHA256,
       executableSha256: hash(readFileSync(join(root, "bin/go"))),
@@ -109,8 +121,8 @@ export async function prepareEnvironment(scenario, caseDir, cwd) {
     const bun = realpathSync(process.env.PI_BUN_PATH ?? join(homedir(), ".bun/bin/bun"));
     const version = (await run("bun-version", bun, ["--version"])).trim();
     if (version !== scenario.bunVersion) throw new Error(`Expected Bun ${scenario.bunVersion}, found ${version}`);
-    environment.readOnlyPaths.push(bun);
-    environment.path.push(dirname(bun));
+    environment.mounts.push({ source: bun, target: "/opt/bin/bun" });
+    environment.path.push("/opt/bin");
     environment.dependencies.bun = { version, executableSha256: hash(readFileSync(bun)) };
   }
   if (scenario.nodeProject) {
@@ -121,31 +133,37 @@ export async function prepareEnvironment(scenario, caseDir, cwd) {
     await run("node-setup", "npm", [locked ? "ci" : "install", "--prefix", prefix,
       "--ignore-scripts", "--no-audit", "--no-fund", ...(locked ? [] : ["--save-exact", ...scenario.nodePackages])]);
     const modules = join(prefix, "node_modules");
-    environment.env.PI_NODE_MODULES = modules;
+    environment.baselineEnv.PI_NODE_MODULES = modules;
     const link = join(cwd, scenario.nodeProject, "node_modules");
-    if (!existsSync(link)) symlinkSync(modules, link);
-    if (realpathSync(link) !== modules) throw new Error("Unexpected node_modules directory");
-    environment.readOnlyPaths.push(prefix);
+    if (!existsSync(link)) {
+      try { unlinkSync(link); } catch (error) { if (error.code !== "ENOENT") throw error; }
+      symlinkSync("/home/developer/.local/share/node/node_modules", link);
+    }
+    if (readlinkSync(link) !== "/home/developer/.local/share/node/node_modules") throw new Error("Unexpected node_modules directory");
+    environment.mounts.push({ source: prefix, target: "/home/developer/.local/share/node", writable: true });
     environment.path.push(join(modules, ".bin"));
     environment.dependencies.node = { version: process.version, packages: scenario.nodePackages,
       lockSha256: hash(readFileSync(join(prefix, "package-lock.json"))) };
     if (scenario.nodeProject === "packages/@expo/env") {
       // Run the actual @expo/env tests with their memfs convention, without bootstrapping Expo CLI.
       const config = join(prefix, "jest.config.cjs");
+      const visiblePrefix = "/home/developer/.local/share/node";
+      const visibleModules = join(visiblePrefix, "node_modules");
       const setup = join(prefix, "jest.setup.cjs");
       const tsconfig = join(prefix, "tsconfig.json");
       writeFileSync(setup, ["fs", "node:fs"].map(name =>
-        `jest.mock(${JSON.stringify(name)}, () => require(${JSON.stringify(join(modules, "memfs"))}).fs);`).join("\n") + "\n");
+        `jest.mock(${JSON.stringify(name)}, () => require(${JSON.stringify(join(visibleModules, "memfs"))}).fs);`).join("\n") + "\n");
       writeFileSync(tsconfig, JSON.stringify({ compilerOptions: {
         target: "ES2022", module: "commonjs", esModuleInterop: true, isolatedModules: true,
       } }, null, 2) + "\n");
       writeFileSync(config, "module.exports = " + JSON.stringify({
-        rootDir: join(cwd, scenario.nodeProject), testEnvironment: "node", clearMocks: true,
-        testMatch: ["<rootDir>/src/__tests__/*.test.ts"], setupFilesAfterEnv: [setup],
-        moduleDirectories: [modules, "node_modules"],
-        transform: { "^.+\\.tsx?$": [join(modules, "ts-jest"), { diagnostics: false, tsconfig }] },
+        rootDir: join(neutralCwd(), scenario.nodeProject), testEnvironment: "node", clearMocks: true,
+        testMatch: ["<rootDir>/src/__tests__/*.test.ts"], setupFilesAfterEnv: [join(visiblePrefix, "jest.setup.cjs")],
+        moduleDirectories: [visibleModules, "node_modules"],
+        transform: { "^.+\\.tsx?$": [join(visibleModules, "ts-jest"), { diagnostics: false, tsconfig: join(visiblePrefix, "tsconfig.json") }] },
       }, null, 2) + ";\n");
-      environment.env.PI_JEST_CONFIG = config;
+      environment.baselineEnv.PI_JEST_CONFIG = config;
+      environment.env.JEST_CONFIG = config;
       environment.dependencies.node.testConfigSha256 = hash(readFileSync(config));
       environment.dependencies.node.testSetupSha256 = hash(readFileSync(setup));
       environment.dependencies.node.typescriptConfigSha256 = hash(readFileSync(tsconfig));
