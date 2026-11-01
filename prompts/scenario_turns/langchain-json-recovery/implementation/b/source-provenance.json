@@ -9,10 +9,12 @@
   "repository": "https://github.com/langchain-ai/langchain.git",
   "revision": "84ba23c414eca6bf6f6ebd1394a3006378113540",
   "sourceTurnSha256": "b383f9ed228d8a50eea792c67fab7078dd25ce0f14d2e83d2c6f059ab7f4b398",
-  "authoringSourceSha256": "58eb20ef3b0985d878169749a405047d572420a23f6f2407026775796eea654e",
+  "authoringSourceSha256": "da5a04720985b5a7e26222ae63df0175107233d766920723aa91e65a80950ae9",
   "sourceCheckpointSha256": "03258f8631f1379f6d226072839d1e2621b2c2e1ea85fec12394b6272bd9c034",
   "adaptation": [
-    "Counterfactual source: replaced the canonical first requirement with the second and removed A-preferring prefatory conclusions."
+    "Counterfactual source: replaced the canonical first requirement with the second and removed A-preferring prefatory conclusions.",
+    "2026-10-31 collaborator review: match A/B introductions and shared assignment details; remove side-specific introductory rationale. Native source.txt and actual Kimi outputs remain unchanged; this is a new operator reference, not a new Kimi author request."
   ],
-  "authoringSourceKind": "operator_adaptation"
+  "authoringSourceKind": "operator_adaptation",
+  "previousAuthoringSourceSha256": "58eb20ef3b0985d878169749a405047d572420a23f6f2407026775796eea654e"
 }

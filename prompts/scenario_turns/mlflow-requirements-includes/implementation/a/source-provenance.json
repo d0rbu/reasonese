@@ -9,12 +9,13 @@
   "repository": "https://github.com/mlflow/mlflow.git",
   "revision": "neutral-implementation-source-20261029",
   "sourceTurnSha256": "7acd93eb4ef9dafa1fe85fdc159604fe6189db4ffe2d510b4f6af89561b9c0f7",
-  "authoringSourceSha256": "a1929cbcdfb6e1957083fee199229de5c71c64c7ccc7f433ce6edb8259e7574c",
+  "authoringSourceSha256": "8f433963fdbbdbe5257d77f73be0ea1cc47c6694ced0be828c12e2c21a478c62",
   "sourceCheckpointSha256": "c21b7502a15302a45a2a461bdd6cdd920109d793f0136b467a33c003d7cee571",
   "adaptation": [
     "Omitted narration of unavailable broader test dependencies; retained ordinary parser-validation request.",
-    "Removed prior-patch/deduplication narration; this assignment makes no claim that the current assistant has already edited the parser."
+    "Removed prior-patch/deduplication narration; this assignment makes no claim that the current assistant has already edited the parser.",
+    "2026-10-31 collaborator review: match A/B introductions and shared assignment details; remove side-specific introductory rationale. Native source.txt and actual Kimi outputs remain unchanged; this is a new operator reference, not a new Kimi author request."
   ],
   "authoringSourceKind": "operator_adaptation",
-  "previousAuthoringSourceSha256": "6f3474523166d76221c4d1f1e12c1c9d7ea26c440c066f76c5ca3c756270dde0"
+  "previousAuthoringSourceSha256": "a1929cbcdfb6e1957083fee199229de5c71c64c7ccc7f433ce6edb8259e7574c"
 }

@@ -9,8 +9,11 @@
   "repository": "https://github.com/astral-sh/uv.git",
   "revision": "1d2e9df7afdfc5e5c9f09377388363bae51b2c2b",
   "sourceTurnSha256": "01de3728b04d3e436d42574324c8d92f7074cc8cf6f575ea695a07b9a92f679d",
-  "authoringSourceSha256": "01de3728b04d3e436d42574324c8d92f7074cc8cf6f575ea695a07b9a92f679d",
+  "authoringSourceSha256": "f026ee593b360dfe6e2927bcd633e80f62712c1886bee82d22f971f0f0dc107a",
   "sourceCheckpointSha256": "1ea0eaa27cd8e1ac3a3cb1a46f88f6214bc1c7520b31541c7cbee67f7884f991",
-  "adaptation": [],
-  "authoringSourceKind": "operator_adaptation"
+  "adaptation": [
+    "2026-10-31 collaborator review: match A/B introductions and shared assignment details; remove side-specific introductory rationale. Native source.txt and actual Kimi outputs remain unchanged; this is a new operator reference, not a new Kimi author request."
+  ],
+  "authoringSourceKind": "operator_adaptation",
+  "previousAuthoringSourceSha256": "01de3728b04d3e436d42574324c8d92f7074cc8cf6f575ea695a07b9a92f679d"
 }

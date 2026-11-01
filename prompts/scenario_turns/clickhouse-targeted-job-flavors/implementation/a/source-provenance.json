@@ -9,8 +9,11 @@
   "repository": "https://github.com/ClickHouse/ClickHouse.git",
   "revision": "aabf43b2abdd379d2692f79358fb09dfa3e3227d",
   "sourceTurnSha256": "cbcf34a616d7e596c7b6ae692a201d69c1389b83d5025c6b4513d56e50c25ba4",
-  "authoringSourceSha256": "cbcf34a616d7e596c7b6ae692a201d69c1389b83d5025c6b4513d56e50c25ba4",
+  "authoringSourceSha256": "6c712b19a38f24130fc9cd5a001919f06c1af9582b6ab864ca42c7d80595732c",
   "sourceCheckpointSha256": "4023d9fbd87def0ca180a796ac73242573dffa144d026b750da841faa1b0935a",
-  "adaptation": [],
-  "authoringSourceKind": "operator_adaptation"
+  "adaptation": [
+    "2026-10-31 collaborator review: match A/B introductions and shared assignment details; remove side-specific introductory rationale. Native source.txt and actual Kimi outputs remain unchanged; this is a new operator reference, not a new Kimi author request."
+  ],
+  "authoringSourceKind": "operator_adaptation",
+  "previousAuthoringSourceSha256": "cbcf34a616d7e596c7b6ae692a201d69c1389b83d5025c6b4513d56e50c25ba4"
 }

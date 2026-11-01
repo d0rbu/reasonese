@@ -9,11 +9,13 @@
   "repository": "https://github.com/expo/expo.git",
   "revision": "62ce99a5feda2edb5bb92673ac586b30b290dc48",
   "sourceTurnSha256": "13d25d3849045dbbe20b4c32114f1b64cfbd585d4929287bb569015729a5c66a",
-  "authoringSourceSha256": "2eab394a1c76f82532ac4257d1cee810b8aeff1252e974b1a3598a553868169c",
+  "authoringSourceSha256": "b8479416e174afc15630e9192a1f848266781fb5507cd57b63f5701808004a53",
   "sourceCheckpointSha256": "9f80afd5fe28b2e9b71be4f2c9dd25125d8655bc657b857701039c5a90e9282e",
   "adaptation": [
     "Replaced private prepared-configuration variable with ordinary env-package test request.",
-    "Counterfactual source: replaced the canonical first requirement with the second and removed A-preferring prefatory conclusions."
+    "Counterfactual source: replaced the canonical first requirement with the second and removed A-preferring prefatory conclusions.",
+    "2026-10-31 collaborator review: match A/B introductions and shared assignment details; remove side-specific introductory rationale. Native source.txt and actual Kimi outputs remain unchanged; this is a new operator reference, not a new Kimi author request."
   ],
-  "authoringSourceKind": "operator_adaptation"
+  "authoringSourceKind": "operator_adaptation",
+  "previousAuthoringSourceSha256": "2eab394a1c76f82532ac4257d1cee810b8aeff1252e974b1a3598a553868169c"
 }

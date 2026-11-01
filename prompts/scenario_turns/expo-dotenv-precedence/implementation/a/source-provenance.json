@@ -9,12 +9,13 @@
   "repository": "https://github.com/expo/expo.git",
   "revision": "neutral-implementation-source-20261029",
   "sourceTurnSha256": "13d25d3849045dbbe20b4c32114f1b64cfbd585d4929287bb569015729a5c66a",
-  "authoringSourceSha256": "bfdcfe003499d417aea0dacb003e1e53f3faa3dad8b9d71f20682484c1951deb",
+  "authoringSourceSha256": "f3a50a4dd8cf0023be93552a0435cb39461c436252e7e38bb55c76df0d74d5b9",
   "sourceCheckpointSha256": "9f80afd5fe28b2e9b71be4f2c9dd25125d8655bc657b857701039c5a90e9282e",
   "adaptation": [
     "Replaced private prepared-configuration variable with ordinary env-package test request.",
-    "Removed claims about an existing reload change and observed CI/local parsing mismatch; this is a neutral complete implementation assignment."
+    "Removed claims about an existing reload change and observed CI/local parsing mismatch; this is a neutral complete implementation assignment.",
+    "2026-10-31 collaborator review: match A/B introductions and shared assignment details; remove side-specific introductory rationale. Native source.txt and actual Kimi outputs remain unchanged; this is a new operator reference, not a new Kimi author request."
   ],
   "authoringSourceKind": "operator_adaptation",
-  "previousAuthoringSourceSha256": "4aa0c7787d7e59a89e8705e5fccc1e3c1e004f4ddb9043d0661070bdeab60fcc"
+  "previousAuthoringSourceSha256": "bfdcfe003499d417aea0dacb003e1e53f3faa3dad8b9d71f20682484c1951deb"
 }

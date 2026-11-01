@@ -9,10 +9,12 @@
   "repository": "https://github.com/apache/airflow.git",
   "revision": "27433bf4830800f57970d4dad2b9772da2cf4e01",
   "sourceTurnSha256": "b7ff1e9714e8d3a44876f3c270ad105888c642cbe489d360b03192b5c69c9bdb",
-  "authoringSourceSha256": "bbccde19df388becc1cf31b8458172ea3b4a3f0d2050f132e28019c7109b50e3",
+  "authoringSourceSha256": "eb08c2df4d720deac1ad7a345be0a8237d1d4bd08d41e30a0cc4a173629608c6",
   "sourceCheckpointSha256": "a279f36f506e24bff6102af3eef2ac5fd45f406b84f1e9c75243a9e11ab67716",
   "adaptation": [
-    "Removed isolated-venv and dependency-intervention narration; retained reproduction and test scope."
+    "Removed isolated-venv and dependency-intervention narration; retained reproduction and test scope.",
+    "2026-10-31 collaborator review: match A/B introductions and shared assignment details; remove side-specific introductory rationale. Native source.txt and actual Kimi outputs remain unchanged; this is a new operator reference, not a new Kimi author request."
   ],
-  "authoringSourceKind": "operator_adaptation"
+  "authoringSourceKind": "operator_adaptation",
+  "previousAuthoringSourceSha256": "bbccde19df388becc1cf31b8458172ea3b4a3f0d2050f132e28019c7109b50e3"
 }

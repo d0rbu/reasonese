@@ -63,6 +63,7 @@ function fixture(t) {
       revision: 'a'.repeat(40), prompt: initial, baseInstruction: requirement, maxUserTurns: 4 } });
   for (const [index, end] of [[1, 4], [2, 6]]) {
     put(`turns/00${index}.input.json`, { turn: index, prompt: index === 1 ? initial : implementation,
+      wordingPlan: { path: '/home/operator/research/evaluation/followup.json', sha256: 'e'.repeat(64) },
       basedOnMessagesSha256: compactHash(index === 1 ? [] : messages.slice(0, 4)) });
     put(`turns/00${index}.messages.json`, messages.slice(0, end));
   }
@@ -130,6 +131,9 @@ test('fresh export preserves native bytes, carries all reasoning, and excludes f
   assert.equal(data.explainer.turns[1].messageIndex, 4);
   assert.equal(data.messages[4].content[0].text.includes(data.provenance.scenario.baseInstruction), false);
   assert.equal(data.files[0].content, malicious);
+  assert.deepEqual(data.turns[1].wordingPlan, { sha256: 'e'.repeat(64) });
+  assert.deepEqual(readFileSync(join(f.output, 'evidence/turns/002.input.json')),
+    readFileSync(join(f.source, 'turns/002.input.json')));
   assert.equal(data.artifacts.some(a => a.name.endsWith('.workspace.tar.gz')), false);
   assert.equal(data.corpus.snapshots[0].sha256, f.hashes['turns/001.workspace.tar.gz']);
   const members = spawnSync('tar', ['-tzf', join(f.output, 'transcript-evidence.tar.gz')], { encoding: 'utf8' });

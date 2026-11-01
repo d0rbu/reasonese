@@ -65,6 +65,12 @@ matchup -> authored messages -> independent message QA -> conversation -> assist
   unchanged source messages and separate explainer/check receipts from `data.json`; a shared
   catalog supplies the left sidebar's scenario cards. Generated exports and publication receipts
   remain under `out/`. The viewer renders transcript content as text and makes no model calls.
+- `tools/pi-authoring/` adds a server-backed human editor to the native viewer. It
+  composes source-bound per-assignment rubrics with independent framing briefs,
+  submits explicitly authorized checks to GPT 6.1 Sol high and saves accepted text
+  into an ignored planner-compatible bank. It does not execute trajectories or
+  replace the native runner's Luna QA. See the
+  [workshop guide](../../tools/pi-authoring/README.md).
 - `reasonese.manual_messages` resolves filesystem-backed variants for the user author and
   snapshots the needed files once per top-level invocation.
 - `reasonese.tools` defines bounded file, shell, Python, and server-side web-search tools.
