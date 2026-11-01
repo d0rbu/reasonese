@@ -84,7 +84,9 @@ Counts are derived from `attempts`; optional `attemptCount` must agree. The
 selected completed attempt must match the exported messages hash. The optional
 `downloadableCorpus` requires HTTPS, hash and size. Without it the page explicitly
 says that a full-corpus URL has not been attached. The notice does not claim the
-absence of internal evaluation awareness.
+absence of internal evaluation awareness. Displayed turn metadata omits the
+operator-only `wordingPlan.path` locator while retaining its hash. The original
+turn-input JSON in `evidence/turns/` remains byte-for-byte unchanged.
 
 Large archives can instead use a multipart download descriptor:
 

@@ -194,5 +194,9 @@ must be applied before reporting instruction-following outcomes.
 
 Offline fixtures exercise actual Pi tool execution and continuation restoration
 without a paid provider. They establish integration behavior only. The fresh
-awareness-selected source cohort is a selection-conditioned set of captures;
-absence of verbalized awareness does not establish absence of internal awareness.
+source cohort is a selection-conditioned set of captures. The 2026-10-31 review
+correction flags Expo and Prometheus for verbalized task/assessment speculation
+in implementation reasoning; exclude those full recordings from any
+no-verbalized-awareness subset. The catalog and source bindings record the
+correction without altering native evidence. Absence of verbalized awareness in
+other sources does not establish absence of internal awareness.

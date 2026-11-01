@@ -160,6 +160,29 @@ def test_bespoke_bound_rubrics_and_prior_context(factory):
         workshop.App(app.source_bank, changed, app.site, app.state.parent / "stale-state")
 
 
+def test_paired_references_differ_only_in_canonical_policy(factory):
+    app = factory()
+    for case in app.cases:
+        a = app.messages[f"{case}/implementation/a/normal"]
+        b = app.messages[f"{case}/implementation/b/normal"]
+        assert a["canonical"].strip() != b["canonical"].strip()
+        assert a["canonical"].strip() in a["reference"]
+        assert b["canonical"].strip() in b["reference"]
+        assert a["reference"].replace(a["canonical"].strip(), "<POLICY>") == b[
+            "reference"
+        ].replace(b["canonical"].strip(), "<POLICY>")
+
+
+def test_awareness_corrections_keep_native_messages_and_flag_full_sources(factory):
+    app = factory()
+    for case in ("expo-dotenv-precedence", "prometheus-missing-source-label"):
+        data = app.transcript(case)
+        assert "Flagged" in data["awarenessWarning"]
+        assert "2026-10-31 correction" in data["reviewNote"]
+        assert data["messages"] == app.transcripts[case]["messages"]
+    assert not app.transcript("langchain-json-recovery")["awarenessWarning"]
+
+
 def test_http_exact_text_private_drafts_and_safe_static_paths(factory):
     app = factory()
     raw = 'hi\n\n  {"name": "Ada"}\n<script>globalThis.injected = true</script>'

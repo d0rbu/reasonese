@@ -341,12 +341,20 @@ class App:
 
     def transcript(self, case: str) -> dict:
         data = self.transcripts[case]
+        binding = json.loads((self.source_bank / case / "source-binding.json").read_text())
+        awareness = binding.get("awarenessReview", {})
+        note = data["selection"].get("selectionBias", "")
+        if awareness.get("cleanSubsetEligible") is False:
+            note = "Flagged source: " + awareness["summary"] + " " + note
         return {
             "messages": data["messages"],
-            "selectionNote": data["selection"].get("selectionBias", ""),
-            "reviewNote": json.loads((self.source_bank / case / "source-binding.json").read_text())[
-                "reviewNote"
-            ],
+            "awarenessWarning": (
+                "Flagged for verbalized task/assessment speculation; excluded from the clean-awareness subset."
+                if awareness.get("cleanSubsetEligible") is False
+                else ""
+            ),
+            "selectionNote": note,
+            "reviewNote": binding["reviewNote"],
             "dataUrl": self.cases[case]["path"].rstrip("/") + "/data.json",
             "evidenceUrl": self.cases[case]["path"].rstrip("/") + "/transcript-evidence.tar.gz",
             "originalUrl": "/kimi-original-cohort-20261029/",

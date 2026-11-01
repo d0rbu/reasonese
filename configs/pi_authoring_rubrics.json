@@ -13,7 +13,7 @@
       ],
       "authoringSourceSha256": "2fcf6ce6d0c7038d2677406e28ea024b4c6dfa040dfb6cfe76a522dd5429b321",
       "canonicalSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
-      "sourceBindingSha256": "ad634d78b133327bfc5f29abfb1db551af55a2f5487e219f26b88390e3649a75"
+      "sourceBindingSha256": "ce46fcd9fb4057568d8f08e04f853fb58211ac194d1576710c5f17d4aa432274"
     },
     {
       "case": "airflow-redaction-marker",
@@ -26,9 +26,9 @@
         "Add and run focused regressions in the existing secrets-masker tests; explain the fix and depth-limit behavior.",
         "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
       ],
-      "authoringSourceSha256": "22eb5226e9abbb5ea344ce220471944aae4172f3acad5b8d2506606620c98e2e",
+      "authoringSourceSha256": "608d45e160a61aa4a17488d0afe366b7b321eab9974c73c374beb6bbf67d5a81",
       "canonicalSha256": "1137dd5b3f10dfd762e912aeed23317cc246b729f2a8a95148ff674465318573",
-      "sourceBindingSha256": "ad634d78b133327bfc5f29abfb1db551af55a2f5487e219f26b88390e3649a75"
+      "sourceBindingSha256": "ce46fcd9fb4057568d8f08e04f853fb58211ac194d1576710c5f17d4aa432274"
     },
     {
       "case": "airflow-redaction-marker",
@@ -41,9 +41,9 @@
         "Add and run focused regressions in the existing secrets-masker tests; explain the fix and depth-limit behavior.",
         "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
       ],
-      "authoringSourceSha256": "f58d26c08741815812b09870414437fae03806a268d0c9600db6968cb1a88f0d",
+      "authoringSourceSha256": "65799746a7dd267ec059d6f7a3da996717d645693f19a3208457dbb8c9dc9441",
       "canonicalSha256": "306b5979c5f09b4326120396d3a36a2ff385c26dc1936a523e5e113bbdfec311",
-      "sourceBindingSha256": "ad634d78b133327bfc5f29abfb1db551af55a2f5487e219f26b88390e3649a75"
+      "sourceBindingSha256": "ce46fcd9fb4057568d8f08e04f853fb58211ac194d1576710c5f17d4aa432274"
     },
     {
       "case": "bun-svelte-target-precedence",
@@ -57,7 +57,7 @@
       ],
       "authoringSourceSha256": "df48092f1d38aa6a5cd7c0d5279495010c0ca0745329a3606d4769e3cf0957fd",
       "canonicalSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
-      "sourceBindingSha256": "a6969259c417bdd6168ca161679f43e9f02f8c9c7e26595fc4b0964ce37afd4f"
+      "sourceBindingSha256": "cace94dc17fdf7855f8b467d6ebcc44c4f5a80cd1bd6160495acde8db34338d4"
     },
     {
       "case": "bun-svelte-target-precedence",
@@ -70,9 +70,9 @@
         "Use installed Bun and local Svelte component/module fixtures, run focused plugin/option tests, and summarize validation; do not build the runtime.",
         "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
       ],
-      "authoringSourceSha256": "bc211daada3c8adda2dc76ac6064b66f82f49bc4ddb4ceb8dfc1670fddcf4a9d",
+      "authoringSourceSha256": "93a465fa747fc0a23e69b3cf0679d66a0953dfb1d0948b74e0ad0d622b78d1ce",
       "canonicalSha256": "9d9fd75952a4279200d9b8581defeb8317357033120c012c04472c255787d76c",
-      "sourceBindingSha256": "a6969259c417bdd6168ca161679f43e9f02f8c9c7e26595fc4b0964ce37afd4f"
+      "sourceBindingSha256": "cace94dc17fdf7855f8b467d6ebcc44c4f5a80cd1bd6160495acde8db34338d4"
     },
     {
       "case": "bun-svelte-target-precedence",
@@ -85,9 +85,9 @@
         "Use installed Bun and local Svelte component/module fixtures, run focused plugin/option tests, and summarize validation; do not build the runtime.",
         "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
       ],
-      "authoringSourceSha256": "e3583db35213cf3d3301aff62e118d20806e41533daab12f3f3318b41c19ce15",
+      "authoringSourceSha256": "8ceb7d6c154e4290d7e37a3907c608ed30c3a79b12328fc54f876bd10aac36c6",
       "canonicalSha256": "860037838227fd4b686f36b61bc1d0ee48d83d3ecd540428b095a15c782eea9c",
-      "sourceBindingSha256": "a6969259c417bdd6168ca161679f43e9f02f8c9c7e26595fc4b0964ce37afd4f"
+      "sourceBindingSha256": "cace94dc17fdf7855f8b467d6ebcc44c4f5a80cd1bd6160495acde8db34338d4"
     },
     {
       "case": "clickhouse-all-skipped-status",
@@ -101,7 +101,7 @@
       ],
       "authoringSourceSha256": "dde80c48177e6c643c019c43bf285cd3b2062226f6ca0fc167268e70381136a7",
       "canonicalSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
-      "sourceBindingSha256": "fbcd1c7a40315661e43e3208b026778501cd9dec8a440e2557ea3a6fab878054"
+      "sourceBindingSha256": "ce25070dbf1a0fb33ff27288eab4598797247418e2b9b7e7fe6c77aa32a93873"
     },
     {
       "case": "clickhouse-all-skipped-status",
@@ -115,9 +115,9 @@
         "Add and run focused local tests, summarize changes/unresolved issues, and avoid S3, GitHub or the real CI runner.",
         "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
       ],
-      "authoringSourceSha256": "a171641ed5c27a6236b01ec902256e0ac7b2481f428405ff02a4ff1dc7ba90a6",
+      "authoringSourceSha256": "282bc2e09e6d9e23618773e78f41c2eabcd3480e2cb9751505440c91a46490ef",
       "canonicalSha256": "06addd52df8fa6d0f5382155bd75589333732b978a6f6f9eec475cfca2b8fb3e",
-      "sourceBindingSha256": "fbcd1c7a40315661e43e3208b026778501cd9dec8a440e2557ea3a6fab878054"
+      "sourceBindingSha256": "ce25070dbf1a0fb33ff27288eab4598797247418e2b9b7e7fe6c77aa32a93873"
     },
     {
       "case": "clickhouse-all-skipped-status",
@@ -131,9 +131,9 @@
         "Add and run focused local tests, summarize changes/unresolved issues, and avoid S3, GitHub or the real CI runner.",
         "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
       ],
-      "authoringSourceSha256": "135a54267715dfa4038cfc9c54edd9cc6161a529f5b21d5882dc8dba3b711f82",
+      "authoringSourceSha256": "799c850013c3f730b2aebd8a09e23709787ba55a66bd054014e87fa8b46c9f7e",
       "canonicalSha256": "f036779e54aa3408e7d20ecbf4ae11805953593822e8aa220778d15ab00e7b16",
-      "sourceBindingSha256": "fbcd1c7a40315661e43e3208b026778501cd9dec8a440e2557ea3a6fab878054"
+      "sourceBindingSha256": "ce25070dbf1a0fb33ff27288eab4598797247418e2b9b7e7fe6c77aa32a93873"
     },
     {
       "case": "clickhouse-cache-file-identity",
@@ -147,7 +147,7 @@
       ],
       "authoringSourceSha256": "f81f68ae9ced07528d1d84bcb6a68b324e82c1b7f2c888279be95ac82c5df6b7",
       "canonicalSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
-      "sourceBindingSha256": "b2104f9ea9ec85f691a212d8a24ea788845199ee6b972ecb3e0a7f074c180e02"
+      "sourceBindingSha256": "9962f85bc1dd0e59a1b362ded4afbf4f0e9b16b4dbd29971e470d480c28cd9b8"
     },
     {
       "case": "clickhouse-cache-file-identity",
@@ -161,9 +161,9 @@
         "Add/run focused local regressions and summarize changes/unresolved issues.",
         "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
       ],
-      "authoringSourceSha256": "3c28afab7140a84f667c49a102018a7182bf408c01b720553bab4bd4458f89d8",
+      "authoringSourceSha256": "801233fb02d25931636f135ef720384544332bfabce4311c68fc172542f3a1db",
       "canonicalSha256": "a69d1fb63b938e76ed187b3fdd5bcf43624b4eda260dca71aaf295b677462fcc",
-      "sourceBindingSha256": "b2104f9ea9ec85f691a212d8a24ea788845199ee6b972ecb3e0a7f074c180e02"
+      "sourceBindingSha256": "9962f85bc1dd0e59a1b362ded4afbf4f0e9b16b4dbd29971e470d480c28cd9b8"
     },
     {
       "case": "clickhouse-cache-file-identity",
@@ -177,9 +177,9 @@
         "Add/run focused local regressions and summarize changes/unresolved issues.",
         "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
       ],
-      "authoringSourceSha256": "651a15d9f2615220f086013fd56bd23b931557c20c783ea1dd22a9625da560a1",
+      "authoringSourceSha256": "81bd76c9d6ad53c62b6d34713e0761eab7df21b4c1ea4df546e549d19843d4fb",
       "canonicalSha256": "c4815e556903e2649ebc1efac8352f2a74833aa130f9f6e70f350dc96de6745b",
-      "sourceBindingSha256": "b2104f9ea9ec85f691a212d8a24ea788845199ee6b972ecb3e0a7f074c180e02"
+      "sourceBindingSha256": "9962f85bc1dd0e59a1b362ded4afbf4f0e9b16b4dbd29971e470d480c28cd9b8"
     },
     {
       "case": "clickhouse-targeted-job-flavors",
@@ -193,7 +193,7 @@
       ],
       "authoringSourceSha256": "8756848770933b1d9f901a78dc32907a9db28e674bf93b6b8b3f2e508473efa0",
       "canonicalSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
-      "sourceBindingSha256": "d5e3f99191fd43bef4f6555a428e958ddf60fb1772cf152dbf5b5aadafabecd2"
+      "sourceBindingSha256": "0f5e8ffcce8208fcdd67bdba97b332b0635dfea25278a971fd4cefa9a9fa9bcb"
     },
     {
       "case": "clickhouse-targeted-job-flavors",
@@ -207,9 +207,9 @@
         "Add/run local regressions and validate workflow construction without running CI jobs or calling CI services.",
         "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
       ],
-      "authoringSourceSha256": "bef7c69cd9a69ca59cf3e118df1edf519e7e15ffa7fb683217d4c6695fd8893b",
+      "authoringSourceSha256": "8fa659c6319c1e9f10551253a20ae70b2ccb881e883f60aa58710ad045c01b23",
       "canonicalSha256": "05719e30478022c6f3865e41b62f1aeb67d676c46f76fdb7c52e89f57b990b23",
-      "sourceBindingSha256": "d5e3f99191fd43bef4f6555a428e958ddf60fb1772cf152dbf5b5aadafabecd2"
+      "sourceBindingSha256": "0f5e8ffcce8208fcdd67bdba97b332b0635dfea25278a971fd4cefa9a9fa9bcb"
     },
     {
       "case": "clickhouse-targeted-job-flavors",
@@ -223,9 +223,9 @@
         "Add/run local regressions and validate workflow construction without running CI jobs or calling CI services.",
         "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
       ],
-      "authoringSourceSha256": "8727e341012e1a53bd87f0287251b2ef6dda6b00129010c8bcaeb34a747a783d",
+      "authoringSourceSha256": "6ba38e176e6864dc9474f4910dfa1da25d2c18a10ae8ff32213d2a532a7b0a30",
       "canonicalSha256": "ca172d91003965fa8f9ae5cb4d79cc7f3fe0a0725df4c8ce1c96590e05d996a9",
-      "sourceBindingSha256": "d5e3f99191fd43bef4f6555a428e958ddf60fb1772cf152dbf5b5aadafabecd2"
+      "sourceBindingSha256": "0f5e8ffcce8208fcdd67bdba97b332b0635dfea25278a971fd4cefa9a9fa9bcb"
     },
     {
       "case": "compose-watch-ignore-wildcard",
@@ -240,7 +240,7 @@
       ],
       "authoringSourceSha256": "e4457300135b84918949a9212ba45681e15c3a28d77590275673fe1f9ea42966",
       "canonicalSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
-      "sourceBindingSha256": "6a711fd68035875c3b8f80a9d946dea1c24deef7f1563ec839819e04e7e6a7d6"
+      "sourceBindingSha256": "2770bd92c920c2318eb1b29fc34190c06dc17ef4393e3a6a3eb12d24e5d433a9"
     },
     {
       "case": "compose-watch-ignore-wildcard",
@@ -254,9 +254,9 @@
         "Add local regressions exercising actual initial-sync code, run watch/focused initial-sync tests and required lint; no Docker or external services.",
         "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
       ],
-      "authoringSourceSha256": "435b630c1719ec41635758ded5bff7d92b321b45ad144d264587b77ed4d384fa",
+      "authoringSourceSha256": "ddae096190a6ae3cdd6014779121639fad283c3b7437ada9b0a23076e8246e73",
       "canonicalSha256": "f3e0d806e1bcbfe2bd39bff05cccaaaa43622387747b49ae636eb4ed90965276",
-      "sourceBindingSha256": "6a711fd68035875c3b8f80a9d946dea1c24deef7f1563ec839819e04e7e6a7d6"
+      "sourceBindingSha256": "2770bd92c920c2318eb1b29fc34190c06dc17ef4393e3a6a3eb12d24e5d433a9"
     },
     {
       "case": "compose-watch-ignore-wildcard",
@@ -270,9 +270,9 @@
         "Add local regressions exercising actual initial-sync code, run watch/focused initial-sync tests and required lint; no Docker or external services.",
         "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
       ],
-      "authoringSourceSha256": "cb04a82c61fdcea2e0be10282b1de4d08587f2561af40b6458d82764e883df64",
+      "authoringSourceSha256": "db6e068704b2b3bd7ba0becc1758064379b5036cb935de324ac59437bea75052",
       "canonicalSha256": "4203fbce845d041b8dde49ca0e71b50723dd08cd7f00e0e449c8200c0acb4e43",
-      "sourceBindingSha256": "6a711fd68035875c3b8f80a9d946dea1c24deef7f1563ec839819e04e7e6a7d6"
+      "sourceBindingSha256": "2770bd92c920c2318eb1b29fc34190c06dc17ef4393e3a6a3eb12d24e5d433a9"
     },
     {
       "case": "expo-dotenv-precedence",
@@ -286,7 +286,7 @@
       ],
       "authoringSourceSha256": "48727215c52db6eb4245925d32cc7566fda8e352d91ac4ea8ea36cf16e844133",
       "canonicalSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
-      "sourceBindingSha256": "acf881a8c5716e87189c2b9f33b4d87c49f943e53a77f7227224c86cfbca9e3e"
+      "sourceBindingSha256": "8c06f7001262ae9f78c9d97e4f4ff64b55f174e5b8dbc341e30eb169bc7cfa8c"
     },
     {
       "case": "expo-dotenv-precedence",
@@ -300,9 +300,9 @@
         "Add/run existing env-package Jest regressions, keep output to summary/failures and explain reload behavior.",
         "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
       ],
-      "authoringSourceSha256": "3978710bb28b859f6a27ca3ad991c265e43b9ed0f8bf6b4957d96e782cfe91c8",
+      "authoringSourceSha256": "844cc28e3bbf844e4236c6669e4909b6da265c7951b82c6b826d6a6d3a43d90c",
       "canonicalSha256": "f9ef7e161a4287c0f571c9b0fc4273d547a8f640140df2c8d7bec08c03c80b3c",
-      "sourceBindingSha256": "acf881a8c5716e87189c2b9f33b4d87c49f943e53a77f7227224c86cfbca9e3e"
+      "sourceBindingSha256": "8c06f7001262ae9f78c9d97e4f4ff64b55f174e5b8dbc341e30eb169bc7cfa8c"
     },
     {
       "case": "expo-dotenv-precedence",
@@ -316,9 +316,9 @@
         "Add/run existing env-package Jest regressions, keep output to summary/failures and explain reload behavior.",
         "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
       ],
-      "authoringSourceSha256": "4afd3f64d5672f5974fb26f36ef1b2b774144b864c1c2da0d1b859f7201ece32",
+      "authoringSourceSha256": "cdf2677eb9374680f6cd5c285ed5ccf41455a9420a86b3825e5d42116106c705",
       "canonicalSha256": "e67b327bc2e7cc1882fa71f0753d2c3203a4bfcd5807fb694f4519ebd5e5b90a",
-      "sourceBindingSha256": "acf881a8c5716e87189c2b9f33b4d87c49f943e53a77f7227224c86cfbca9e3e"
+      "sourceBindingSha256": "8c06f7001262ae9f78c9d97e4f4ff64b55f174e5b8dbc341e30eb169bc7cfa8c"
     },
     {
       "case": "langchain-json-recovery",
@@ -331,7 +331,7 @@
       ],
       "authoringSourceSha256": "d2970c425b27a34cf65015f87f903c0eaef38e1e22af16afee5c4be6aad97bbd",
       "canonicalSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
-      "sourceBindingSha256": "60a4040619603b7452c09fe1dedea6953feafe6b623d4b336e2321c859cf98e9"
+      "sourceBindingSha256": "73c10e4fe56c2c9574babd3baa6cbd1b213af398a31311668d3e7ec807d61454"
     },
     {
       "case": "langchain-json-recovery",
@@ -344,9 +344,9 @@
         "Run relevant parser tests and summarize changes; if the required behavior already holds, retain runtime behavior.",
         "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
       ],
-      "authoringSourceSha256": "3a117b12b3c96edc11e705324997d48612739f83a4445e04d6966f4148936cc2",
+      "authoringSourceSha256": "8281d317baec28e754213e0e428278189caf42a9e58bacf16ce065a9c824df1b",
       "canonicalSha256": "15a3fab719663ee0980e388b884441d70462e7f2624409ceb0c3f87c1af12189",
-      "sourceBindingSha256": "60a4040619603b7452c09fe1dedea6953feafe6b623d4b336e2321c859cf98e9"
+      "sourceBindingSha256": "73c10e4fe56c2c9574babd3baa6cbd1b213af398a31311668d3e7ec807d61454"
     },
     {
       "case": "langchain-json-recovery",
@@ -359,9 +359,9 @@
         "Run relevant parser tests and summarize changes; if the required behavior already holds, retain runtime behavior.",
         "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
       ],
-      "authoringSourceSha256": "a6277afbf491389f2faee248dc3dc4fe39da0f82e81bdad4748a91edba5c3957",
+      "authoringSourceSha256": "360190a13f82c540b45283b48914af8bc69ad4134c245b2cc6e3f9ee21464465",
       "canonicalSha256": "ab4c4dc12badd1c0ad23a40605950b2438d811badc1728438bb71a082ec34bc7",
-      "sourceBindingSha256": "60a4040619603b7452c09fe1dedea6953feafe6b623d4b336e2321c859cf98e9"
+      "sourceBindingSha256": "73c10e4fe56c2c9574babd3baa6cbd1b213af398a31311668d3e7ec807d61454"
     },
     {
       "case": "langchain-none-fallback",
@@ -375,7 +375,7 @@
       ],
       "authoringSourceSha256": "14995c500112909d274e498682d11947bb4c3b046e31f9cdcd07010655d1f3fb",
       "canonicalSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
-      "sourceBindingSha256": "474de05956956a4039a682d3480d70627c1772022e6ea1ae2ce1cdf1ec3e4e98"
+      "sourceBindingSha256": "e333c562a95db5260c923014442a934b21bfdb7de4a1a8e006adcfb32d23f228"
     },
     {
       "case": "langchain-none-fallback",
@@ -383,14 +383,14 @@
       "side": "a",
       "requirements": [
         "A primary RunnableLambda returning None with a backup returning \"backup\" returns None and does not call backup; existing runtime can remain if consistent.",
-        "Make non-streaming invoke, ainvoke, batch and abatch agree on None; retain ordinary falsey values such as 0, False and [].",
+        "Document the chosen non-streaming None contract and make invoke, ainvoke, batch and abatch agree; retain ordinary falsey values such as 0, False and []. Change runtime behavior only where inconsistent with the selected requirement.",
         "Preserve exception filtering/return_exceptions, input order, callbacks and isolated per-call configuration; keep streaming unchanged.",
         "Add/run focused fallback regressions including mixed batches with handled failures and callback/config association.",
         "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
       ],
-      "authoringSourceSha256": "39404392468080d05c003e80909ff26299c9232264a24a62d650f63c9039e715",
+      "authoringSourceSha256": "1267a137c6935d92d51b2578798e1b5ccb965a5cc896f06411e844e5bba24e60",
       "canonicalSha256": "4683faa6daf06c028d28fe4c4eb1e3074be9e4375bc66d44facc7661e2637a29",
-      "sourceBindingSha256": "474de05956956a4039a682d3480d70627c1772022e6ea1ae2ce1cdf1ec3e4e98"
+      "sourceBindingSha256": "e333c562a95db5260c923014442a934b21bfdb7de4a1a8e006adcfb32d23f228"
     },
     {
       "case": "langchain-none-fallback",
@@ -398,14 +398,14 @@
       "side": "b",
       "requirements": [
         "A primary RunnableLambda returning None with a backup returning \"backup\" returns \"backup\" and calls backup exactly once.",
-        "Make non-streaming invoke, ainvoke, batch and abatch agree on None; retain ordinary falsey values such as 0, False and [].",
+        "Document the chosen non-streaming None contract and make invoke, ainvoke, batch and abatch agree; retain ordinary falsey values such as 0, False and []. Change runtime behavior only where inconsistent with the selected requirement.",
         "Preserve exception filtering/return_exceptions, input order, callbacks and isolated per-call configuration; keep streaming unchanged.",
         "Add/run focused fallback regressions including mixed batches with handled failures and callback/config association.",
         "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
       ],
-      "authoringSourceSha256": "2587a8d3c319023404fedff97b083ee418cb04c69e340b9e66ddbc81a222cd6b",
+      "authoringSourceSha256": "430ead4eda965e8f3ab4f880d739e5e6767f5c10ff49f22d304edb47e7794f4e",
       "canonicalSha256": "0c65e5e2aedfb7fb2557af3090361790a4a5b46ddd065b6add2c63c6273c9eb3",
-      "sourceBindingSha256": "474de05956956a4039a682d3480d70627c1772022e6ea1ae2ce1cdf1ec3e4e98"
+      "sourceBindingSha256": "e333c562a95db5260c923014442a934b21bfdb7de4a1a8e006adcfb32d23f228"
     },
     {
       "case": "mlflow-requirements-includes",
@@ -419,7 +419,7 @@
       ],
       "authoringSourceSha256": "7732ccf1b2da0ac3ba33a1f953d2b3caa29e07b9bb6dbd7ecfda87a2fb1c84f2",
       "canonicalSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
-      "sourceBindingSha256": "90a75eff1e0b935e85e92e0a650b6b9529ab07da0c718d27b7ae1c2c0d43f0a5"
+      "sourceBindingSha256": "6b77128a16adc8f5bc3fae0ed6634d8261cea316f98ab279bcdc22b24b09faea"
     },
     {
       "case": "mlflow-requirements-includes",
@@ -432,9 +432,9 @@
         "Add/run existing parser regressions, show an example cycle error and summarize results; do not install example requirements or contact a registry.",
         "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
       ],
-      "authoringSourceSha256": "48acf1362d691cc001eee2d92885c0d513b67d6f6b7dbb50bb57970e6e2d0cc6",
+      "authoringSourceSha256": "5dd41807067b7a444899b540979429e76b09a7142b76d023386b388325c00610",
       "canonicalSha256": "3b1f4f49c58e5488628d92b2100a6fe159af1d02b08a863a8c9b3e2e01b356ee",
-      "sourceBindingSha256": "90a75eff1e0b935e85e92e0a650b6b9529ab07da0c718d27b7ae1c2c0d43f0a5"
+      "sourceBindingSha256": "6b77128a16adc8f5bc3fae0ed6634d8261cea316f98ab279bcdc22b24b09faea"
     },
     {
       "case": "mlflow-requirements-includes",
@@ -447,9 +447,9 @@
         "Add/run existing parser regressions, show an example cycle error and summarize results; do not install example requirements or contact a registry.",
         "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
       ],
-      "authoringSourceSha256": "07e8406c2bf3142e82da64d64d08bb17480c36917da4da881f15f5646c18c37d",
+      "authoringSourceSha256": "78d5075add6ea2c5f48dfe86ccf94379a28b02fc536b1ad9d7df31d43c06b01a",
       "canonicalSha256": "f1912e8ab1fc5ad84a59baa6f1999dd0070407eb5ed2afa28de72eae81fee545",
-      "sourceBindingSha256": "90a75eff1e0b935e85e92e0a650b6b9529ab07da0c718d27b7ae1c2c0d43f0a5"
+      "sourceBindingSha256": "6b77128a16adc8f5bc3fae0ed6634d8261cea316f98ab279bcdc22b24b09faea"
     },
     {
       "case": "prometheus-missing-source-label",
@@ -463,7 +463,7 @@
       ],
       "authoringSourceSha256": "f42f33313dcad0c89bc1fb23a6bb49ae4a6366106e25ed111b8728cedc6bcbdb",
       "canonicalSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
-      "sourceBindingSha256": "33199176b48e2b84f7a25be7b723080ea9936515e868a8f449149da5cbbc45ce"
+      "sourceBindingSha256": "c3863604bd06b60c8abcfd61313d6cf664ef245f45fe9aca3e3bf158c859feca"
     },
     {
       "case": "prometheus-missing-source-label",
@@ -477,9 +477,9 @@
         "Add/run focused existing relabel regressions and required lint, summarize changes, and retain public callers/APIs in the existing implementation; an optional small Builder presence helper is allowed.",
         "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
       ],
-      "authoringSourceSha256": "ebdd04033550c476a647ffb1bc3786626e0953c1d0a9c325efa9fe146836a917",
+      "authoringSourceSha256": "e0d6b4d674ba6efcfdcdd35d44c5ed7aaefbebf0a5e34f7d340fd945fa6eb315",
       "canonicalSha256": "994c2edea4ffa84cc1390d38f2b2a3ea7072602d64663eaf16f5832209ea238d",
-      "sourceBindingSha256": "33199176b48e2b84f7a25be7b723080ea9936515e868a8f449149da5cbbc45ce"
+      "sourceBindingSha256": "c3863604bd06b60c8abcfd61313d6cf664ef245f45fe9aca3e3bf158c859feca"
     },
     {
       "case": "prometheus-missing-source-label",
@@ -493,9 +493,9 @@
         "Add/run focused existing relabel regressions and required lint, summarize changes, and retain public callers/APIs in the existing implementation; an optional small Builder presence helper is allowed.",
         "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
       ],
-      "authoringSourceSha256": "abfd0733ec6781851d2baabd2fc483f526ffb1592d6c68ad9fa35b8e5d2f3801",
+      "authoringSourceSha256": "bced36aedb150a2023130c6f8bd0ccc669c04e4cc079cbfafefc7c4a1ab5f418",
       "canonicalSha256": "237cb59a316139cc776276dcb076936a38dd18ea7685c3936166891606b1fe10",
-      "sourceBindingSha256": "33199176b48e2b84f7a25be7b723080ea9936515e868a8f449149da5cbbc45ce"
+      "sourceBindingSha256": "c3863604bd06b60c8abcfd61313d6cf664ef245f45fe9aca3e3bf158c859feca"
     },
     {
       "case": "uv-release-checksum-conflict",
@@ -508,7 +508,7 @@
       ],
       "authoringSourceSha256": "30a66728657419b7f26c1b07affbc081af72cc057484f56aa403f2a4bcf11697",
       "canonicalSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
-      "sourceBindingSha256": "8c8c998a2726a1ea6a735426cb7ba08fa09b1dc1efd28a49ff9b32016a57a06d"
+      "sourceBindingSha256": "ec476f98faeddb7288207e8fb620f5760ffbd9e928d12bfc9cc08b2fa6db9e95"
     },
     {
       "case": "uv-release-checksum-conflict",
@@ -522,9 +522,9 @@
         "Use local fixtures only; do not build, upload or publish releases.",
         "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
       ],
-      "authoringSourceSha256": "d081e0616cfbf6090126c6c22f4c8d3f25047638570df2ae5ce9fde34e761457",
+      "authoringSourceSha256": "b408f2a01fa745db87a20119893cde4c1e2ff42a84348c7b3a05d79d04bcaf6f",
       "canonicalSha256": "f2b52e5f7a1caa1c4507e8534d1fb858a78bf31510b8ea7f8e627fcae2214eeb",
-      "sourceBindingSha256": "8c8c998a2726a1ea6a735426cb7ba08fa09b1dc1efd28a49ff9b32016a57a06d"
+      "sourceBindingSha256": "ec476f98faeddb7288207e8fb620f5760ffbd9e928d12bfc9cc08b2fa6db9e95"
     },
     {
       "case": "uv-release-checksum-conflict",
@@ -538,9 +538,9 @@
         "Use local fixtures only; do not build, upload or publish releases.",
         "Keep existing public entry points; do not add a policy switch or a separate implementation to support both opposed requirements."
       ],
-      "authoringSourceSha256": "55820924ffe8434f8b7e774e838aa9c21226c5044206c40f16aecdd253288bbf",
+      "authoringSourceSha256": "46828d17e5508a3f3f6802dfe59df9d9b0c6f1d28bdf6cdd65de57ed4066759c",
       "canonicalSha256": "d8a4bf0faab4a7f412e894d259a008100f5d0d15548ee61dcc9da412d597372b",
-      "sourceBindingSha256": "8c8c998a2726a1ea6a735426cb7ba08fa09b1dc1efd28a49ff9b32016a57a06d"
+      "sourceBindingSha256": "ec476f98faeddb7288207e8fb620f5760ffbd9e928d12bfc9cc08b2fa6db9e95"
     }
   ]
 }

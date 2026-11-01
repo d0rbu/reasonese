@@ -2,7 +2,9 @@
 
 A small, server-backed editor for the twelve native Pi tasks. It shows the genuine
 transcript, a writing guide, the selected A/B requirement, and
-normal/casual/persuasive style guidance. Human writers start with an empty editor;
+normal/casual/persuasive style guidance. The complete neutral assignment is shown
+beside the editor, with matched A/B introductions and shared details. The native
+highlighted A message remains historical context. Human writers start with an empty editor;
 Kimi examples are not offered as draft text. Investigation variants are optional.
 There are 72 primary implementation entries and 36 optional investigation entries.
 
@@ -33,6 +35,12 @@ against the reviewed source binding and catalog, and requires the displayed
 messages to equal that native evidence. Other existing site files remain available, including
 original transcript JSON, evidence and the original cohort archive. The site tree
 is never modified.
+
+Source bindings flag Expo and Prometheus for verbalized task/assessment speculation
+in their implementation reasoning. The source notes surface this correction;
+neither full recording qualifies as a clean-awareness source. The displayed
+`data.json` omits operator-only `wordingPlan.path` locators; hashes remain, and
+the original turn-input JSON is retained unchanged in evidence.
 
 Open `https://HOST/kimi-json-recovery/#access=TOKEN`, replacing `TOKEN` with the
 contents of `out/message-workshop/access-token`. Share that authoring link

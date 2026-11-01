@@ -8,6 +8,11 @@ bound to the plan. Replace its entire `TODO:` text. There are 108 human slots:
 12 tasks × (shared investigation + implementation A + implementation B) × 3 styles.
 The primary editing task is the 72 implementation messages. The 36 investigation
 messages are optional when keeping the source investigation history fixed.
+In that comparison, `author` describes the replacement implementation message,
+not the whole conversation. Every condition shares the same recorded investigation
+request and response. The native `Hm,`/`Okay` openings are historical wording;
+writers do not need to copy them. Rewriting investigation turns would define an
+additional treatment and regenerate that assistant history.
 
 The [message workshop](../../tools/pi-authoring/README.md) offers the same editing
 task beside the real transcript, with bespoke checklists and GPT 6.1 Sol high
@@ -31,6 +36,20 @@ comparison, or a framing label. `normal` means an ordinary direct request;
 `casual` and `persuasive` use the project definitions in
 [axes.md](../../docs/research/axes.md). Human messages are attributed to their human
 writer, even when a model suggested an edit.
+
+The current A/B authoring references have matching neutral introductions and
+identical shared task details; they differ only in their canonical policy.
+Use these references rather than copying the recorded A introduction. The
+2026-10-31 correction updates operator references and their bindings; existing
+Kimi variants and their historical author requests are unchanged. It does not
+establish that those older Kimi outputs came from the newly matched references.
+
+The full Expo and Prometheus recordings are flagged for verbalized task/assessment
+speculation in implementation reasoning. Their `source-binding.json` records
+zero-based message indices and supersedes the earlier clean/ambiguous reviews.
+Exclude these full sources from any no-verbalized-awareness subset. The flagged
+messages follow their investigation checkpoints; that fact does not itself
+qualify a truncated prefix. Native evidence remains unchanged.
 
 The initial Kimi text was written from the **original** source messages and
 explicit operator adaptations. Later Kimi rewrites align task details, investigation

@@ -38,6 +38,17 @@ def write(path, value):
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n")
 
 
+def public_turns(turns):
+    """Omit operator plan locators from the display; preserve captured inputs in evidence."""
+    result = []
+    for turn in turns:
+        item = dict(turn)
+        if "wordingPlan" in item:
+            item["wordingPlan"] = {k: v for k, v in item["wordingPlan"].items() if k != "path"}
+        result.append(item)
+    return result
+
+
 def relative(name):
     require(isinstance(name, str) and name and "\\" not in name, "Invalid relative path")
     path = PurePosixPath(name)
@@ -448,6 +459,7 @@ def write_export(case, output, source, support_bytes, inputs, fixture):
         step["messageIndex"] = index
     payload = {key: source[key] for key in ("provenance", "outcome", "messages", "turns", "system",
                                            "toolDefinitions", "reasoning", "reportedModels", "reportedProviders")}
+    payload["turns"] = public_turns(source["turns"])
     payload.update(files=files, patch=(source["source"] / "changes.patch").read_text(), artifacts=copied,
                    validation=validation, explainer=explainer, selection=selection, corpus=corpus,
                    catalogUrl="catalog.json", fixture=fixture)

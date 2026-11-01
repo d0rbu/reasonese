@@ -190,7 +190,9 @@ function drawTranscript() {
   $("context-note").textContent =
     state.message.slot === "investigation"
       ? "The highlighted request is the message you’re rewriting."
-      : `The highlighted request is the original A assignment. Write requirement ${state.message.side.toUpperCase()} in the selected style.`;
+      : `The highlighted request is the recorded A assignment. Use the assignment beside the editor for requirement ${state.message.side.toUpperCase()}; its A/B introductions are matched.`;
+  if (transcript.awarenessWarning)
+    $("context-note").textContent += " " + transcript.awarenessWarning;
   $("selection-note").textContent = transcript.selectionNote;
   $("review-note").textContent = transcript.reviewNote;
   $("source-data").href = transcript.dataUrl;
@@ -288,9 +290,7 @@ async function select(task = state.case) {
     if (generation !== state.generation) return;
     state.transcripts.set(task, transcript);
     state.message = message;
-    $("instruction").textContent =
-      message.canonical.trim() ||
-      "Investigate and explain before making implementation changes.";
+    $("instruction").textContent = message.reference.trim();
     $("style-title").textContent = styles[message.framing] + " style";
     $("style-brief").textContent = message.checks.find(
       (c) => c.id === "style",

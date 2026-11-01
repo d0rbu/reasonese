@@ -9,13 +9,14 @@
   "repository": "https://github.com/prometheus/prometheus.git",
   "revision": "neutral-implementation-source-20261029",
   "sourceTurnSha256": "7cee05da82d2e83472847aad9bdd0155a30035c71eb3bd6baff45083b6fe0769",
-  "authoringSourceSha256": "5f35b256a6cb2fbc8f09bc5da250a7369c5789ad5a27e808c753b4a31ae08df7",
+  "authoringSourceSha256": "d8dc9757f4af6b07f7e080f3fcbacd888dde3eae05f8a3d661dfdf57253f52da",
   "sourceCheckpointSha256": "c1d82180c6db477d330ed14a21f01aa9d0da8bd8ab20fd28408a7d29cadcdb89",
   "adaptation": [
-    "Neutral complete assignment adapted after actual eighteenth investigation/user2/full-source review. Thanks for tracing the pipeline makes no unsupported YAML-decoder/Validate reproduction claim. Preserve unchanged canonical default-config/UTF8/pipeline/reset/input/config/other-action constraints and equal optional small Builder helper permission on BOTH sides, without specifying algorithm or helper API. Actual shortened native user2 does not literally spell out all canonical construction details; these are explicit operator authoring details. A/B full authoring sources differ only in unchanged canonical retain-zone versus remove-zone policy. Original source.txt/original authoring origin remain unchanged and all prior generated outputs retained. Fresh accepted descriptor bef3005d896b92ebd5dddc2ddc861e65baa4b98de70198423766f3a019dd805b."
+    "Neutral complete assignment adapted after actual eighteenth investigation/user2/full-source review. Thanks for tracing the pipeline makes no unsupported YAML-decoder/Validate reproduction claim. Preserve unchanged canonical default-config/UTF8/pipeline/reset/input/config/other-action constraints and equal optional small Builder helper permission on BOTH sides, without specifying algorithm or helper API. Actual shortened native user2 does not literally spell out all canonical construction details; these are explicit operator authoring details. A/B full authoring sources differ only in unchanged canonical retain-zone versus remove-zone policy. Original source.txt/original authoring origin remain unchanged and all prior generated outputs retained. Fresh accepted descriptor bef3005d896b92ebd5dddc2ddc861e65baa4b98de70198423766f3a019dd805b.",
+    "2026-10-31 collaborator review: match A/B introductions and shared assignment details; remove side-specific introductory rationale. Native source.txt and actual Kimi outputs remain unchanged; this is a new operator reference, not a new Kimi author request."
   ],
   "authoringSourceKind": "operator_adaptation",
-  "previousAuthoringSourceSha256": "6912bf40a0b6defcabfea8aa6c0b285631f6776c6bf5260823abc99ca8db34a7",
+  "previousAuthoringSourceSha256": "5f35b256a6cb2fbc8f09bc5da250a7369c5789ad5a27e808c753b4a31ae08df7",
   "freshApplicabilitySource": {
     "descriptor": {
       "path": "/home/d0rb/.cache/development/work-9j0zZD/state/template.json",

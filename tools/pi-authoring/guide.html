@@ -26,7 +26,10 @@
       <p>
         <strong>Investigation</strong> messages are optional: another 36
         messages. They ask the assistant to investigate and explain before
-        making implementation changes.
+        making implementation changes. For the implementation comparison, every
+        condition shares the same recorded investigation request and response.
+        “Human” describes the replacement implementation message's author, not
+        the whole conversation's author.
       </p>
       <h2>2. Read the highlighted message</h2>
       <p>
@@ -37,10 +40,12 @@
         requirement A.
       </p>
       <p>
-        The requirement beside the editor tells you whether your message should
-        ask for A or B. Keep the rest of the highlighted task’s details,
-        compatibility constraints and requested tests. Investigation variants
-        rewrite the opening request and stop before implementation.
+        The complete assignment beside the editor is the content reference for
+        A or B. Its introductions and shared requirements are matched across
+        the two sides; only the opposed policy changes. The highlighted message
+        is historical context and may have an A-specific introduction. You do
+        not need to copy its opening words or its rationale. Investigation
+        variants rewrite the opening request and stop before implementation.
       </p>
       <h2>3. Use the selected style</h2>
       <ul>

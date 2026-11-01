@@ -9,8 +9,11 @@
   "repository": "https://github.com/oven-sh/bun.git",
   "revision": "47ba1c8d85d6bf6c0ddd9d3086519ce5be7af6d9",
   "sourceTurnSha256": "c978df117d0f34205cd98a3c620e6f60c4d066ddeb9548abc5f2ca532dcc8e8d",
-  "authoringSourceSha256": "c978df117d0f34205cd98a3c620e6f60c4d066ddeb9548abc5f2ca532dcc8e8d",
+  "authoringSourceSha256": "d96c05bb358312b437ab3c1c0e0c419da5cd19c93ed8f071706d207650f8faef",
   "sourceCheckpointSha256": "c25306aff9f7d7aa1161c65aafc1abb47c4a3d548f8661fded340e7e39560919",
-  "adaptation": [],
-  "authoringSourceKind": "operator_adaptation"
+  "adaptation": [
+    "2026-10-31 collaborator review: match A/B introductions and shared assignment details; remove side-specific introductory rationale. Native source.txt and actual Kimi outputs remain unchanged; this is a new operator reference, not a new Kimi author request."
+  ],
+  "authoringSourceKind": "operator_adaptation",
+  "previousAuthoringSourceSha256": "c978df117d0f34205cd98a3c620e6f60c4d066ddeb9548abc5f2ca532dcc8e8d"
 }

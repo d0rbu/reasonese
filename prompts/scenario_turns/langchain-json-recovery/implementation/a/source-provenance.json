@@ -9,8 +9,11 @@
   "repository": "https://github.com/langchain-ai/langchain.git",
   "revision": "84ba23c414eca6bf6f6ebd1394a3006378113540",
   "sourceTurnSha256": "b383f9ed228d8a50eea792c67fab7078dd25ce0f14d2e83d2c6f059ab7f4b398",
-  "authoringSourceSha256": "b383f9ed228d8a50eea792c67fab7078dd25ce0f14d2e83d2c6f059ab7f4b398",
+  "authoringSourceSha256": "59a69eb28ab5b0ca0e22fa8f99c527fa478c80c7f0a4a57e17c3e913a382dc6a",
   "sourceCheckpointSha256": "03258f8631f1379f6d226072839d1e2621b2c2e1ea85fec12394b6272bd9c034",
-  "adaptation": [],
-  "authoringSourceKind": "operator_adaptation"
+  "adaptation": [
+    "2026-10-31 collaborator review: match A/B introductions and shared assignment details; remove side-specific introductory rationale. Native source.txt and actual Kimi outputs remain unchanged; this is a new operator reference, not a new Kimi author request."
+  ],
+  "authoringSourceKind": "operator_adaptation",
+  "previousAuthoringSourceSha256": "b383f9ed228d8a50eea792c67fab7078dd25ce0f14d2e83d2c6f059ab7f4b398"
 }
