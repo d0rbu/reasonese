@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -15,7 +16,12 @@ from beartype import beartype
 from phantom import Phantom
 
 from reasonese.axes import Assistant, Author
-from reasonese.scheduling import ModelScheduler, ProviderRequestError, ScheduledRequest
+from reasonese.scheduling import (
+    ModelScheduler,
+    ProviderRequestError,
+    ScheduledRequest,
+    retry_after_seconds,
+)
 
 JsonObject = dict[str, Any]
 _TERMINAL_BATCH_STATUSES = frozenset({"completed", "failed", "cancelled", "expired"})
@@ -94,6 +100,7 @@ class ModelRoute:
 class RoutePreference(StrEnum):
     """Collection routing preferences; never experimental coordinates."""
 
+    AUTO = "auto"
     FREE = "free"
     PAID = "paid"
     BATCH = "batch"
@@ -174,10 +181,27 @@ class _PendingBatch:
     batch_id: str
     batch: JsonObject
     body_count: int
+    offset: int
     deadline: float
+    poll_failures: int = 0
+    poll_after: float = 0.0
 
 
-_MODEL_ROUTES: dict[Author, ModelRoute] = {
+def _poll_retry_delay(error: Exception, failures: int) -> float | None:
+    response = error.response if isinstance(error, requests.HTTPError) else None
+    if response is not None:
+        status = response.status_code
+        if status in {408, 429} or 500 <= status < 600:
+            return max(2.0**failures, retry_after_seconds(response.headers.get("Retry-After")))
+    elif isinstance(error, (requests.Timeout, requests.ConnectionError)):
+        return 2.0**failures
+    return None
+
+
+_MODEL_ROUTES: dict[Author | Assistant, ModelRoute] = {
+    Assistant.DEEPSEEK_V4_1_FLASH_1017: ModelRoute(
+        OpenRouterModelId.parse("deepseek/deepseek-v4.1-flash-1017"), None,
+    ),
     Author.QWEN3_8_FLASH: ModelRoute(OpenRouterModelId.parse("qwen/qwen3.8-flash"), None),
     Author.QWEN3_8_2_4T: ModelRoute(
         OpenRouterModelId.parse("qwen/qwen3.8-2.4t-a95b"),
@@ -209,17 +233,16 @@ _MODEL_ROUTES: dict[Author, ModelRoute] = {
 @beartype
 def model_route(model: Author | Assistant) -> ModelRoute:
     """Return OpenRouter slugs for a model-backed author or assistant."""
-    author = Author(model.value)
-    if author is Author.USER:
+    if model is Author.USER:
         raise ValueError("the user author does not have an OpenRouter model")
-    return _MODEL_ROUTES[author]
+    return _MODEL_ROUTES[model]
 
 
 @beartype
 def select_route(model: Author | Assistant, preference: RoutePreference) -> ModelRoute:
     """Resolve a preference before execution; never retry a failed free call as paid."""
     route = model_route(model)
-    if preference is RoutePreference.FREE and route.free_model_id is not None:
+    if preference in {RoutePreference.AUTO, RoutePreference.FREE} and route.free_model_id is not None:
         return ModelRoute(route.free_model_id, None)
     if preference is RoutePreference.BATCH:
         return route
@@ -313,11 +336,37 @@ class OpenRouterClient:
     monotonic: Callable[[], float] = field(default=time.monotonic, repr=False)
 
     scheduler: ModelScheduler = field(init=False, repr=False)
+    batch_scheduler: ModelScheduler = field(init=False, repr=False)
+    _batch_models: frozenset[str] | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.scheduler = ModelScheduler(
             self.sync_workers, self.rate_limit_retries, self.sleep, self.monotonic
         )
+        self.batch_scheduler = ModelScheduler(
+            self.sync_workers, self.rate_limit_retries, self.sleep, self.monotonic
+        )
+
+    def assistant_route(
+        self, assistant: Assistant, preference: RoutePreference, *, prefer_batch: bool
+    ) -> ModelRoute:
+        if prefer_batch and preference in {RoutePreference.AUTO, RoutePreference.BATCH}:
+            if self._batch_models is None:
+                models = self.transport.get_json("/api/v1/models").get("data")
+                if not isinstance(models, list) or not models or any(
+                    not isinstance(model, dict) or not isinstance(model.get("id"), str)
+                    for model in models
+                ):
+                    raise ValueError("OpenRouter returned an invalid model catalog")
+                self._batch_models = frozenset(
+                    model["id"] for model in models if model["id"].endswith(":batch")
+                )
+            route = model_route(assistant)
+            variant = f"{route.model_id}:batch"
+            if variant in self._batch_models:
+                return ModelRoute(route.model_id, OpenRouterModelId.parse(variant))
+        fallback = RoutePreference.PAID if preference is RoutePreference.BATCH else preference
+        return select_route(assistant, fallback)
 
     def completion_request(
         self,
@@ -372,23 +421,51 @@ class OpenRouterClient:
         *,
         prefer_batch: bool,
         on_response: Callable[[int, int, JsonObject], None] | None = None,
+        batch_only: bool = False,
     ) -> tuple[tuple[JsonObject, ...], ...]:
         """Complete model groups while overlapping independent batch jobs."""
         results: list[list[JsonObject | None]] = [[None] * len(group.bodies) for group in groups]
-        pending: dict[int, _PendingBatch] = {}
-        batch_requests: list[ScheduledRequest[JsonObject]] = []
-        sync_requests: list[ScheduledRequest[JsonObject]] = []
+        pending: dict[tuple[int, int], _PendingBatch] = {}
+        batch_requests: list[ScheduledRequest[JsonObject | None]] = []
+        sync_requests: list[ScheduledRequest[JsonObject | None]] = []
 
-        def collect_batch(index: int, batch: JsonObject) -> None:
-            batch_id = batch.get("id")
-            if not isinstance(batch_id, str) or not batch_id:
-                raise ValueError("OpenRouter batch response is missing an id")
-            pending[index] = _PendingBatch(
-                batch_id,
-                batch,
-                len(groups[index].bodies),
-                self.monotonic() + self.batch_timeout_seconds,
-            )
+        def batch_request(
+            index: int, offset: int, bodies: tuple[JsonObject, ...]
+        ) -> ScheduledRequest[JsonObject | None]:
+            model_id = groups[index].route.model_id
+
+            def submit() -> JsonObject | None:
+                try:
+                    return self._submit_batch(model_id, bodies)
+                except requests.HTTPError as error:
+                    if len(bodies) > 1 and error.response is not None and error.response.status_code == 413:
+                        return None
+                    raise
+
+            def accepted(batch: JsonObject | None) -> None:
+                if batch is None:
+                    half = len(bodies) // 2
+                    splits.extend((
+                        batch_request(index, offset, bodies[:half]),
+                        batch_request(index, offset + half, bodies[half:]),
+                    ))
+                    return
+                batch_id = batch.get("id")
+                if not isinstance(batch_id, str) or not batch_id:
+                    raise ValueError("OpenRouter batch response is missing an id")
+                print(
+                    f"Accepted OpenRouter batch {batch_id} for {model_id} ({len(bodies)} requests)",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                pending[index, offset] = _PendingBatch(
+                    batch_id, batch, len(bodies), offset,
+                    self.monotonic() + self.batch_timeout_seconds,
+                )
+
+            return ScheduledRequest(str(model_id), submit, accepted)
+
+        splits: list[ScheduledRequest[JsonObject | None]] = []
 
         def collect_sync(index: int, body_index: int, response: JsonObject) -> None:
             results[index][body_index] = response
@@ -404,27 +481,34 @@ class OpenRouterClient:
                 ).transport
                 is CompletionTransport.BATCH
             ):
-                batch_requests.append(
-                    ScheduledRequest(
-                        str(group.route.model_id),
-                        lambda group=group: self._submit_batch(group.route.model_id, group.bodies),
-                        lambda batch, index=index: collect_batch(index, batch),
-                    )
-                )
+                batch_requests.append(batch_request(index, 0, group.bodies))
             else:
+                if batch_only:
+                    raise ValueError("batch-only groups must contain batch-compatible requests")
                 for body_index, body in enumerate(group.bodies):
-                    sync_requests.append(
-                        self.completion_request(
-                            group.route.model_id,
-                            body,
-                            lambda response, index=index, body_index=body_index: collect_sync(
-                                index, body_index, response
-                            ),
-                        )
+                    request = self.completion_request(
+                        group.route.model_id,
+                        body,
+                        lambda response, index=index, body_index=body_index: collect_sync(
+                            index, body_index, response
+                        ),
                     )
+
+                    def receive(
+                        response: JsonObject | None, request: ScheduledRequest[JsonObject] = request
+                    ) -> None:
+                        assert response is not None
+                        request.receive(response)
+
+                    sync_requests.append(ScheduledRequest(request.model, request.send, receive))
         failure: Exception | None = None
         try:
-            self.scheduler.run((*batch_requests, *sync_requests))
+            scheduler = self.batch_scheduler if batch_only else self.scheduler
+            scheduler.run((*batch_requests, *sync_requests))
+            while splits:
+                ready = tuple(splits)
+                splits.clear()
+                scheduler.run(ready)
         except Exception as error:
             failure = error
 
@@ -455,7 +539,7 @@ class OpenRouterClient:
             for index, body in enumerate(bodies)
         ]
         return self.transport.post_json(
-            "/api/beta/batches",
+            "/api/v1/batches",
             {
                 "endpoint": "/v1/chat/completions",
                 "model": str(model_id),
@@ -465,21 +549,23 @@ class OpenRouterClient:
 
     def _wait_for_batches(
         self,
-        jobs: dict[int, _PendingBatch],
+        jobs: dict[tuple[int, int], _PendingBatch],
         *,
         on_response: Callable[[int, int, JsonObject], None],
     ) -> None:
         failure: Exception | None = None
         pending = sorted(jobs.items())
         while pending:
-            next_pending: list[tuple[int, _PendingBatch]] = []
+            next_pending: list[tuple[tuple[int, int], _PendingBatch]] = []
             for index, job in pending:
                 try:
-                    if job.batch.get("status") in _TERMINAL_BATCH_STATUSES:
+                    status = job.batch.get("status")
+                    waiting_for_results = status == "completed" and job.batch.get("results", ()) is None
+                    if status in _TERMINAL_BATCH_STATUSES and not waiting_for_results:
                         for body_index, response in enumerate(self._batch_results(job)):
                             try:
                                 validate_completion(response)
-                                on_response(index, body_index, response)
+                                on_response(index[0], job.offset + body_index, response)
                             except Exception as error:
                                 logger.exception(
                                     "Batch completion failed: batch=%s item=%s response_id=%s",
@@ -498,14 +584,30 @@ class OpenRouterClient:
                         failure = error
             if not next_pending:
                 break
-            self.sleep(self.poll_interval_seconds)
+            now = self.monotonic()
+            self.sleep(max(0.0, min(
+                min(job.deadline - now, max(self.poll_interval_seconds, job.poll_after - now))
+                for _, job in next_pending
+            )))
             pending = []
             for index, job in next_pending:
+                now = self.monotonic()
+                if now < job.poll_after or now >= job.deadline:
+                    pending.append((index, job))
+                    continue
                 try:
-                    job.batch = self.transport.get_json(f"/api/beta/batches/{job.batch_id}")
+                    job.batch = self.transport.get_json(f"/api/v1/batches/{job.batch_id}")
+                    job.poll_failures = 0
+                    job.poll_after = 0.0
                     pending.append((index, job))
                 except Exception as error:
-                    if failure is None:
+                    delay = _poll_retry_delay(error, job.poll_failures)
+                    if delay is not None and job.poll_failures < self.rate_limit_retries:
+                        job.poll_after = self.monotonic() + delay
+                        job.poll_failures += 1
+                        pending.append((index, job))
+                    elif failure is None:
+                        error.add_note(f"While polling OpenRouter batch {job.batch_id}")
                         failure = error
         if failure is not None:
             raise failure
@@ -514,8 +616,11 @@ class OpenRouterClient:
     def _batch_results(job: _PendingBatch) -> tuple[JsonObject, ...]:
         batch = job.batch
         if batch.get("status") != "completed":
+            error = batch.get("error")
+            detail = error.get("message") if isinstance(error, dict) else None
             raise RuntimeError(
                 f"OpenRouter batch {job.batch_id} ended with status {batch.get('status')}"
+                + (f": {detail}" if detail else "")
             )
         raw_results = batch.get("results")
         if not isinstance(raw_results, list):

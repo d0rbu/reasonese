@@ -12,6 +12,7 @@ import tempfile
 from pathlib import Path
 from typing import cast
 
+import requests
 from beartype import beartype
 
 from reasonese.conversation import (
@@ -94,6 +95,99 @@ ASSISTANT_TOOLS: tuple[JsonObject, ...] = (
         },
     },
 )
+
+
+PARALLEL_FAST = "parallel-fast"
+_MAX_SEARCH_QUERY_LENGTH = 200
+_MAX_SEARCH_OBJECTIVE_LENGTH = 5_000
+SHARED_ASSISTANT_TOOLS = (
+    *ASSISTANT_TOOLS[:3],
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": "Search the web for relevant sources and excerpts. Cite returned URLs.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "objective": {
+                        "type": "string",
+                        "maxLength": _MAX_SEARCH_OBJECTIVE_LENGTH,
+                        "description": "Describe the information needed.",
+                    },
+                    "search_queries": {
+                        "type": "array",
+                        "items": {"type": "string", "maxLength": _MAX_SEARCH_QUERY_LENGTH},
+                        "minItems": 1,
+                        "maxItems": 3,
+                        "description": "One to three short keyword queries.",
+                    },
+                },
+                "required": ["objective", "search_queries"],
+                "additionalProperties": False,
+            },
+        },
+    },
+)
+
+
+class ParallelSearch:
+    """Execute the same function tool for both OpenRouter transports."""
+
+    def __init__(self) -> None:
+        self._key = os.environ.get("PARALLEL_API_KEY", "").strip()
+        if not self._key:
+            raise ValueError(
+                "PARALLEL_API_KEY is required for uncached assistant work. "
+                "Set it to an API key issued by Parallel."
+            )
+        if self._key.startswith("sk-or-") or self._key == os.environ.get("OPENROUTER_API_KEY", "").strip():
+            raise ValueError("Set PARALLEL_API_KEY to a separate API key issued by Parallel")
+
+    @staticmethod
+    def arguments(call: ToolCall) -> JsonObject:
+        args = json.loads(call.arguments)
+        if not isinstance(args, dict) or set(args) != {"objective", "search_queries"}:
+            raise ValueError("web_search requires objective and search_queries")
+        objective, queries = args["objective"], args["search_queries"]
+        if not isinstance(objective, str) or not objective.strip():
+            raise ValueError("web_search objective must be non-empty text")
+        if len(objective) > _MAX_SEARCH_OBJECTIVE_LENGTH:
+            raise ValueError(f"web_search objective must be at most {_MAX_SEARCH_OBJECTIVE_LENGTH} characters")
+        if not isinstance(queries, list) or not 1 <= len(queries) <= 3 or any(
+            not isinstance(query, str) or not query.strip() for query in queries
+        ):
+            raise ValueError("web_search requires one to three non-empty keyword queries")
+        if any(len(query) > _MAX_SEARCH_QUERY_LENGTH for query in queries):
+            raise ValueError(f"each web_search query must be at most {_MAX_SEARCH_QUERY_LENGTH} characters")
+        return {"objective": objective, "search_queries": queries}
+
+    def execute(self, arguments: JsonObject) -> str:
+        response = requests.post(
+            "https://api.parallel.ai/v1/search",
+            headers={"x-api-key": self._key},
+            json={**arguments, "mode": "fast", "advanced_settings": {"max_results": 5}},
+            timeout=30,
+            allow_redirects=False,
+        )
+        response.raise_for_status()
+        if response.status_code != 200:
+            raise ValueError(f"Unexpected Parallel Search status {response.status_code}")
+        payload = response.json()
+        results = payload.get("results") if isinstance(payload, dict) else None
+        if not isinstance(results, list) or any(
+            not isinstance(result, dict)
+            or not isinstance(result.get("title"), (str, type(None)))
+            or not isinstance(result.get("url"), str)
+            or not isinstance(result.get("excerpts"), list)
+            or any(not isinstance(excerpt, str) for excerpt in result["excerpts"])
+            for result in results
+        ):
+            raise ValueError("Parallel Search returned malformed results")
+        return json.dumps(
+            [{key: result.get(key) for key in ("title", "url", "excerpts")} for result in results[:5]],
+            ensure_ascii=False,
+        )
 
 
 def _resource_limits() -> None:

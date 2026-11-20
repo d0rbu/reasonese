@@ -321,7 +321,7 @@ def test_check_pairs_uses_one_judge_batch_in_order() -> None:
 
     assert check_pairs((), OpenRouterClient(transport)) == ()
     path, body = transport.post_calls[0]
-    assert path == "/api/beta/batches"
+    assert path == "/api/v1/batches"
     assert body["model"].startswith("openai/gpt-5.6-luna")
     assert body["endpoint"] == "/v1/chat/completions"
     assert [check.pair.pair_id for check in checks] == ["count-vs-list", "two"]

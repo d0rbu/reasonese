@@ -517,9 +517,8 @@ def test_run_matchup_executes_once_preserves_reasoning_and_then_hits_cache(
     }
     assert transport.post_calls[1][1]["temperature"] == 0.7
     assert transport.post_calls[1][1]["parallel_tool_calls"] is False
-    assert {tool["type"] for tool in transport.post_calls[1][1]["tools"]} == {
-        "function",
-        "openrouter:web_search",
+    assert {tool["function"]["name"] for tool in transport.post_calls[1][1]["tools"]} == {
+        "read_file", "bash", "python", "web_search",
     }
 
 
@@ -1110,6 +1109,7 @@ def test_run_conversation_cli_executes_and_warm_cache_needs_no_key(
     assert run_conversation(["--allow-paid", "--route", "paid", *args]) == 0
     cold_summary = json.loads(capsys.readouterr().out)
     monkeypatch.delenv("OPENROUTER_API_KEY")
+    monkeypatch.delenv("PARALLEL_API_KEY")
     assert run_conversation(["--allow-paid", "--route", "paid", *args]) == 0
     warm_summary = json.loads(capsys.readouterr().out)
 

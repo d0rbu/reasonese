@@ -97,7 +97,7 @@ def score_saved_collections(
         for saved in database_studies:
             study = saved.study
             study_id = study_fingerprint(study)
-            contexts: list[tuple[int, ConversationSetup]] = []
+            contexts: list[tuple[int, ConversationSetup, bool]] = []
             source_trials: list[dict[str, object]] = []
             for trial in saved.trials:
                 trace = traces.get(trial.trial_id)
@@ -110,7 +110,7 @@ def score_saved_collections(
                     raise ValueError(
                         "role-probe scoring does not support scenario conversations"
                     )
-                contexts.append((int(trial.permutation), trace.setup))
+                contexts.append((int(trial.permutation), trace.setup, trace.web_search is not None))
                 source_trial: dict[str, object] = {
                     "trial_id": str(trial.trial_id),
                     "permutation": int(trial.permutation),
@@ -121,6 +121,8 @@ def score_saved_collections(
                         trace.provenance.to_dict() if trace.provenance is not None else None
                     ),
                 }
+                if trace.web_search is not None:
+                    source_trial["web_search"] = trace.web_search
                 source_trials.append(source_trial)
                 fingerprint_rows.append(source_trial)
                 traces_for_fingerprint.append(trace)

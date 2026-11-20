@@ -18,7 +18,7 @@ from reasonese.role_probe_extraction import (
     NativeTemplateAdapter,
     validate_native_template,
 )
-from reasonese.tools import ASSISTANT_TOOLS
+from reasonese.tools import ASSISTANT_TOOLS, SHARED_ASSISTANT_TOOLS
 
 FUNCTION_TOOLS = ASSISTANT_TOOLS[:-1]
 SERVER_TOOL_LIMITATION = (
@@ -69,6 +69,7 @@ def _render_config(
     adapter: NativeTemplateAdapter,
     *,
     tools: bool,
+    shared_search: bool = False,
     generation: bool,
     strict_content_tokens: bool,
 ) -> str:
@@ -76,16 +77,16 @@ def _render_config(
         "adapter": adapter.name,
         "add_generation_prompt": generation,
         "template_kwargs": _template_kwargs(adapter),
-        "function_tools": FUNCTION_TOOLS if tools else [],
+        "function_tools": (SHARED_ASSISTANT_TOOLS if shared_search else FUNCTION_TOOLS) if tools else [],
         "full_assistant_tools_sha256": hashlib.sha256(
             json.dumps(
-                ASSISTANT_TOOLS,
+                SHARED_ASSISTANT_TOOLS if shared_search else ASSISTANT_TOOLS,
                 ensure_ascii=False,
                 separators=(",", ":"),
                 sort_keys=True,
             ).encode()
         ).hexdigest(),
-        "server_tool_limitation": SERVER_TOOL_LIMITATION if tools else None,
+        "server_tool_limitation": SERVER_TOOL_LIMITATION if tools and not shared_search else None,
         "tool_argument_representation": "parsed-json-object" if tools else None,
         "strict_content_tokens": strict_content_tokens,
     }
@@ -100,11 +101,12 @@ def _apply_template(
     messages: list[dict[str, Any]],
     *,
     tools: bool,
+    shared_search: bool = False,
     generation: bool,
 ) -> str:
     kwargs: dict[str, Any] = _template_kwargs(adapter)
     if tools:
-        kwargs["tools"] = list(FUNCTION_TOOLS)
+        kwargs["tools"] = list(SHARED_ASSISTANT_TOOLS if shared_search else FUNCTION_TOOLS)
     rendered = tokenizer.apply_chat_template(
         messages,
         tokenize=False,
@@ -138,6 +140,7 @@ def _render_spans(
     replacements: tuple[tuple[int, str, str], ...],
     *,
     tools: bool,
+    shared_search: bool = False,
     generation: bool,
     strict_content_tokens: bool,
 ) -> RenderedProbeContext:
@@ -153,7 +156,7 @@ def _render_spans(
             raise ValueError("measured probe content does not match its message field")
         marked[message_index][field] = marker
         spans.append((marker, content))
-    skeleton = _apply_template(tokenizer, adapter, marked, tools=tools, generation=generation)
+    skeleton = _apply_template(tokenizer, adapter, marked, tools=tools, generation=generation, shared_search=shared_search)
     rendered = skeleton
     character_spans: list[tuple[int, int]] = []
     for marker, content in spans:
@@ -162,7 +165,7 @@ def _render_spans(
         start = rendered.index(marker)
         rendered = rendered.replace(marker, content, 1)
         character_spans.append((start, start + len(content)))
-    actual = _apply_template(tokenizer, adapter, messages, tools=tools, generation=generation)
+    actual = _apply_template(tokenizer, adapter, messages, tools=tools, generation=generation, shared_search=shared_search)
     if rendered != actual:
         raise ValueError("native template transformed measured content unexpectedly")
 
@@ -208,6 +211,7 @@ def _render_spans(
         _render_config(
             adapter,
             tools=tools,
+            shared_search=shared_search,
             generation=generation,
             strict_content_tokens=strict_content_tokens,
         ),
@@ -251,6 +255,8 @@ def render_collector_probe_context(
     adapter: NativeTemplateAdapter,
     setup: ConversationSetup,
     position: int,
+    *,
+    shared_search: bool = False,
 ) -> RenderedProbeContext:
     """Render the actual pre-generation collector context and one input span."""
     messages = _native_tool_arguments(setup.openrouter_messages())
@@ -262,6 +268,7 @@ def render_collector_probe_context(
         messages,
         ((message_index, "content", content),),
         tools=True,
+        shared_search=shared_search,
         generation=True,
         strict_content_tokens=False,
     )

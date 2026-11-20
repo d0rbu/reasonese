@@ -182,7 +182,7 @@ def test_batch_completion_polls_and_restores_submission_order() -> None:
     assert results == (_chat("one"), _chat("two"))
     assert sleeps == [0.25, 0.25]
     path, payload = transport.post_calls[0]
-    assert path == "/api/beta/batches"
+    assert path == "/api/v1/batches"
     assert list(payload) == ["endpoint", "model", "requests"]
     assert payload["model"] == "example/model"
     assert payload["requests"] == [
@@ -198,7 +198,7 @@ def test_batch_completion_polls_and_restores_submission_order() -> None:
             "body": {"messages": [], "model": "example/model"},
         },
     ]
-    assert transport.get_calls == ["/api/beta/batches/batch-1"] * 2
+    assert transport.get_calls == ["/api/v1/batches/batch-1"] * 2
 
 
 def test_grouped_completion_submits_all_batches_before_polling() -> None:
@@ -247,10 +247,10 @@ def test_grouped_completion_submits_all_batches_before_polling() -> None:
 
     assert results == ((_chat("one-a"), _chat("one-b")), (_chat("two-a"),))
     assert transport.calls == [
-        ("POST", "/api/beta/batches"),
-        ("POST", "/api/beta/batches"),
-        ("GET", "/api/beta/batches/batch-1"),
-        ("GET", "/api/beta/batches/batch-2"),
+        ("POST", "/api/v1/batches"),
+        ("POST", "/api/v1/batches"),
+        ("GET", "/api/v1/batches/batch-1"),
+        ("GET", "/api/v1/batches/batch-2"),
     ]
     assert sleeps == [0.25]
 
@@ -287,7 +287,7 @@ def test_grouped_completion_starts_batches_before_synchronous_groups() -> None:
 
     assert results == ((_chat("sync"),), (_chat("batch"),), ())
     assert transport.calls[:2] == [
-        ("POST", "/api/beta/batches"),
+        ("POST", "/api/v1/batches"),
         ("POST", "/api/v1/chat/completions"),
     ]
 
@@ -408,6 +408,44 @@ def test_batch_completion_times_out() -> None:
     )
     with pytest.raises(TimeoutError, match="did not finish"):
         client.complete_many(route, ({"messages": []},), prefer_batch=True)
+
+
+def test_polling_retries_same_batch_until_results_are_available() -> None:
+    class Transport(FakeTransport):
+        def get_json(self, path: str) -> JsonObject:
+            if not self.get_calls:
+                self.get_calls.append(path)
+                response = requests.Response()
+                response.status_code = 429
+                response.headers["Retry-After"] = "5"
+                raise requests.HTTPError(response=response)
+            return super().get_json(path)
+
+    now = 0.0
+    sleeps: list[float] = []
+
+    def sleep_for(seconds: float) -> None:
+        nonlocal now
+        sleeps.append(seconds)
+        now += seconds
+
+    transport = Transport(
+        posts=[{"id": "batch", "status": "validating", "results": None}],
+        gets=[
+            {"status": "completed", "results": None},
+            {"status": "completed", "results": [_batch_result("request-0", "answer")]},
+        ],
+    )
+    route = ModelRoute(
+        OpenRouterModelId.parse("example/model"), OpenRouterModelId.parse("example/model:batch"),
+    )
+    client = OpenRouterClient(
+        transport, sleep=sleep_for, monotonic=lambda: now, poll_interval_seconds=1.0,
+    )
+    assert client.complete_many(route, ({"messages": []},), prefer_batch=True) == (_chat("answer"),)
+    assert len(transport.post_calls) == 1
+    assert transport.get_calls == ["/api/v1/batches/batch"] * 3
+    assert sleeps == [1.0, 5.0, 1.0]
 
 
 @pytest.mark.parametrize(

@@ -124,7 +124,7 @@ def _trace_from_dict(
     if not isinstance(raw, dict):
         raise ValueError("cached trace must be a mapping")
     data = cast(dict[str, Any], raw)
-    if set(data) - {"provenance", "terminal_status", "placements"} != {
+    if set(data) - {"provenance", "terminal_status", "placements", "web_search"} != {
         "matchup", "conversation", "tool_steps", "response"
     }:
         raise ValueError("cached trace has invalid fields")
@@ -165,6 +165,7 @@ def _trace_from_dict(
     return ConversationTrace(
         setup, response, steps, provenance_from_dict(data.get("provenance")),
         data.get("terminal_status", "completed"),
+        data.get("web_search"),
     )
 
 
@@ -302,6 +303,7 @@ def trace_to_dict(trace: ConversationTrace) -> dict[str, object]:
             for step in trace.tool_steps
         ],
         "response": trace.response,
+        **({"web_search": trace.web_search} if trace.web_search is not None else {}),
         **({"terminal_status": trace.terminal_status} if trace.terminal_status != "completed" else {}),
         **({"provenance": trace.provenance.to_dict()} if trace.provenance else {}),
     }

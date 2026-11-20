@@ -73,7 +73,7 @@ Author means whoever writes the framed instruction, not the executor model.
 ## Assistant
 
 The assistant is not a fifth entry axis. A `Matchup` places an ordered tuple of four-axis
-datapoints in front of one of the six model-backed author values. This cleanly separates who
+datapoints in front of a selected assistant, including DeepSeek V4.1 Flash 1017. This cleanly separates who
 writes each instruction from which model receives the resulting conversation.
 
 ## Design size

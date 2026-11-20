@@ -27,7 +27,6 @@ from reasonese.probe_qa import (
     probe_expectation,
 )
 from reasonese.probe_rendering import (
-    SERVER_TOOL_LIMITATION,
     RenderedProbeContext,
     render_collector_probe_context,
 )
@@ -595,6 +594,7 @@ class LocalProbeQaScorer:
                 prepared.bundle.adapter,
                 request.setup,
                 request.position,
+                shared_search=request.shared_search,
             )
             prefix = self._target_prefix(context)
             rendered[request] = prefix
@@ -669,7 +669,8 @@ class LocalProbeQaScorer:
     @property
     def limitations(self) -> tuple[str, ...]:
         return (
-            SERVER_TOOL_LIMITATION,
+            "Historical traces that used OpenRouter-hosted search lack its provider-native "
+            "tool declaration in the local renderer.",
             "Local open-weight activations do not establish hosted checkpoint, quantization, "
             "template, or provider-transform parity.",
         )

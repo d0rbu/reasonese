@@ -457,9 +457,9 @@ choice explicit. `--probe-mode off` cannot be combined with a bundle:
 In inline mode, the collector validates the bundle configuration normally. Probe preflight or
 scoring failures are recorded as diagnostic errors and do not change Luna exclusions, assistant
 trials, judgments, or observations. Scoring renders both instruction spans in each exact ordered
-context with thinking enabled and the three local function declarations. The OpenRouter web-search
-tool is injected server-side and has no reproducible local prompt representation; every report
-records this limitation.
+context with thinking enabled and the recorded function declarations. New assistant work renders the
+Parallel search function alongside file, bash, and Python. Historical traces preserve the
+limitation that their OpenRouter-hosted search declaration is unavailable to the local renderer.
 
 Each target span uses one forward ending at that span's final scored token. For the pinned Nemotron
 CUDA runtime, the scorer temporarily selects the registered Triton cumsum configuration with

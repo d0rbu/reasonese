@@ -312,6 +312,7 @@ class ConversationTrace:
     tool_steps: tuple[ToolStep, ...] = ()
     provenance: RouteProvenance | None = None
     terminal_status: Literal["completed", "tool_limit_exhausted"] = "completed"
+    web_search: Literal["parallel-fast"] | None = None
 
     def __post_init__(self) -> None:
         if self.terminal_status == "tool_limit_exhausted":
@@ -549,6 +550,7 @@ def tool_call_id(assistant: Assistant, identity: str) -> ToolCallId:
             | Assistant.INKLING_SMALL
             | Assistant.GEMMA_4_31B_IT
             | Assistant.NEMOTRON_3_5_LIGHTNING
+            | Assistant.DEEPSEEK_V4_1_FLASH_1017
         ):
             return ToolCallId.parse(f"call_{digest[:24]}")
         case _:

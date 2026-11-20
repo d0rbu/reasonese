@@ -336,7 +336,7 @@ def _patch_runtime(
         lambda *args, **kwargs: (runtime_sha256, {"runtime": "test"}),
     )
 
-    def render(tokenizer: object, adapter: object, setup: object, position: int):
+    def render(tokenizer: object, adapter: object, setup: object, position: int, *, shared_search: bool = False):
         input_ids = tuple(range(12))
         positions = (1, 2) if position == 1 else (7, 8)
         return RenderedProbeContext(
@@ -663,7 +663,7 @@ def test_local_scorer_uses_identical_prefix_for_different_future_suffixes(
     config, cache, runtime_sha256 = _scorer_files(tmp_path)
     _, captured = _patch_runtime(monkeypatch, runtime_sha256)
 
-    def mismatched_render(tokenizer: object, adapter: object, setup: object, position: int):
+    def mismatched_render(tokenizer: object, adapter: object, setup: object, position: int, *, shared_search: bool = False):
         input_ids = tuple(range(12 + position))
         positions = (1, 2)
         return RenderedProbeContext(

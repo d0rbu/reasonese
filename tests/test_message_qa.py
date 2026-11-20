@@ -196,7 +196,7 @@ def test_check_messages_batches_independent_verdicts_in_input_order() -> None:
         message.spec for message in messages
     )
     path, payload = transport.post_calls[0]
-    assert path == "/api/beta/batches"
+    assert path == "/api/v1/batches"
     assert payload["model"] == "openai/gpt-5.6-luna"
     assert len(payload["requests"]) == 2
     assert check_messages((), OpenRouterClient(FakeTransport([]))) == ()

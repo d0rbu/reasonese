@@ -6,7 +6,7 @@ import argparse
 import logging
 import math
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
 from typing import Protocol, runtime_checkable
@@ -95,6 +95,7 @@ class ProbeQaRequest:
     permutation: int
     position: int
     setup: ConversationSetup
+    shared_search: bool = False
 
     def __post_init__(self) -> None:
         if self.permutation not in {1, 2} or self.position not in {1, 2}:
@@ -219,20 +220,25 @@ def probe_qa_requests_for_setups(
 @beartype
 def probe_qa_contexts(
     study: Study,
-    contexts: tuple[tuple[int, ConversationSetup], ...],
+    contexts: tuple[tuple[int, ConversationSetup] | tuple[int, ConversationSetup, bool], ...],
     *,
     missing_reason: str,
 ) -> tuple[tuple[ProbeQaRequest, ...], tuple[ProbeQaDiagnosticIssue, ...]]:
     """Classify each order's exact contexts once for inline and saved-trace scoring."""
-    if any(permutation not in {1, 2} for permutation, _ in contexts):
+    if any(context[0] not in {1, 2} for context in contexts):
         raise ValueError("probe setup permutation must be 1 or 2")
     available: list[tuple[int, ConversationSetup]] = []
+    shared_search: dict[int, bool] = {}
     issues: list[ProbeQaDiagnosticIssue] = []
     study_id = study_fingerprint(study)
     for permutation in (1, 2):
-        unique = {setup for order, setup in contexts if order == permutation}
+        unique = {
+            (context[1], context[2] if len(context) == 3 else False)
+            for context in contexts if context[0] == permutation
+        }
         if len(unique) == 1:
-            available.append((permutation, unique.pop()))
+            setup, shared_search[permutation] = unique.pop()
+            available.append((permutation, setup))
             continue
         kind = ProbeQaIssueKind.ERROR if unique else ProbeQaIssueKind.MISSING
         reason = (
@@ -243,7 +249,11 @@ def probe_qa_contexts(
             ProbeQaDiagnosticIssue(study_id, permutation, position, kind, reason)
             for position in (1, 2)
         )
-    return probe_qa_requests_for_setups(study, tuple(available)), tuple(issues)
+    requests = probe_qa_requests_for_setups(study, tuple(available))
+    return tuple(
+        replace(request, shared_search=True) if shared_search[request.permutation] else request
+        for request in requests
+    ), tuple(issues)
 
 
 @beartype

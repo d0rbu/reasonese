@@ -13,7 +13,8 @@ uv run reasonese-plan \
 The first utility prints the canonical definitions. The second validates the 24 instruction
 pairs and writes 2,304 prompt specifications: 48 for each of the 48 instructions, using
 Nemotron 3.5 Lightning and Gemma 4 31B as authors. The sampler defaults to those same two
-assistants, and collection defaults to their registered `:free` routes.
+assistants. Collection checks for an assistant batch route before using their registered free
+synchronous routes.
 
 Inspect a few records with:
 
@@ -27,6 +28,7 @@ To execute the example matchup, provide the API key through the environment:
 
 ```bash
 export OPENROUTER_API_KEY=...
+export PARALLEL_API_KEY=...
 uv run reasonese-run-conversation --allow-paid --matchup configs/example_matchup.yaml
 ```
 

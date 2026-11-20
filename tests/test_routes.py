@@ -49,7 +49,7 @@ from tests.test_study_orchestration import (
 )
 
 
-@pytest.mark.parametrize("assistant", tuple(Assistant))
+@pytest.mark.parametrize("assistant", tuple(model for model in Assistant if model.value in {a.value for a in Author}))
 def test_complete_registry_and_route_matrix(assistant: Assistant) -> None:
     author = Author(assistant.value)
     registered = model_route(assistant)
@@ -64,7 +64,7 @@ def test_complete_registry_and_route_matrix(assistant: Assistant) -> None:
         assert select_route(author, preference) == route
         expected = (
             registered.free_model_id
-            if preference is RoutePreference.FREE and free
+            if preference in {RoutePreference.AUTO, RoutePreference.FREE} and free
             else registered.model_id
         )
         assert route.model_id == expected
@@ -313,7 +313,7 @@ def test_authoring_provenance_tracks_actual_endpoint(
     assert route is not None
     assert route.transport is (CompletionTransport.BATCH if batch else CompletionTransport.SYNC)
     assert route.requested_model_id == (
-        slug + ":free" if preference is RoutePreference.FREE else slug
+        slug + ":free" if preference in {RoutePreference.AUTO, RoutePreference.FREE} else slug
     )
     assert transport.post_calls[0][1]["model"] == route.requested_model_id
     assert messages[0].response == raw
@@ -468,7 +468,7 @@ def test_suffix_legacy_judgments_miss_without_recollecting_traces(tmp_path: Path
     )
     assert resumed.trace_cache_hits == 2 and resumed.judgment_cache_hits == 0
     assert resumed.observations == cold.observations
-    assert len(allowed.post_calls) == 1 and allowed.post_calls[0][0] == "/api/beta/batches"
+    assert len(allowed.post_calls) == 1 and allowed.post_calls[0][0] == "/api/v1/batches"
 
 
 def test_mixed_author_group_denial_happens_before_free_submission(tmp_path: Path) -> None:

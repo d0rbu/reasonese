@@ -125,7 +125,7 @@ valid and produce distinct read-call/result pairs. IDs are deterministic BLAKE2s
 in the format observed from the selected OpenRouter route on September 1, 2026:
 
 - Qwen3.8 2.4T uses `chatcmpl-tool-` plus 16 lowercase hexadecimal characters.
-- Qwen3.8 Flash, Inkling, Inkling Small, Gemma 4 31B, and Nemotron 3.5 Lightning use `call_` plus 24 lowercase hexadecimal characters.
+- Qwen3.8 Flash, Inkling, Inkling Small, Gemma 4 31B, Nemotron 3.5 Lightning, and DeepSeek V4.1 Flash 1017 use `call_` plus 24 lowercase hexadecimal characters.
 
 OpenRouter's public contract treats the ID as an opaque string, and its upstream provider routing
 can change, so these shapes are empirical rather than a universal API guarantee. The synthetic
@@ -136,10 +136,10 @@ conversation is rebuilt.
 
 Every assistant request exposes four tools:
 
-- `read_file` reads UTF-8 text inside the temporary task workspace;
-- `bash` runs a command in that workspace;
-- `python` runs isolated Python code there; and
-- `openrouter:web_search` lets OpenRouter perform bounded current-information search.
+- `read_file` reads UTF-8 text inside the temporary task workspace.
+- `bash` runs a command in that workspace.
+- `python` runs isolated Python code there.
+- `web_search` retrieves current sources and excerpts through Parallel Fast.
 
 Local shell and Python executions use `bubblewrap`: the task workspace is disposable, the host
 filesystem is not mounted writable, networking is unshared, and time, address space, file size,
@@ -149,7 +149,8 @@ targets; other host `/etc` files are not exposed. `read_file` rejects absolute p
 traversal. The temporary `README.md` contains the matchup's README treatments in their input
 order for any later model-initiated reads.
 
-OpenRouter executes server-side web-search calls itself. For local function calls, the runner
+The assistant uses the same function calls in batch and synchronous inference, including direct
+Parallel Fast search. For each function call, the runner
 appends the raw assistant tool-call message and the local results, then asks the model to
 continue. Eight local steps are allowed before the run fails. The final trace caches every raw
 intermediate response, every local result, and the raw final response, preserving reasoning,

@@ -25,7 +25,7 @@ from reasonese.openrouter import (
 class CollectionRouting:
     """One invocation's explicit policy and observed route counts."""
 
-    preference: RoutePreference = RoutePreference.FREE
+    preference: RoutePreference = RoutePreference.AUTO
     allow_paid: bool = False
     _counts: Counter[tuple[str, str, str, str | None, str | None, str | None]] = field(
         default_factory=Counter, init=False, repr=False
@@ -88,6 +88,13 @@ class CollectionRouting:
             for model in dict.fromkeys(models):
                 if model == Author.USER:
                     continue
+                if stage == "assistant" and prefer_batch and self.preference in {
+                    RoutePreference.AUTO, RoutePreference.BATCH
+                }:
+                    selected.append({
+                        "stage": stage, "model": str(model), "preference": str(self.preference),
+                    })
+                    continue
                 route = select_route(model, self.preference)
                 provenance = completion_provenance(
                     route, (), prefer_batch=prefer_batch and stage == "author"
@@ -116,8 +123,8 @@ def add_route_arguments(parser: argparse.ArgumentParser) -> None:
         "--route",
         type=RoutePreference,
         choices=tuple(RoutePreference),
-        default=RoutePreference.FREE,
-        help="free preferred by default; paid is synchronous; batch prefers batch authoring",
+        default=RoutePreference.AUTO,
+        help="auto prefers batch for assistants; free and paid are synchronous model routes",
     )
     parser.add_argument(
         "--allow-paid",

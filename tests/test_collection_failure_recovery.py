@@ -53,7 +53,7 @@ class RecoveringCollectionTransport:
         with self.lock:
             self.calls[model] += 1
             count = self.calls[model]
-        if path == "/api/beta/batches":
+        if path == "/api/v1/batches":
             schema = body["requests"][0]["body"]["response_format"]["json_schema"]["name"]
             self.batch_schemas.append(schema)
             if schema == "message_compliance_verdict":
@@ -227,7 +227,7 @@ def test_accepted_author_batch_is_collected_and_cached_after_sync_model_failure(
 
     class Transport:
         def post_json(self, path: str, body: JsonObject) -> JsonObject:
-            if path == "/api/beta/batches":
+            if path == "/api/v1/batches":
                 batch_accepted.set()
                 return {"id": "accepted-author", "status": "in_progress"}
             assert batch_accepted.wait(2)
@@ -255,7 +255,7 @@ def test_accepted_author_batch_is_collected_and_cached_after_sync_model_failure(
             prefer_batch=True,
             routing=CollectionRouting(RoutePreference.BATCH, True),
         )
-    assert polled == ["/api/beta/batches/accepted-author"]
+    assert polled == ["/api/v1/batches/accepted-author"]
     assert len(cache.load()) == 1
     assert cache.load()[0].spec == specs[0]
     assert cache.load()[0].response == _chat("batch wording", "author")
@@ -369,7 +369,7 @@ def test_batch_failure_does_not_replace_original_submission_failure() -> None:
 
     class Transport:
         def post_json(self, path: str, body: JsonObject) -> JsonObject:
-            if path == "/api/beta/batches":
+            if path == "/api/v1/batches":
                 return {"id": "accepted", "status": "failed"}
             raise original
 
@@ -415,7 +415,7 @@ def test_malformed_author_batch_preserves_valid_results_from_other_accepted_batc
 
     class Transport:
         def post_json(self, path: str, body: JsonObject) -> JsonObject:
-            assert path == "/api/beta/batches"
+            assert path == "/api/v1/batches"
             if body["model"].startswith("qwen/"):
                 responses = [
                     _batch_result("request-0", _chat("", "empty")),
@@ -459,7 +459,7 @@ def test_malformed_author_batch_preserves_valid_results_from_other_accepted_batc
             prefer_batch=True,
             routing=CollectionRouting(RoutePreference.BATCH, True),
         )
-    assert polled == ["/api/beta/batches/healthy-author"]
+    assert polled == ["/api/v1/batches/healthy-author"]
     if malformed_kind == "content":
         assert tuple(message.spec for message in cache.load()) == specs[2:]
         assert tuple(message.response for message in cache.load()) == (
@@ -530,7 +530,7 @@ def test_failed_batch_does_not_discard_other_accepted_batch_results(failure_kind
         )
     assert received == ([] if failure_kind == "all_poll" else [(2, 0, _chat("healthy", "healthy-result"))])
     assert polled == (
-        [f"/api/beta/batches/{case}" for case in cases]
+        [f"/api/v1/batches/{case}" for case in cases]
         if failure_kind in ("poll", "all_poll")
         else []
     )

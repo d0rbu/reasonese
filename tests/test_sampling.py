@@ -661,10 +661,10 @@ def test_full_pilot_design_has_the_expected_size() -> None:
         Natural.parse(0),
     )
     assert len(studies) == 24 * DEFAULT_PAIRINGS_PER_PAIR * len(Assistant)
-    assert len(studies) == 103_680
+    assert len(studies) == 120_960
     assert len(set(studies)) == len(studies)
     # Two orderings per study, one rollout each.
-    assert 2 * len(studies) == 207_360
+    assert 2 * len(studies) == 241_920
 
 
 @pytest.mark.parametrize(

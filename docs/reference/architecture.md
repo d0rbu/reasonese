@@ -28,10 +28,9 @@ matchup -> authored messages -> independent message QA -> conversation -> assist
 
 - `reasonese.matchup` validates an assistant and an ordered tuple of two or more datapoints.
 - `reasonese.openrouter` uses the shared model scheduler for synchronous completions and batch
-  submissions, and overlaps
-  independent model-grouped batch jobs while preserving request and group order. Requests with
-  OpenRouter server tools stay on the synchronous API because those tools are rejected by the
-  Batch API.
+  submissions. It checks the model catalog for assistant batch support and overlaps independent
+  batch jobs while preserving request and group order. Both assistant transports use one tool loop
+  and ordinary function tools.
 - `reasonese.scheduling` owns a separate adaptive concurrency window, start interval, and
   cooldown per requested model slug. HTTP attempts and response callbacks run in bounded thread
   workers; retries wait in model queues. One tracked future represents each active request,
@@ -45,7 +44,7 @@ matchup -> authored messages -> independent message QA -> conversation -> assist
   scenario directory every conversation is bare.
 - `reasonese.manual_messages` resolves filesystem-backed variants for the user author and
   snapshots the needed files once per top-level invocation.
-- `reasonese.tools` defines bounded file, shell, Python, and server-side web-search tools.
+- `reasonese.tools` defines bounded file, shell, Python, and direct Parallel web-search tools.
 - `reasonese.cache` stores generated messages and raw traces in readable YAML.
 - `reasonese.message_qa` audits exact materialized text against its datapoint instructions.
 - `reasonese.message_qa_cache` preserves parsed QA results and raw judge responses in YAML.
@@ -72,7 +71,7 @@ integer type. `beartype` checks public functions and the `PromptSpec` constructo
 
 `MatchupInputs` is a `phantom-types` refined tuple: it contains exactly two `PromptSpec`
 objects and at least one explicit user-message channel. Repeated channels are valid.
-`Assistant` shares the six model values with model-backed authors but is
+`Assistant` includes the six model-backed author values and DeepSeek V4.1 Flash 1017 and is
 separate from the four entry axes.
 
 The OpenRouter key exists only at the transport boundary. Cache keys are structural input
@@ -117,8 +116,8 @@ conversation including local tool calls and results, and the assistant's final v
 as separately escaped XML elements inside one evidence block.
 Intermediate assistant messages retain provider `annotations`; final-message annotations appear
 as escaped JSON in a separate `<assistant-annotations>` element when the field is present.
-This exposes OpenRouter's server-side web-search citations even without local tool calls or URLs
-in the response text. Missing or empty annotations do not prove that no search occurred.
+Current search tool results supply source evidence in the visible conversation. Historical
+OpenRouter search citations remain available through any saved annotations.
 Hidden reasoning remains in the trace and its fingerprint but is not quoted as judge evidence.
 The response judge does not compare instructions or force a winner.
 
@@ -136,8 +135,7 @@ with 1-second then 2-second delays or a longer supplied Retry-After. Provider-fa
 while the provider-failure counter is retained across the conversation.
 Embedded 429s use the same adaptive limiter and cooldown as HTTP 429s. Explicit permanent
 provider errors such as 400/401/403 are not retried. Failed responses never reach local tools
-or response judgments. Already executed local tools are preserved, while server-side searches
-may execute again on a retry. Consumer/callback errors do not retry a successful HTTP request.
+or response judgments. Already executed functions, including web searches, are preserved when retrying a model call. Consumer/callback errors do not retry a successful HTTP request.
 
 Completed batch items are individually validated, with failures logged and raised after
 successful items and other submitted batches have been processed. Authoring retains successful

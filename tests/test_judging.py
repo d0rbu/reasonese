@@ -232,7 +232,7 @@ def test_judge_trace_batches_one_independent_boolean_per_input() -> None:
     assert tuple(verdict.spec for verdict in judgment.verdicts) == trace.setup.matchup.inputs
     assert judgment.trace_fingerprint == trace_fingerprint(trace)
     path, payload = transport.post_calls[0]
-    assert path == "/api/beta/batches"
+    assert path == "/api/v1/batches"
     assert payload["model"] == "openai/gpt-5.6-luna"
     assert len(payload["requests"]) == 2
     assert all(request["body"]["model"] == "openai/gpt-5.6-luna" for request in payload["requests"])
@@ -254,7 +254,7 @@ def test_fingerprinted_judging_sync_matches_default_batch_requests_and_verdicts(
     assert tuple(item.completed for item in sync_judgments[0].verdicts) == (True, False)
     assert sync_judgments == batch_judgments
     batch_path, batch_payload = batch_transport.post_calls[0]
-    assert batch_path == "/api/beta/batches"
+    assert batch_path == "/api/v1/batches"
     batch_requests = batch_payload["requests"]
     assert isinstance(batch_requests, list)
     assert [path for path, _ in sync_transport.post_calls] == [

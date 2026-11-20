@@ -614,7 +614,7 @@ def test_collect_study_batches_trials_and_judgments_then_resumes_without_a_key(
     first_request = transport.post_calls[1][1]
     assert first_request["temperature"] == 0.7
     assert first_request["parallel_tool_calls"] is False
-    assert any(tool["type"] == "openrouter:web_search" for tool in first_request["tools"])
+    assert any(tool["function"]["name"] == "web_search" for tool in first_request["tools"])
     assert transport.post_calls[5][1]["model"] == "openai/gpt-5.6-luna"
     assert len(transport.post_calls[5][1]["requests"]) == 8
     rows = [json.loads(line) for line in (output / "observations.jsonl").read_text().splitlines()]
@@ -922,7 +922,7 @@ def test_collect_studies_runs_mixed_assistant_models_through_sync_requests(
     )
 
     assert [len(result.observations) for result in results] == [4, 4]
-    assert transport.post_calls[0][0] == "/api/beta/batches"
+    assert transport.post_calls[0][0] == "/api/v1/batches"
     assert all(call[0] == "/api/v1/chat/completions" for call in transport.post_calls[1:5])
     assert sorted(call[1]["model"] for call in transport.post_calls[1:5]) == [
         "thinkingmachines/inkling",
@@ -930,7 +930,7 @@ def test_collect_studies_runs_mixed_assistant_models_through_sync_requests(
         "thinkingmachines/inkling-small",
         "thinkingmachines/inkling-small",
     ]
-    assert transport.post_calls[5][0] == "/api/beta/batches"
+    assert transport.post_calls[5][0] == "/api/v1/batches"
     assert len(transport.post_calls[5][1]["requests"]) == 8
 
 

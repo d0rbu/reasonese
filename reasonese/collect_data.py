@@ -40,7 +40,7 @@ from reasonese.matchup import prompt_spec_to_dict
 from reasonese.message_qa import MessageQaVerdict
 from reasonese.message_qa_cache import YamlMessageQaCache
 from reasonese.observations import Observation, observations_from_trials, write_observations
-from reasonese.openrouter import OpenRouterClient, RequestsTransport, select_route
+from reasonese.openrouter import OpenRouterClient, RequestsTransport
 from reasonese.planning import PromptSpec
 from reasonese.probe_qa import (
     ProbeQaDiagnosticIssue,
@@ -181,10 +181,14 @@ def _run_inline_probe_diagnostics(
     ):
         planned_by_matchup = {setup.matchup: setup for setup in planned_setups or ()}
         contexts = tuple(
-            (int(trial.permutation), state.traces[str(trial.trial_id)].trace.setup)
+            (
+                int(trial.permutation),
+                state.traces[str(trial.trial_id)].trace.setup,
+                state.traces[str(trial.trial_id)].trace.web_search is not None,
+            )
             for trial in trials if str(trial.trial_id) in state.traces
         ) + tuple(
-            (int(trial.permutation), planned_by_matchup[trial.matchup])
+            (int(trial.permutation), planned_by_matchup[trial.matchup], True)
             for trial in state.missing_trials if trial.matchup in planned_by_matchup
         )
         study_requests, issues = probe_qa_contexts(
@@ -456,13 +460,14 @@ def collect_studies(
             run_assistant_groups(
                 tuple(
                     AssistantRunGroup(
-                        select_route(assistant, routing.preference),
+                        client.assistant_route(assistant, routing.preference, prefer_batch=prefer_batch),
                         tuple(setup for _, _, setup in work),
                     )
                     for assistant, work in ordered_work
                 ),
                 client,
                 on_trace=collect_trace,
+                prefer_batch=prefer_batch,
             )
         finally:
             # The scheduler joins its workers before returning or raising. Preserve

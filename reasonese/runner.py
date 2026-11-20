@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
 from dataclasses import dataclass
 from threading import Lock
@@ -20,6 +21,7 @@ from reasonese.conversation import (
     ConversationTrace,
     GeneratedMessage,
     GeneratedText,
+    ToolResult,
     ToolStep,
     authoring_request,
 )
@@ -33,7 +35,6 @@ from reasonese.openrouter import (
     ModelRoute,
     OpenRouterClient,
     OpenRouterModelId,
-    RouteProvenance,
     completion_provenance,
     response_content,
     select_route,
@@ -47,7 +48,9 @@ from reasonese.scenarios import (
 )
 from reasonese.scheduling import ScheduledRequest
 from reasonese.tools import (
-    ASSISTANT_TOOLS,
+    PARALLEL_FAST,
+    SHARED_ASSISTANT_TOOLS,
+    ParallelSearch,
     ToolRuntime,
     assistant_message_from_response,
     tool_calls_from_response,
@@ -57,7 +60,7 @@ from reasonese.tools import (
 def _assistant_request(messages: list[JsonObject]) -> JsonObject:
     return {
         "messages": list(messages),
-        "tools": list(ASSISTANT_TOOLS),
+        "tools": list(SHARED_ASSISTANT_TOOLS),
         "parallel_tool_calls": False,
         "temperature": 0.7,
         "reasoning": {"enabled": True, "exclude": False},
@@ -230,6 +233,8 @@ def run_assistant_groups(
     client: OpenRouterClient,
     *,
     on_trace: Callable[[int, int, ConversationTrace], None] | None = None,
+    prefer_batch: bool = True,
+    search: ParallelSearch | None = None,
 ) -> tuple[tuple[ConversationTrace, ...], ...]:
     """Run assistant-model groups without blocking fast tool continuations on slow peers."""
     messages = {
@@ -241,6 +246,12 @@ def run_assistant_groups(
     completed: dict[tuple[int, int], ConversationTrace] = {}
     if not messages:
         return tuple(() for _ in groups)
+    search_client = search if search is not None else ParallelSearch()
+    search_counts = dict.fromkeys(messages, 0)
+    provenances = tuple(
+        completion_provenance(group.route, (_assistant_request([]),), prefer_batch=prefer_batch)
+        for group in groups
+    )
     runtimes: dict[tuple[int, int], ToolRuntime] = {}
     available_runtimes: list[ToolRuntime] = []
     runtime_stack = ExitStack()
@@ -266,10 +277,10 @@ def run_assistant_groups(
         return client.completion_request(
             groups[group_index].route.model_id,
             _assistant_request(messages[key]),
-            lambda response: receive(key, response),
+            lambda response: request_for(key) if advance(key, response) else None,
         )
 
-    def receive(key: tuple[int, int], response: JsonObject) -> ScheduledRequest[JsonObject] | None:
+    def advance(key: tuple[int, int], response: JsonObject) -> bool:
         group_index, setup_index = key
         calls = tool_calls_from_response(response)
         exhausted = bool(calls) and len(steps[key]) == MAX_LOCAL_TOOL_STEPS
@@ -289,8 +300,9 @@ def run_assistant_groups(
                 groups[group_index].setups[setup_index],
                 response,
                 tuple(steps[key]),
-                RouteProvenance(groups[group_index].route.model_id, CompletionTransport.SYNC),
+                provenances[group_index],
                 "tool_limit_exhausted" if exhausted else "completed",
+                PARALLEL_FAST,
             )
             with runtime_lock:
                 completed[key] = trace
@@ -299,16 +311,81 @@ def run_assistant_groups(
                     available_runtimes.append(runtime)
             if on_trace is not None:
                 on_trace(group_index, setup_index, trace)
-            return None
-        runtime = runtime_for(key)
-        results = tuple(runtime.execute(call) for call in calls)
-        steps[key].append(ToolStep(response, results))
+            return False
+        results = []
+        for call in calls:
+            if call.name != "web_search":
+                results.append(runtime_for(key).execute(call))
+                continue
+            try:
+                arguments = search_client.arguments(call)
+            except ValueError as error:
+                results.append(ToolResult(call.call_id, f"error: {error}"))
+                continue
+            if search_counts[key] >= 2:
+                results.append(ToolResult(call.call_id, "error: search limit reached for this trial"))
+                continue
+            search_counts[key] += 1
+            results.append(ToolResult(call.call_id, search_client.execute(arguments)))
+        steps[key].append(ToolStep(response, tuple(results)))
         messages[key].append(assistant_message_from_response(response))
         messages[key].extend(result.openrouter_dict() for result in results)
-        return request_for(key)
+        return True
+
+    def batch_round(ready: dict[int, list[int]], following: dict[int, list[int]]) -> None:
+        indices = tuple(ready)
+
+        def on_response(index: int, body: int, response: JsonObject) -> None:
+            group_index = indices[index]
+            setup_index = ready[group_index][body]
+            if advance((group_index, setup_index), response):
+                following.setdefault(group_index, []).append(setup_index)
+
+        client.complete_many_grouped(
+            tuple(
+                CompletionGroup(
+                    groups[index].route,
+                    tuple(_assistant_request(messages[index, setup]) for setup in ready[index]),
+                )
+                for index in indices
+            ),
+            prefer_batch=True,
+            on_response=on_response,
+            batch_only=True,
+        )
+
+    def run_batches(ready: dict[int, list[int]]) -> None:
+        failure: Exception | None = None
+        while ready:
+            following: dict[int, list[int]] = {}
+            try:
+                batch_round(ready, following)
+            except Exception as error:
+                if failure is None:
+                    failure = error
+            # Successful items may still have tool results waiting to reach the model.
+            ready = following
+        if failure is not None:
+            raise failure
+
+    batch_ready: dict[int, list[int]] = {}
+    sync_ready: list[tuple[int, int]] = []
+    for index, setup in messages:
+        if provenances[index].transport is CompletionTransport.BATCH:
+            batch_ready.setdefault(index, []).append(setup)
+        else:
+            sync_ready.append((index, setup))
 
     with runtime_stack:
-        client.scheduler.run(request_for(key) for key in messages)
+        if batch_ready and sync_ready:
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                sync = executor.submit(client.scheduler.run, tuple(map(request_for, sync_ready)))
+                run_batches(batch_ready)
+                sync.result()
+        elif batch_ready:
+            run_batches(batch_ready)
+        else:
+            client.scheduler.run(map(request_for, sync_ready))
 
     return tuple(
         tuple(completed[(group_index, setup_index)] for setup_index in range(len(group.setups)))
@@ -355,6 +432,7 @@ def run_matchup(
     routing.require_paid(
         "uncached assistant work (chargeable web search), including required message QA"
     )
+    search = ParallelSearch()
     generated = materialize_messages(
         matchup,
         client,
@@ -367,9 +445,10 @@ def run_matchup(
         audit_messages(generated, qa_cache, client, routing=routing, prefer_batch=prefer_batch)
     )
     setup = build_conversation(matchup, generated, scenarios)
-    trace = run_assistant(
-        setup, select_route(matchup.assistant, routing.preference).model_id, client
-    )
+    route = client.assistant_route(matchup.assistant, routing.preference, prefer_batch=prefer_batch)
+    trace = run_assistant_groups(
+        (AssistantRunGroup(route, (setup,)),), client, prefer_batch=prefer_batch, search=search,
+    )[0][0]
     trace_cache.put(trace)
     routing.record("assistant", matchup.assistant, "new", trace.provenance, trace.response)
     return RunResult(trace, False)

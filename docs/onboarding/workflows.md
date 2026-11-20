@@ -69,6 +69,7 @@ Create YAML following [`../reference/configuration.md`](../reference/configurati
 
 ```bash
 export OPENROUTER_API_KEY=...
+export PARALLEL_API_KEY=...
 uv run reasonese-run-conversation --allow-paid --matchup path/to/matchup.yaml
 ```
 
@@ -102,6 +103,7 @@ Point the judge utility at the same matchup and trace cache:
 
 ```bash
 export OPENROUTER_API_KEY=...
+export PARALLEL_API_KEY=...
 uv run reasonese-judge-responses \
   --matchup path/to/matchup.yaml \
   --trace-cache out/conversation_traces.yaml \
@@ -118,6 +120,7 @@ Create study YAML following [`../reference/configuration.md`](../reference/confi
 
 ```bash
 export OPENROUTER_API_KEY=...
+export PARALLEL_API_KEY=...
 uv run reasonese-collect-data --allow-paid \
   --study path/to/study.yaml \
   --user-messages prompts/user \
@@ -146,9 +149,8 @@ uv run reasonese-collect-studies --allow-paid \
 ```
 
 The suite utility batches shared message QA once, runs pending assistant requests concurrently,
-and judges all completed traces in one request group. Assistant inference stays synchronous so
-the OpenRouter web-search server tool remains available; authoring, QA, and judging still use
-compatible batch routes. Shared authoring and QA caches live at the suite root; each study's
+and judges all completed traces in one request group. Batch-capable assistants use OpenRouter
+Batch by default. Both transports use the same direct Parallel search function. Shared authoring and QA caches live at the suite root; each study's
 resumable traces, judgments, and observations remain in its own subdirectory.
 
 For a sampled suite, pass the single generated artifact instead:

@@ -125,14 +125,15 @@ the suite; fingerprint-named output directories avoid dependence on thousands of
 ## Collection route selection and paid work
 
 All three collection commands (`reasonese-run-conversation`, `reasonese-collect-data`, and
-`reasonese-collect-studies`) accept `--route {free,paid,batch}` and `--allow-paid`. Routing is
+`reasonese-collect-studies`) accept `--route {auto,free,paid,batch}` and `--allow-paid`. Routing is
 invocation configuration, never part of the study YAML or a treatment axis.
 
 | Preference | Model authors | Assistants |
 |---|---|---|
-| `free` (default) | Registered `:free` slug synchronously; otherwise paid synchronous fallback | Same |
+| `auto` (default) | Free-first synchronous | OpenRouter Batch when the model catalog lists a matching `:batch` variant, otherwise free-first synchronous |
+| `free` | Registered `:free` slug synchronously, otherwise paid synchronous | Same |
 | `paid` | Paid synchronous slug | Paid synchronous slug |
-| `batch` | Batch API where registered and compatible; otherwise paid synchronous fallback | Paid synchronous slug under the existing web-search harness |
+| `batch` | Batch API where registered and compatible; otherwise paid synchronous fallback | OpenRouter Batch when listed in the catalog, otherwise paid synchronous |
 
 Nemotron 3.5 Lightning, Inkling, Inkling Small, and Gemma 4 31B have registered free routes; both Qwen models lack one.
 A failed free request never triggers a paid retry. `--no-batch` keeps authoring, message QA,
@@ -143,7 +144,7 @@ synchronous endpoint.
 
 **No uncached chargeable collection work is allowed without `--allow-paid`.** This includes
 paid authoring, message QA, response judgments, and assistant requests that expose chargeable
-server-side web search. Thus even a cold collection using free model routes needs this opt-in:
+Parallel web search. Thus even a cold collection using free model routes needs this opt-in:
 free token pricing is not free end-to-end collection. The harness does not remove tools or skip
 QA to avoid charges. Cold model authoring in collection is rejected before provider calls.
 Cached authored messages and QA rejections can be inspected and excluded without an API key or
@@ -169,8 +170,9 @@ and does not change with the authoring brief.
 The planner accepts repeated `--author` and the sampler accepts repeated `--author` and
 `--assistant` filters, including `Gemma 4 31B`. Both default author selection and default assistant selection
 contain only Nemotron 3.5 Lightning and Gemma 4 31B. Supplying a filter replaces its default
-set; it does not append to it. Other supported models and `author: user` remain available
-explicitly. Duplicate values are rejected. Filtering preserves
+set; it does not append to it. Use `--assistant "DeepSeek V4.1 Flash 1017"` to select the DeepSeek snapshot
+(`deepseek/deepseek-v4.1-flash-1017`). Other supported models and `author: user` remain
+available explicitly. Duplicate values are rejected. Filtering preserves
 existing specification order; the planner summary counts only selected conditions.
 
 These defaults apply when generating new plans and suites. Existing suite YAML and cached
@@ -178,19 +180,24 @@ responses keep their original models and provenance; regenerate a suite to adopt
 selection, and use separate caches if you need fresh collection on the free routes.
 
 Nemotron 3.5 Lightning uses `nvidia/nemotron-3.5-lightning:free` by default, or
-`nvidia/nemotron-3.5-lightning` with `--route paid`. No Nemotron batch route is registered;
-`--route batch` uses the ordinary paid synchronous fallback for this model. Both Inklings
+`nvidia/nemotron-3.5-lightning` with `--route paid`. The catalog determines whether Nemotron has a batch route; explicit `--route batch` uses
+the ordinary paid synchronous fallback when that route is absent. Both Inklings
 remain supported via explicit filters, but their free endpoints rejected this runner's authoring
 requests with an agentic-harness access restriction. Catalog listings do not establish live access.
 
 ## Pilot web search
 
-Assistant web search uses OpenRouter's Parallel engine with `mode: fast`, five results per
-search, at most ten results and two search calls per API request. These bounds reset on a new
-API request, including local-tool continuations; they are not a whole-trial or run spending cap.
-The author and assistant model routes remain `free` by default. Search and the existing Luna
-QA/judges require `--allow-paid`. Use a fresh output directory when changing the search engine
-so cached traces from another search configuration are not silently reused.
+Both assistant transports expose the same `web_search` function. Set `PARALLEL_API_KEY` to a
+separate key issued by Parallel. The function uses it to call Parallel Fast and returns
+source titles, URLs, and excerpts as tool results. Each trial allows
+two searches of up to five results, within its eight tool rounds. Parallel bills search separately
+from model inference. New assistant traces record `web_search: parallel-fast`.
+
+Use the same authored-message and QA caches with separate fresh trace outputs to compare the
+two transports. Historical traces retain their original OpenRouter-hosted search configuration.
+A fully cached replay needs neither API key. Accepted batch IDs appear in progress and failure
+messages. Collection resumes from persisted completed traces. If interrupted, reconcile any still-running
+provider batches before rerunning uncached work.
 
 The Inkling free endpoints are restricted to agentic harnesses. Their presence in the model
 catalog and zero token prices do not establish access for this runner: a September 12, 2026
@@ -203,7 +210,8 @@ Resolve provider access before launching the pilot; failed free calls do not tri
 One `OpenRouterClient` keeps independent limiter state for each **requested model slug** across
 its sequential authoring and assistant stages. Free and paid slugs have separate state, and
 multiple groups using the same slug share one limit. This applies to chat completions, tool
-continuations, and batch submissions. Batch status polling retains its existing polling policy.
+continuations, and batch submissions. Status polling retries temporary failures on the accepted
+batch ID, honors HTTP `Retry-After`, and waits for results if a completed job still returns null.
 
 Each model starts with at most two in-flight requests. On success its concurrency window grows
 by `1 / window`, up to `OpenRouterClient(sync_workers=8)` by default. `sync_workers` is now a
@@ -239,7 +247,8 @@ Other HTTP failures, ambiguous network errors, malformed responses, and response
 errors stop all new admission and propagate after in-flight results are processed. A callback
 failure never resends its already successful HTTP request. Already accepted batches are
 collected despite a peer failure; failed or malformed batches do not discard valid peer batch
-results. Duplicate batch request IDs are rejected rather than overwriting a response.
+results. Successful assistant items can finish their tool continuations before a peer error is
+reported. Duplicate batch request IDs are rejected rather than overwriting a response.
 
 Successful authored messages and complete trial traces are saved in bulk on both success and
 handled failure. Resuming reuses those results; QA, judging, and observation stages remain

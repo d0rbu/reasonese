@@ -81,8 +81,9 @@ research definitions together.
 
 ## Routing invariants
 
-- Collection defaults to preferring registered free routes, with explicit paid permission before
-  any uncached chargeable work. Paid QA, judgments, and server-side search remain chargeable even
+- Collection prefers batch for eligible assistants and free-first synchronous for other assistants
+  and authors. Explicit paid permission applies before uncached chargeable work. QA, judgments,
+  and Parallel search remain chargeable even
   when author or assistant model tokens are free.
 - Route preferences never change study definitions, cell identifiers, trial identifiers, or the
   eligible comparison graph. Changing preferences does not force a cache miss.

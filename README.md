@@ -58,6 +58,7 @@ uv run reasonese-sample-studies \
   --output out/example/studies.yaml
 
 export OPENROUTER_API_KEY=...
+export PARALLEL_API_KEY=...
 uv run reasonese-curate-instructions --output out/instructions
 
 uv run reasonese-run-conversation --allow-paid \
@@ -97,14 +98,16 @@ generates any missing model-authored messages, constructs the ordered conversati
 it to the selected assistant with file-read, sandboxed bash, sandboxed Python, and web-search
 tools. When batch authoring is selected, it submits independent author batches before polling, so one
 author model's queue does not block another author's submission. `--route batch --allow-paid`
-selects batch authoring where available; the default prefers free synchronous routes.
+selects batch authoring where registered. By default, assistant inference uses OpenRouter Batch
+when the catalog lists the model’s batch variant. Other assistants use their free-first
+synchronous routes. Authoring defaults to free-first routing.
 `--no-batch` keeps authoring, message QA, assistant inference, and response judging synchronous;
 it conflicts with `--route batch`. Bash and Python
 execution require `bubblewrap` (`bwrap`) on the host.
 
 Collection requires `--allow-paid` before any uncached chargeable work. Even free model routes
-still use paid message QA, study judgments, and potentially paid assistant web search. A complete
-cache-only replay needs neither the flag nor an API key. Route selection stays outside study
+still use paid message QA, study judgments, and potentially paid assistant web search. New assistant work uses direct Parallel Fast search. A complete
+cache-only replay needs neither the flag nor either API key. Route selection stays outside study
 YAML; summaries preserve original cache provenance. See
 [`route configuration`](docs/reference/configuration.md#collection-route-selection-and-paid-work).
 
@@ -189,9 +192,9 @@ Each model has its own admission queue and cooldown, and ready tool continuation
 model's freed slots before fresh requests. A rate-limited model does not consume another model's
 capacity. Local tool processing uses that model's workers, so a slow tool also leaves other
 models free to progress. The same scheduler handles authoring and batch submissions.
-Assistant requests retain the
-OpenRouter web-search tool and therefore use the synchronous API because OpenRouter does not
-support that server tool in batch jobs. Definite HTTP 429 responses are retried a bounded number
+Both assistant transports use the same prompts and tools, including a function that calls
+Parallel Fast directly. There are two searches per trial and five results per search. Batch
+turns are grouped by model, with a new batch round for trials that request a tool. Definite HTTP 429 responses are retried a bounded number
 of times, halving that model's concurrency window and slowing its request starts. Successful
 requests gradually restore throughput; `Retry-After` seconds or HTTP dates are honored in full.
 See [adaptive scheduling](docs/reference/configuration.md#adaptive-api-scheduling) for the policy
@@ -244,8 +247,8 @@ Connectivity is required within a pair and is impossible between pairs, so the c
 has exactly one component per `(pair, assistant)`.
 
 The planner and sampler default to Nemotron 3.5 Lightning and Gemma 4 31B as authors;
-the sampler evaluates those same two assistants. The default collection route is `free`, so
-both use their registered `:free` slugs. Repeated `--author` and `--assistant` options
+the sampler evaluates those same two assistants. Both have registered `:free` slugs for
+synchronous free-first routing. DeepSeek V4.1 Flash 1017 is available as an explicit assistant selection. Repeated `--author` and `--assistant` options
 replace the corresponding default set; Qwen/Inkling models and the manual `user` author remain
 available explicitly. With these defaults there are 48 conditions per instruction, 96 cells
 and 1,280 eligible pairings per pair. The 24-pair bank produces 2,304 prompt specifications
