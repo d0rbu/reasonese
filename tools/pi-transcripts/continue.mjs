@@ -16,7 +16,7 @@ function within(root, filename) {
   if (relative(realpathSync(root), path).split(/[\\/]/).includes("..")) throw new Error("Artifact escapes source directory");
   return path;
 }
-function artifact(root, ref) {
+export function artifact(root, ref) {
   const path = within(root, ref.path);
   const bytes = readFileSync(path);
   if (sha256(bytes) !== ref.sha256) throw new Error("Source artifact hash mismatch");
@@ -112,7 +112,7 @@ export function preflightPlan(planPath, receiptPath = null, { fixture = false } 
   return { plan, planSha256, checkpoint, archive: path, qa };
 }
 
-async function validateRestoredState(restored, source, checkpoint, fixture) {
+export async function validateRestoredState(restored, source, checkpoint, fixture) {
   const cwd = join(restored.destination, "workspace"), prepared = restored.prepared;
   contextFile(cwd, source.scenarioConfig);
   const python = prepared.pythonEnvironment;
@@ -148,7 +148,9 @@ async function validateRestoredState(restored, source, checkpoint, fixture) {
     const identity = dependencies[name];
     if (!identity) continue;
     const mount = environment.mounts?.find(m => m.target === target);
-    if (!mount || !identity.executableSha256 || hashFile(executable(mount.source)) !== identity.executableSha256) throw new Error(`Prepared ${name} runtime changed`);
+    // Older uv captures stored the pinned digest under binarySha256.
+    const expected = identity.executableSha256 ?? (name === "uv" ? identity.binarySha256 : undefined);
+    if (!mount || !expected || hashFile(executable(mount.source)) !== expected) throw new Error(`Prepared ${name} runtime changed`);
   }
   const head = (await sandboxGit(cwd, join(restored.destination, "tool-state"), "rev-parse", "HEAD")).trim();
   const status = await sandboxGit(cwd, join(restored.destination, "tool-state"), "status", "--porcelain=v1", "--untracked-files=all");

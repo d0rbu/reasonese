@@ -345,6 +345,10 @@ Preparation makes no model calls. Collection requires explicit authorization and
 `--allow-paid --interactive`, selecting one scenario. Source transcripts remain
 separate from later templated comparisons.
 
+The [frontier transcript runner](docs/reference/native-pi-experiments.md#frontier-transcripts)
+collects outcome-matched Claude or OpenAI baselines and branches the same user-turn
+plans from their provider-native reasoning and workspace checkpoints.
+
 ## Writing the manual variants
 
 For native Pi experiments, start with the 72 human implementation TODOs in the

@@ -6,6 +6,7 @@ import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { main, preflightPlan, runContinuation, validateHistory } from "../continue.mjs";
 import { runTrajectory } from "../trajectory.mjs";
+import { main as runFrontier } from "../frontier.mjs";
 import { isNeutralCase } from "../backing.mjs";
 import { projectDir } from "../sandbox.mjs";
 import { git, KIMI_MODEL, loadManifest, readJson, sha256, writeJson } from "../workspaces.mjs";
@@ -164,6 +165,8 @@ function refreshDescriptor(f, { review = true } = {}) {
     const variants = [...f.plan.turns.map(t => t.variant), ...f.plan.metadata.authoringVariants];
     for (const path of new Set(variants.map(v => v.sourceBinding.path))) {
       const binding = readJson(path); binding.target.descriptorSha256 = f.plan.sourceDescriptor.sha256;
+    binding.target.checkpoints = Object.fromEntries(Object.entries(f.plan.source.checkpoints)
+      .map(([key, value]) => [key, value.workspace.sha256]));
       writeJson(path, binding);
       const hash = sha256(readFileSync(path));
       variants.filter(v => v.sourceBinding.path === path).forEach(v => { v.sourceBinding.sha256 = hash; });
@@ -220,4 +223,81 @@ test("restored Git, context and immutable runtimes are checked before model look
       assert.equal(readJson(join(f.root, "rejected-" + name, "message-qa.json")).passed, true);
     }
   } finally { globalThis.fetch = originalFetch; }
+});
+
+test("frontier collection rejects an attempt and branches from the accepted native prefix", { timeout: 240_000 }, async t => {
+  const f = await fixture(t);
+  const source = f.plan.source;
+  source.captureKind = "live_pi_session";
+  const uv = realpathSync(execFileSync("/usr/bin/which", ["uv"], { encoding: "utf8" }).trim());
+  source.prepared.toolEnvironment.mounts.push({ source: uv, target: "/opt/bin/uv" });
+  source.prepared.toolEnvironment.dependencies.uv = { binarySha256: sha256(readFileSync(uv)) };
+  const initial = "turns/000.workspace.tar.gz";
+  source.checkpoints["0"] = {
+    workspace: { path: initial, sha256: sha256(readFileSync(join(f.plan.corpusRoot, initial))) },
+    gitState: readJson(join(f.plan.corpusRoot, "turns/000.workspace.json")).gitState,
+  };
+  refreshDescriptor(f);
+  const receipt = readJson(f.receiptPath);
+  writeJson(f.receiptPath, { ...receipt, fixture: false });
+  const descriptor = join(f.plan.corpusRoot, f.plan.sourceDescriptor.path);
+  const collection = join(f.root, "frontier-baseline"), branch = join(f.root, "frontier-branch");
+  const checks = join(f.root, "checks.json");
+  writeJson(checks, [
+    [{ kind: "answer", contains: "Investigation completed." }, { kind: "file", path: "rejected.txt", missing: true }],
+    [{ kind: "file", path: "implemented.txt", contains: "working behavior" }],
+  ]);
+  const requests = [];
+  const signed = i => ({ type: "thinking", thinking: "", signature: `opaque-${i}` });
+  const replies = [
+    [{ type: "tool_use", name: "write", id: "toolu_bad", input: { path: "rejected.txt", content: "Rejected state" } }],
+    [{ type: "text", text: "Skipped investigation." }],
+    [{ type: "text", text: "Investigation completed." }],
+    [{ type: "tool_use", name: "write", id: "toolu_good", input: { path: "implemented.txt", content: "working behavior" } }],
+    [{ type: "text", text: "Original implementation completed." }],
+    [{ type: "text", text: "First assignment completed." }],
+    [{ type: "text", text: "Second assignment completed." }],
+  ];
+  const originalFetch = globalThis.fetch, key = process.env.ANTHROPIC_API_KEY;
+  const originalUmask = process.umask();
+  const common = ["--source", descriptor, "--provider", "anthropic", "--model", "claude-opus-5-5", "--effort", "high", "--allow-paid"];
+  try {
+    process.env.ANTHROPIC_API_KEY = "offline-fixture";
+    globalThis.fetch = async (url, { body }) => {
+      assert.equal(url, "https://api.anthropic.com/v1/messages");
+      const index = requests.push(JSON.parse(body)) - 1;
+      const blocks = replies[index];
+      return Response.json({ model: "claude-opus-5-5",
+        stop_reason: blocks[0].type === "tool_use" ? "tool_use" : "end_turn", content: [signed(index), ...blocks] });
+    };
+    await runFrontier(["collect", ...common, "--checks", checks, "--attempts", "2", "--max-request-bytes", "786432", "--out", collection]);
+    const summary = readJson(join(collection, "collection.json"));
+    assert.equal(summary.accepted, "attempt-2");
+    assert.equal(summary.maxRequestBytes, 786432);
+    assert.deepEqual(summary.attempts.map(attempt => attempt.status), ["rejected", "accepted"]);
+    assert.deepEqual(requests[0], requests[2], "resampling starts from the exact original user prompt");
+    assert.deepEqual(requests[1].messages[1].content[0], signed(0));
+    assert.equal(requests[1].messages[2].content[0].tool_use_id, "toolu_bad");
+    assert.equal(requests[3].messages.at(-1).content[0].text, "Original implementation request.");
+
+    await runFrontier(["branch", ...common, "--collection", collection, "--plan", f.planPath, "--qa-receipt", f.receiptPath, "--out", branch]);
+    assert.equal(requests.length, 7);
+    assert.deepEqual(requests[5].messages.slice(0, 2), requests[3].messages.slice(0, 2));
+    assert.deepEqual(requests[5].messages[1].content[0], signed(2));
+    assert.equal(requests[5].messages.at(-1).content[0].text, f.plan.turns[0].prompt);
+    assert.equal(requests[6].messages.at(-1).content[0].text, f.plan.turns[1].prompt);
+    assert.equal(readJson(join(branch, "frontier/outcome.json")).status, "completed");
+    assert.throws(() => readFileSync(join(branch, "workspace/implemented.txt")), /ENOENT/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    process.umask(originalUmask);
+    if (key === undefined) delete process.env.ANTHROPIC_API_KEY;
+    else process.env.ANTHROPIC_API_KEY = key;
+    for (const attempt of ["attempt-1", "attempt-2"]) {
+      const alias = join(collection, attempt);
+      if (!lstatSync(alias, { throwIfNoEntry: false })?.isSymbolicLink()) continue;
+      const target = readlinkSync(alias);
+      if (isNeutralCase(target)) rmSync(dirname(target), { recursive: true, force: true });
+    }
+  }
 });

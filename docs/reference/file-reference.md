@@ -40,6 +40,8 @@
 | `reasonese/io.py` | JSONL writer |
 | `reasonese/matchup.py` | Strongly typed matchup invariants and serialization |
 | `reasonese/conversation.py` | Authoring requests, channel rendering, and the bare and scenario conversation layouts |
+| `tools/pi-transcripts/frontier.mjs` | Bounded native frontier transcript collection, outcome matching, and branching |
+| `tools/pi-transcripts/frontier-provider.mjs` | Anthropic Messages and OpenAI Responses native history and tool-result encoding |
 | `reasonese/scenarios.py` | Optional per-pair scenario templates: loading, slot rendering, placement, and cache validity |
 | `reasonese/show_scenario.py` | `reasonese-show-scenario` offline rendering utility |
 | `reasonese/prompt_optimization.py` | Bounded authoring-brief evaluation, fixed-rubric reports, and offline comparison table |

@@ -136,9 +136,11 @@ def test_native_run_audits_exact_turns_then_launches_and_reuses_cache(
         tmp_path / "second-run",
         cache,
         allow_paid=True,
+        qa_only=True,
         transport_factory=lambda: None,
         launcher=launches.append,
     )
+    assert len(launches) == 1 and "--preflight-only" in launches[0]
     assert json.loads(second_receipt.read_text())["cacheHits"] == 2
     assert json.loads(receipt_path.read_text())["cacheHits"] == 0
     assert len(transport.calls) == 1

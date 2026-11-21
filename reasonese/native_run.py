@@ -104,10 +104,11 @@ def run_native(
     qa_cache_path: Path,
     *,
     allow_paid: bool = False,
+    qa_only: bool = False,
     transport_factory: Callable[[], JsonTransport | None] = _transport,
     launcher: Callable[[Sequence[str]], None] = _launch,
 ) -> Path:
-    """Cache exact Luna QA, bind its receipt to the plan bytes, then invoke Pi.
+    """Cache exact Luna QA and optionally invoke Pi with the plan-bound receipt.
 
     The injected boundaries support offline checks. The explicit opt-in covers
     both uncached QA and the assistant continuation, even when QA is cached.
@@ -117,7 +118,9 @@ def run_native(
     plan_sha256 = hashlib.sha256(raw).hexdigest()
     messages = _messages(_object(json.loads(raw), "native plan"))
     routing = CollectionRouting(allow_paid=allow_paid)
-    routing.require_paid("native Pi continuation and any uncached message QA")
+    routing.require_paid(
+        "native message QA" if qa_only else "native Pi continuation and any uncached message QA"
+    )
     if output.exists() or output.is_symlink():
         raise ValueError("native continuation output must be fresh; retain failed attempts")
     receipt_path = output.resolve().with_name(output.name + f".message-qa.{plan_sha256}.json")
@@ -166,6 +169,8 @@ def run_native(
     require_compliant_messages(result)
     if hashlib.sha256(plan_path.read_bytes()).hexdigest() != plan_sha256:
         raise ValueError("native plan changed during message QA; recompile and audit it again")
+    if qa_only:
+        return receipt_path
     launcher(
         [
             "node",
@@ -190,9 +195,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--qa-cache", type=Path, default=Path("out/native-message-qa.yaml"))
     parser.add_argument("--allow-paid", action="store_true")
+    parser.add_argument("--qa-only", action="store_true", help="write the exact plan QA receipt")
     args = parser.parse_args(argv)
     try:
-        receipt = run_native(args.plan, args.out, args.qa_cache, allow_paid=args.allow_paid)
+        receipt = run_native(
+            args.plan, args.out, args.qa_cache, allow_paid=args.allow_paid, qa_only=args.qa_only
+        )
     except (
         OSError,
         RuntimeError,
@@ -202,7 +210,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         subprocess.SubprocessError,
     ) as error:
         parser.error(str(error))
-    print(
-        json.dumps({"qaReceipt": str(receipt), "output": str(args.out.resolve())}, sort_keys=True)
-    )
+    result = {"qaReceipt": str(receipt)}
+    if not args.qa_only:
+        result["output"] = str(args.out.resolve())
+    print(json.dumps(result, sort_keys=True))
     return 0

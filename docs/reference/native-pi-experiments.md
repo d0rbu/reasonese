@@ -185,3 +185,84 @@ Offline fixtures exercise actual Pi tool execution and continuation restoration
 without a paid provider. They establish integration behavior only. The fresh
 awareness-selected source cohort is a selection-conditioned set of captures;
 absence of verbalized awareness does not establish absence of internal awareness.
+
+## Frontier transcripts
+
+The frontier collector runs the original Kimi user turns in order against a direct
+Anthropic Messages or OpenAI Responses model. Start with the pinned Kimi source
+descriptor and its complete checkpoint 0. Each attempt restores that same clean
+workspace, uses the pinned system prompt and sandbox tools, and saves the actual
+provider history, tool results, visible answers, and workspace checkpoints. Claude
+thinking blocks with signatures and OpenAI reasoning items with encrypted content
+are replayed in their original order. Use the same provider account, model and
+effort across collection and branching.
+
+Before sampling, define which observable outcomes must match the Kimi reference.
+Pass a JSON array with one nonempty check list per original user turn. Within each
+list all checks must pass. An `answer` check looks for a literal substring in the
+visible final answer. A `file` check takes a workspace-relative path and one of
+`contains`, `sha256`, or `missing: true`. For example, for a two-turn source:
+
+```json
+[
+  [{"kind": "answer", "contains": "the relevant policy or finding"}],
+  [{"kind": "file", "path": "src/example.py", "contains": "the required implementation marker"}]
+]
+```
+
+Derive the actual checks from the source scenario and its recorded outcomes.
+A hash is useful when exact artifact bytes matter. Substrings can admit different
+implementations, and the choice of predicates determines what “matching” measures.
+A refusal, a missing visible answer, a missing opaque reasoning item for a turn,
+or a failed outcome check rejects the sample. Provider and execution errors stop
+collection with evidence for diagnosis. Each attempt inherits the native source
+request, token, byte, and time bounds. Use `--max-request-bytes` to set an explicit
+request size ceiling for a collection or branch when the full native history needs
+more room. The effective ceiling is recorded in the outcome. Use a fresh output
+directory per collection.
+
+```bash
+node tools/pi-transcripts/frontier.mjs collect \
+  --source out/native-corpus/SCENARIO/template.json --checks out/SCENARIO-checks.json \
+  --provider anthropic --model claude-opus-5-5 --effort high --attempts 3 \
+  --out out/frontier/SCENARIO/opus --allow-paid
+```
+
+Use `--provider openai` with a Responses model that supports encrypted reasoning
+and `all_turns` reasoning context. Set `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` for
+live work. `--preflight-only` validates local inputs without contacting a provider.
+The collection summary records every completed attempt and identifies the first
+accepted one. Retain accepted and rejected counts when interpreting the selected
+baselines.
+
+Compile message variants with the existing native planner. Create the exact plan's
+QA receipt without starting the Kimi executor:
+
+```bash
+uv run reasonese-native-run --qa-only --plan out/native-plans/TRIAL.json \
+  --out out/native-qa/TRIAL --allow-paid
+```
+
+Use the resulting `qaReceipt` path when branching. The branch runner uses those plans for delivery and
+treatment identity. An edit to the opening message starts from checkpoint 0.
+A B variant delivered after investigation starts after the frontier investigation.
+An appended B variant after unchanged A restores the frontier implementation
+checkpoint. If the plan changes A before B, the frontier model regenerates A
+under the selected schedule. Plans with consecutive A and B messages send both
+before inference. The provider may combine adjacent user messages.
+
+```bash
+node tools/pi-transcripts/frontier.mjs branch \
+  --source out/native-corpus/SCENARIO/template.json \
+  --collection out/frontier/SCENARIO/opus \
+  --plan out/native-plans/TRIAL.json --qa-receipt out/TRIAL-qa.json \
+  --provider anthropic --model claude-opus-5-5 --effort high \
+  --out out/frontier/SCENARIO/TRIAL --allow-paid
+```
+
+Branch outcomes record execution completion. Score B outcomes independently.
+Keep the raw artifacts private, including signed thinking and encrypted reasoning.
+A branch that edits past input always generates new assistant history after the
+edit. The reusable history comes from the same frontier provider and ends before
+that change. [Claude preserved thinking](https://platform.claude.com/docs/en/build-with-claude/preserved-thinking/change-tools-or-instructions)
+[OpenAI reasoning models](https://developers.openai.com/api/docs/guides/reasoning)
